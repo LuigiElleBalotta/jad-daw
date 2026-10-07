@@ -1,4 +1,4 @@
-# lpc (working title)
+# JAD Daw (Just Another Daw)
 
 Open source (AGPLv3) digital audio workstation, work in progress. This repository currently contains the
 **Core**: project model, undoable JSON commands, real-time audio engine, offline renderer and a CLI.

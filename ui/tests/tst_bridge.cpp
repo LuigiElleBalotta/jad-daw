@@ -23,6 +23,20 @@ std::filesystem::path makeDemo(const TempDir& dir, const char8_t* name = u8"d.lp
 
 class BridgeTest : public QObject {
     Q_OBJECT
+private:
+    static QString firstAudioTrackId(jad::ProjectController& c) {
+        const auto roles = c.tracks()->roleNames();
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->data(c.tracks()->index(i), roles.key("kind")).toString() == "audio")
+                return c.tracks()->data(c.tracks()->index(i), roles.key("trackId")).toString();
+        return {};
+    }
+    static int countFiles(const std::filesystem::path& dir) {
+        if (!std::filesystem::exists(dir)) return 0;
+        int n = 0;
+        for (const auto& e : std::filesystem::directory_iterator(dir)) { (void)e; ++n; }
+        return n;
+    }
 private slots:
     void opensTheDemoProject() {
         TempDir dir;
@@ -72,6 +86,95 @@ private slots:
         QCOMPARE(c.waveformPeaks(mediaId, 64).size(), 64);
         QVERIFY(c.waveformPeaks("no-such-media", 64).isEmpty());
         QVERIFY(c.waveformPeaks(mediaId, 0).isEmpty());
+    }
+    void moveRegionClampsAndSendsOneCommand() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString id = c.regions()->data(c.regions()->index(0), c.regions()->roleNames().key("regionId")).toString();
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.moveRegion(id, -50.0);                       // negative: clamped to 0
+        QTRY_COMPARE(sent.count(), 1);
+        c.moveRegion(id, std::numeric_limits<double>::quiet_NaN());   // NaN: ignored, no command
+        c.moveRegion(id, 1e30);                        // huge: clamped, accepted or rejected, never crashes
+        QTRY_VERIFY(sent.count() >= 2);
+    }
+    void deleteRegionsIsOneTransaction() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.regions()->rowCount() >= 2);
+        const int n = c.regions()->rowCount();
+        QStringList ids;
+        for (int i = 0; i < 2; ++i) ids << c.regions()->data(c.regions()->index(i), c.regions()->roleNames().key("regionId")).toString();
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.deleteRegions(ids);
+        QTRY_COMPARE(c.regions()->rowCount(), n - 2);
+        QCOMPARE(sent.count(), 1);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), n);      // one undo step restores both
+    }
+    void deleteRegionsWithEmptyListSendsNothing() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.deleteRegions({});
+        QCOMPARE(sent.count(), 0);
+    }
+    void importAudioRejectsWrongRateAndLeavesNoFile() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        lpc::writeWav(dir.path() / "x44.wav", 44100, 2, std::vector<float>(2 * 4410, 0.1f), lpc::WavFormat::Float32);
+        const QString audioTrack = firstAudioTrackId(c);
+        const auto before = countFiles(proj / "audio");
+        c.importAudio(url(dir.path() / "x44.wav"), audioTrack, 0.0);
+        QTRY_VERIFY(c.lastError().contains("48000"));
+        QCOMPARE(countFiles(proj / "audio"), before);
+    }
+    void importAudioOnANonAudioTrackIsRefused() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        lpc::writeWav(dir.path() / "ok.wav", 48000, 2, std::vector<float>(2 * 480, 0.1f), lpc::WavFormat::Float32);
+        const auto before = countFiles(proj / "audio");
+        c.importAudio(url(dir.path() / "ok.wav"), QStringLiteral("00000000-0000-0000-0000-0000000000ff"), 0.0);
+        QTRY_VERIFY(!c.lastError().isEmpty());
+        QCOMPARE(countFiles(proj / "audio"), before);
+    }
+    void importAudioAddsMediaAndRegionInOneStep() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        lpc::writeWav(dir.path() / "ok.wav", 48000, 2, std::vector<float>(2 * 48000, 0.1f), lpc::WavFormat::Float32);
+        c.importAudio(url(dir.path() / "ok.wav"), firstAudioTrackId(c), 4.0);
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), n);
+    }
+    void importAudioMakesTheFileNameUnique() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        lpc::writeWav(dir.path() / "tone.wav", 48000, 2, std::vector<float>(2 * 480, 0.1f), lpc::WavFormat::Float32);  // the demo already has audio/tone.wav
+        const auto before = countFiles(proj / "audio");
+        c.importAudio(url(dir.path() / "tone.wav"), firstAudioTrackId(c), 0.0);
+        QTRY_COMPARE(countFiles(proj / "audio"), before + 1);
+        QVERIFY(std::filesystem::exists(proj / "audio" / "tone (2).wav"));
     }
     void invalidFolderKeepsPreviousProject() {
         TempDir dir;

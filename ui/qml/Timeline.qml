@@ -7,11 +7,18 @@ Item {
     property real pixelsPerBeat: 40
     property real scrollBeats: 0
     property real scrollY: 0
+    property real snapBeats: 1.0   // 0 disables snapping
+    property var selectedIds: ({})  // region id -> true
     readonly property real minPixelsPerBeat: 4
     readonly property real maxPixelsPerBeat: 400
     readonly property real rowHeight: Theme.sizeTrackHeight[1]
     readonly property real rulerHeight: 24
     readonly property real contentHeight: project.tracks.rowCount() * rowHeight
+
+    signal regionMoved(string id, real beats)
+
+    focus: true
+    activeFocusOnTab: true
 
     function beatsToX(b) { return (b - scrollBeats) * pixelsPerBeat }
     function xToBeats(x) { return x / pixelsPerBeat + scrollBeats }
@@ -27,6 +34,41 @@ Item {
     function scrollByPixelsY(d) {
         const maxY = Math.max(0, contentHeight - (height - rulerHeight))
         scrollY = Math.max(0, Math.min(maxY, scrollY + d))
+    }
+
+    function select(id, extend) {
+        const next = extend ? Object.assign({}, selectedIds) : ({})
+        next[id] = true
+        selectedIds = next
+    }
+    function clearSelection() { selectedIds = ({}) }
+    function deleteSelected() {
+        const ids = Object.keys(selectedIds)
+        if (ids.length === 0) return
+        project.deleteRegions(ids)
+        clearSelection()
+    }
+    function trackIdAt(y) {
+        return project.tracks.trackIdAt(Math.floor((y - rulerHeight + scrollY) / rowHeight))
+    }
+    function snapBeat(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
+
+    onRegionMoved: (id, beats) => project.moveRegion(id, beats)
+
+    Keys.onDeletePressed: deleteSelected()
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_Backspace) { deleteSelected(); event.accepted = true }
+    }
+
+    // forget selected regions that no longer exist (deleted, undone, project replaced)
+    Connections {
+        target: root.project.regions
+        function onModelReset() {
+            const kept = ({})
+            for (const id of Object.keys(root.selectedIds))
+                if (root.project.regions.hasRegion(id)) kept[id] = true
+            root.selectedIds = kept
+        }
     }
 
     Ruler {
@@ -58,16 +100,38 @@ Item {
             }
         }
 
+        // empty space: clears the selection and takes the keyboard focus
+        MouseArea {
+            anchors.fill: parent
+            onPressed: { root.forceActiveFocus(); root.clearSelection() }
+        }
+
         Repeater {
             model: root.project.regions
             delegate: RegionItem {
+                id: region
+                required property var model
                 project: root.project
+                regionId: model.regionId
+                trackId: model.trackId
+                trackIndex: model.trackIndex
+                startBeats: model.startBeats
+                lengthBeats: model.lengthBeats
+                isAudio: model.isAudio
+                missing: model.missing
+                mediaId: model.mediaId
+                trackColor: model.trackColor
+                pixelsPerBeat: root.pixelsPerBeat
+                snapBeats: root.snapBeats
+                selected: root.selectedIds[model.regionId] === true
                 x: root.beatsToX(startBeats)
                 y: trackIndex * root.rowHeight - root.scrollY + 2
                 width: lengthBeats * root.pixelsPerBeat
                 height: root.rowHeight - 4
                 // only what is on screen is drawn
                 visible: x + width > 0 && x < body.width
+                onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.select(id, extend) }
+                onMoved: (id, beats) => root.regionMoved(id, beats)
             }
         }
 
@@ -78,6 +142,23 @@ Item {
             height: parent.height
             color: Theme.playhead
             visible: x >= 0 && x <= body.width
+        }
+    }
+
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        function wavs(urls) {
+            const out = []
+            for (const u of urls) if (u.toString().toLowerCase().endsWith(".wav")) out.push(u)
+            return out
+        }
+        onEntered: (drag) => { drag.accepted = drag.hasUrls && wavs(drag.urls).length > 0 }
+        onDropped: (drop) => {
+            const files = wavs(drop.urls)
+            if (files.length === 0) return
+            const beats = Math.max(0, root.snapBeat(root.xToBeats(drop.x)))
+            root.project.importAudio(files[0], root.trackIdAt(drop.y), beats)
         }
     }
 

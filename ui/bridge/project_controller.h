@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+#include <QStringList>
 #include <QHash>
 #include <QSet>
 #include <QString>
@@ -9,6 +10,7 @@
 #include <QtQml/qqmlregistration.h>
 
 #include <atomic>
+#include <functional>
 #include <filesystem>
 #include <memory>
 #include <thread>
@@ -97,6 +99,11 @@ public:
     Q_INVOKABLE void locateBeats(double beats);
     Q_INVOKABLE void setLoopBeats(double startBeats, double endBeats);
     Q_INVOKABLE void clearError();
+    Q_INVOKABLE void moveRegion(const QString& regionId, double startBeats);
+    Q_INVOKABLE void deleteRegions(const QStringList& regionIds);
+    // Copies a 1-2 channel WAV of the project sample rate into <project>/audio and adds it as media plus a region
+    // on `trackId` at `startBeats`, as one undo step. Errors go to lastError.
+    Q_INVOKABLE void importAudio(const QUrl& file, const QString& trackId, double startBeats);
     // Peaks of an audio file of the project, `buckets` values in [0,1]. Empty until computed (on a worker);
     // waveformReady(mediaId) fires when the call can be repeated to get them.
     Q_INVOKABLE QVariantList waveformPeaks(const QString& mediaId, int buckets);
@@ -118,7 +125,8 @@ signals:
     void waveformReady(const QString& mediaId);
 
 private:
-    void sendCommand(const nlohmann::json& command);
+    // `done(accepted)` runs on the Qt thread once the project thread has answered (not for a command that never got sent).
+    void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     void refresh(std::uint64_t revision);
     void applySnapshot(Snapshot snapshot);
     void tick();

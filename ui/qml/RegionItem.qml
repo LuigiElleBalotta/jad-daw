@@ -1,35 +1,35 @@
 import QtQuick
 import Jad
 
-Rectangle {
+Item {
     id: root
-    // the role names of RegionModel
-    required property string regionId
-    required property string trackId
-    required property int trackIndex
-    required property real startBeats
-    required property real lengthBeats
-    required property bool isAudio
-    required property bool missing
-    required property string mediaId
-    required property string trackColor
+    // the role names of RegionModel (plain properties so the item can also be created on its own)
+    property string regionId
+    property string trackId
+    property int trackIndex: 0
+    property real startBeats: 0
+    property real lengthBeats: 1
+    property bool isAudio: false
+    property bool missing: false
+    property string mediaId
+    property string trackColor: "purple"
     property var project
+
+    property real pixelsPerBeat: 40
+    property real snapBeats: 1
+    property bool selected: false
+    property real dragDeltaPx: 0
+    readonly property bool dragging: area.moving
+
+    signal moved(string id, real beats)
+    signal selectRequested(string id, bool extend)
+
+    function snap(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
 
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
     readonly property color solid: Theme["track" + capitalColor + "Solid"]
     readonly property color fill: Theme["track" + capitalColor + "Fill"]
     property var peaks: []
-
-    radius: Theme.radiusRegion
-    color: "transparent"
-    Rectangle {
-        anchors.fill: parent
-        radius: root.radius
-        color: root.missing ? Theme.surfaceRaised : root.fill
-        border.color: root.missing ? Theme.stateMute : root.solid
-        border.width: 1
-    }
-
     readonly property int buckets: Math.min(4096, Math.ceil(width / 2 / 32) * 32)
 
     function requestPeaks() {
@@ -42,45 +42,94 @@ Rectangle {
     onMediaIdChanged: debounce.restart()
     Component.onCompleted: requestPeaks()
     Connections {
-        target: root.project
+        target: root.project ? root.project : null
         function onWaveformReady(id) { if (id === root.mediaId) root.requestPeaks() }
     }
 
-    Loader {
-        anchors.fill: parent
-        anchors.topMargin: 14
-        active: root.isAudio && !root.missing && root.peaks.length > 0
-        sourceComponent: WaveformPreview { peaks: root.peaks; color: root.solid }
-    }
+    // the visuals follow the pointer while dragging; the item itself stays put until the model moves
+    Item {
+        id: content
+        x: root.dragDeltaPx
+        width: root.width
+        height: root.height
+        opacity: area.moving ? 0.8 : 1
 
-    // missing media: diagonal hatch
-    Canvas {
-        anchors.fill: parent
-        visible: root.missing
-        onPaint: {
-            const ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-            ctx.strokeStyle = Theme.stateMute
-            ctx.globalAlpha = 0.5
-            ctx.lineWidth = 1
-            for (let x = -height; x < width; x += 8) {
-                ctx.beginPath()
-                ctx.moveTo(x, height)
-                ctx.lineTo(x + height, 0)
-                ctx.stroke()
-            }
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusRegion
+            color: root.missing ? Theme.surfaceRaised : root.fill
+            border.color: root.selected ? Theme.textPrimary : (root.missing ? Theme.stateMute : root.solid)
+            border.width: root.selected ? 2 : 1
         }
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
+
+        Loader {
+            anchors.fill: parent
+            anchors.topMargin: 14
+            active: root.isAudio && !root.missing && root.peaks.length > 0
+            sourceComponent: WaveformPreview { peaks: root.peaks; color: root.solid }
+        }
+
+        // missing media: diagonal hatch
+        Canvas {
+            anchors.fill: parent
+            visible: root.missing
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                ctx.strokeStyle = Theme.stateMute
+                ctx.globalAlpha = 0.5
+                ctx.lineWidth = 1
+                for (let x = -height; x < width; x += 8) {
+                    ctx.beginPath()
+                    ctx.moveTo(x, height)
+                    ctx.lineTo(x + height, 0)
+                    ctx.stroke()
+                }
+            }
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+        }
+
+        Text {
+            x: 4; y: 1
+            width: parent.width - 8
+            elide: Text.ElideRight
+            text: root.missing ? qsTr("missing media") : ""
+            color: Theme.textSecondary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontTypeCaptionSize
+        }
     }
 
-    Text {
-        x: 4; y: 1
-        width: parent.width - 8
-        elide: Text.ElideRight
-        text: root.missing ? qsTr("missing media") : ""
-        color: Theme.textSecondary
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontTypeCaptionSize
+    MouseArea {
+        id: area
+        anchors.fill: parent
+        preventStealing: true
+        property real pressSceneX: 0
+        property bool moving: false
+
+        function sceneX(m) { return mapToItem(null, m.x, m.y).x }
+
+        onPressed: (m) => {
+            pressSceneX = sceneX(m)
+            moving = false
+            root.dragDeltaPx = 0
+            root.selectRequested(root.regionId, (m.modifiers & Qt.ShiftModifier) !== 0)
+        }
+        onPositionChanged: (m) => {
+            if (!pressed) return
+            const d = sceneX(m) - pressSceneX
+            if (!moving && Math.abs(d) < 3) return  // a click, not a drag
+            moving = true
+            root.dragDeltaPx = d
+        }
+        onReleased: (m) => {
+            const wasMoving = moving
+            const d = root.dragDeltaPx
+            moving = false
+            root.dragDeltaPx = 0
+            if (wasMoving) root.moved(root.regionId, Math.max(0, root.snap(root.startBeats + d / root.pixelsPerBeat)))
+        }
+        onCanceled: { moving = false; root.dragDeltaPx = 0 }
     }
 }

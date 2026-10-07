@@ -20,7 +20,7 @@ struct RegionRow {
     QString id, trackId;
     int trackIndex = 0;  // among the tracks without the master: the timeline row
     double startBeats = 0.0, lengthBeats = 0.0;
-    bool audio = false, missing = false;
+    bool audio = false, missing = false, absolute = false;  // absolute: positions are in real time, not musical time
     QString mediaId;
     QString color;  // the colour name of its track
 };

@@ -14,6 +14,9 @@ ApplicationWindow {
     property alias project: controller
     ProjectController { id: controller }
 
+    Shortcut { sequences: [StandardKey.Undo]; onActivated: controller.undo() }
+    Shortcut { sequences: [StandardKey.Redo]; onActivated: controller.redo() }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0

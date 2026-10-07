@@ -67,6 +67,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.trackId = tr.id;
             rr.trackIndex = row;
             rr.color = tr.color;
+            rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
             rr.startBeats = toBeats(p, r, r.start);
             rr.lengthBeats = toBeats(p, r, r.start + r.length) - rr.startBeats;
             rr.audio = t.kind == lpc::TrackKind::Audio;

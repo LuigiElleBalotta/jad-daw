@@ -8,6 +8,12 @@ void RegionModel::reset(const std::vector<RegionRow>& rows) {
     endResetModel();
 }
 
+const RegionRow* RegionModel::find(const QString& regionId) const {
+    for (const RegionRow& r : rows_)
+        if (r.id == regionId) return &r;
+    return nullptr;
+}
+
 QVariant RegionModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(rows_.size())) return {};
     const RegionRow& r = rows_[static_cast<std::size_t>(index.row())];

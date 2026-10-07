@@ -8,6 +8,12 @@ void TrackListModel::reset(const std::vector<TrackRow>& rows) {
     endResetModel();
 }
 
+const TrackRow* TrackListModel::find(const QString& trackId) const {
+    for (const TrackRow& t : rows_)
+        if (t.id == trackId) return &t;
+    return nullptr;
+}
+
 QVariant TrackListModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(rows_.size())) return {};
     const TrackRow& r = rows_[static_cast<std::size_t>(index.row())];

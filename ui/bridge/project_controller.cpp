@@ -1,5 +1,7 @@
 #include "bridge/project_controller.h"
 
+#include <QCryptographicHash>
+#include <QFile>
 #include <QMetaObject>
 #include <QPointer>
 #include <QtConcurrent>
@@ -14,9 +16,11 @@
 #include "lpc/commands.h"
 #include "lpc/device.h"
 #include "lpc/media_store.h"
+#include "lpc/model_json.h"
 #include "lpc/project_host.h"
 #include "lpc/project_io.h"
 #include "lpc/validation.h"
+#include "lpc/wav.h"
 
 #ifdef JAD_HAVE_JUCE
 #include <juce_events/juce_events.h>
@@ -223,7 +227,7 @@ void ProjectController::applySnapshot(Snapshot s) {
     emit projectChanged();
 }
 
-void ProjectController::sendCommand(const nlohmann::json& command) {
+void ProjectController::sendCommand(const nlohmann::json& command, std::function<void(bool)> done) {
     if (!host_) {
         setError("No project is open");
         return;
@@ -238,17 +242,19 @@ void ProjectController::sendCommand(const nlohmann::json& command) {
     emit commandSent(QString::fromStdString(command.value("type", std::string())));
     auto future = std::make_shared<std::future<std::optional<lpc::CommandError>>>(host_->submit(std::move(cmd)));
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, future] {
+    (void)QtConcurrent::run([self, future, done = std::move(done)] {
         std::optional<lpc::CommandError> error;
         try {
             error = future->get();
         } catch (const std::exception&) {
             return;
         }
-        if (!error || !self) return;
-        const QString message = QString::fromStdString(error->code + ": " + error->message);
-        QMetaObject::invokeMethod(self.data(), [self, message] {
-            if (self) self->setError(message);
+        if (!self) return;
+        const QString message = error ? QString::fromStdString(error->code + ": " + error->message) : QString();
+        QMetaObject::invokeMethod(self.data(), [self, message, accepted = !error.has_value(), done] {
+            if (!self) return;
+            if (!accepted) self->setError(message);
+            if (done) done(accepted);
         }, Qt::QueuedConnection);
     });
 }
@@ -262,6 +268,133 @@ void ProjectController::submit(const QString& commandJson) {
         return;
     }
     sendCommand(j);
+}
+
+void ProjectController::moveRegion(const QString& regionId, double startBeats) {
+    if (!host_ || !std::isfinite(startBeats)) return;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row) return;
+    const double clamped = std::clamp(startBeats, 0.0, kMaxBeats);
+    std::int64_t start = static_cast<std::int64_t>(std::llround(clamped * lpc::kPPQ));
+    if (row->absolute) {
+        const double frames = tempoMap_.ticksToSamples(start, sampleRate_);
+        start = std::min<std::int64_t>(std::llround(frames * 1e6 / sampleRate_), lpc::kMaxPosition);
+    }
+    sendCommand({{"type", "move_region"}, {"regionId", regionId.toStdString()}, {"start", start}});
+}
+
+void ProjectController::deleteRegions(const QStringList& regionIds) {
+    if (!host_ || regionIds.isEmpty()) return;
+    auto remove = [](const QString& id) { return nlohmann::json{{"type", "remove_region"}, {"regionId", id.toStdString()}}; };
+    if (regionIds.size() == 1) {
+        sendCommand(remove(regionIds.first()));
+        return;
+    }
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : regionIds) commands.push_back(remove(id));
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId, double startBeats) {
+    if (!host_ || !std::isfinite(startBeats)) return;
+    const TrackRow* track = tracks_.find(trackId);
+    if (!track || track->kind != "audio") {
+        setError("Audio can only be dropped on an audio track");
+        return;
+    }
+    const std::filesystem::path source = toPath(fileUrl);
+    const std::filesystem::path projectDir = dir_;
+    const int projectRate = sampleRate_;
+    const double beats = std::clamp(startBeats, 0.0, kMaxBeats);
+    const lpc::Ticks startTick = static_cast<lpc::Ticks>(std::llround(beats * lpc::kPPQ));
+    const double startFrames = tempoMap_.ticksToSamples(startTick, projectRate);
+    const std::int64_t startMicros = std::min<std::int64_t>(std::llround(startFrames * 1e6 / projectRate), lpc::kMaxPosition);
+
+    QPointer<ProjectController> self(this);
+    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros] {
+        auto fail = [&](const QString& message) {
+            if (!self) return;
+            QMetaObject::invokeMethod(self.data(), [self, message] { if (self) self->setError(message); }, Qt::QueuedConnection);
+        };
+        const QString sourceName = QString::fromStdU16String(source.filename().u16string());
+        std::int64_t frames = 0;
+        int channels = 0;
+        try {
+            lpc::WavFile wav(source);
+            if (wav.sampleRate() != projectRate) {
+                fail(QString("Cannot import %1: its sample rate is %2 Hz but the project uses %3 Hz").arg(sourceName).arg(wav.sampleRate()).arg(projectRate));
+                return;
+            }
+            if (wav.channels() < 1 || wav.channels() > 2) {
+                fail(QString("Cannot import %1: only mono and stereo files are supported").arg(sourceName));
+                return;
+            }
+            frames = wav.frames();
+            channels = wav.channels();
+        } catch (const std::exception& e) {
+            fail(QString("Cannot import %1: %2").arg(sourceName, QString::fromUtf8(e.what())));
+            return;
+        }
+
+        // copy into <project>/audio under a name that is not taken yet
+        std::filesystem::path target;
+        try {
+            const std::filesystem::path audioDir = projectDir / "audio";
+            std::filesystem::create_directories(audioDir);
+            const std::filesystem::path stem = source.stem(), ext = source.extension();
+            target = audioDir / source.filename();
+            for (int n = 2; std::filesystem::exists(target); ++n)
+                target = audioDir / (stem.u16string() + u" (" + QString::number(n).toStdU16String() + u")" + ext.u16string());
+            std::filesystem::copy_file(source, target);
+        } catch (const std::exception& e) {
+            std::error_code ignore;
+            if (!target.empty()) std::filesystem::remove(target, ignore);
+            fail(QString("Cannot import %1: %2").arg(sourceName, QString::fromUtf8(e.what())));
+            return;
+        }
+
+        QString hash;
+        {
+            QFile f(QString::fromStdU16String(target.u16string()));
+            QCryptographicHash h(QCryptographicHash::Sha256);
+            if (f.open(QIODevice::ReadOnly) && h.addData(&f)) hash = QString::fromLatin1(h.result().toHex());
+        }
+
+        if (!self) {
+            std::error_code ignore;
+            std::filesystem::remove(target, ignore);
+            return;
+        }
+        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash] {
+            std::error_code ignore;
+            if (!self || self->dir_ != projectDir || !self->host_) {  // closed or replaced meanwhile
+                std::filesystem::remove(target, ignore);
+                return;
+            }
+            lpc::MediaItem item;
+            item.id = lpc::Uuid::random();
+            const std::u8string rel = (std::filesystem::path("audio") / target.filename()).generic_u8string();
+            item.path.assign(rel.begin(), rel.end());
+            item.hash = hash.toStdString();
+            item.sampleRate = projectRate;
+            item.channels = channels;
+            item.frames = frames;
+            lpc::Region region;
+            region.id = lpc::Uuid::random();
+            region.timeBase = lpc::TimeBase::Absolute;
+            region.start = startMicros;
+            region.length = std::max<std::int64_t>(1, std::llround(static_cast<double>(frames) * 1e6 / projectRate));
+            region.mediaId = item.id;
+            nlohmann::json commands = nlohmann::json::array();
+            commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
+            commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"region", region}, {"index", -1}});
+            self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [target](bool accepted) {
+                if (accepted) return;
+                std::error_code ec;
+                std::filesystem::remove(target, ec);  // rejected: leave no orphan file
+            });
+        }, Qt::QueuedConnection);
+    });
 }
 
 void ProjectController::undo() {

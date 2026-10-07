@@ -9,3 +9,9 @@ endif()
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(lpc_tests)
+
+add_test(NAME audio_dirs_have_no_locks
+    COMMAND ${CMAKE_COMMAND} -DCORE_DIR=${CMAKE_SOURCE_DIR}/core -P ${CMAKE_CURRENT_SOURCE_DIR}/check_no_locks.cmake)
+add_test(NAME lock_check_detects_violation
+    COMMAND ${CMAKE_COMMAND} -DCORE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/data/bad_core -P ${CMAKE_CURRENT_SOURCE_DIR}/check_no_locks.cmake)
+set_tests_properties(lock_check_detects_violation PROPERTIES WILL_FAIL TRUE)

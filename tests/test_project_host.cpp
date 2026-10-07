@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <functional>
+#include <mutex>
 #include <thread>
 #include <unordered_set>
 #include "lpc/audio/engine.h"
@@ -177,4 +178,27 @@ TEST_CASE("host: many random commands under load stay consistent", "[host][threa
     }
     REQUIRE(f.engine.describeForTest() == freshDescription(finalProject, f.media));
     REQUIRE(test::rt::violations() == 0);
+}
+
+TEST_CASE("host: the change listener runs once per accepted change, with growing revisions", "[host][threads]") {
+    Fixture f;
+    test::ThreadedDevice device(f.engine);
+    ProjectHost host(f.initial, f.engine, f.media);
+    std::mutex m;
+    std::vector<std::uint64_t> seen;
+    host.setChangeListener([&](std::uint64_t rev) {
+        std::lock_guard lock(m);
+        seen.push_back(rev);
+    }).get();
+
+    const Track a = track(f.rng, TrackKind::Audio, "A");
+    REQUIRE_FALSE(host.submit(makeAddTrack(a)).get().has_value());
+    REQUIRE(host.submit(makeRemoveTrack(Uuid::random(f.rng))).get().has_value());  // rejected: no call
+    REQUIRE_FALSE(host.undo().get().has_value());
+    REQUIRE_FALSE(host.redo().get().has_value());
+    host.read([](const Project&) { return 0; }).get();  // queue drained
+
+    std::lock_guard lock(m);
+    REQUIRE(seen == std::vector<std::uint64_t>{1, 2, 3});
+    REQUIRE(host.revision() == 3);
 }

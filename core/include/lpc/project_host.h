@@ -46,6 +46,13 @@ public:
     std::future<void> locate(std::int64_t frame);
     std::future<void> setLoop(std::int64_t startFrame, std::int64_t endFrame);
 
+    // Called on the project thread after every accepted submit/undo/redo and after a rebuild of the audio
+    // graph. Keep it short and non-blocking: post to another thread. Replaces any earlier listener.
+    std::future<void> setChangeListener(std::function<void(std::uint64_t revision)> listener) {
+        return call([this, l = std::move(listener)]() mutable { listener_ = std::move(l); });
+    }
+    std::uint64_t revision() const { return revision_.load(std::memory_order_acquire); }
+
     std::uint64_t lastPostedSeq() const { return seq_.load(std::memory_order_acquire); }
     bool degraded() const { return degraded_.load(std::memory_order_acquire); }  // true while the engine has stopped draining
 
@@ -64,6 +71,7 @@ private:
     bool post(audio::AudioMsg m);  // false when the engine is stalled (the message is destroyed) or shutting down
     void postAll(std::vector<audio::AudioMsg>& messages);
     void resync();
+    void notifyChanged();
     void publish(const Project& before);
     void postTransport(audio::MsgKind kind, std::int64_t frame = 0, std::int64_t frame2 = 0);
 
@@ -73,6 +81,8 @@ private:
     MediaStore& media_;
     std::atomic<std::uint64_t> seq_{0};
     std::atomic<bool> stopping_{false};
+    std::function<void(std::uint64_t)> listener_;  // project thread only
+    std::atomic<std::uint64_t> revision_{0};
     std::atomic<bool> degraded_{false};      // the audio graph may have missed messages; cleared by a rebuild
     std::unordered_set<Uuid> everAdded_;     // project thread only: every track id ever sent to the engine
 

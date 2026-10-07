@@ -90,6 +90,12 @@ void ProjectHost::resync() {
     for (audio::AudioMsg& m : initialMessages(project_, media_)) messages.push_back(m);
     degraded_.store(false, std::memory_order_release);
     postAll(messages);
+    notifyChanged();  // the audio side was rebuilt: observers may want to refresh
+}
+
+void ProjectHost::notifyChanged() {
+    const std::uint64_t rev = revision_.fetch_add(1, std::memory_order_acq_rel) + 1;
+    if (listener_) listener_(rev);
 }
 
 void ProjectHost::publish(const Project& before) {
@@ -111,7 +117,10 @@ std::future<std::optional<CommandError>> ProjectHost::submit(CommandPtr command)
     return call([this, cmd = std::move(command)]() mutable -> std::optional<CommandError> {
         const Project before = project_;
         auto err = undo_.execute(project_, std::move(cmd));
-        if (!err) publish(before);
+        if (!err) {
+            publish(before);
+            notifyChanged();
+        }
         return err;
     });
 }
@@ -120,7 +129,10 @@ std::future<std::optional<CommandError>> ProjectHost::undo() {
     return call([this]() -> std::optional<CommandError> {
         const Project before = project_;
         auto err = undo_.undo(project_);
-        if (!err) publish(before);
+        if (!err) {
+            publish(before);
+            notifyChanged();
+        }
         return err;
     });
 }
@@ -129,7 +141,10 @@ std::future<std::optional<CommandError>> ProjectHost::redo() {
     return call([this]() -> std::optional<CommandError> {
         const Project before = project_;
         auto err = undo_.redo(project_);
-        if (!err) publish(before);
+        if (!err) {
+            publish(before);
+            notifyChanged();
+        }
         return err;
     });
 }

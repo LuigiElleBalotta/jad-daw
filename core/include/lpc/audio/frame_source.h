@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
@@ -38,14 +39,17 @@ private:
     std::vector<float> l_, r_;
 };
 
-// Streams a WAV file from disk. A background thread keeps a window of chunks loaded ahead of the last
-// position the audio thread asked for; the audio thread only copies from loaded chunks and never waits.
+// Streams a WAV file from disk. A background thread keeps a window of chunks loaded ahead of each playback
+// position the audio thread is reading (several regions can play the same file at different places: up to
+// kCursors positions are followed). The audio thread only copies from loaded chunks and never waits.
 // Each slot has an atomic tag (the chunk number it holds, -1 while being rewritten); the reader checks the
 // tag again after copying and treats a change as an underrun (seqlock pattern).
 class StreamingSource final : public IFrameSource {
 public:
     static constexpr int kChunkFrames = 16384;
-    static constexpr int kSlots = 16;  // the reader keeps kSlots - 1 chunks ahead of the playhead
+    static constexpr int kCursors = 4;  // playback positions followed at the same time
+    static constexpr int kSlots = 32;
+    static constexpr int kWindow = kSlots / kCursors - 1;  // chunks kept loaded ahead of each position
 
     explicit StreamingSource(const std::filesystem::path& path, bool startReaderThread = true);
     ~StreamingSource() override;
@@ -71,7 +75,9 @@ private:
     std::int64_t frames_;
     std::unique_ptr<Slot[]> slots_;
     std::vector<float> scratch_;
-    mutable std::atomic<std::int64_t> lastRead_{0};
+    // Next expected frame of each playback position (-1: unused). Written by the audio thread only.
+    mutable std::array<std::atomic<std::int64_t>, kCursors> cursors_;
+    mutable int nextVictim_ = 0;  // audio thread only: which cursor a new position replaces
     mutable std::atomic<int> underruns_{0};
     std::atomic<bool> stop_{false};
     std::thread thread_;

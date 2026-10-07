@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 #include "lpc/audio/engine.h"
 #include "lpc/graph_builder.h"
@@ -30,6 +31,9 @@ RenderResult renderOffline(const Project& p, MediaStore& media, const RenderOpti
         total = std::max<std::int64_t>(0, projectEndFrame(p) - start) +
                 static_cast<std::int64_t>(std::llround(std::max(0.0, options.tailSeconds) * p.sampleRate));
     }
+    constexpr std::int64_t kMaxRenderSeconds = 4 * 3600;  // the whole result is held in memory
+    if (total > kMaxRenderSeconds * p.sampleRate)
+        throw std::runtime_error("project too long to render (limit is 4 hours; use --seconds to render a part)");
     out.frames = total;
     out.interleaved.assign(static_cast<std::size_t>(total) * 2, 0.0f);
 

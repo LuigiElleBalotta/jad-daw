@@ -57,6 +57,7 @@ Owned RenderGraph::apply(const AudioMsg& m) noexcept {
             if (!n) return Owned{cfg, &RenderGraph::deleteConfig};
             TrackConfig* old = n->config;
             n->config = cfg;
+            n->synth.releaseAll();  // the new config only knows its own note-offs: do not leave held notes droning
             return Owned{old, &RenderGraph::deleteConfig};
         }
         case MsgKind::Reorder: {

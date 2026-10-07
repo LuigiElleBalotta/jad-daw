@@ -58,6 +58,11 @@ void SineSynth::noteOff(std::uint8_t note) noexcept {
     }
 }
 
+void SineSynth::releaseAll() noexcept {
+    for (Voice& v : voices_)
+        if (v.active) v.releasing = true;
+}
+
 void SineSynth::allNotesOff() noexcept {
     for (Voice& v : voices_) v = Voice{};
 }

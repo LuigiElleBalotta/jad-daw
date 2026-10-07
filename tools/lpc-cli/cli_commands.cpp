@@ -13,7 +13,23 @@
 #include "lpc/project_io.h"
 #include "lpc/wav.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 namespace lpc::cli {
+
+#ifdef _WIN32
+std::string wideToUtf8(const wchar_t* wide) {
+    const int size = WideCharToMultiByte(CP_UTF8, 0, wide, -1, nullptr, 0, nullptr, nullptr);
+    if (size <= 1) return {};
+    std::string out(static_cast<std::size_t>(size - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide, -1, out.data(), size, nullptr, nullptr);
+    return out;
+}
+#endif
 
 namespace {
 
@@ -123,7 +139,7 @@ int cmdRender(const std::vector<std::string>& args, std::ostream& out, std::ostr
     const Project project = loadProject(dir);
     MediaStore media(dir, /*streaming=*/false);  // memory sources: deterministic output
     RenderOptions options;
-    if (seconds) options.frames = static_cast<std::int64_t>(std::llround(*seconds * project.sampleRate));
+    if (seconds) options.frames = static_cast<std::int64_t>(std::llround(std::min(*seconds * project.sampleRate, 1e15)));
     const RenderResult result = renderOffline(project, media, options);
     writeWav(toPath(p.positional[1]), result.sampleRate, 2, result.interleaved, format);
     for (const std::string& w : media.warnings()) err << "warning: " << w << "\n";

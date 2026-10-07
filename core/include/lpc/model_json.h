@@ -24,7 +24,8 @@ void from_json(const nlohmann::json& j, TempoMap& m);
 void to_json(nlohmann::json& j, const Track& t);
 void from_json(const nlohmann::json& j, Track& t);
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MidiNote, start, length, note, velocity)
+void to_json(nlohmann::json& j, const MidiNote& n);
+void from_json(const nlohmann::json& j, MidiNote& n);  // note and velocity must be in 0..255 before the model checks them
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Region, id, timeBase, start, length, mediaId, sourceOffsetFrames, gainDb, notes)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ProcessorRef, processorId, params, state)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Send, id, targetTrackId, levelDb, preFader)

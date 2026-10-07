@@ -7,6 +7,7 @@
 
 #include "lpc/model_json.h"
 #include "lpc/processor_ids.h"
+#include "lpc/validation.h"
 
 namespace lpc {
 
@@ -26,66 +27,6 @@ ApplyResult success(CommandPtr inverse) {
     return r;
 }
 
-using MaybeError = std::optional<CommandError>;
-
-bool isBusLike(TrackKind k) { return k == TrackKind::Bus || k == TrackKind::Aux; }
-bool isSourceKind(TrackKind k) { return k == TrackKind::Audio || k == TrackKind::Midi || k == TrackKind::Instrument; }
-bool inRange(float v, float lo, float hi) { return std::isfinite(v) && v >= lo && v <= hi; }
-
-MaybeError checkStripValues(float gainDb, float pan) {
-    if (!inRange(gainDb, -96.0f, 24.0f)) return CommandError{"bad_value", "gainDb must be a number in [-96, 24]"};
-    if (!inRange(pan, -1.0f, 1.0f)) return CommandError{"bad_value", "pan must be a number in [-1, 1]"};
-    return std::nullopt;
-}
-
-// A region is valid for a given track kind and project (media must exist, notes must be sane).
-MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r) {
-    if (r.id.isNull()) return CommandError{"duplicate_id", "region id is missing"};
-    if (r.start < 0 || r.length <= 0) return CommandError{"bad_region", "region needs start >= 0 and length > 0"};
-    if (!inRange(r.gainDb, -96.0f, 24.0f)) return CommandError{"bad_value", "region gainDb must be in [-96, 24]"};
-    if (kind == TrackKind::Audio) {
-        if (r.mediaId.isNull() || !p.findMedia(r.mediaId))
-            return CommandError{"bad_region", "audio region needs a mediaId present in the media pool"};
-        if (!r.notes.empty()) return CommandError{"bad_region", "audio regions cannot contain notes"};
-        if (r.sourceOffsetFrames < 0) return CommandError{"bad_region", "sourceOffsetFrames must be >= 0"};
-    } else if (kind == TrackKind::Midi || kind == TrackKind::Instrument) {
-        if (!r.mediaId.isNull()) return CommandError{"bad_region", "MIDI regions cannot reference media"};
-        if (r.timeBase != TimeBase::Musical) return CommandError{"bad_region", "MIDI regions must be musical"};
-        for (const MidiNote& n : r.notes) {
-            if (n.start < 0 || n.length <= 0 || n.note > 127 || n.velocity < 1 || n.velocity > 127)
-                return CommandError{"bad_region", "invalid MIDI note"};
-        }
-    } else {
-        return CommandError{"invalid_kind", "this track kind cannot hold regions"};
-    }
-    return std::nullopt;
-}
-
-MaybeError checkSendFields(const Project& p, const Uuid& owner, const Send& s) {
-    if (s.id.isNull()) return CommandError{"duplicate_id", "send id is missing"};
-    if (!inRange(s.levelDb, -96.0f, 12.0f)) return CommandError{"bad_value", "send levelDb must be in [-96, 12]"};
-    const Track* target = p.findTrack(s.targetTrackId);
-    if (!target || !isBusLike(target->kind) || target->id == owner)
-        return CommandError{"bad_target", "send target must be another existing bus or aux track"};
-    return std::nullopt;
-}
-
-// True when `goal` can be reached from `from` by following outputs and sends.
-bool reaches(const Project& p, const Uuid& from, const Uuid& goal) {
-    std::vector<Uuid> stack{from};
-    std::unordered_set<Uuid> seen;
-    while (!stack.empty()) {
-        const Uuid cur = stack.back();
-        stack.pop_back();
-        if (cur == goal) return true;
-        if (!seen.insert(cur).second) continue;
-        const Track* t = p.findTrack(cur);
-        if (!t) continue;
-        if (!t->strip.output.isNull()) stack.push_back(t->strip.output);
-        for (const Send& s : t->strip.sends) stack.push_back(s.targetTrackId);
-    }
-    return false;
-}
 
 std::unordered_set<Uuid> allRegionIds(const Project& p) {
     std::unordered_set<Uuid> ids;
@@ -101,20 +42,6 @@ std::unordered_set<Uuid> allSendIds(const Project& p) {
     return ids;
 }
 
-bool validRelativeMediaPath(const std::string& path) {
-    if (path.empty() || path.front() == '/' || path.find(':') != std::string::npos ||
-        path.find('\\') != std::string::npos)
-        return false;
-    std::size_t start = 0;
-    while (start <= path.size()) {
-        const std::size_t end = path.find('/', start);
-        const std::string part = path.substr(start, end == std::string::npos ? std::string::npos : end - start);
-        if (part == "..") return false;
-        if (end == std::string::npos) break;
-        start = end + 1;
-    }
-    return true;
-}
 
 // ---------------------------------------------------------------- add_track / remove_track
 
@@ -134,6 +61,7 @@ public:
 private:
     MaybeError validate(const Project& p) const {
         if (track_.kind == TrackKind::Master) return CommandError{"invalid_kind", "a master track already exists"};
+        if (p.tracks.size() >= kMaxProjectTracks) return CommandError{"limit", "a project holds at most 1024 tracks"};
         if (track_.id.isNull() || p.findTrack(track_.id)) return CommandError{"duplicate_id", "track id missing or already used"};
         if (index_ < -1 || index_ > static_cast<int>(p.tracks.size())) return CommandError{"bad_index", "track index out of range"};
         if (auto e = checkStripValues(track_.strip.gainDb, track_.strip.pan)) return e;
@@ -147,7 +75,7 @@ private:
             (wantsInstrument && !isKnownInstrument(track_.instrument->processorId)))
             return CommandError{"invalid_kind", "exactly instrument tracks need a known instrument"};
         for (const ProcessorRef& ins : track_.strip.inserts)
-            if (!isKnownEffect(ins.processorId)) return CommandError{"bad_value", "unknown insert processor: " + ins.processorId};
+            if (auto e = checkInsert(ins)) return e;
         auto sendIds = allSendIds(p);
         for (const Send& s : track_.strip.sends) {
             if (auto e = checkSendFields(p, track_.id, s)) return e;
@@ -362,7 +290,7 @@ public:
         std::size_t idx = 0;
         Track* t = p.findTrackOfRegion(id_, &idx);
         if (!t) return fail("not_found", "no such region");
-        if (start_ < 0) return fail("bad_region", "region start must be >= 0");
+        if (start_ < 0 || start_ > kMaxPosition) return fail("bad_region", "region start must be in [0, 2^40]");
         const std::int64_t old = t->regions[idx].start;
         t->regions[idx].start = start_;
         return success(makeMoveRegion(id_, old));
@@ -434,7 +362,7 @@ public:
         Track* t = p.findTrack(trackId_);
         if (!t) return fail("not_found", "no such track");
         for (const ProcessorRef& r : inserts_)
-            if (!isKnownEffect(r.processorId)) return fail("bad_value", "unknown insert processor: " + r.processorId);
+            if (auto e = checkInsert(r)) return fail(*e);
         std::vector<ProcessorRef> previous = std::move(t->strip.inserts);
         t->strip.inserts = inserts_;
         return success(makeSetInserts(trackId_, std::move(previous)));

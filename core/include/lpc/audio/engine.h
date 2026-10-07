@@ -13,6 +13,7 @@ namespace lpc::audio {
 
 inline constexpr std::size_t kMessageQueueCapacity = 8192;
 inline constexpr std::size_t kFeedbackQueueCapacity = 4096;
+inline constexpr int kMaxMessagesPerBlock = 1024;  // bounds the work one audio callback does for the project thread
 
 class AudioEngine {
 public:
@@ -29,6 +30,7 @@ public:
     std::int64_t positionFrames() const { return positionPub_.load(std::memory_order_relaxed); }
     bool playing() const { return playingPub_.load(std::memory_order_relaxed); }
     float masterPeak() const { return masterPeakPub_.load(std::memory_order_relaxed); }
+    std::size_t pendingMessages() const { return messages_.sizeApprox(); }
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }
 
     // ---- audio thread

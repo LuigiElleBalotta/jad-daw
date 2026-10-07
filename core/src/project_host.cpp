@@ -9,7 +9,8 @@ namespace lpc {
 ProjectHost::ProjectHost(Project initial, audio::AudioEngine& engine, MediaStore& media)
     : project_(std::move(initial)), engine_(engine), media_(media), thread_([this] { run(); }) {
     enqueue([this] {
-        for (audio::AudioMsg& m : initialMessages(project_, media_)) post(m);
+        auto messages = initialMessages(project_, media_);
+        postAll(messages);
     });
 }
 
@@ -44,26 +45,57 @@ void ProjectHost::run() {
         }
         lock.unlock();
         engine_.collectGarbage();  // free what the audio thread handed back
+        if (degraded_ && engine_.pendingMessages() < audio::kMessageQueueCapacity / 2) resync();  // rebuilding is expensive: wait for room
         lock.lock();
         if (stop_ && tasks_.empty()) break;
     }
 }
 
-void ProjectHost::post(audio::AudioMsg m) {
+bool ProjectHost::post(audio::AudioMsg m) {
+    constexpr auto kStallTimeout = std::chrono::milliseconds(500);
     m.seq = seq_.load(std::memory_order_relaxed) + 1;
+    engine_.collectGarbage();  // keeps the feedback queue from filling up during bursts
+    const auto giveUpAt = std::chrono::steady_clock::now() + kStallTimeout;
     while (!engine_.postMessage(m)) {
-        if (stopping_.load(std::memory_order_acquire)) {
-            m.obj.destroy();  // shutting down: this message will never be applied
-            return;
+        if (stopping_.load(std::memory_order_acquire) || degraded_ || std::chrono::steady_clock::now() >= giveUpAt) {
+            m.obj.destroy();  // this message will never be applied
+            if (!stopping_.load(std::memory_order_acquire)) degraded_.store(true, std::memory_order_release);
+            return false;
         }
         engine_.collectGarbage();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    if (m.kind == audio::MsgKind::AddTrack) everAdded_.insert(m.track);
     seq_.store(m.seq, std::memory_order_release);
+    return true;
+}
+
+void ProjectHost::postAll(std::vector<audio::AudioMsg>& messages) {
+    for (std::size_t i = 0; i < messages.size(); ++i) {
+        if (post(messages[i])) continue;
+        for (std::size_t j = i + 1; j < messages.size(); ++j) messages[j].obj.destroy();
+        return;
+    }
+}
+
+// The audio graph may have missed messages: drop every track it could hold and send the whole model again.
+void ProjectHost::resync() {
+    std::vector<audio::AudioMsg> messages;
+    for (const Uuid& id : everAdded_) {
+        audio::AudioMsg m;
+        m.kind = audio::MsgKind::RemoveTrack;
+        m.track = id;
+        messages.push_back(m);
+    }
+    for (audio::AudioMsg& m : initialMessages(project_, media_)) messages.push_back(m);
+    degraded_.store(false, std::memory_order_release);
+    postAll(messages);
 }
 
 void ProjectHost::publish(const Project& before) {
-    for (audio::AudioMsg& m : diffToMessages(before, project_, media_)) post(m);
+    if (degraded_) return;  // run() rebuilds the graph once the engine drains its queue again
+    auto messages = diffToMessages(before, project_, media_);
+    postAll(messages);
 }
 
 void ProjectHost::postTransport(audio::MsgKind kind, std::int64_t frame, std::int64_t frame2) {
@@ -71,6 +103,7 @@ void ProjectHost::postTransport(audio::MsgKind kind, std::int64_t frame, std::in
     m.kind = kind;
     m.frame = frame;
     m.frame2 = frame2;
+    if (degraded_) return;  // a rebuild follows the next change; the transport is not part of it
     post(m);
 }
 

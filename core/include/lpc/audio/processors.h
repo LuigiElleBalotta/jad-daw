@@ -34,6 +34,7 @@ public:
     void noteOn(std::uint8_t note, std::uint8_t velocity) noexcept;
     void noteOff(std::uint8_t note) noexcept;
     void allNotesOff() noexcept;                           // immediate silence
+    void releaseAll() noexcept;                            // every sounding voice fades out (5 ms)
     void render(float* l, float* r, int frames) noexcept;  // adds into l and r
 
 private:

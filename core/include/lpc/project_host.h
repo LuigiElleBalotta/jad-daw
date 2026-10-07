@@ -8,6 +8,8 @@
 #include <optional>
 #include <thread>
 #include <type_traits>
+#include <unordered_set>
+#include <vector>
 
 #include "lpc/audio/engine.h"
 #include "lpc/command.h"
@@ -18,8 +20,9 @@ namespace lpc {
 
 // Owns the authoritative Project, the undo stack and the project thread. Every request (commands, undo,
 // reads, transport) runs on that thread, in submission order. After each accepted change the host
-// translates it into audio messages and posts them to the engine. If the engine stops draining its queue,
-// the project thread waits (nothing is dropped); destruction cancels the wait.
+// translates it into audio messages and posts them to the engine. If the engine stops draining its queue
+// (device unplugged or closed) the project thread waits only briefly, then stops posting so that reads and
+// saves keep working; as soon as the queue has room again the audio graph is rebuilt from the model.
 class ProjectHost {
 public:
     ProjectHost(Project initial, audio::AudioEngine& engine, MediaStore& media);
@@ -44,6 +47,7 @@ public:
     std::future<void> setLoop(std::int64_t startFrame, std::int64_t endFrame);
 
     std::uint64_t lastPostedSeq() const { return seq_.load(std::memory_order_acquire); }
+    bool degraded() const { return degraded_.load(std::memory_order_acquire); }  // true while the engine has stopped draining
 
 private:
     template <typename F>
@@ -57,7 +61,9 @@ private:
 
     void enqueue(std::function<void()> task);
     void run();
-    void post(audio::AudioMsg m);
+    bool post(audio::AudioMsg m);  // false when the engine is stalled (the message is destroyed) or shutting down
+    void postAll(std::vector<audio::AudioMsg>& messages);
+    void resync();
     void publish(const Project& before);
     void postTransport(audio::MsgKind kind, std::int64_t frame = 0, std::int64_t frame2 = 0);
 
@@ -67,6 +73,8 @@ private:
     MediaStore& media_;
     std::atomic<std::uint64_t> seq_{0};
     std::atomic<bool> stopping_{false};
+    std::atomic<bool> degraded_{false};      // the audio graph may have missed messages; cleared by a rebuild
+    std::unordered_set<Uuid> everAdded_;     // project thread only: every track id ever sent to the engine
 
     std::mutex mutex_;
     std::condition_variable cv_;

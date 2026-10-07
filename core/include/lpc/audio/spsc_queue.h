@@ -39,6 +39,11 @@ public:
         return true;
     }
 
+    // Producer side: true when the next push would fail.
+    bool full() const noexcept {
+        return tail_.load(std::memory_order_relaxed) - head_.load(std::memory_order_acquire) == Capacity;
+    }
+
     std::size_t sizeApprox() const noexcept {
         return tail_.load(std::memory_order_acquire) - head_.load(std::memory_order_acquire);
     }

@@ -1,4 +1,5 @@
 #include "lpc/model_json.h"
+#include "lpc/validation.h"
 
 #include <algorithm>
 #include <iterator>
@@ -42,6 +43,21 @@ void to_json(nlohmann::json& j, TrackKind k) { enumToJson(j, k, kKinds, std::siz
 void from_json(const nlohmann::json& j, TrackKind& k) { enumFromJson(j, k, kKinds, std::size(kKinds)); }
 void to_json(nlohmann::json& j, TimeBase b) { enumToJson(j, b, kBases, std::size(kBases)); }
 void from_json(const nlohmann::json& j, TimeBase& b) { enumFromJson(j, b, kBases, std::size(kBases)); }
+
+void to_json(nlohmann::json& j, const MidiNote& n) {
+    j = {{"start", n.start}, {"length", n.length}, {"note", n.note}, {"velocity", n.velocity}};
+}
+
+void from_json(const nlohmann::json& j, MidiNote& n) {
+    // read as int: a plain uint8_t conversion would wrap 300 to 44 without complaint
+    const int note = j.at("note").get<int>();
+    const int velocity = j.at("velocity").get<int>();
+    if (note < 0 || note > 255 || velocity < 0 || velocity > 255) throw std::runtime_error("MIDI note or velocity out of range");
+    j.at("start").get_to(n.start);
+    j.at("length").get_to(n.length);
+    n.note = static_cast<std::uint8_t>(note);
+    n.velocity = static_cast<std::uint8_t>(velocity);
+}
 
 void to_json(nlohmann::json& j, const TempoMap& m) {
     j = nlohmann::json::object();
@@ -97,7 +113,7 @@ Project projectFromJson(const nlohmann::json& j) {
     const auto masters = std::count_if(p.tracks.begin(), p.tracks.end(),
                                        [](const Track& t) { return t.kind == TrackKind::Master; });
     if (masters != 1) throw std::runtime_error("project must contain exactly one master track");
-    if (p.sampleRate < 8000 || p.sampleRate > 384000) throw std::runtime_error("unsupported sample rate");
+    if (const auto problem = checkProject(p)) throw std::runtime_error("invalid project: " + problem->message);
     return p;
 }
 

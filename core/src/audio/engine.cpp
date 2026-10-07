@@ -53,8 +53,10 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
 }
 
 void AudioEngine::drain() noexcept {
+    // Stops early when the feedback queue is full (nothing may be leaked) or after a fixed budget;
+    // what is left stays queued for the next block.
     AudioMsg m;
-    while (messages_.pop(m)) handle(m);
+    for (int i = 0; i < kMaxMessagesPerBlock && !feedback_.full() && messages_.pop(m); ++i) handle(m);
 }
 
 void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {

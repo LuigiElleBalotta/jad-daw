@@ -93,6 +93,8 @@ TEST_CASE("engine: a full queue reports failure instead of dropping, and drainin
     REQUIRE_FALSE(e.postMessage(msg(MsgKind::Stop, 99999)));
     std::vector<float> l(64), r(64);
     e.processBlock(l.data(), r.data(), 64);
+    REQUIRE(e.appliedSeq() == kMaxMessagesPerBlock);  // one block applies a bounded batch, in order
+    for (int block = 0; block < 20 && e.appliedSeq() < kMessageQueueCapacity; ++block) e.processBlock(l.data(), r.data(), 64);
     REQUIRE(e.appliedSeq() == kMessageQueueCapacity);  // all of them, in order
     REQUIRE(e.postMessage(msg(MsgKind::Stop, 99999)));
 }

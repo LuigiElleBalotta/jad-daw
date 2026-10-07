@@ -1,13 +1,21 @@
 name: ci
 on: [push, pull_request]
 jobs:
-  windows:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            configure: -G "Visual Studio 17 2022" -A x64
+          - os: macos-latest   # Apple Silicon: also covers weakly ordered memory and CoreAudio via JUCE
+            configure: -DCMAKE_BUILD_TYPE=Release
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -S . -B build ${{ matrix.configure }}
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure

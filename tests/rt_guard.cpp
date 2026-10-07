@@ -1,10 +1,12 @@
 #include "rt_guard.h"
 
-#include <malloc.h>
-
 #include <atomic>
 #include <cstdlib>
 #include <new>
+
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 namespace {
 
@@ -22,9 +24,28 @@ void* allocate(std::size_t n) {
     return p;
 }
 
+// MSVC has no aligned free that matches std::free; elsewhere posix_memalign memory is released with free.
+void* alignedAlloc(std::size_t n, std::size_t alignment) {
+#ifdef _WIN32
+    return _aligned_malloc(n, alignment);
+#else
+    void* p = nullptr;
+    if (alignment < sizeof(void*)) alignment = sizeof(void*);
+    return posix_memalign(&p, alignment, n) == 0 ? p : nullptr;
+#endif
+}
+
+void alignedFree(void* p) {
+#ifdef _WIN32
+    _aligned_free(p);
+#else
+    std::free(p);
+#endif
+}
+
 void* allocateAligned(std::size_t n, std::size_t alignment) {
     note();
-    void* p = _aligned_malloc(n ? n : alignment, alignment);
+    void* p = alignedAlloc(n ? n : alignment, alignment);
     if (!p) throw std::bad_alloc();
     return p;
 }
@@ -48,7 +69,7 @@ void operator delete(void* p) noexcept { std::free(p); }
 void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
-void operator delete(void* p, std::align_val_t) noexcept { _aligned_free(p); }
-void operator delete[](void* p, std::align_val_t) noexcept { _aligned_free(p); }
-void operator delete(void* p, std::size_t, std::align_val_t) noexcept { _aligned_free(p); }
-void operator delete[](void* p, std::size_t, std::align_val_t) noexcept { _aligned_free(p); }
+void operator delete(void* p, std::align_val_t) noexcept { alignedFree(p); }
+void operator delete[](void* p, std::align_val_t) noexcept { alignedFree(p); }
+void operator delete(void* p, std::size_t, std::align_val_t) noexcept { alignedFree(p); }
+void operator delete[](void* p, std::size_t, std::align_val_t) noexcept { alignedFree(p); }

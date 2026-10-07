@@ -211,11 +211,14 @@ bool ProjectController::saveProject() {
     }
 }
 
-void ProjectController::refresh(std::uint64_t revision) {
+void ProjectController::refresh(std::uint64_t /*lowerBound*/) {
     if (!host_) return;
     lpc::MediaStore* media = media_.get();
-    auto future = std::make_shared<std::future<Snapshot>>(host_->read([revision, media](const lpc::Project& p) {
-        return makeSnapshot(p, revision, [media](const lpc::MediaItem& item) { return media->open(item) != nullptr; });
+    const lpc::ProjectHost* host = host_.get();
+    // The read runs on the project thread, which also bumps the revision right after each change: inside the read,
+    // revision() is exactly the revision of the state being copied (the listener's `revision` is only a lower bound).
+    auto future = std::make_shared<std::future<Snapshot>>(host_->read([host, media](const lpc::Project& p) {
+        return makeSnapshot(p, host->revision(), [media](const lpc::MediaItem& item) { return media->open(item) != nullptr; });
     }));
     QPointer<ProjectController> self(this);
     const std::uint64_t generation = generation_;

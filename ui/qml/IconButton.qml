@@ -32,6 +32,7 @@ Item {
     MultiEffect {
         anchors.fill: glyph
         source: glyph
+        brightness: 1.0
         colorization: 1.0
         colorizationColor: root.active ? Theme.accentPrimary : Theme.textPrimary
     }

@@ -42,6 +42,10 @@ ApplicationWindow {
                 project: controller
             }
         }
+        Mixer {
+            Layout.fillWidth: true
+            project: controller
+        }
         ErrorBar {
             Layout.fillWidth: true
             message: controller.lastError

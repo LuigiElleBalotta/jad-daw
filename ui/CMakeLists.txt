@@ -29,6 +29,9 @@ qt_add_qml_module(jad_ui_lib
         qml/RegionItem.qml
         qml/WaveformPreview.qml
         qml/TrackList.qml
+        qml/Meter.qml
+        qml/MixerStrip.qml
+        qml/Mixer.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg
@@ -37,6 +40,10 @@ qt_add_qml_module(jad_ui_lib
         qml/icons/forward.svg
         qml/icons/plus.svg
         qml/icons/mixer.svg
+        qml/icons/mute.svg
+        qml/icons/solo.svg
+        qml/icons/chevron-down.svg
+        qml/icons/chevron-right.svg
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
 )
 target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent lpc_core)

@@ -176,6 +176,26 @@ private slots:
         QTRY_COMPARE(countFiles(proj / "audio"), before + 1);
         QVERIFY(std::filesystem::exists(proj / "audio" / "tone (2).wav"));
     }
+    void setGainClampsAndIgnoresNaN() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.mixer()->rowCount() >= 3);
+        const QString id = c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("trackId")).toString();
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.setGain(id, std::numeric_limits<double>::quiet_NaN());
+        QCOMPARE(sent.count(), 0);
+        c.setGain(id, 1000.0);
+        QTRY_COMPARE(sent.count(), 1);
+        QTRY_COMPARE(c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("gainDb")).toDouble(), 24.0);
+        c.setPan(id, -5.0);
+        QTRY_COMPARE(c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("pan")).toDouble(), -1.0);
+        c.setMute(id, true);
+        QTRY_VERIFY(c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("mute")).toBool());
+        c.setSolo(id, true);
+        QTRY_VERIFY(c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("solo")).toBool());
+    }
     void invalidFolderKeepsPreviousProject() {
         TempDir dir;
         jad::ProjectController c(false);

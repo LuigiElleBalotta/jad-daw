@@ -270,6 +270,25 @@ void ProjectController::submit(const QString& commandJson) {
     sendCommand(j);
 }
 
+void ProjectController::setStripField(const QString& trackId, const char* field, nlohmann::json value) {
+    if (!host_) return;
+    sendCommand({{"type", "set_strip"}, {"trackId", trackId.toStdString()}, {field, std::move(value)}});
+}
+
+void ProjectController::setGain(const QString& trackId, double db) {
+    if (!std::isfinite(db)) return;
+    setStripField(trackId, "gainDb", std::clamp(db, -96.0, 24.0));
+}
+
+void ProjectController::setPan(const QString& trackId, double pan) {
+    if (!std::isfinite(pan)) return;
+    setStripField(trackId, "pan", std::clamp(pan, -1.0, 1.0));
+}
+
+void ProjectController::setMute(const QString& trackId, bool on) { setStripField(trackId, "mute", on); }
+
+void ProjectController::setSolo(const QString& trackId, bool on) { setStripField(trackId, "solo", on); }
+
 void ProjectController::moveRegion(const QString& regionId, double startBeats) {
     if (!host_ || !std::isfinite(startBeats)) return;
     const RegionRow* row = regions_.find(regionId);

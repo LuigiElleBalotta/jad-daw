@@ -3,8 +3,8 @@
 
 #include "lpc/device.h"
 
-namespace lpc::cli {
+namespace lpc {
 
 std::unique_ptr<IAudioDevice> makeJuceAudioDevice();
 
-}  // namespace lpc::cli
+}  // namespace lpc

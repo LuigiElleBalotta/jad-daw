@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(LPC_BUILD_CLI "Build lpc-cli (downloads JUCE)" ON)
+option(LPC_BUILD_UI "Build the Qt Quick UI (needs Qt 6)" OFF)
+option(LPC_WITH_JUCE "Build the audio device backend (downloads JUCE, AGPLv3)" ON)
 
 include(FetchContent)
 FetchContent_Declare(Catch2
@@ -25,6 +27,14 @@ endif()
 
 enable_testing()
 add_subdirectory(core)
+if(LPC_WITH_JUCE AND (LPC_BUILD_CLI OR LPC_BUILD_UI))
+    FetchContent_Declare(JUCE
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG 8.0.4
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(JUCE)
+    add_subdirectory(platform/juce)
+endif()
 if(LPC_BUILD_CLI)
     add_subdirectory(tools/lpc-cli)
 endif()

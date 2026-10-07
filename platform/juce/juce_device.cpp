@@ -7,7 +7,7 @@
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
-namespace lpc::cli {
+namespace lpc {
 
 namespace {
 
@@ -90,4 +90,4 @@ private:
 
 std::unique_ptr<IAudioDevice> makeJuceAudioDevice() { return std::make_unique<JuceAudioDevice>(); }
 
-}  // namespace lpc::cli
+}  // namespace lpc

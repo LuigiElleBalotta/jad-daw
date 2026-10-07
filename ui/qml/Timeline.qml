@@ -164,7 +164,8 @@ Item {
             const files = wavs(drop.urls)
             if (files.length === 0) return
             const beats = Math.max(0, root.snapBeat(root.xToBeats(drop.x)))
-            root.project.importAudio(files[0], root.trackIdAt(drop.y), beats)
+            // several files go on the same track, back to back
+            root.project.importAudioFiles(files, root.trackIdAt(drop.y), beats)
         }
     }
 

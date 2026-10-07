@@ -257,6 +257,46 @@ private slots:
         c.play();
         QVERIFY2(c.lastError().contains("not running"), qPrintable(c.lastError()));
     }
+    void importAudioFilesLaysTheClipsBackToBack() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        lpc::writeWav(dir.path() / "one.wav", 48000, 2, std::vector<float>(2 * 48000, 0.1f), lpc::WavFormat::Float32);   // 1 s = 2 beats at 120 bpm
+        lpc::writeWav(dir.path() / "two.wav", 48000, 2, std::vector<float>(2 * 48000, 0.1f), lpc::WavFormat::Float32);
+        c.importAudioFiles({url(dir.path() / "one.wav"), url(dir.path() / "two.wav")}, firstAudioTrackId(c), 4.0);
+        QTRY_COMPARE(c.regions()->rowCount(), n + 2);
+        QList<double> starts;
+        const auto roles = c.regions()->roleNames();
+        for (int i = 0; i < c.regions()->rowCount(); ++i)
+            starts << c.regions()->data(c.regions()->index(i), roles.key("startBeats")).toDouble();
+        const auto has = [&](double v) { return std::any_of(starts.begin(), starts.end(), [v](double s) { return qAbs(s - v) < 0.01; }); };
+        QVERIFY(has(4.0));
+        QVERIFY(has(6.0));  // the second one starts where the first one ends
+    }
+    void importAudioFilesKeepsGoingAfterABadFile() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        lpc::writeWav(dir.path() / "bad44.wav", 44100, 2, std::vector<float>(2 * 441, 0.1f), lpc::WavFormat::Float32);
+        lpc::writeWav(dir.path() / "good.wav", 48000, 2, std::vector<float>(2 * 4800, 0.1f), lpc::WavFormat::Float32);
+        c.importAudioFiles({url(dir.path() / "bad44.wav"), url(dir.path() / "good.wav")}, firstAudioTrackId(c), 0.0);
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+        QVERIFY(c.lastError().contains("44100"));
+    }
+    void openingAnInvalidProjectEmitsTheLoaderMessage() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QSignalSpy failed(&c, &jad::ProjectController::projectOpenFailed);
+        QVERIFY(!c.openProject(url(dir.path() / "nothing here")));
+        QCOMPARE(failed.count(), 1);
+        QVERIFY(failed.first().first().toString().contains("Cannot open project"));
+    }
     void invalidFolderKeepsPreviousProject() {
         TempDir dir;
         jad::ProjectController c(false);

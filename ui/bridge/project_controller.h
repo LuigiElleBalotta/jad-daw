@@ -1,4 +1,5 @@
 #pragma once
+#include <QList>
 #include <QObject>
 #include <QStringList>
 #include <QHash>
@@ -10,6 +11,7 @@
 #include <QtQml/qqmlregistration.h>
 
 #include <atomic>
+#include <deque>
 #include <functional>
 #include <filesystem>
 #include <memory>
@@ -114,6 +116,8 @@ public:
     // Copies a 1-2 channel WAV of the project sample rate into <project>/audio and adds it as media plus a region
     // on `trackId` at `startBeats`, as one undo step. Errors go to lastError.
     Q_INVOKABLE void importAudio(const QUrl& file, const QString& trackId, double startBeats);
+    // Several files: imported one after the other, back to back from `startBeats`. A bad file is reported and skipped.
+    Q_INVOKABLE void importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats);
     // Peaks of an audio file of the project, `buckets` values in [0,1]. Empty until computed (on a worker);
     // waveformReady(mediaId) fires when the call can be repeated to get them.
     Q_INVOKABLE QVariantList waveformPeaks(const QString& mediaId, int buckets);
@@ -135,12 +139,22 @@ signals:
     void peakChanged();
     void commandSent(const QString& type);
     void audioEnabledChanged();
+    // The loader refused a folder; the message is the loader's. The previous project stays open.
+    void projectOpenFailed(const QString& message);
     void waveformReady(const QString& mediaId);
 
 private:
-    // `done(accepted)` runs on the Qt thread once the project thread has answered (not for a command that never got sent).
+    // `done(accepted)` runs on the Qt thread once the project thread has answered, or at once when nothing could be sent.
     void setStripField(const QString& trackId, const char* field, nlohmann::json value);
     void loadShortcuts();
+    struct PendingImport {
+        QUrl file;
+        QString trackId;
+        double startBeats;  // NaN: right after the previous clip
+    };
+    void startNextImport();
+    // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
+    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done);
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     void refresh(std::uint64_t revision);
     void applySnapshot(Snapshot snapshot, std::uint64_t generation);
@@ -165,6 +179,9 @@ private:
     QTimer timer_;
 
     std::unique_ptr<ShortcutMap> shortcuts_;
+    std::deque<PendingImport> importQueue_;
+    bool importRunning_ = false;
+    double lastImportEnd_ = 0.0;
     QHash<QString, QString> mediaPaths_;
     QHash<QString, QVariantList> peaksCache_;  // key: mediaId + "#" + buckets
     QSet<QString> peaksPending_;

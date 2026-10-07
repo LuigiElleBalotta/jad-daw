@@ -30,6 +30,19 @@ ApplicationWindow {
         onAccepted: controller.newProject(selectedFolder)
     }
 
+    MessageDialog {
+        id: openErrorDialog
+        title: qsTr("Cannot open project")
+        buttons: MessageDialog.Ok
+    }
+    Connections {
+        target: controller
+        function onProjectOpenFailed(message) {
+            openErrorDialog.text = message
+            openErrorDialog.open()
+        }
+    }
+
     // actions that appear in the menus carry their sequence; the shortcut map decides it
     Action { id: newAction; text: qsTr("New…"); onTriggered: newDialog.open() }
     Action { id: openAction; text: qsTr("Open…"); shortcut: controller.shortcut("file.open"); onTriggered: openDialog.open() }

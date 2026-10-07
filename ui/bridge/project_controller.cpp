@@ -10,7 +10,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <deque>
 #include <future>
+#include <limits>
 #include <nlohmann/json.hpp>
 
 #include "lpc/audio/engine.h"
@@ -135,12 +137,15 @@ bool ProjectController::openProject(const QUrl& folder) {
     try {
         project = lpc::loadProject(path);
     } catch (const std::exception& e) {
-        setError(QString("Cannot open project: ") + QString::fromUtf8(e.what()));
+        const QString message = QString("Cannot open project: ") + QString::fromUtf8(e.what());
+        setError(message);
+        emit projectOpenFailed(message);
         return false;  // the current project stays open
     }
 
     teardown();
     ++generation_;
+    importQueue_.clear();  // pending imports were meant for the previous project
     dir_ = path;
     shownRevision_ = 0;
     peaksCache_.clear();
@@ -258,6 +263,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
 void ProjectController::sendCommand(const nlohmann::json& command, std::function<void(bool)> done) {
     if (!host_) {
         setError("No project is open");
+        if (done) done(false);
         return;
     }
     lpc::CommandPtr cmd;
@@ -265,6 +271,7 @@ void ProjectController::sendCommand(const nlohmann::json& command, std::function
         cmd = lpc::commandFromJson(command);
     } catch (const std::exception& e) {
         setError(QString("Invalid command: ") + QString::fromUtf8(e.what()));
+        if (done) done(false);
         return;
     }
     emit commandSent(QString::fromStdString(command.value("type", std::string())));
@@ -351,10 +358,41 @@ void ProjectController::deleteRegions(const QStringList& regionIds) {
 }
 
 void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId, double startBeats) {
-    if (!host_ || !std::isfinite(startBeats)) return;
+    importAudioFiles({fileUrl}, trackId, startBeats);
+}
+
+void ProjectController::importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats) {
+    if (!host_ || files.isEmpty() || !std::isfinite(startBeats)) return;
     const TrackRow* track = tracks_.find(trackId);
     if (!track || track->kind != "audio") {
         setError("Audio can only be dropped on an audio track");
+        return;
+    }
+    for (int i = 0; i < files.size(); ++i)
+        importQueue_.push_back({files[i], trackId, i == 0 ? startBeats : std::numeric_limits<double>::quiet_NaN()});
+    if (!importRunning_) startNextImport();
+}
+
+void ProjectController::startNextImport() {
+    if (importQueue_.empty()) {
+        importRunning_ = false;
+        return;
+    }
+    importRunning_ = true;
+    const PendingImport next = importQueue_.front();
+    importQueue_.pop_front();
+    const double start = std::isnan(next.startBeats) ? lastImportEnd_ : next.startBeats;
+    QPointer<ProjectController> self(this);
+    runImport(next.file, next.trackId, start, [self, start](bool ok, double endBeats) {
+        if (!self) return;
+        self->lastImportEnd_ = ok ? endBeats : start;  // a failed file leaves the spot free for the next one
+        self->startNextImport();
+    });
+}
+
+void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done) {
+    if (!host_) {
+        done(false, startBeats);
         return;
     }
     const std::filesystem::path source = toPath(fileUrl);
@@ -366,10 +404,14 @@ void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId,
     const std::int64_t startMicros = std::min<std::int64_t>(std::llround(startFrames * 1e6 / projectRate), lpc::kMaxPosition);
 
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros] {
+    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done] {
         auto fail = [&](const QString& message) {
             if (!self) return;
-            QMetaObject::invokeMethod(self.data(), [self, message] { if (self) self->setError(message); }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(self.data(), [self, message, done, beats] {
+                if (!self) return;
+                self->setError(message);
+                done(false, beats);
+            }, Qt::QueuedConnection);
         };
         const QString sourceName = QString::fromStdU16String(source.filename().u16string());
         std::int64_t frames = 0;
@@ -426,10 +468,12 @@ void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId,
             std::filesystem::remove(target, ignore);
             return;
         }
-        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash] {
+        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats] {
             std::error_code ignore;
             if (!self || self->dir_ != projectDir || !self->host_) {  // closed or replaced meanwhile
                 std::filesystem::remove(target, ignore);
+                if (self) self->importQueue_.clear();
+                done(false, beats);
                 return;
             }
             lpc::MediaItem item;
@@ -449,10 +493,14 @@ void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId,
             nlohmann::json commands = nlohmann::json::array();
             commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
             commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"region", region}, {"index", -1}});
-            self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [target](bool accepted) {
-                if (accepted) return;
-                std::error_code ec;
-                std::filesystem::remove(target, ec);  // rejected: leave no orphan file
+            const double endFrames = static_cast<double>(startMicros + region.length) * projectRate / 1e6;
+            const double endBeats = static_cast<double>(self->tempoMap_.samplesToTicks(endFrames, projectRate)) / lpc::kPPQ;
+            self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [target, done, endBeats, beats](bool accepted) {
+                if (!accepted) {
+                    std::error_code ec;
+                    std::filesystem::remove(target, ec);  // rejected: leave no orphan file
+                }
+                done(accepted, accepted ? endBeats : beats);
             });
         }, Qt::QueuedConnection);
     });
@@ -492,8 +540,9 @@ QVariantList ProjectController::waveformPeaks(const QString& mediaId, int bucket
     const QByteArray rel = path->toUtf8();
     const std::filesystem::path file = dir_ / std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(rel.constData()), static_cast<std::size_t>(rel.size())));
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, key, mediaId, buckets, file] {
-        const std::vector<float> peaks = WaveformCache().peaks(file, buckets);
+    const std::filesystem::path cacheDir = dir_ / "cache";
+    (void)QtConcurrent::run([self, key, mediaId, buckets, file, cacheDir] {
+        const std::vector<float> peaks = WaveformCache(cacheDir).peaks(file, buckets);
         if (!self) return;
         QVariantList list;
         list.reserve(static_cast<qsizetype>(peaks.size()));

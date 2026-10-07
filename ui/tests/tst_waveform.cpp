@@ -25,6 +25,47 @@ private slots:
         QVERIFY(f.open(QIODevice::WriteOnly)); f.write("not a wav"); f.close();
         QVERIFY(cache.peaks(dir.path() / "bad.wav", 10).empty());
     }
+    void peaksAreCachedOnDiskAndInvalidatedWhenTheFileChanges() {
+        TempDir dir;
+        const auto wav = dir.path() / "a.wav";
+        const auto cacheDir = dir.path() / "cache";
+        lpc::writeWav(wav, 48000, 2, std::vector<float>(2 * 4800, 0.5f), lpc::WavFormat::Float32);
+        jad::WaveformCache cache(cacheDir);
+        const auto first = cache.peaks(wav, 8);
+        QCOMPARE(int(first.size()), 8);
+        QVERIFY(qFuzzyCompare(first[0], 0.5f));
+
+        std::filesystem::path stored;
+        for (const auto& e : std::filesystem::directory_iterator(cacheDir)) stored = e.path();
+        QVERIFY(!stored.empty());
+        QCOMPARE(stored.extension().string(), std::string(".peaks"));
+
+        // overwrite the cache entry with a sentinel: the next call must read it instead of the wav
+        {
+            QFile f(QString::fromStdU16String(stored.u16string()));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            const std::vector<float> sentinel(8, 0.25f);
+            f.write(reinterpret_cast<const char*>(sentinel.data()), qint64(sentinel.size() * sizeof(float)));
+        }
+        const auto cached = cache.peaks(wav, 8);
+        QCOMPARE(int(cached.size()), 8);
+        QVERIFY(qFuzzyCompare(cached[0], 0.25f));
+
+        // the wav changes (different length): the stale entry is not used
+        lpc::writeWav(wav, 48000, 2, std::vector<float>(2 * 9600, 0.75f), lpc::WavFormat::Float32);
+        const auto fresh = cache.peaks(wav, 8);
+        QVERIFY(qFuzzyCompare(fresh[0], 0.75f));
+
+        // a damaged cache entry (wrong size) is ignored too
+        for (const auto& e : std::filesystem::directory_iterator(cacheDir)) {
+            QFile f(QString::fromStdU16String(e.path().u16string()));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("xx");
+        }
+        const auto again = cache.peaks(wav, 8);
+        QCOMPARE(int(again.size()), 8);
+        QVERIFY(qFuzzyCompare(again[0], 0.75f));
+    }
 };
 QTEST_MAIN(WaveformTest)
 #include "tst_waveform.moc"

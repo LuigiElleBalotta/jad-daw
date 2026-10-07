@@ -20,13 +20,14 @@ QVariant RegionModel::data(const QModelIndex& index, int role) const {
         case IsAudio: return r.audio;
         case Missing: return r.missing;
         case MediaId: return r.mediaId;
+        case Color: return r.color;
     }
     return {};
 }
 
 QHash<int, QByteArray> RegionModel::roleNames() const {
     return {{RegionId, "regionId"},       {TrackId, "trackId"},   {TrackIndex, "trackIndex"}, {StartBeats, "startBeats"},
-            {LengthBeats, "lengthBeats"}, {IsAudio, "isAudio"},   {Missing, "missing"},       {MediaId, "mediaId"}};
+            {LengthBeats, "lengthBeats"}, {IsAudio, "isAudio"},   {Missing, "missing"},       {MediaId, "mediaId"},       {Color, "trackColor"}};
 }
 
 }  // namespace jad

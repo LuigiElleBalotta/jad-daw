@@ -56,6 +56,23 @@ private slots:
         c.redo();
         QTRY_COMPARE(c.tracks()->rowCount(), n + 1);
     }
+    void waveformPeaksArriveAsynchronously() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString mediaId;
+        const auto roles = c.regions()->roleNames();
+        for (int i = 0; i < c.regions()->rowCount() && mediaId.isEmpty(); ++i)
+            mediaId = c.regions()->data(c.regions()->index(i), roles.key("mediaId")).toString();
+        QVERIFY(!mediaId.isEmpty());
+        QSignalSpy ready(&c, &jad::ProjectController::waveformReady);
+        QVERIFY(c.waveformPeaks(mediaId, 64).isEmpty());  // computed on a worker
+        QTRY_COMPARE(ready.count(), 1);
+        QCOMPARE(c.waveformPeaks(mediaId, 64).size(), 64);
+        QVERIFY(c.waveformPeaks("no-such-media", 64).isEmpty());
+        QVERIFY(c.waveformPeaks(mediaId, 0).isEmpty());
+    }
     void invalidFolderKeepsPreviousProject() {
         TempDir dir;
         jad::ProjectController c(false);

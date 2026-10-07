@@ -8,6 +8,7 @@ endfunction()
 jad_add_qt_test(jad_shell_tests tst_shell.cpp)
 jad_add_qt_test(jad_models_tests tst_models.cpp)
 jad_add_qt_test(jad_bridge_tests tst_bridge.cpp)
+jad_add_qt_test(jad_waveform_tests tst_waveform.cpp)
 
 qt_add_executable(jad_ui_qmltests qmltests.cpp)
 target_link_libraries(jad_ui_qmltests PRIVATE Qt6::QuickTest jad_ui_libplugin jad_ui_lib)

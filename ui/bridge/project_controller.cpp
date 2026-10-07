@@ -121,6 +121,8 @@ bool ProjectController::openProject(const QUrl& folder) {
     teardown();
     dir_ = path;
     shownRevision_ = 0;
+    peaksCache_.clear();
+    peaksPending_.clear();
     sampleRate_ = project.sampleRate;
     engine_ = std::make_unique<lpc::audio::AudioEngine>(static_cast<double>(project.sampleRate));
     media_ = std::make_unique<lpc::MediaStore>(path, /*streaming=*/true);
@@ -213,6 +215,7 @@ void ProjectController::applySnapshot(Snapshot s) {
     mixer_.reset(s.tracks);
     regions_.reset(s.regions);
     tempoMap_ = s.tempoMap;
+    mediaPaths_ = s.mediaPaths;
     sampleRate_ = s.sampleRate;
     name_ = s.name;
     bpm_ = s.bpm;
@@ -283,6 +286,31 @@ void ProjectController::redo() {
         const QString message = QString::fromStdString(error->code + ": " + error->message);
         QMetaObject::invokeMethod(self.data(), [self, message] { if (self) self->setError(message); }, Qt::QueuedConnection);
     });
+}
+
+QVariantList ProjectController::waveformPeaks(const QString& mediaId, int buckets) {
+    if (buckets <= 0 || buckets > 4096) return {};
+    const QString key = mediaId + '#' + QString::number(buckets);
+    if (const auto it = peaksCache_.constFind(key); it != peaksCache_.constEnd()) return it.value();
+    const auto path = mediaPaths_.constFind(mediaId);
+    if (path == mediaPaths_.constEnd() || peaksPending_.contains(key)) return {};
+    peaksPending_.insert(key);
+    const QByteArray rel = path->toUtf8();
+    const std::filesystem::path file = dir_ / std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(rel.constData()), static_cast<std::size_t>(rel.size())));
+    QPointer<ProjectController> self(this);
+    (void)QtConcurrent::run([self, key, mediaId, buckets, file] {
+        const std::vector<float> peaks = WaveformCache().peaks(file, buckets);
+        if (!self) return;
+        QVariantList list;
+        list.reserve(static_cast<qsizetype>(peaks.size()));
+        for (float v : peaks) list.push_back(static_cast<double>(v));
+        QMetaObject::invokeMethod(self.data(), [self, key, mediaId, list] {
+            if (!self || !self->peaksPending_.remove(key)) return;  // the project changed meanwhile
+            self->peaksCache_.insert(key, list);
+            emit self->waveformReady(mediaId);
+        }, Qt::QueuedConnection);
+    });
+    return {};
 }
 
 void ProjectController::play() {

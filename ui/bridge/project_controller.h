@@ -1,6 +1,9 @@
 #pragma once
 #include <QObject>
+#include <QHash>
+#include <QSet>
 #include <QString>
+#include <QVariantList>
 #include <QTimer>
 #include <QUrl>
 #include <QtQml/qqmlregistration.h>
@@ -16,6 +19,7 @@
 #include "bridge/region_model.h"
 #include "bridge/snapshot.h"
 #include "bridge/track_list_model.h"
+#include "bridge/waveform_cache.h"
 
 namespace lpc {
 class MediaStore;
@@ -49,6 +53,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool degraded READ degraded NOTIFY degradedChanged)
     Q_PROPERTY(QString deviceError READ deviceError NOTIFY deviceErrorChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    Q_PROPERTY(bool audioEnabled READ audioEnabled WRITE setAudioEnabled NOTIFY audioEnabledChanged)
     Q_PROPERTY(double masterPeak READ masterPeak NOTIFY peakChanged)
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -71,6 +76,12 @@ public:
     QString deviceError() const { return deviceError_; }
     QString lastError() const { return lastError_; }
     double masterPeak() const { return peak_; }
+    bool audioEnabled() const { return openAudioDevice_; }
+    void setAudioEnabled(bool enabled) {
+        if (enabled == openAudioDevice_) return;
+        openAudioDevice_ = enabled;
+        emit audioEnabledChanged();
+    }
     TrackListModel* tracks() { return &tracks_; }
     RegionModel* regions() { return &regions_; }
     MixerModel* mixer() { return &mixer_; }
@@ -86,6 +97,9 @@ public:
     Q_INVOKABLE void locateBeats(double beats);
     Q_INVOKABLE void setLoopBeats(double startBeats, double endBeats);
     Q_INVOKABLE void clearError();
+    // Peaks of an audio file of the project, `buckets` values in [0,1]. Empty until computed (on a worker);
+    // waveformReady(mediaId) fires when the call can be repeated to get them.
+    Q_INVOKABLE QVariantList waveformPeaks(const QString& mediaId, int buckets);
 
     // Same code path the change listener uses; lets tests feed snapshots in any order.
     void applySnapshotForTest(Snapshot snapshot) { applySnapshot(std::move(snapshot)); }
@@ -100,6 +114,8 @@ signals:
     void lastErrorChanged();
     void peakChanged();
     void commandSent(const QString& type);
+    void audioEnabledChanged();
+    void waveformReady(const QString& mediaId);
 
 private:
     void sendCommand(const nlohmann::json& command);
@@ -124,6 +140,10 @@ private:
     std::unique_ptr<lpc::ProjectHost> host_;
     std::filesystem::path dir_;
     QTimer timer_;
+
+    QHash<QString, QString> mediaPaths_;
+    QHash<QString, QVariantList> peaksCache_;  // key: mediaId + "#" + buckets
+    QSet<QString> peaksPending_;
 
     std::uint64_t shownRevision_ = 0;
     lpc::TempoMap tempoMap_;

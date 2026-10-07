@@ -11,21 +11,39 @@ ApplicationWindow {
     title: "JAD Daw"
     color: Theme.surfaceApp
 
-    ProjectController { id: project }
+    property alias project: controller
+    ProjectController { id: controller }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
         TransportBar {
             Layout.fillWidth: true
-            project: project
+            project: controller
         }
-        Item { Layout.fillWidth: true; Layout.fillHeight: true }
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
+            TrackList {
+                Layout.preferredWidth: 220
+                Layout.fillHeight: true
+                project: controller
+                scrollY: timeline.scrollY
+                headerHeight: timeline.rulerHeight
+            }
+            Timeline {
+                id: timeline
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                project: controller
+            }
+        }
         ErrorBar {
             Layout.fillWidth: true
-            message: project.lastError
+            message: controller.lastError
             visible: message !== ""
-            onDismissed: project.clearError()
+            onDismissed: controller.clearError()
         }
     }
 }

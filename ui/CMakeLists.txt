@@ -14,6 +14,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/region_model.cpp
         bridge/mixer_model.cpp
         bridge/project_controller.cpp
+        bridge/waveform_cache.cpp
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
@@ -23,6 +24,11 @@ qt_add_qml_module(jad_ui_lib
         qml/Knob.qml
         qml/ErrorBar.qml
         qml/TransportBar.qml
+        qml/Timeline.qml
+        qml/Ruler.qml
+        qml/RegionItem.qml
+        qml/WaveformPreview.qml
+        qml/TrackList.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg

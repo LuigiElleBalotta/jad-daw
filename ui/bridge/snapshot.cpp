@@ -43,6 +43,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
     s.bpm = p.tempoMap.tempos().empty() ? 120.0 : p.tempoMap.tempos().front().bpm;
     s.beatsPerBar = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().numerator;
     s.tempoMap = p.tempoMap;
+    for (const lpc::MediaItem& m : p.mediaPool) s.mediaPaths.insert(QString::fromStdString(m.id.toString()), QString::fromStdString(m.path));
 
     int row = 0;
     for (const lpc::Track& t : p.tracks) {
@@ -65,6 +66,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.id = QString::fromStdString(r.id.toString());
             rr.trackId = tr.id;
             rr.trackIndex = row;
+            rr.color = tr.color;
             rr.startBeats = toBeats(p, r, r.start);
             rr.lengthBeats = toBeats(p, r, r.start + r.length) - rr.startBeats;
             rr.audio = t.kind == lpc::TrackKind::Audio;

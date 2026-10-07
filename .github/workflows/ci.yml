@@ -2,6 +2,19 @@ name: ci
 on:
   push:
     branches: [main]
+    # only changes that can affect the build or the tests; docs, plans and the README do not start a run
+    paths:
+      - "core/**"
+      - "platform/**"
+      - "tools/**"
+      - "tests/**"
+      - "ui/**"
+      - "assets/fonts/**"
+      - "assets/icons/**"
+      - "assets/branding/**"
+      - "design/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/ci.yml"
 jobs:
   build:
     strategy:

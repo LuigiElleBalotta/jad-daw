@@ -25,7 +25,7 @@ endif()
 
 enable_testing()
 add_subdirectory(core)
-add_subdirectory(tests)
 if(LPC_BUILD_CLI)
     add_subdirectory(tools/lpc-cli)
 endif()
+add_subdirectory(tests)

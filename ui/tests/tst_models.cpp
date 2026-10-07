@@ -1,6 +1,7 @@
 #include <QtTest>
 #include <algorithm>
 
+#include "bridge/mixer_model.h"
 #include "bridge/region_model.h"
 #include "bridge/snapshot.h"
 #include "bridge/track_list_model.h"
@@ -30,6 +31,38 @@ private slots:
         const auto audio = std::find_if(s.regions.begin(), s.regions.end(), [](const jad::RegionRow& r) { return r.audio; });
         QVERIFY(audio != s.regions.end());
         QVERIFY(audio->missing);
+    }
+    void sameRowsAreUpdatedInPlace() {
+        // a model reset rebuilds every delegate (and drops a drag in progress): same ids must only emit dataChanged
+        auto track = [](const char* id, double gain) { jad::TrackRow t; t.id = id; t.name = id; t.kind = "audio"; t.gainDb = gain; return t; };
+        auto region = [](const char* id, double start) { jad::RegionRow r; r.id = id; r.startBeats = start; r.lengthBeats = 1; return r; };
+
+        jad::MixerModel mixer;
+        mixer.reset({track("a", 0), track("b", 0)});
+        QSignalSpy mixerReset(&mixer, &QAbstractItemModel::modelReset), mixerChanged(&mixer, &QAbstractItemModel::dataChanged);
+        mixer.reset({track("a", -3), track("b", 0)});
+        QCOMPARE(mixerReset.count(), 0);
+        QCOMPARE(mixerChanged.count(), 1);
+        QCOMPARE(mixer.data(mixer.index(0), mixer.roleNames().key("gainDb")).toDouble(), -3.0);
+        mixer.reset({track("a", -3), track("c", 0)});  // a different id: rebuilt
+        QCOMPARE(mixerReset.count(), 1);
+
+        jad::TrackListModel tracks;
+        tracks.reset({track("a", 0)});
+        QSignalSpy tracksReset(&tracks, &QAbstractItemModel::modelReset);
+        tracks.reset({track("a", 1)});
+        QCOMPARE(tracksReset.count(), 0);
+        tracks.reset({});
+        QCOMPARE(tracksReset.count(), 1);
+
+        jad::RegionModel regions;
+        regions.reset({region("r1", 0), region("r2", 4)});
+        QSignalSpy regionsReset(&regions, &QAbstractItemModel::modelReset);
+        regions.reset({region("r1", 2), region("r2", 4)});
+        QCOMPARE(regionsReset.count(), 0);
+        QCOMPARE(regions.data(regions.index(0), regions.roleNames().key("startBeats")).toDouble(), 2.0);
+        regions.reset({region("r1", 2)});
+        QCOMPARE(regionsReset.count(), 1);
     }
     void modelsResetAndExposeRoles() {
         jad::TrackListModel model;

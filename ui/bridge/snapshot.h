@@ -25,6 +25,16 @@ struct RegionRow {
     QString color;  // the colour name of its track
 };
 
+// True when `a` and `b` hold the same ids in the same order: the models then update in place (dataChanged) instead of
+// resetting, so delegates survive and a drag in progress is not lost.
+template <class Row>
+bool sameIds(const std::vector<Row>& a, const std::vector<Row>& b) {
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i)
+        if (a[i].id != b[i].id) return false;
+    return true;
+}
+
 // Everything the UI shows, copied out of a Project on the project thread. Plain data: safe to move to the Qt thread.
 struct Snapshot {
     std::uint64_t revision = 0;

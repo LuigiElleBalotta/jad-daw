@@ -5,9 +5,15 @@
 namespace jad {
 
 void MixerModel::reset(const std::vector<TrackRow>& rows) {
+    std::vector<TrackRow> ordered = rows;
+    std::stable_partition(ordered.begin(), ordered.end(), [](const TrackRow& r) { return !r.master; });  // master goes last
+    if (sameIds(rows_, ordered)) {
+        rows_ = std::move(ordered);
+        if (!rows_.empty()) emit dataChanged(index(0), index(static_cast<int>(rows_.size()) - 1));
+        return;
+    }
     beginResetModel();
-    rows_ = rows;
-    std::stable_partition(rows_.begin(), rows_.end(), [](const TrackRow& r) { return !r.master; });  // master goes last
+    rows_ = std::move(ordered);
     endResetModel();
 }
 

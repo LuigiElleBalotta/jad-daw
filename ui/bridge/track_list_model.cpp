@@ -3,6 +3,11 @@
 namespace jad {
 
 void TrackListModel::reset(const std::vector<TrackRow>& rows) {
+    if (sameIds(rows_, rows)) {
+        rows_ = rows;
+        if (!rows_.empty()) emit dataChanged(index(0), index(static_cast<int>(rows_.size()) - 1));
+        return;
+    }
     beginResetModel();
     rows_ = rows;
     endResetModel();

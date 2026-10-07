@@ -59,6 +59,11 @@ if(TARGET lpc_juce_device)
 endif()
 
 qt_add_executable(jad-daw main.cpp)
+if(WIN32)
+    enable_language(RC)
+    target_sources(jad-daw PRIVATE jad-daw.rc)
+endif()
+# macOS: the bundle icon (.icns) is not generated yet; set MACOSX_BUNDLE_ICON_FILE once assets/branding has one.
 target_link_libraries(jad-daw PRIVATE jad_ui_libplugin jad_ui_lib Qt6::Quick Qt6::QuickControls2)
 set_target_properties(jad-daw PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 

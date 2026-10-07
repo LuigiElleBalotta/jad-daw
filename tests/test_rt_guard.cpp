@@ -20,6 +20,10 @@ TEST_CASE("rt guard: counts allocations only inside a scope", "[rt]") {
         std::vector<int> v;
         v.reserve(256);
         REQUIRE(v.capacity() >= 256);
+        // libc++ allocates through __builtin_operator_new, which clang may drop when the memory is never used:
+        // let the pointer escape so the allocation really happens
+        static void* volatile escape;
+        escape = v.data();
     }
     REQUIRE(test::rt::violations() >= 2);
     test::rt::reset();

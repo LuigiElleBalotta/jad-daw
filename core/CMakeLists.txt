@@ -1,0 +1,7 @@
+file(GLOB_RECURSE LPC_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+add_library(lpc_core STATIC ${LPC_CORE_SOURCES})
+target_include_directories(lpc_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(lpc_core PUBLIC nlohmann_json::nlohmann_json)
+find_package(Threads REQUIRED)
+target_link_libraries(lpc_core PUBLIC Threads::Threads)
+set_target_properties(lpc_core PROPERTIES LINKER_LANGUAGE CXX)

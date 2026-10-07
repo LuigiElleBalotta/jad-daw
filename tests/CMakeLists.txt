@@ -1,0 +1,7 @@
+file(GLOB_RECURSE LPC_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+add_executable(lpc_tests ${LPC_TEST_SOURCES})
+target_link_libraries(lpc_tests PRIVATE lpc_core Catch2::Catch2WithMain)
+target_compile_definitions(lpc_tests PRIVATE LPC_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+include(Catch)
+catch_discover_tests(lpc_tests)

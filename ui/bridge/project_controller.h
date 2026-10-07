@@ -119,7 +119,10 @@ public:
     Q_INVOKABLE QVariantList waveformPeaks(const QString& mediaId, int buckets);
 
     // Same code path the change listener uses; lets tests feed snapshots in any order.
-    void applySnapshotForTest(Snapshot snapshot) { applySnapshot(std::move(snapshot)); }
+    void applySnapshotForTest(Snapshot snapshot) { applySnapshot(std::move(snapshot), generation_); }
+    void applySnapshotForTest(Snapshot snapshot, std::uint64_t generation) { applySnapshot(std::move(snapshot), generation); }
+    std::uint64_t generationForTest() const { return generation_; }
+    void forceDegradedForTest(bool on) { forcedDegraded_ = on; }
 
 signals:
     void projectChanged();
@@ -140,7 +143,7 @@ private:
     void loadShortcuts();
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     void refresh(std::uint64_t revision);
-    void applySnapshot(Snapshot snapshot);
+    void applySnapshot(Snapshot snapshot, std::uint64_t generation);
     void tick();
     void setError(const QString& message);
     void teardown();
@@ -166,6 +169,9 @@ private:
     QHash<QString, QVariantList> peaksCache_;  // key: mediaId + "#" + buckets
     QSet<QString> peaksPending_;
 
+    // Bumped on every open: reads and notifications started for a previous project must not touch the new one.
+    std::uint64_t generation_ = 0;
+    bool forcedDegraded_ = false;
     std::uint64_t shownRevision_ = 0;
     lpc::TempoMap tempoMap_;
     int sampleRate_ = 48000;

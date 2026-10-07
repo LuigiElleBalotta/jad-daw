@@ -102,7 +102,7 @@ void ProjectController::loadShortcuts() {
 
 QString ProjectController::shortcut(const QString& actionId) const { return shortcuts_ ? shortcuts_->sequence(actionId) : QString(); }
 
-bool ProjectController::degraded() const { return host_ && host_->degraded(); }
+bool ProjectController::degraded() const { return forcedDegraded_ || (host_ && host_->degraded()); }
 
 std::filesystem::path ProjectController::toPath(const QUrl& url) {
     const QString local = url.isLocalFile() ? url.toLocalFile() : url.toString();
@@ -140,6 +140,7 @@ bool ProjectController::openProject(const QUrl& folder) {
     }
 
     teardown();
+    ++generation_;
     dir_ = path;
     shownRevision_ = 0;
     peaksCache_.clear();
@@ -172,8 +173,9 @@ bool ProjectController::openProject(const QUrl& folder) {
     emit deviceErrorChanged();
 
     host_ = std::make_unique<lpc::ProjectHost>(std::move(project), *engine_, *media_);
-    host_->setChangeListener([this](std::uint64_t rev) {
-        QMetaObject::invokeMethod(this, [this, rev] { refresh(rev); }, Qt::QueuedConnection);
+    const std::uint64_t generation = generation_;
+    host_->setChangeListener([this, generation](std::uint64_t rev) {
+        QMetaObject::invokeMethod(this, [this, rev, generation] { if (generation == generation_) refresh(rev); }, Qt::QueuedConnection);
     }).get();
     refresh(host_->revision());
     timer_.start();
@@ -184,6 +186,10 @@ bool ProjectController::openProject(const QUrl& folder) {
 bool ProjectController::newProject(const QUrl& folder) {
     const std::filesystem::path path = toPath(folder);
     try {
+        if (std::filesystem::exists(path / "project.json")) {
+            setError("Cannot create project: this folder already contains a project");
+            return false;
+        }
         std::filesystem::create_directories(path);
         lpc::saveProject(lpc::Project{}, path);
     } catch (const std::exception& e) {
@@ -212,7 +218,8 @@ void ProjectController::refresh(std::uint64_t revision) {
         return makeSnapshot(p, revision, [media](const lpc::MediaItem& item) { return media->open(item) != nullptr; });
     }));
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, future] {
+    const std::uint64_t generation = generation_;
+    (void)QtConcurrent::run([self, future, generation] {
         Snapshot snapshot;
         try {
             snapshot = future->get();
@@ -220,13 +227,14 @@ void ProjectController::refresh(std::uint64_t revision) {
             return;  // the host went away
         }
         if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self, s = std::move(snapshot)]() mutable {
-            if (self) self->applySnapshot(std::move(s));
+        QMetaObject::invokeMethod(self.data(), [self, generation, s = std::move(snapshot)]() mutable {
+            if (self) self->applySnapshot(std::move(s), generation);
         }, Qt::QueuedConnection);
     });
 }
 
-void ProjectController::applySnapshot(Snapshot s) {
+void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
+    if (generation != generation_) return;  // read for a project that has been replaced
     if (s.revision < shownRevision_) return;  // an older read finished after a newer one
     shownRevision_ = s.revision;
     std::vector<TrackRow> withoutMaster;
@@ -382,17 +390,23 @@ void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId,
 
         // copy into <project>/audio under a name that is not taken yet
         std::filesystem::path target;
+        bool created = false;
         try {
             const std::filesystem::path audioDir = projectDir / "audio";
             std::filesystem::create_directories(audioDir);
             const std::filesystem::path stem = source.stem(), ext = source.extension();
-            target = audioDir / source.filename();
-            for (int n = 2; std::filesystem::exists(target); ++n)
-                target = audioDir / (stem.u16string() + u" (" + QString::number(n).toStdU16String() + u")" + ext.u16string());
-            std::filesystem::copy_file(source, target);
+            // copy_file without overwrite fails when the name is taken (also by a concurrent import): try the next name
+            for (int n = 1; !created; ++n) {
+                target = n == 1 ? audioDir / source.filename()
+                                : audioDir / (stem.u16string() + u" (" + QString::number(n).toStdU16String() + u")" + ext.u16string());
+                if (std::filesystem::exists(target)) continue;
+                std::error_code ec;
+                created = std::filesystem::copy_file(source, target, std::filesystem::copy_options::none, ec);
+                if (ec && ec != std::errc::file_exists) throw std::filesystem::filesystem_error("copy failed", source, target, ec);
+            }
         } catch (const std::exception& e) {
             std::error_code ignore;
-            if (!target.empty()) std::filesystem::remove(target, ignore);
+            if (created) std::filesystem::remove(target, ignore);  // only a file this worker made
             fail(QString("Cannot import %1: %2").arg(sourceName, QString::fromUtf8(e.what())));
             return;
         }
@@ -492,6 +506,10 @@ QVariantList ProjectController::waveformPeaks(const QString& mediaId, int bucket
 
 void ProjectController::play() {
     if (!host_) return;
+    if (degraded()) {
+        setError("Audio engine not running: playback is unavailable until it recovers");
+        return;
+    }
     if (!device_) {
         setError(QString("No audio output: ") + (deviceError_.isEmpty() ? QString("no device") : deviceError_));
         return;

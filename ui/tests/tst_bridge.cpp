@@ -220,6 +220,43 @@ private slots:
         c.toggleSolo("no-such-track");  // unknown track: nothing sent
         QCOMPARE(sent.count(), 0);
     }
+    void snapshotFromAPreviousProjectIsDropped() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir, u8"a.lpc"))));
+        const auto oldGeneration = c.generationForTest();
+        QVERIFY(c.openProject(url(makeDemo(dir, u8"b.lpc"))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        jad::Snapshot stale;
+        stale.revision = 500;
+        stale.name = "StaleFromA";
+        c.applySnapshotForTest(stale, oldGeneration);        // arrives late from the project that was replaced
+        QCOMPARE(c.projectName(), QStringLiteral("Demo"));
+        jad::Snapshot fresh;                                    // and it must not push the shown revision up
+        fresh.revision = 1;
+        fresh.name = "Fresh";
+        c.applySnapshotForTest(fresh, c.generationForTest());
+        QCOMPARE(c.projectName(), QStringLiteral("Fresh"));
+    }
+    void newProjectRefusesAnExistingProject() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        const auto proj = makeDemo(dir);
+        const auto before = std::filesystem::file_size(proj / "project.json");
+        QVERIFY(!c.newProject(url(proj)));
+        QVERIFY(!c.lastError().isEmpty());
+        QVERIFY(!c.hasProject());
+        QCOMPARE(std::filesystem::file_size(proj / "project.json"), before);
+        QVERIFY(!std::filesystem::exists(proj / "project.json.bak"));
+    }
+    void playReportsAStalledEngine() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        c.forceDegradedForTest(true);
+        c.play();
+        QVERIFY2(c.lastError().contains("not running"), qPrintable(c.lastError()));
+    }
     void invalidFolderKeepsPreviousProject() {
         TempDir dir;
         jad::ProjectController c(false);

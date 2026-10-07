@@ -17,7 +17,20 @@ qt_add_qml_module(jad_ui_lib
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
+        qml/IconButton.qml
+        qml/Panel.qml
+        qml/Fader.qml
+        qml/Knob.qml
+        qml/ErrorBar.qml
+        qml/TransportBar.qml
     RESOURCES
+        qml/icons/play.svg
+        qml/icons/stop.svg
+        qml/icons/loop.svg
+        qml/icons/rewind.svg
+        qml/icons/forward.svg
+        qml/icons/plus.svg
+        qml/icons/mixer.svg
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
 )
 target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent lpc_core)

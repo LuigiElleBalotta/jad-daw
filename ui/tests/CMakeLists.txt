@@ -1,0 +1,8 @@
+function(jad_add_qt_test name source)
+    qt_add_executable(${name} ${source})
+    target_link_libraries(${name} PRIVATE Qt6::Test jad_ui_libplugin jad_ui_lib)
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endfunction()
+
+jad_add_qt_test(jad_shell_tests tst_shell.cpp)

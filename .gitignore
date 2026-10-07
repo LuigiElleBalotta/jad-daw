@@ -5,3 +5,7 @@ out/
 CMakeUserPresets.json
 .superpowers/
 .claude/
+.qt/
+.qt-venv/
+build-ui/
+build-core/

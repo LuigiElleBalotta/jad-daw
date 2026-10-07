@@ -9,7 +9,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            configure: -G "Visual Studio 17 2022" -A x64
+            configure: -A x64   # default generator = newest Visual Studio on the runner
           - os: macos-latest   # Apple Silicon: also covers weakly ordered memory and CoreAudio via JUCE
             configure: -DCMAKE_BUILD_TYPE=Release
     runs-on: ${{ matrix.os }}

@@ -34,7 +34,7 @@ std::filesystem::path WaveformCache::cacheFile(const std::filesystem::path& wav,
     if (ec) return {};
     const std::u8string path = wav.generic_u8string();
     std::string key(path.begin(), path.end());
-    key += '|' + std::to_string(size) + '|' + std::to_string(mtime.time_since_epoch().count()) + '|' + std::to_string(buckets);
+    key += '|' + std::to_string(size) + '|' + std::to_string(static_cast<long long>(mtime.time_since_epoch().count())) + '|' + std::to_string(buckets);
     char name[32];
     std::snprintf(name, sizeof name, "%016llx.peaks", static_cast<unsigned long long>(fnv1a(key)));
     return cacheDir_ / name;

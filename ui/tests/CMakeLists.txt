@@ -9,6 +9,8 @@ jad_add_qt_test(jad_shell_tests tst_shell.cpp)
 jad_add_qt_test(jad_models_tests tst_models.cpp)
 jad_add_qt_test(jad_bridge_tests tst_bridge.cpp)
 jad_add_qt_test(jad_waveform_tests tst_waveform.cpp)
+jad_add_qt_test(jad_shortcuts_tests tst_shortcuts.cpp)
+target_compile_definitions(jad_shortcuts_tests PRIVATE JAD_DEFAULT_SHORTCUTS="${CMAKE_CURRENT_SOURCE_DIR}/../shortcuts/default-shortcuts.json")
 
 qt_add_executable(jad_ui_qmltests qmltests.cpp)
 target_link_libraries(jad_ui_qmltests PRIVATE Qt6::QuickTest jad_ui_libplugin jad_ui_lib)

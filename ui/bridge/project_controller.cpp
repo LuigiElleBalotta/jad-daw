@@ -2,6 +2,7 @@
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QStandardPaths>
 #include <QMetaObject>
 #include <QPointer>
 #include <QtConcurrent>
@@ -79,11 +80,27 @@ private:
 ProjectController::ProjectController(QObject* parent) : ProjectController(true, parent) {}
 
 ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QObject(parent), openAudioDevice_(openAudioDevice) {
+    loadShortcuts();
     timer_.setInterval(33);
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
 }
 
 ProjectController::~ProjectController() { teardown(); }
+
+void ProjectController::loadShortcuts() {
+    const auto read = [](const QString& path) {
+        QFile f(path);
+        return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+    };
+    const QString defaults = read(":/qt/qml/Jad/shortcuts/default-shortcuts.json");
+    // a missing user file is normal and not a problem
+    const QString user = read(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/shortcuts.json");
+    QStringList problems;
+    shortcuts_.reset(new ShortcutMap(ShortcutMap::fromFiles(defaults, user, &problems)));
+    for (const QString& p : problems) qWarning().noquote() << "shortcuts:" << p;
+}
+
+QString ProjectController::shortcut(const QString& actionId) const { return shortcuts_ ? shortcuts_->sequence(actionId) : QString(); }
 
 bool ProjectController::degraded() const { return host_ && host_->degraded(); }
 
@@ -288,6 +305,14 @@ void ProjectController::setPan(const QString& trackId, double pan) {
 void ProjectController::setMute(const QString& trackId, bool on) { setStripField(trackId, "mute", on); }
 
 void ProjectController::setSolo(const QString& trackId, bool on) { setStripField(trackId, "solo", on); }
+
+void ProjectController::toggleMute(const QString& trackId) {
+    if (const TrackRow* t = tracks_.find(trackId)) setMute(trackId, !t->mute);
+}
+
+void ProjectController::toggleSolo(const QString& trackId) {
+    if (const TrackRow* t = tracks_.find(trackId)) setSolo(trackId, !t->solo);
+}
 
 void ProjectController::moveRegion(const QString& regionId, double startBeats) {
     if (!host_ || !std::isfinite(startBeats)) return;

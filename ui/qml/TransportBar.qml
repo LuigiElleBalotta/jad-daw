@@ -9,6 +9,9 @@ Panel {
     implicitHeight: 48
     radius: 0
 
+    // the loop is the first four bars; turning it off sets an empty range
+    function toggleLoop() { project.setLoopBeats(0, project.loopEnabled ? 0 : project.beatsPerBar * 4) }
+
     function pad(n, w) { let s = String(n); while (s.length < w) s = "0" + s; return s }
     readonly property string barBeat: {
         const b = Math.max(0, project.positionBeats)
@@ -36,9 +39,8 @@ Panel {
         IconButton { source: "icons/stop.svg"; onClicked: root.project.stop() }
         IconButton {
             source: "icons/loop.svg"
-            toggle: true
             active: root.project.loopEnabled
-            onClicked: root.project.setLoopBeats(0, active ? root.project.beatsPerBar * 4 : 0)
+            onClicked: root.toggleLoop()
         }
 
         Rectangle {

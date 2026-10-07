@@ -3,6 +3,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf PROPERTIES QT_RESOURCE_ALIAS fonts/InterVariable.ttf)
+set_source_files_properties(shortcuts/default-shortcuts.json PROPERTIES QT_RESOURCE_ALIAS shortcuts/default-shortcuts.json)
 
 qt_add_library(jad_ui_lib STATIC)
 qt_add_qml_module(jad_ui_lib
@@ -15,6 +16,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/mixer_model.cpp
         bridge/project_controller.cpp
         bridge/waveform_cache.cpp
+        shortcuts/shortcut_map.cpp
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
@@ -32,6 +34,8 @@ qt_add_qml_module(jad_ui_lib
         qml/Meter.qml
         qml/MixerStrip.qml
         qml/Mixer.qml
+        qml/ThemedMenu.qml
+        qml/ThemedMenuItem.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg
@@ -45,6 +49,7 @@ qt_add_qml_module(jad_ui_lib
         qml/icons/chevron-down.svg
         qml/icons/chevron-right.svg
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
+        shortcuts/default-shortcuts.json
 )
 target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent lpc_core)
 target_include_directories(jad_ui_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bridge)

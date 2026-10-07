@@ -22,6 +22,7 @@
 #include "bridge/snapshot.h"
 #include "bridge/track_list_model.h"
 #include "bridge/waveform_cache.h"
+#include "shortcuts/shortcut_map.h"
 
 namespace lpc {
 class MediaStore;
@@ -104,6 +105,10 @@ public:
     Q_INVOKABLE void setPan(const QString& trackId, double pan);
     Q_INVOKABLE void setMute(const QString& trackId, bool on);
     Q_INVOKABLE void setSolo(const QString& trackId, bool on);
+    Q_INVOKABLE void toggleMute(const QString& trackId);
+    Q_INVOKABLE void toggleSolo(const QString& trackId);
+    // The key sequence (portable text) of an action id, empty when unknown; see shortcuts/default-shortcuts.json.
+    Q_INVOKABLE QString shortcut(const QString& actionId) const;
     Q_INVOKABLE void moveRegion(const QString& regionId, double startBeats);
     Q_INVOKABLE void deleteRegions(const QStringList& regionIds);
     // Copies a 1-2 channel WAV of the project sample rate into <project>/audio and adds it as media plus a region
@@ -132,6 +137,7 @@ signals:
 private:
     // `done(accepted)` runs on the Qt thread once the project thread has answered (not for a command that never got sent).
     void setStripField(const QString& trackId, const char* field, nlohmann::json value);
+    void loadShortcuts();
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     void refresh(std::uint64_t revision);
     void applySnapshot(Snapshot snapshot);
@@ -155,6 +161,7 @@ private:
     std::filesystem::path dir_;
     QTimer timer_;
 
+    std::unique_ptr<ShortcutMap> shortcuts_;
     QHash<QString, QString> mediaPaths_;
     QHash<QString, QVariantList> peaksCache_;  // key: mediaId + "#" + buckets
     QSet<QString> peaksPending_;

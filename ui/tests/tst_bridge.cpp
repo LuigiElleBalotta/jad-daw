@@ -196,6 +196,30 @@ private slots:
         c.setSolo(id, true);
         QTRY_VERIFY(c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("solo")).toBool());
     }
+    void shortcutsComeFromTheModuleResource() {
+        jad::ProjectController c(false);
+        QCOMPARE(c.shortcut("transport.playStop"), QStringLiteral("Space"));
+        QCOMPARE(c.shortcut("edit.undo"), QStringLiteral("Ctrl+Z"));
+        QVERIFY(c.shortcut("no.such.action").isEmpty());
+    }
+    void toggleMuteAndSoloFlipTheCurrentState() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 2);
+        const auto roles = c.tracks()->roleNames();
+        const QString id = c.tracks()->data(c.tracks()->index(0), roles.key("trackId")).toString();
+        const auto muted = [&] { return c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("mute")).toBool(); };
+        QVERIFY(!muted());
+        c.toggleMute(id);
+        QTRY_VERIFY(muted());
+        c.toggleMute(id);
+        QTRY_VERIFY(!muted());
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.toggleSolo("no-such-track");  // unknown track: nothing sent
+        QCOMPARE(sent.count(), 0);
+    }
     void invalidFolderKeepsPreviousProject() {
         TempDir dir;
         jad::ProjectController c(false);

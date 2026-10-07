@@ -36,10 +36,16 @@ Item {
         scrollY = Math.max(0, Math.min(maxY, scrollY + d))
     }
 
-    function select(id, extend) {
+    function select(id, extend, trackId) {
         const next = extend ? Object.assign({}, selectedIds) : ({})
-        next[id] = true
+        next[id] = trackId
         selectedIds = next
+    }
+    // the tracks that hold the selected regions
+    function selectedTrackIds() {
+        const seen = ({})
+        for (const id of Object.keys(selectedIds)) seen[selectedIds[id]] = true
+        return Object.keys(seen)
     }
     function clearSelection() { selectedIds = ({}) }
     function deleteSelected() {
@@ -66,7 +72,7 @@ Item {
         function onModelReset() {
             const kept = ({})
             for (const id of Object.keys(root.selectedIds))
-                if (root.project.regions.hasRegion(id)) kept[id] = true
+                if (root.project.regions.hasRegion(id)) kept[id] = root.selectedIds[id]
             root.selectedIds = kept
         }
     }
@@ -123,14 +129,14 @@ Item {
                 trackColor: model.trackColor
                 pixelsPerBeat: root.pixelsPerBeat
                 snapBeats: root.snapBeats
-                selected: root.selectedIds[model.regionId] === true
+                selected: root.selectedIds[model.regionId] !== undefined
                 x: root.beatsToX(startBeats)
                 y: trackIndex * root.rowHeight - root.scrollY + 2
                 width: lengthBeats * root.pixelsPerBeat
                 height: root.rowHeight - 4
                 // only what is on screen is drawn
                 visible: x + width > 0 && x < body.width
-                onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.select(id, extend) }
+                onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.select(id, extend, region.trackId) }
                 onMoved: (id, beats) => root.regionMoved(id, beats)
             }
         }

@@ -265,9 +265,9 @@ private:
 
 class AddMediaCmd final : public Command {
 public:
-    explicit AddMediaCmd(MediaItem item) : item_(std::move(item)) {}
+    AddMediaCmd(MediaItem item, int index) : item_(std::move(item)), index_(index) {}
     std::string type() const override { return "add_media"; }
-    json toJson() const override { return {{"type", type()}, {"item", item_}}; }
+    json toJson() const override { return {{"type", type()}, {"item", item_}, {"index", index_}}; }
 
     ApplyResult apply(Project& p) const override {
         if (item_.id.isNull() || p.findMedia(item_.id)) return fail("duplicate_id", "media id missing or already used");
@@ -275,12 +275,15 @@ public:
         if (item_.sampleRate != p.sampleRate) return fail("bad_media", "media sample rate must equal the project sample rate (no resampling)");
         if (item_.channels < 1 || item_.channels > 2) return fail("bad_media", "media must be mono or stereo");
         if (item_.frames < 0) return fail("bad_media", "media frame count must be >= 0");
-        p.mediaPool.push_back(item_);
+        if (index_ < -1 || index_ > static_cast<int>(p.mediaPool.size())) return fail("bad_index", "media index out of range");
+        const int idx = index_ < 0 ? static_cast<int>(p.mediaPool.size()) : index_;
+        p.mediaPool.insert(p.mediaPool.begin() + idx, item_);
         return success(makeRemoveMedia(item_.id));
     }
 
 private:
     MediaItem item_;
+    int index_;
 };
 
 class RemoveMediaCmd final : public Command {
@@ -296,12 +299,180 @@ public:
             for (const Region& r : t.regions)
                 if (r.mediaId == id_) return fail("in_use", "a region still uses this media");
         MediaItem removed = *it;
+        const int index = static_cast<int>(it - p.mediaPool.begin());
         p.mediaPool.erase(it);
-        return success(makeAddMedia(std::move(removed)));
+        return success(makeAddMedia(std::move(removed), index));
     }
 
 private:
     Uuid id_;
+};
+
+// ---------------------------------------------------------------- regions
+
+class AddRegionCmd final : public Command {
+public:
+    AddRegionCmd(Uuid trackId, Region region, int index) : trackId_(trackId), region_(std::move(region)), index_(index) {}
+    std::string type() const override { return "add_region"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"region", region_}, {"index", index_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        if (allRegionIds(p).count(region_.id)) return fail("duplicate_id", "region id already used");
+        if (auto e = checkRegion(p, t->kind, region_)) return fail(*e);
+        if (index_ < -1 || index_ > static_cast<int>(t->regions.size())) return fail("bad_index", "region index out of range");
+        const int idx = index_ < 0 ? static_cast<int>(t->regions.size()) : index_;
+        t->regions.insert(t->regions.begin() + idx, region_);
+        return success(makeRemoveRegion(region_.id));
+    }
+
+private:
+    Uuid trackId_;
+    Region region_;
+    int index_;
+};
+
+class RemoveRegionCmd final : public Command {
+public:
+    explicit RemoveRegionCmd(Uuid id) : id_(id) {}
+    std::string type() const override { return "remove_region"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        std::size_t idx = 0;
+        Track* t = p.findTrackOfRegion(id_, &idx);
+        if (!t) return fail("not_found", "no such region");
+        Region removed = std::move(t->regions[idx]);
+        t->regions.erase(t->regions.begin() + static_cast<std::ptrdiff_t>(idx));
+        return success(makeAddRegion(t->id, std::move(removed), static_cast<int>(idx)));
+    }
+
+private:
+    Uuid id_;
+};
+
+class MoveRegionCmd final : public Command {
+public:
+    MoveRegionCmd(Uuid id, std::int64_t start) : id_(id), start_(start) {}
+    std::string type() const override { return "move_region"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"start", start_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        std::size_t idx = 0;
+        Track* t = p.findTrackOfRegion(id_, &idx);
+        if (!t) return fail("not_found", "no such region");
+        if (start_ < 0) return fail("bad_region", "region start must be >= 0");
+        const std::int64_t old = t->regions[idx].start;
+        t->regions[idx].start = start_;
+        return success(makeMoveRegion(id_, old));
+    }
+
+private:
+    Uuid id_;
+    std::int64_t start_;
+};
+
+// ---------------------------------------------------------------- sends
+
+class AddSendCmd final : public Command {
+public:
+    AddSendCmd(Uuid trackId, Send send, int index) : trackId_(trackId), send_(send), index_(index) {}
+    std::string type() const override { return "add_send"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"send", send_}, {"index", index_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        if (t->kind == TrackKind::Master) return fail("invalid_kind", "the master track cannot have sends");
+        if (allSendIds(p).count(send_.id)) return fail("duplicate_id", "send id already used");
+        if (auto e = checkSendFields(p, trackId_, send_)) return fail(*e);
+        if (reaches(p, send_.targetTrackId, trackId_)) return fail("cycle", "this send would create a routing loop");
+        if (index_ < -1 || index_ > static_cast<int>(t->strip.sends.size())) return fail("bad_index", "send index out of range");
+        const int idx = index_ < 0 ? static_cast<int>(t->strip.sends.size()) : index_;
+        t->strip.sends.insert(t->strip.sends.begin() + idx, send_);
+        return success(makeRemoveSend(send_.id));
+    }
+
+private:
+    Uuid trackId_;
+    Send send_;
+    int index_;
+};
+
+class RemoveSendCmd final : public Command {
+public:
+    explicit RemoveSendCmd(Uuid id) : id_(id) {}
+    std::string type() const override { return "remove_send"; }
+    json toJson() const override { return {{"type", type()}, {"sendId", id_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        for (Track& t : p.tracks) {
+            auto it = std::find_if(t.strip.sends.begin(), t.strip.sends.end(), [&](const Send& s) { return s.id == id_; });
+            if (it == t.strip.sends.end()) continue;
+            const Send removed = *it;
+            const int idx = static_cast<int>(it - t.strip.sends.begin());
+            t.strip.sends.erase(it);
+            return success(makeAddSend(t.id, removed, idx));
+        }
+        return fail("not_found", "no such send");
+    }
+
+private:
+    Uuid id_;
+};
+
+// ---------------------------------------------------------------- inserts
+
+class SetInsertsCmd final : public Command {
+public:
+    SetInsertsCmd(Uuid trackId, std::vector<ProcessorRef> inserts) : trackId_(trackId), inserts_(std::move(inserts)) {}
+    std::string type() const override { return "set_inserts"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"inserts", inserts_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        for (const ProcessorRef& r : inserts_)
+            if (!isKnownEffect(r.processorId)) return fail("bad_value", "unknown insert processor: " + r.processorId);
+        std::vector<ProcessorRef> previous = std::move(t->strip.inserts);
+        t->strip.inserts = inserts_;
+        return success(makeSetInserts(trackId_, std::move(previous)));
+    }
+
+private:
+    Uuid trackId_;
+    std::vector<ProcessorRef> inserts_;
+};
+
+// ---------------------------------------------------------------- transaction
+
+class TransactionCmd final : public Command {
+public:
+    explicit TransactionCmd(std::vector<CommandPtr> cmds) : cmds_(std::move(cmds)) {}
+    std::string type() const override { return "transaction"; }
+    json toJson() const override {
+        json arr = json::array();
+        for (const auto& c : cmds_) arr.push_back(c->toJson());
+        return {{"type", type()}, {"commands", arr}};
+    }
+
+    ApplyResult apply(Project& p) const override {
+        std::vector<CommandPtr> inverses;
+        for (std::size_t i = 0; i < cmds_.size(); ++i) {
+            ApplyResult r = cmds_[i]->apply(p);
+            if (!r.ok()) {
+                for (auto it = inverses.rbegin(); it != inverses.rend(); ++it) (*it)->apply(p);  // inverses cannot fail
+                return fail(r.error->code, "command " + std::to_string(i) + ": " + r.error->message);
+            }
+            inverses.push_back(std::move(r.inverse));
+        }
+        std::reverse(inverses.begin(), inverses.end());
+        return success(makeTransaction(std::move(inverses)));
+    }
+
+private:
+    std::vector<CommandPtr> cmds_;
 };
 
 }  // namespace
@@ -311,8 +482,15 @@ CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCm
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
-CommandPtr makeAddMedia(MediaItem item) { return std::make_unique<AddMediaCmd>(std::move(item)); }
+CommandPtr makeAddMedia(MediaItem item, int index) { return std::make_unique<AddMediaCmd>(std::move(item), index); }
 CommandPtr makeRemoveMedia(Uuid mediaId) { return std::make_unique<RemoveMediaCmd>(mediaId); }
+CommandPtr makeAddRegion(Uuid trackId, Region region, int index) { return std::make_unique<AddRegionCmd>(trackId, std::move(region), index); }
+CommandPtr makeRemoveRegion(Uuid regionId) { return std::make_unique<RemoveRegionCmd>(regionId); }
+CommandPtr makeMoveRegion(Uuid regionId, std::int64_t newStart) { return std::make_unique<MoveRegionCmd>(regionId, newStart); }
+CommandPtr makeAddSend(Uuid trackId, Send send, int index) { return std::make_unique<AddSendCmd>(trackId, send, index); }
+CommandPtr makeRemoveSend(Uuid sendId) { return std::make_unique<RemoveSendCmd>(sendId); }
+CommandPtr makeSetInserts(Uuid trackId, std::vector<ProcessorRef> inserts) { return std::make_unique<SetInsertsCmd>(trackId, std::move(inserts)); }
+CommandPtr makeTransaction(std::vector<CommandPtr> commands) { return std::make_unique<TransactionCmd>(std::move(commands)); }
 
 CommandPtr commandFromJson(const nlohmann::json& j) {
     try {
@@ -330,9 +508,19 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         }
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());
-        if (type == "add_media") return makeAddMedia(j.at("item").get<MediaItem>());
+        if (type == "add_media") return makeAddMedia(j.at("item").get<MediaItem>(), j.value("index", -1));
         if (type == "remove_media") return makeRemoveMedia(j.at("mediaId").get<Uuid>());
-        // Task 6 adds its command types above this line.
+        if (type == "add_region") return makeAddRegion(j.at("trackId").get<Uuid>(), j.at("region").get<Region>(), j.value("index", -1));
+        if (type == "remove_region") return makeRemoveRegion(j.at("regionId").get<Uuid>());
+        if (type == "move_region") return makeMoveRegion(j.at("regionId").get<Uuid>(), j.at("start").get<std::int64_t>());
+        if (type == "add_send") return makeAddSend(j.at("trackId").get<Uuid>(), j.at("send").get<Send>(), j.value("index", -1));
+        if (type == "remove_send") return makeRemoveSend(j.at("sendId").get<Uuid>());
+        if (type == "set_inserts") return makeSetInserts(j.at("trackId").get<Uuid>(), j.at("inserts").get<std::vector<ProcessorRef>>());
+        if (type == "transaction") {
+            std::vector<CommandPtr> inner;
+            for (const auto& c : j.at("commands")) inner.push_back(commandFromJson(c));
+            return makeTransaction(std::move(inner));
+        }
         throw std::runtime_error("unknown command type: " + type);
     } catch (const nlohmann::json::exception& e) {
         throw std::runtime_error(std::string("invalid command: ") + e.what());

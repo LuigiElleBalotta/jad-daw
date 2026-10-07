@@ -1,0 +1,40 @@
+#pragma once
+#include <stdexcept>
+#include <string>
+
+#include <nlohmann/json.hpp>
+
+#include "lpc/model.h"
+
+namespace lpc {
+
+inline void to_json(nlohmann::json& j, const Uuid& u) { j = u.toString(); }
+inline void from_json(const nlohmann::json& j, Uuid& u) {
+    const auto parsed = Uuid::parse(j.get<std::string>());
+    if (!parsed) throw std::runtime_error("invalid uuid: " + j.dump());
+    u = *parsed;
+}
+
+void to_json(nlohmann::json& j, TrackKind k);
+void from_json(const nlohmann::json& j, TrackKind& k);
+void to_json(nlohmann::json& j, TimeBase b);
+void from_json(const nlohmann::json& j, TimeBase& b);
+void to_json(nlohmann::json& j, const TempoMap& m);
+void from_json(const nlohmann::json& j, TempoMap& m);
+void to_json(nlohmann::json& j, const Track& t);
+void from_json(const nlohmann::json& j, Track& t);
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MidiNote, start, length, note, velocity)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Region, id, timeBase, start, length, mediaId, sourceOffsetFrames, gainDb, notes)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ProcessorRef, processorId, params, state)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Send, id, targetTrackId, levelDb, preFader)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Strip, gainDb, pan, mute, solo, inserts, sends, output)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationPoint, tick, value)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationLane, id, target, points)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Marker, id, tick, name)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MediaItem, id, path, hash, sampleRate, channels, frames)
+
+nlohmann::json toJson(const Project& p);
+Project projectFromJson(const nlohmann::json& j);  // throws on any invalid or incomplete document
+
+}  // namespace lpc

@@ -6,3 +6,5 @@ function(jad_add_qt_test name source)
 endfunction()
 
 jad_add_qt_test(jad_shell_tests tst_shell.cpp)
+jad_add_qt_test(jad_models_tests tst_models.cpp)
+jad_add_qt_test(jad_bridge_tests tst_bridge.cpp)

@@ -8,6 +8,12 @@ qt_add_library(jad_ui_lib STATIC)
 qt_add_qml_module(jad_ui_lib
     URI Jad
     VERSION 1.0
+    SOURCES
+        bridge/snapshot.cpp
+        bridge/track_list_model.cpp
+        bridge/region_model.cpp
+        bridge/mixer_model.cpp
+        bridge/project_controller.cpp
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
@@ -15,7 +21,11 @@ qt_add_qml_module(jad_ui_lib
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
 )
 target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent lpc_core)
-target_include_directories(jad_ui_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(jad_ui_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bridge)
+if(TARGET lpc_juce_device)
+    target_link_libraries(jad_ui_lib PUBLIC lpc_juce_device)
+    target_compile_definitions(jad_ui_lib PUBLIC JAD_HAVE_JUCE=1)
+endif()
 
 qt_add_executable(jad-daw main.cpp)
 target_link_libraries(jad-daw PRIVATE jad_ui_libplugin jad_ui_lib Qt6::Quick Qt6::QuickControls2)

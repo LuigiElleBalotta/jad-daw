@@ -67,4 +67,17 @@ endif()
 target_link_libraries(jad-daw PRIVATE jad_ui_libplugin jad_ui_lib Qt6::Quick Qt6::QuickControls2)
 set_target_properties(jad-daw PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 
+# Release builds pass the tag (for example 0.0.1 or 1.0.0-1); the bundle versions must be plain numbers.
+set(JAD_VERSION "0.0.0-dev" CACHE STRING "Version shown by the app")
+string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" JAD_VERSION_NUMERIC "${JAD_VERSION}")
+if(NOT JAD_VERSION_NUMERIC)
+    set(JAD_VERSION_NUMERIC "0.0.0")
+endif()
+target_compile_definitions(jad-daw PRIVATE JAD_VERSION="${JAD_VERSION}")
+set_target_properties(jad-daw PROPERTIES
+    MACOSX_BUNDLE_BUNDLE_NAME "JAD Daw"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "org.jad.daw"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${JAD_VERSION_NUMERIC}"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${JAD_VERSION_NUMERIC}")
+
 add_subdirectory(tests)

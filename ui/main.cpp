@@ -11,11 +11,15 @@ int main(int argc, char** argv) {
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName("JAD Daw");
     QGuiApplication::setOrganizationName("JAD");
+#ifdef JAD_VERSION
+    QGuiApplication::setApplicationVersion(JAD_VERSION);
+#endif
     QQuickStyle::setStyle("Basic");
     QFontDatabase::addApplicationFont(":/qt/qml/Jad/fonts/InterVariable.ttf");
 
     QCommandLineParser parser;
     parser.addHelpOption();
+    parser.addVersionOption();
     QCommandLineOption projectOption("project", "Open the project in <folder> at startup.", "folder");
     parser.addOption(projectOption);
     parser.process(app);

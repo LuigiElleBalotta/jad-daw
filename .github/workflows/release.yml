@@ -1,0 +1,127 @@
+name: release
+
+# Builds the Windows exe and the macOS app and publishes them as a GitHub release, only for version tags that sit on main:
+#   0.0.x            alpha        (GitHub pre-release)
+#   0.y.z, y >= 1    beta         (GitHub pre-release)
+#   x.y.z-N          pre-release  (GitHub pre-release)
+#   x.y.z, x >= 1    release
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The tagged commit must be on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag $GITHUB_REF_NAME is not on main: releases are only built from main"
+            exit 1
+          fi
+      - name: Channel from the version
+        id: v
+        run: |
+          v="$GITHUB_REF_NAME"
+          if   [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then channel="pre-release"; pre=true
+          elif [[ "$v" =~ ^0\.0\.[0-9]+$ ]];                         then channel="alpha";       pre=true
+          elif [[ "$v" =~ ^0\.[0-9]+\.[0-9]+$ ]];                    then channel="beta";        pre=true
+          elif [[ "$v" =~ ^[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]];          then channel="release";     pre=false
+          else echo "::error::unexpected version $v"; exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
+          echo "$v is $channel"
+
+  build:
+    needs: meta
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            configure: -A x64 -T host=x64
+          - os: macos-latest
+            name: macos-arm64
+            configure: -DCMAKE_BUILD_TYPE=Release
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          modules: qtshadertools
+          cache: true
+      - name: Configure
+        run: cmake -S . -B build ${{ matrix.configure }} -DLPC_BUILD_UI=ON -DJAD_VERSION=${{ needs.meta.outputs.version }}
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dist = "jad-daw-${{ needs.meta.outputs.version }}-${{ matrix.name }}"
+          New-Item -ItemType Directory -Path $dist | Out-Null
+          Copy-Item build/ui/Release/jad-daw.exe $dist/
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir ui/qml "$dist/jad-daw.exe"
+          Copy-Item LICENSE, THIRD_PARTY.md $dist/
+          Copy-Item assets/fonts/LICENSE.txt "$dist/Inter-LICENSE.txt"
+          Compress-Archive -Path $dist -DestinationPath "$dist.zip"
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          app=build/ui/jad-daw.app
+          "$QT_ROOT_DIR/bin/macdeployqt" "$app" -qmldir=ui/qml
+          cp LICENSE THIRD_PARTY.md "$app/Contents/Resources/"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "jad-daw-${{ needs.meta.outputs.version }}-${{ matrix.name }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jad-daw-${{ matrix.name }}
+          path: jad-daw-*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          CHANNEL: ${{ needs.meta.outputs.channel }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+        run: |
+          flag=""
+          if [ "$PRERELEASE" = "true" ]; then flag="--prerelease"; fi
+          gh release create "$VERSION" dist/*.zip $flag \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "JAD Daw $VERSION ($CHANNEL)" \
+            --notes "JAD Daw $VERSION, $CHANNEL build.
+
+          - Windows: unzip and run \`jad-daw.exe\`.
+          - macOS (Apple Silicon): unzip, then right-click the app and choose Open the first time (the app is not signed yet).
+          - 48 kHz audio device and WAV files only. This is early software: expect rough edges."

@@ -120,6 +120,25 @@ TEST_CASE("resize_region: MIDI notes keep their position; notes outside go, stra
     REQUIRE(e.p == before);
 }
 
+TEST_CASE("resize_region: a MIDI note crossing the new right edge is clipped to the region; undo restores", "[commands][edit]") {
+    Edit e;
+    // region 0..4 beats; notes: inside, crossing the new right edge (beat 2), after it
+    const Region r = e.midiRegion(0, 4 * kPPQ, {{0, 480, 60, 100}, {1800, 960, 62, 100}, {3000, 480, 65, 100}});
+    e.add(e.inst, r);
+    const Project before = e.p;
+    auto res = makeResizeRegion(r.id, 0, 2 * kPPQ)->apply(e.p);  // new region: beats 0..2
+    REQUIRE(res.ok());
+    const Region& after = e.get(r.id);
+    REQUIRE(after.notes.size() == 2);
+    for (const MidiNote& n : after.notes) {
+        REQUIRE(n.start >= 0);
+        REQUIRE(n.start + n.length <= after.length);
+    }
+    REQUIRE(after.notes[1] == MidiNote{1800, 120, 62, 100});  // clipped at the new end
+    REQUIRE(res.inverse->apply(e.p).ok());
+    REQUIRE(e.p == before);
+}
+
 TEST_CASE("split_region: audio splits into two continuous halves; undo restores", "[commands][edit]") {
     Edit e;
     const Region r = e.audioRegion(0, 8 * kPPQ);

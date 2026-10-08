@@ -427,6 +427,7 @@ public:
                     n.length += n.start;
                     n.start = 0;
                 }
+                if (n.start + n.length > length_) n.length = length_ - n.start;  // crossing the new right edge
                 r.notes.push_back(n);
             }
         }

@@ -41,6 +41,15 @@ CommandPtr makeSetInserts(Uuid trackId, std::vector<ProcessorRef> inserts);
 CommandPtr makeSetPatchId(Uuid trackId, std::string patchId);          // "" clears the patch
 CommandPtr makeSetInstrument(Uuid trackId, ProcessorRef instrument);   // instrument tracks only
 CommandPtr makeSetOutput(Uuid trackId, Uuid output);                   // null output = master
+struct SendPatch {
+    std::optional<float> levelDb;
+    std::optional<bool> preFader;
+};
+CommandPtr makeSetSend(Uuid sendId, SendPatch patch);  // a patch changes only the fields it carries
+CommandPtr makeSetRegionGain(Uuid regionId, float gainDb);
+CommandPtr makeAddInsert(Uuid trackId, ProcessorRef insert, int index = -1);  // index -1 appends
+CommandPtr makeRemoveInsert(Uuid trackId, int index);
+CommandPtr makeSetInsertParam(Uuid trackId, int index, std::string param, std::optional<double> value);  // nullopt removes it
 CommandPtr makeTransaction(std::vector<CommandPtr> commands);
 
 CommandPtr commandFromJson(const nlohmann::json& j);  // throws std::runtime_error

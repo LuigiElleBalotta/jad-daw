@@ -747,6 +747,20 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "set_patch_id") return makeSetPatchId(j.at("trackId").get<Uuid>(), j.at("patchId").get<std::string>());
         if (type == "set_instrument") return makeSetInstrument(j.at("trackId").get<Uuid>(), j.at("instrument").get<ProcessorRef>());
         if (type == "set_output") return makeSetOutput(j.at("trackId").get<Uuid>(), j.at("output").get<Uuid>());
+        if (type == "set_send") {
+            SendPatch patch;
+            if (j.contains("levelDb")) patch.levelDb = j["levelDb"].get<float>();
+            if (j.contains("preFader")) patch.preFader = j["preFader"].get<bool>();
+            return makeSetSend(j.at("sendId").get<Uuid>(), patch);
+        }
+        if (type == "set_region_gain") return makeSetRegionGain(j.at("regionId").get<Uuid>(), j.at("gainDb").get<float>());
+        if (type == "add_insert") return makeAddInsert(j.at("trackId").get<Uuid>(), j.at("insert").get<ProcessorRef>(), j.value("index", -1));
+        if (type == "remove_insert") return makeRemoveInsert(j.at("trackId").get<Uuid>(), j.at("index").get<int>());
+        if (type == "set_insert_param") {
+            const auto& v = j.at("value");
+            return makeSetInsertParam(j.at("trackId").get<Uuid>(), j.at("index").get<int>(), j.at("param").get<std::string>(),
+                                      v.is_null() ? std::nullopt : std::optional<double>(v.get<double>()));
+        }
         if (type == "transaction") {
             std::vector<CommandPtr> inner;
             for (const auto& c : j.at("commands")) inner.push_back(commandFromJson(c));

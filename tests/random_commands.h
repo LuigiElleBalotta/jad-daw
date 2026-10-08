@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <random>
 #include <string>
 #include <vector>
@@ -25,7 +26,7 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
     std::vector<const Track*> senders = sources;
     senders.insert(senders.end(), busLike.begin(), busLike.end());
 
-    switch (pick(23)) {
+    switch (pick(28)) {
         case 0: {  // add track
             static const TrackKind kinds[] = {TrackKind::Audio, TrackKind::Midi, TrackKind::Instrument, TrackKind::Bus, TrackKind::Aux};
             Track t;
@@ -161,6 +162,35 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             if (nonMaster.empty()) return nullptr;
             const Uuid to = chance(30) || busLike.empty() ? Uuid{} : busLike[pick(busLike.size())]->id;
             return makeSetOutput(nonMaster[pick(nonMaster.size())]->id, to);
+        }
+        case 23:  // send level / pre-post
+            if (withSends.empty()) return nullptr;
+            {
+                const Track& t = *withSends[pick(withSends.size())];
+                SendPatch patch;
+                if (chance(70)) patch.levelDb = static_cast<float>(static_cast<int>(pick(30)) - 20);  // sometimes above +12
+                if (chance(40)) patch.preFader = chance(50);
+                return makeSetSend(t.strip.sends[pick(t.strip.sends.size())].id, patch);
+            }
+        case 24:  // region gain
+            if (withRegions.empty()) return nullptr;
+            {
+                const Track& t = *withRegions[pick(withRegions.size())];
+                return makeSetRegionGain(t.regions[pick(t.regions.size())].id, static_cast<float>(static_cast<int>(pick(40)) - 30));
+            }
+        case 25: {  // add insert (sometimes with a bad parameter)
+            ProcessorRef ins{kProcGain, {}, ""};
+            if (chance(80)) ins.params["gainDb"] = static_cast<double>(pick(40)) - 20.0;
+            return makeAddInsert(p.tracks[pick(p.tracks.size())].id, std::move(ins), chance(30) ? static_cast<int>(pick(3)) : -1);
+        }
+        case 26: {  // remove insert
+            const Track& t = p.tracks[pick(p.tracks.size())];
+            return makeRemoveInsert(t.id, static_cast<int>(pick(3)));
+        }
+        case 27: {  // insert parameter (sometimes removed, sometimes out of range)
+            const Track& t = p.tracks[pick(p.tracks.size())];
+            return makeSetInsertParam(t.id, static_cast<int>(pick(3)), chance(90) ? "gainDb" : "cutoff",
+                                      chance(20) ? std::optional<double>() : std::optional<double>(static_cast<double>(pick(40)) - 20.0));
         }
         default:
             return nullptr;

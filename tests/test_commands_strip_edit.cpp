@@ -1,4 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <optional>
 #include <random>
 
 #include "lpc/commands.h"
@@ -118,4 +120,107 @@ TEST_CASE("set_output: self, non-bus, cycles, master, unknown are rejected", "[c
     requireRejected(p, makeSetOutput(a.id, Uuid::random(gRng)), "bad_output");
     requireRejected(p, makeSetOutput(p.master()->id, b1.id), "invalid_kind");
     requireRejected(p, makeSetOutput(Uuid::random(gRng), b1.id), "not_found");
+}
+
+namespace {
+Send makeSend(const Uuid& target) { return Send{Uuid::random(gRng), target, -6.0f, false}; }
+ProcessorRef gainInsert(double db) { return ProcessorRef{kProcGain, {{"gainDb", db}}, ""}; }
+}  // namespace
+
+TEST_CASE("set_send: changes level and pre/post, a patch changes only what it carries, undo restores", "[commands][send]") {
+    const Track a = track(TrackKind::Audio, "Audio");
+    const Track bus = track(TrackKind::Bus, "Bus");
+    Project p = projectWith({a, bus});
+    const Send s = makeSend(bus.id);
+    REQUIRE(makeAddSend(a.id, s)->apply(p).ok());
+    SendPatch level;
+    level.levelDb = -12.0f;
+    requireUndo(p, makeSetSend(s.id, level));
+    REQUIRE(makeSetSend(s.id, level)->apply(p).ok());
+    REQUIRE(p.findTrack(a.id)->strip.sends[0].levelDb == -12.0f);
+    REQUIRE_FALSE(p.findTrack(a.id)->strip.sends[0].preFader);
+    SendPatch pre;
+    pre.preFader = true;
+    requireUndo(p, makeSetSend(s.id, pre));
+    requireRoundTrip(makeSetSend(s.id, level));
+    requireRoundTrip(makeSetSend(s.id, pre));
+}
+
+TEST_CASE("set_send: out of range, NaN and unknown sends are rejected", "[commands][send]") {
+    const Track a = track(TrackKind::Audio, "Audio");
+    const Track bus = track(TrackKind::Bus, "Bus");
+    Project p = projectWith({a, bus});
+    const Send s = makeSend(bus.id);
+    REQUIRE(makeAddSend(a.id, s)->apply(p).ok());
+    SendPatch tooLoud;
+    tooLoud.levelDb = 13.0f;
+    requireRejected(p, makeSetSend(s.id, tooLoud), "bad_value");
+    SendPatch nan;
+    nan.levelDb = std::nanf("");
+    requireRejected(p, makeSetSend(s.id, nan), "bad_value");
+    requireRejected(p, makeSetSend(Uuid::random(gRng), SendPatch{}), "not_found");
+}
+
+TEST_CASE("set_region_gain: sets the gain of one region, undo restores", "[commands][regiongain]") {
+    Track k = track(TrackKind::Instrument, "Keys");
+    Region r;
+    r.id = Uuid::random(gRng);
+    r.length = kPPQ * 4;
+    k.regions.push_back(r);
+    Project p = projectWith({k});
+    requireUndo(p, makeSetRegionGain(r.id, -6.0f));
+    requireRoundTrip(makeSetRegionGain(r.id, -6.0f));
+    requireRejected(p, makeSetRegionGain(r.id, 30.0f), "bad_value");
+    requireRejected(p, makeSetRegionGain(r.id, -100.0f), "bad_value");
+    requireRejected(p, makeSetRegionGain(r.id, std::nanf("")), "bad_value");
+    requireRejected(p, makeSetRegionGain(Uuid::random(gRng), 0.0f), "not_found");
+}
+
+TEST_CASE("add_insert and remove_insert: append, insert at an index, remove, exact inverses", "[commands][insert]") {
+    const Track a = track(TrackKind::Audio, "Audio");
+    Project p = projectWith({a});
+    REQUIRE(makeAddInsert(a.id, gainInsert(1.0))->apply(p).ok());
+    requireUndo(p, makeAddInsert(a.id, gainInsert(2.0)));              // append
+    requireUndo(p, makeAddInsert(a.id, gainInsert(3.0), 0));            // at the front
+    requireUndo(p, makeRemoveInsert(a.id, 0));
+    REQUIRE(makeAddInsert(a.id, gainInsert(2.0), 0)->apply(p).ok());
+    REQUIRE(p.findTrack(a.id)->strip.inserts.size() == 2);
+    REQUIRE(p.findTrack(a.id)->strip.inserts[0].params.at("gainDb") == 2.0);
+    requireRoundTrip(makeAddInsert(a.id, gainInsert(2.0), 1));
+    requireRoundTrip(makeRemoveInsert(a.id, 1));
+}
+
+TEST_CASE("add_insert and remove_insert: bad processors, parameters and indexes are rejected", "[commands][insert]") {
+    const Track a = track(TrackKind::Audio, "Audio");
+    Project p = projectWith({a});
+    requireRejected(p, makeAddInsert(a.id, ProcessorRef{"vendor.unknown", {}, ""}), "bad_value");
+    requireRejected(p, makeAddInsert(a.id, ProcessorRef{kProcGain, {{"gainDb", 99.0}}, ""}), "bad_value");
+    requireRejected(p, makeAddInsert(a.id, gainInsert(0.0), 5), "bad_index");
+    requireRejected(p, makeAddInsert(a.id, gainInsert(0.0), -2), "bad_index");
+    requireRejected(p, makeRemoveInsert(a.id, 0), "bad_index");
+    requireRejected(p, makeAddInsert(Uuid::random(gRng), gainInsert(0.0)), "not_found");
+}
+
+TEST_CASE("set_insert_param: sets, adds and removes a parameter, undo is exact", "[commands][insert]") {
+    const Track a = track(TrackKind::Audio, "Audio");
+    Project p = projectWith({a});
+    REQUIRE(makeAddInsert(a.id, ProcessorRef{kProcGain, {}, ""})->apply(p).ok());  // no parameters yet
+    requireUndo(p, makeSetInsertParam(a.id, 0, "gainDb", 3.0));                     // inverse removes it again
+    REQUIRE(makeSetInsertParam(a.id, 0, "gainDb", 3.0)->apply(p).ok());
+    requireUndo(p, makeSetInsertParam(a.id, 0, "gainDb", -2.0));                    // inverse restores 3.0
+    requireUndo(p, makeSetInsertParam(a.id, 0, "gainDb", std::nullopt));            // removes, inverse restores
+    requireRoundTrip(makeSetInsertParam(a.id, 0, "gainDb", 3.0));
+    requireRoundTrip(makeSetInsertParam(a.id, 0, "gainDb", std::nullopt));
+}
+
+TEST_CASE("set_insert_param: unknown parameter, out of range, NaN, bad index are rejected", "[commands][insert]") {
+    const Track a = track(TrackKind::Audio, "Audio");
+    Project p = projectWith({a});
+    REQUIRE(makeAddInsert(a.id, gainInsert(0.0))->apply(p).ok());
+    requireRejected(p, makeSetInsertParam(a.id, 0, "cutoff", 1.0), "bad_value");
+    requireRejected(p, makeSetInsertParam(a.id, 0, "gainDb", 25.0), "bad_value");
+    requireRejected(p, makeSetInsertParam(a.id, 0, "gainDb", std::nan("")), "bad_value");
+    requireRejected(p, makeSetInsertParam(a.id, 1, "gainDb", 1.0), "bad_index");
+    requireRejected(p, makeSetInsertParam(a.id, -1, "gainDb", 1.0), "bad_index");
+    requireRejected(p, makeSetInsertParam(Uuid::random(gRng), 0, "gainDb", 1.0), "not_found");
 }

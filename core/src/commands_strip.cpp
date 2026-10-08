@@ -81,7 +81,141 @@ private:
     Uuid output_;
 };
 
+class SetSendCmd final : public Command {
+public:
+    SetSendCmd(Uuid id, SendPatch patch) : id_(id), patch_(patch) {}
+    std::string type() const override { return "set_send"; }
+    json toJson() const override {
+        json j = {{"type", type()}, {"sendId", id_}};
+        if (patch_.levelDb) j["levelDb"] = *patch_.levelDb;
+        if (patch_.preFader) j["preFader"] = *patch_.preFader;
+        return j;
+    }
+    ApplyResult apply(Project& p) const override {
+        for (Track& t : p.tracks) {
+            for (Send& s : t.strip.sends) {
+                if (s.id != id_) continue;
+                Send next = s;
+                if (patch_.levelDb) next.levelDb = *patch_.levelDb;
+                if (patch_.preFader) next.preFader = *patch_.preFader;
+                if (auto e = checkSendFields(p, t.id, next)) return fail(*e);
+                SendPatch previous;
+                if (patch_.levelDb) previous.levelDb = s.levelDb;
+                if (patch_.preFader) previous.preFader = s.preFader;
+                s = next;
+                return success(makeSetSend(id_, previous));
+            }
+        }
+        return fail("not_found", "no such send");
+    }
+
+private:
+    Uuid id_;
+    SendPatch patch_;
+};
+
+class SetRegionGainCmd final : public Command {
+public:
+    SetRegionGainCmd(Uuid id, float gainDb) : id_(id), gainDb_(gainDb) {}
+    std::string type() const override { return "set_region_gain"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"gainDb", gainDb_}}; }
+    ApplyResult apply(Project& p) const override {
+        std::size_t index = 0;
+        Track* t = p.findTrackOfRegion(id_, &index);
+        if (!t) return fail("not_found", "no such region");
+        if (auto e = checkStripValues(gainDb_, 0.0f)) return fail(*e);  // the same -96..24 dB range as a strip
+        const float previous = t->regions[index].gainDb;
+        t->regions[index].gainDb = gainDb_;
+        return success(makeSetRegionGain(id_, previous));
+    }
+
+private:
+    Uuid id_;
+    float gainDb_;
+};
+
+class AddInsertCmd final : public Command {
+public:
+    AddInsertCmd(Uuid trackId, ProcessorRef insert, int index) : trackId_(trackId), insert_(std::move(insert)), index_(index) {}
+    std::string type() const override { return "add_insert"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"insert", insert_}, {"index", index_}}; }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        if (auto e = checkInsert(insert_)) return fail(*e);
+        auto& chain = t->strip.inserts;
+        if (index_ < -1 || index_ > static_cast<int>(chain.size())) return fail("bad_index", "insert index out of range");
+        const int at = index_ < 0 ? static_cast<int>(chain.size()) : index_;
+        chain.insert(chain.begin() + at, insert_);
+        return success(makeRemoveInsert(trackId_, at));
+    }
+
+private:
+    Uuid trackId_;
+    ProcessorRef insert_;
+    int index_;
+};
+
+class RemoveInsertCmd final : public Command {
+public:
+    RemoveInsertCmd(Uuid trackId, int index) : trackId_(trackId), index_(index) {}
+    std::string type() const override { return "remove_insert"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"index", index_}}; }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        auto& chain = t->strip.inserts;
+        if (index_ < 0 || index_ >= static_cast<int>(chain.size())) return fail("bad_index", "insert index out of range");
+        ProcessorRef removed = std::move(chain[static_cast<std::size_t>(index_)]);
+        chain.erase(chain.begin() + index_);
+        return success(makeAddInsert(trackId_, std::move(removed), index_));
+    }
+
+private:
+    Uuid trackId_;
+    int index_;
+};
+
+class SetInsertParamCmd final : public Command {
+public:
+    SetInsertParamCmd(Uuid trackId, int index, std::string param, std::optional<double> value)
+        : trackId_(trackId), index_(index), param_(std::move(param)), value_(value) {}
+    std::string type() const override { return "set_insert_param"; }
+    json toJson() const override {
+        return {{"type", type()}, {"trackId", trackId_}, {"index", index_}, {"param", param_},
+                {"value", value_ ? json(*value_) : json(nullptr)}};
+    }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        auto& chain = t->strip.inserts;
+        if (index_ < 0 || index_ >= static_cast<int>(chain.size())) return fail("bad_index", "insert index out of range");
+        ProcessorRef next = chain[static_cast<std::size_t>(index_)];
+        std::optional<double> previous;
+        if (const auto it = next.params.find(param_); it != next.params.end()) previous = it->second;
+        if (value_) next.params[param_] = *value_;
+        else next.params.erase(param_);
+        if (auto e = checkInsert(next)) return fail(*e);
+        chain[static_cast<std::size_t>(index_)] = std::move(next);
+        return success(makeSetInsertParam(trackId_, index_, param_, previous));
+    }
+
+private:
+    Uuid trackId_;
+    int index_;
+    std::string param_;
+    std::optional<double> value_;
+};
+
 }  // namespace
+
+CommandPtr makeSetSend(Uuid sendId, SendPatch patch) { return std::make_unique<SetSendCmd>(sendId, patch); }
+CommandPtr makeSetRegionGain(Uuid regionId, float gainDb) { return std::make_unique<SetRegionGainCmd>(regionId, gainDb); }
+CommandPtr makeAddInsert(Uuid trackId, ProcessorRef insert, int index) { return std::make_unique<AddInsertCmd>(trackId, std::move(insert), index); }
+CommandPtr makeRemoveInsert(Uuid trackId, int index) { return std::make_unique<RemoveInsertCmd>(trackId, index); }
+CommandPtr makeSetInsertParam(Uuid trackId, int index, std::string param, std::optional<double> value) {
+    return std::make_unique<SetInsertParamCmd>(trackId, index, std::move(param), value);
+}
 
 CommandPtr makeSetPatchId(Uuid trackId, std::string patchId) { return std::make_unique<SetPatchIdCmd>(trackId, std::move(patchId)); }
 CommandPtr makeSetInstrument(Uuid trackId, ProcessorRef instrument) { return std::make_unique<SetInstrumentCmd>(trackId, std::move(instrument)); }

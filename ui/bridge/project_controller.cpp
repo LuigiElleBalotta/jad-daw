@@ -499,7 +499,7 @@ void ProjectController::resizeRegion(const QString& regionId, double startBeats,
     if (!host_ || !std::isfinite(startBeats) || !std::isfinite(lengthBeats)) return;
     const RegionRow* row = regions_.find(regionId);
     if (!row) return;
-    const double minLength = std::max(snapBeats(), 1.0 / 16.0);
+    const double minLength = std::min(std::max(snapBeats(), 1.0 / 16.0), row->lengthBeats);  // a short region stays short
     const double start = std::clamp(startBeats, 0.0, kMaxBeats);
     const double end = std::clamp(start + std::max(lengthBeats, minLength), 0.0, kMaxBeats);
     const std::int64_t from = regionPosition(*row, start);

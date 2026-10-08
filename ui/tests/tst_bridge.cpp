@@ -569,6 +569,47 @@ private slots:
         c.undo();
         QTRY_VERIFY(c.regions()->rowCount() > 0);
     }
+    void resizingAShortRegionKeepsItShort() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString instrument;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i) {
+            const QString kind = c.tracks()->data(c.tracks()->index(i), c.tracks()->roleNames().key("kind")).toString();
+            if (kind == "instrument") instrument = c.tracks()->trackIdAt(i);
+        }
+        QVERIFY(!instrument.isEmpty());
+        const int n = c.regions()->rowCount();
+        c.createRegion(instrument, 8.0, 2.0);  // half a bar at snap "bar"
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+        const auto row = [&c]() {
+            for (int i = 0; i < c.regions()->rowCount(); ++i) {
+                const auto index = c.regions()->index(i);
+                if (c.regions()->data(index, c.regions()->roleNames().key("startBeats")).toDouble() == 8.0)
+                    return c.regions()->regionIdAt(i);
+            }
+            return QString();
+        };
+        const QString id = row();
+        QVERIFY(!id.isEmpty());
+        const auto lengthOf = [&c, id]() {
+            for (int i = 0; i < c.regions()->rowCount(); ++i)
+                if (c.regions()->regionIdAt(i) == id)
+                    return c.regions()->data(c.regions()->index(i), c.regions()->roleNames().key("lengthBeats")).toDouble();
+            return -1.0;
+        };
+        c.setSnap("bar");
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.resizeRegion(id, 8.0, 0.5);  // the right edge dragged left: it must not grow the region
+        QTRY_COMPARE(sent.count(), 1);
+        QTest::qWait(300);             // the host applies it on its own thread
+        QCOMPARE(lengthOf(), 2.0);
+        c.resizeRegion(id, 8.0, 2.0);  // the left edge dragged right: the end stays where it was
+        QTRY_COMPARE(sent.count(), 2);
+        QTest::qWait(300);
+        QCOMPARE(lengthOf(), 2.0);
+    }
     void splitAtPlayheadWorksOnSelectedRegionsOnly() {
         TempDir dir;
         jad::ProjectController c(false);

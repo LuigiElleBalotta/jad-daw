@@ -112,6 +112,29 @@ TestCase {
         verify(got[0][2] >= 1)  // never a zero or negative length
         verify(got[0][1] + got[0][2] <= 8 + 1e-9)  // the right edge did not move
     }
+    // a region shorter than the snap grid (1 bar here): an edge can only shorten it, never grow it or move the other edge
+    function test_a_short_region_right_edge_dragged_left_keeps_its_length() {
+        var r = createTemporaryObject(itemC, this, { startBeats: 8, lengthBeats: 2, width: 80, snapBeats: 4 })
+        r.tool = "pointer"
+        var got = []
+        r.resized.connect(function (id, s, l) { got.push([id, s, l]) })
+        mousePress(r, 78, 10)
+        mouseMove(r, 58, 10)
+        mouseRelease(r, 58, 10)
+        compare(got.length, 1)
+        compare(got[0], ["r1", 8, 2])
+    }
+    function test_a_short_region_left_edge_dragged_right_keeps_its_end() {
+        var r = createTemporaryObject(itemC, this, { startBeats: 8, lengthBeats: 2, width: 80, snapBeats: 4 })
+        r.tool = "pointer"
+        var got = []
+        r.resized.connect(function (id, s, l) { got.push([id, s, l]) })
+        mousePress(r, 2, 10)
+        mouseMove(r, 22, 10)
+        mouseRelease(r, 22, 10)
+        compare(got.length, 1)
+        compare(got[0], ["r1", 8, 2])
+    }
     function test_edges_do_nothing_with_other_tools() {
         var r = createTemporaryObject(itemC, this)
         r.tool = "scissors"

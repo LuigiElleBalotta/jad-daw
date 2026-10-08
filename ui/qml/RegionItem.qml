@@ -33,9 +33,10 @@ Item {
 
     function snap(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
 
-    // An edge was dragged by deltaPx: the other edge stays, the length never gets below one grid step.
+    // An edge was dragged by deltaPx: the other edge stays, the length never gets below one grid step (or below its own
+    // length when it is already shorter than that, so an edge only ever shortens such a region).
     function finishResize(left, deltaPx) {
-        const minLength = Math.max(snapBeats, 1 / 16)
+        const minLength = Math.min(Math.max(snapBeats, 1 / 16), lengthBeats)
         let s = startBeats, l = lengthBeats
         if (left) {
             const newStart = Math.min(snap(startBeats + deltaPx / pixelsPerBeat), startBeats + lengthBeats - minLength)

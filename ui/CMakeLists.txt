@@ -84,4 +84,26 @@ set_target_properties(jad-daw PROPERTIES
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${JAD_VERSION_NUMERIC}"
     MACOSX_BUNDLE_BUNDLE_VERSION "${JAD_VERSION_NUMERIC}")
 
+# Windows: copy the Qt DLLs and plugins next to the executables right after building, so that they start by
+# double click and under ctest without Qt on PATH (a missing DLL makes Windows open an error dialog per process).
+if(WIN32)
+    set(JAD_QML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/qml")
+    get_filename_component(JAD_QT_PLUGINS "${Qt6_DIR}/../../../plugins" ABSOLUTE)
+    find_program(JAD_WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin" NO_DEFAULT_PATH)
+    function(jad_deploy_qt target)
+        if(JAD_WINDEPLOYQT)
+            add_custom_command(TARGET ${target} POST_BUILD
+                COMMAND ${JAD_WINDEPLOYQT} $<IF:$<CONFIG:Debug>,--debug,--release> --no-translations --no-system-d3d-compiler
+                        --qmldir ${JAD_QML_DIR} $<TARGET_FILE:${target}>
+                COMMENT "windeployqt ${target}")
+            # the tests run with QT_QPA_PLATFORM=offscreen, a plugin that windeployqt does not copy
+            add_custom_command(TARGET ${target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${JAD_QT_PLUGINS}/platforms/qoffscreen$<$<CONFIG:Debug>:d>.dll" "$<TARGET_FILE_DIR:${target}>/platforms/"
+                COMMENT "offscreen platform plugin for ${target}")
+        endif()
+    endfunction()
+    jad_deploy_qt(jad-daw)
+endif()
+
 add_subdirectory(tests)

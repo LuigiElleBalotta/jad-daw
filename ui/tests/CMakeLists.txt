@@ -20,3 +20,7 @@ set_tests_properties(jad_ui_qmltests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
 
 jad_add_qt_test(jad_actions_tests tst_actions.cpp)
 target_compile_definitions(jad_actions_tests PRIVATE JAD_ACTIONS_JSON="${CMAKE_CURRENT_SOURCE_DIR}/../actions/actions.json")
+if(WIN32)
+    jad_deploy_qt(jad_ui_qmltests)
+    jad_deploy_qt(jad_shell_tests)
+endif()

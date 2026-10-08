@@ -25,7 +25,7 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
     std::vector<const Track*> senders = sources;
     senders.insert(senders.end(), busLike.begin(), busLike.end());
 
-    switch (pick(20)) {
+    switch (pick(23)) {
         case 0: {  // add track
             static const TrackKind kinds[] = {TrackKind::Audio, TrackKind::Midi, TrackKind::Instrument, TrackKind::Bus, TrackKind::Aux};
             Track t;
@@ -149,6 +149,19 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             return makeSetSignature(static_cast<Ticks>(pick(6)) * kPPQ * 4, static_cast<int>(1 + pick(8)), chance(90) ? 4 : 8);
         case 19:
             return makeRemoveSignature(static_cast<Ticks>(pick(6)) * kPPQ * 4);
+        case 20:  // patch id (sometimes invalid)
+            if (nonMaster.empty()) return nullptr;
+            return makeSetPatchId(nonMaster[pick(nonMaster.size())]->id,
+                                  chance(80) ? "patch." + std::to_string(pick(50)) : (chance(50) ? std::string() : std::string("bad id")));
+        case 21:  // instrument on any track (rejected unless it is an instrument track)
+            if (nonMaster.empty()) return nullptr;
+            return makeSetInstrument(nonMaster[pick(nonMaster.size())]->id,
+                                     ProcessorRef{chance(90) ? kProcSine : "vendor.unknown", {}, chance(50) ? "" : "s"});
+        case 22: {  // output: a bus, master, or something that cannot be one (cycles and self are rejected naturally)
+            if (nonMaster.empty()) return nullptr;
+            const Uuid to = chance(30) || busLike.empty() ? Uuid{} : busLike[pick(busLike.size())]->id;
+            return makeSetOutput(nonMaster[pick(nonMaster.size())]->id, to);
+        }
         default:
             return nullptr;
     }

@@ -1,5 +1,6 @@
 #include "lpc/validation.h"
 
+#include <cctype>
 #include <cmath>
 #include <unordered_set>
 #include <vector>
@@ -90,6 +91,18 @@ MaybeError checkTrackProps(const std::string& name, const std::string& color) {
     return std::nullopt;
 }
 
+bool validPatchId(const std::string& id) {
+    if (id.empty() || id.size() > 64) return false;
+    for (const unsigned char c : id)
+        if (!(std::isalnum(c) || c == '.' || c == '_' || c == '-')) return false;
+    return true;
+}
+
+MaybeError checkPatchId(const std::string& id) {
+    if (!id.empty() && !validPatchId(id)) return CommandError{"bad_value", "a patch id has 1 to 64 characters of letters, digits, '.', '_' or '-'"};
+    return std::nullopt;
+}
+
 bool validRelativeMediaPath(const std::string& path) {
     if (path.empty() || path.front() == '/' || path.find(':') != std::string::npos || path.find('\\') != std::string::npos) return false;
     std::size_t start = 0;
@@ -137,6 +150,7 @@ MaybeError checkProject(const Project& p) {
 
     for (const Track& t : p.tracks) {
         if (auto e = checkTrackProps(t.name, t.color)) return e;
+        if (auto e = checkPatchId(t.patchId)) return e;
         if (auto e = checkStripValues(t.strip.gainDb, t.strip.pan)) return e;
         const bool wantsInstrument = t.kind == TrackKind::Instrument;
         if (wantsInstrument != t.instrument.has_value() || (wantsInstrument && !isKnownInstrument(t.instrument->processorId)))

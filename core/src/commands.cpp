@@ -744,6 +744,9 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "add_send") return makeAddSend(j.at("trackId").get<Uuid>(), j.at("send").get<Send>(), j.value("index", -1));
         if (type == "remove_send") return makeRemoveSend(j.at("sendId").get<Uuid>());
         if (type == "set_inserts") return makeSetInserts(j.at("trackId").get<Uuid>(), j.at("inserts").get<std::vector<ProcessorRef>>());
+        if (type == "set_patch_id") return makeSetPatchId(j.at("trackId").get<Uuid>(), j.at("patchId").get<std::string>());
+        if (type == "set_instrument") return makeSetInstrument(j.at("trackId").get<Uuid>(), j.at("instrument").get<ProcessorRef>());
+        if (type == "set_output") return makeSetOutput(j.at("trackId").get<Uuid>(), j.at("output").get<Uuid>());
         if (type == "transaction") {
             std::vector<CommandPtr> inner;
             for (const auto& c : j.at("commands")) inner.push_back(commandFromJson(c));

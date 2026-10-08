@@ -26,6 +26,8 @@ MaybeError checkSendFields(const Project& p, const Uuid& owner, const Send& s);
 MaybeError checkInsert(const ProcessorRef& insert);
 bool isKnownTrackColor(const std::string& color);  // "" (automatic) or a palette name
 bool validTrackName(const std::string& name);      // 1 to 64 UTF-8 code points, no control characters
+bool validPatchId(const std::string& id);          // 1 to 64 characters of A-Z a-z 0-9 . _ -
+MaybeError checkPatchId(const std::string& id);    // "" (no patch) or a valid id
 MaybeError checkTrackProps(const std::string& name, const std::string& color);
 bool validRelativeMediaPath(const std::string& path);
 // True when `goal` can be reached from `from` by following outputs and sends.

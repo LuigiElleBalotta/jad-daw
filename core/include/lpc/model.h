@@ -80,6 +80,7 @@ struct Track {
     std::string color;
     Strip strip;
     std::optional<ProcessorRef> instrument;
+    std::string patchId;  // the built-in patch applied to the track; empty when none
     std::vector<Region> regions;
     std::vector<AutomationLane> automation;
     bool operator==(const Track&) const = default;

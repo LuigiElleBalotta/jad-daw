@@ -81,6 +81,7 @@ void to_json(nlohmann::json& j, const Track& t) {
     j = {{"id", t.id},           {"kind", t.kind},       {"name", t.name},       {"color", t.color},
          {"strip", t.strip},     {"regions", t.regions}, {"automation", t.automation}};
     j["instrument"] = t.instrument ? nlohmann::json(*t.instrument) : nlohmann::json(nullptr);
+    if (!t.patchId.empty()) j["patchId"] = t.patchId;
 }
 
 void from_json(const nlohmann::json& j, Track& t) {
@@ -93,6 +94,7 @@ void from_json(const nlohmann::json& j, Track& t) {
     j.at("automation").get_to(t.automation);
     const auto& inst = j.at("instrument");
     t.instrument = inst.is_null() ? std::nullopt : std::optional<ProcessorRef>(inst.get<ProcessorRef>());
+    t.patchId = j.value("patchId", std::string());
 }
 
 nlohmann::json toJson(const Project& p) {

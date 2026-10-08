@@ -38,6 +38,9 @@ CommandPtr makeJoinRegions(std::vector<Uuid> regionIds);                        
 CommandPtr makeAddSend(Uuid trackId, Send send, int index = -1);
 CommandPtr makeRemoveSend(Uuid sendId);
 CommandPtr makeSetInserts(Uuid trackId, std::vector<ProcessorRef> inserts);
+CommandPtr makeSetPatchId(Uuid trackId, std::string patchId);          // "" clears the patch
+CommandPtr makeSetInstrument(Uuid trackId, ProcessorRef instrument);   // instrument tracks only
+CommandPtr makeSetOutput(Uuid trackId, Uuid output);                   // null output = master
 CommandPtr makeTransaction(std::vector<CommandPtr> commands);
 
 CommandPtr commandFromJson(const nlohmann::json& j);  // throws std::runtime_error

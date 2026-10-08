@@ -42,6 +42,7 @@ struct Snapshot {
     int sampleRate = 48000;
     double bpm = 120.0;
     int beatsPerBar = 4;
+    int beatUnit = 4;  // the denominator of the first time signature
     std::vector<TrackRow> tracks;  // project order, master included
     std::vector<RegionRow> regions;
     lpc::TempoMap tempoMap;

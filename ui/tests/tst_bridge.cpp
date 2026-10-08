@@ -340,6 +340,52 @@ private slots:
         QVERIFY(c.saveProject());
         QCOMPARE(lpc::loadProject(proj).tempoMap.tempos().front().bpm, 90.0);
     }
+    void tempoAndSignatureFromTheLcd() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.setTempo(std::numeric_limits<double>::quiet_NaN());
+        c.setTempo(5.0);  // clamped to 20
+        QTRY_COMPARE(c.bpm(), 20.0);
+        c.setTempo(5000.0);  // clamped to 999
+        QTRY_COMPARE(c.bpm(), 999.0);
+        QCOMPARE(sent.count(), 2);
+        c.setSignature(3, 4);
+        QTRY_COMPARE(c.signatureText(), QStringLiteral("3/4"));
+        c.setSignature(3, 5);  // invalid: nothing sent, error shown
+        QVERIFY(!c.lastError().isEmpty());
+        QCOMPARE(c.signatureText(), QStringLiteral("3/4"));
+    }
+    void masterGainGoesThroughSetStrip() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.mixer()->rowCount() >= 3);
+        c.setMasterGain(-6.0);
+        QTRY_COMPARE(c.masterGainDb(), -6.0);
+        c.setMasterGain(1000.0);
+        QTRY_COMPARE(c.masterGainDb(), 24.0);
+    }
+    void barNavigationNeverGoesBelowZero() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        c.barBack();  // at the start: stays at 0
+        c.barForward();
+        QTRY_VERIFY(c.positionBeats() >= 0.0);
+    }
+    void mixerVisibilityIsAnObservableFlag() {
+        jad::ProjectController c(false);
+        QSignalSpy spy(&c, &jad::ProjectController::mixerVisibleChanged);
+        QVERIFY(c.mixerVisible());  // visible by default, as before
+        c.setMixerVisible(false);
+        QVERIFY(!c.mixerVisible());
+        QCOMPARE(spy.count(), 1);
+        c.setMixerVisible(false);  // no change: no signal
+        QCOMPARE(spy.count(), 1);
+    }
 };
 
 QTEST_MAIN(BridgeTest)

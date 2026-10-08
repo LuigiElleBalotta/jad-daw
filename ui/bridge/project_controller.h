@@ -50,6 +50,9 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString projectName READ projectName NOTIFY projectChanged)
     Q_PROPERTY(double bpm READ bpm NOTIFY projectChanged)
     Q_PROPERTY(int beatsPerBar READ beatsPerBar NOTIFY projectChanged)
+    Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
+    Q_PROPERTY(double masterGainDb READ masterGainDb NOTIFY projectChanged)
+    Q_PROPERTY(bool mixerVisible READ mixerVisible WRITE setMixerVisible NOTIFY mixerVisibleChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(double positionSeconds READ positionSeconds NOTIFY positionChanged)
     Q_PROPERTY(double positionBeats READ positionBeats NOTIFY positionChanged)
@@ -72,6 +75,14 @@ public:
     QString projectName() const { return name_; }
     double bpm() const { return bpm_; }
     int beatsPerBar() const { return beatsPerBar_; }
+    QString signatureText() const { return QStringLiteral("%1/%2").arg(beatsPerBar_).arg(beatUnit_); }
+    double masterGainDb() const { return masterGain_; }
+    bool mixerVisible() const { return mixerVisible_; }
+    void setMixerVisible(bool visible) {
+        if (visible == mixerVisible_) return;
+        mixerVisible_ = visible;
+        emit mixerVisibleChanged();
+    }
     bool playing() const { return playing_; }
     double positionSeconds() const { return positionSeconds_; }
     double positionBeats() const { return positionBeats_; }
@@ -99,8 +110,15 @@ public:
     Q_INVOKABLE void play();
     Q_INVOKABLE void stop();
     Q_INVOKABLE void locateBeats(double beats);
+    Q_INVOKABLE void locateSeconds(double seconds);
     Q_INVOKABLE void setLoopBeats(double startBeats, double endBeats);
     Q_INVOKABLE void clearError();
+    // The LCD: tempo (clamped to 20..999, NaN ignored) and time signature at tick 0, master volume, bar steps.
+    Q_INVOKABLE void setTempo(double bpm);
+    Q_INVOKABLE void setSignature(int numerator, int denominator);
+    Q_INVOKABLE void setMasterGain(double db);
+    Q_INVOKABLE void barBack();
+    Q_INVOKABLE void barForward();
     // Strip edits: one set_strip command each; values are clamped, NaN is ignored.
     Q_INVOKABLE void setGain(const QString& trackId, double db);
     Q_INVOKABLE void setPan(const QString& trackId, double pan);
@@ -136,6 +154,7 @@ signals:
     void peakChanged();
     void commandSent(const QString& type);
     void audioEnabledChanged();
+    void mixerVisibleChanged();
     // The loader refused a folder; the message is the loader's. The previous project stays open.
     void projectOpenFailed(const QString& message);
     void waveformReady(const QString& mediaId);
@@ -190,6 +209,10 @@ private:
     QString name_;
     double bpm_ = 120.0;
     int beatsPerBar_ = 4;
+    int beatUnit_ = 4;
+    double masterGain_ = 0.0;
+    QString masterId_;
+    bool mixerVisible_ = true;
     bool playing_ = false;
     bool loop_ = false;
     bool degraded_ = false;

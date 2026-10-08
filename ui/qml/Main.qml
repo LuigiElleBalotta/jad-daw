@@ -16,6 +16,7 @@ ApplicationWindow {
     property alias project: controller
     ProjectController { id: controller }
     ActionRegistry { id: actionRegistry; objectName: "registry" }
+    Component.onCompleted: ActionHub.registry = actionRegistry
 
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
     function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.beatsPerBar * 4) }
@@ -59,12 +60,18 @@ ApplicationWindow {
         "transport.loop": () => root.toggleLoop(),
         "track.mute": () => root.forSelectedTracks((id) => controller.toggleMute(id)),
         "track.solo": () => root.forSelectedTracks((id) => controller.toggleSolo(id)),
+        "transport.stop": () => controller.stop(),
+        "transport.barBack": () => controller.barBack(),
+        "transport.barForward": () => controller.barForward(),
+        "transport.goToPosition": () => controlBar.lcd.editPosition(),
+        "view.mixer": () => { controller.mixerVisible = !controller.mixerVisible },
         "view.zoomIn": () => timeline.zoomBy(1.25, timeline.width / 2),
         "view.zoomOut": () => timeline.zoomBy(0.8, timeline.width / 2)
     })
     // the displayed state of real toggles and radio entries (stubs keep their own)
     readonly property var states: ({
-        "transport.loop": controller.loopEnabled
+        "transport.loop": controller.loopEnabled,
+        "view.mixer": controller.mixerVisible
     })
     readonly property var disabledStates: ({
         "file.save": !controller.hasProject
@@ -88,6 +95,7 @@ ApplicationWindow {
         onObjectAdded: (index, object) => {
             root.actionMap[object.actionId] = object
             root.actionsVersion++
+            ActionHub.add(object)
         }
     }
 
@@ -111,9 +119,11 @@ ApplicationWindow {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        TransportBar {
+        ControlBar {
+            id: controlBar
             Layout.fillWidth: true
             project: controller
+            onMessage: (text) => toast.show(text)
         }
         RowLayout {
             Layout.fillWidth: true
@@ -135,6 +145,7 @@ ApplicationWindow {
         }
         Mixer {
             Layout.fillWidth: true
+            visible: controller.mixerVisible
             project: controller
         }
         ErrorBar {

@@ -55,11 +55,11 @@
  {"id":"track.height.xlarge","label":"Extra Large","menu":"Track/Height","shortcut":"","kind":"command","status":"stub","group":"trackHeight"},
 
  {"id":"transport.playStop","label":"Play/Stop","menu":"Navigate","shortcut":"Space","kind":"command","status":"ready","verified":true},
- {"id":"transport.stop","label":"Stop","menu":"Navigate","shortcut":"","kind":"command","status":"stub"},
+ {"id":"transport.stop","label":"Stop","menu":"Navigate","shortcut":"","kind":"command","status":"ready"},
  {"id":"transport.toStart","label":"Go to Beginning","menu":"Navigate","shortcut":"Return","kind":"command","status":"ready"},
- {"id":"transport.barBack","label":"Previous Bar","menu":"Navigate","shortcut":",","kind":"command","status":"stub"},
- {"id":"transport.barForward","label":"Next Bar","menu":"Navigate","shortcut":".","kind":"command","status":"stub"},
- {"id":"transport.goToPosition","label":"Go to Position…","menu":"Navigate","shortcut":"/","kind":"command","status":"stub"},
+ {"id":"transport.barBack","label":"Previous Bar","menu":"Navigate","shortcut":",","kind":"command","status":"ready"},
+ {"id":"transport.barForward","label":"Next Bar","menu":"Navigate","shortcut":".","kind":"command","status":"ready"},
+ {"id":"transport.goToPosition","label":"Go to Position…","menu":"Navigate","shortcut":"/","kind":"command","status":"ready"},
  {"id":"transport.loop","label":"Cycle","menu":"Navigate","shortcut":"C","kind":"toggle","status":"ready","verified":true},
  {"id":"nav.followPlayhead","label":"Catch Playhead","menu":"Navigate","shortcut":"","kind":"toggle","status":"stub"},
 
@@ -76,7 +76,7 @@
  {"id":"view.inspector","label":"Inspector","menu":"View","shortcut":"I","kind":"toggle","status":"stub"},
  {"id":"view.quickHelp","label":"Quick Help","menu":"View","shortcut":"","kind":"toggle","status":"stub"},
  {"id":"view.smartControls","label":"Smart Controls","menu":"View","shortcut":"B","kind":"toggle","status":"stub"},
- {"id":"view.mixer","label":"Mixer","menu":"View","shortcut":"X","kind":"toggle","status":"stub"},
+ {"id":"view.mixer","label":"Mixer","menu":"View","shortcut":"X","kind":"toggle","status":"ready"},
  {"id":"view.editors","label":"Editors","menu":"View","shortcut":"E","kind":"toggle","status":"stub"},
  {"id":"view.loops","label":"Loops","menu":"View","shortcut":"O","kind":"toggle","status":"stub"},
  {"id":"view.zoomIn","label":"Zoom In","menu":"View","shortcut":"+","kind":"command","status":"ready"},
@@ -97,6 +97,7 @@
  {"id":"window.minimize","label":"Minimize","menu":"Window","shortcut":"Ctrl+M","kind":"command","status":"stub"},
  {"id":"window.zoom","label":"Zoom","menu":"Window","shortcut":"","kind":"command","status":"stub"},
 
+ {"id":"lcd.key","label":"Key Display","menu":"","shortcut":"","kind":"command","status":"stub"},
  {"id":"help.about","label":"About JAD Daw","menu":"Help","shortcut":"","kind":"command","status":"stub"},
  {"id":"help.keyCommands","label":"Key Commands…","menu":"Help","shortcut":"Alt+K","kind":"command","status":"stub"}
 ]

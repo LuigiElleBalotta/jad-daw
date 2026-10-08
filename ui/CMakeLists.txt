@@ -1,7 +1,7 @@
 find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickControls2 QuickTest Test Concurrent)
 qt_standard_project_setup(REQUIRES 6.8)
 
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/ActionHub.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf PROPERTIES QT_RESOURCE_ALIAS fonts/InterVariable.ttf)
 set_source_files_properties(actions/actions.json PROPERTIES QT_RESOURCE_ALIAS actions/actions.json)
 
@@ -16,6 +16,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/mixer_model.cpp
         bridge/project_controller.cpp
         bridge/waveform_cache.cpp
+        bridge/lcd_parse.cpp
         shortcuts/shortcut_map.cpp
         actions/action_registry.cpp
     QML_FILES
@@ -26,7 +27,6 @@ qt_add_qml_module(jad_ui_lib
         qml/Fader.qml
         qml/Knob.qml
         qml/ErrorBar.qml
-        qml/TransportBar.qml
         qml/Timeline.qml
         qml/Ruler.qml
         qml/RegionItem.qml
@@ -40,6 +40,10 @@ qt_add_qml_module(jad_ui_lib
         qml/JadAction.qml
         qml/Toast.qml
         qml/ActionMenuBar.qml
+        qml/ActionHub.qml
+        qml/ActionButton.qml
+        qml/Lcd.qml
+        qml/ControlBar.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg

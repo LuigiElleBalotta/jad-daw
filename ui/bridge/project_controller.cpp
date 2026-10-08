@@ -241,6 +241,14 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     name_ = s.name;
     bpm_ = s.bpm;
     beatsPerBar_ = s.beatsPerBar;
+    beatUnit_ = s.beatUnit;
+    masterId_.clear();
+    masterGain_ = 0.0;
+    for (const TrackRow& t : s.tracks)
+        if (t.master) {
+            masterId_ = t.id;
+            masterGain_ = t.gainDb;
+        }
     emit projectChanged();
 }
 
@@ -303,6 +311,33 @@ void ProjectController::setPan(const QString& trackId, double pan) {
     if (!std::isfinite(pan)) return;
     setStripField(trackId, "pan", std::clamp(pan, -1.0, 1.0));
 }
+
+void ProjectController::setTempo(double bpm) {
+    if (!host_ || !std::isfinite(bpm)) return;
+    sendCommand({{"type", "set_tempo"}, {"tick", 0}, {"bpm", std::clamp(bpm, 20.0, 999.0)}});
+}
+
+void ProjectController::setSignature(int numerator, int denominator) {
+    const bool denominatorOk = denominator == 1 || denominator == 2 || denominator == 4 || denominator == 8 || denominator == 16 || denominator == 32;
+    if (numerator < 1 || numerator > 32 || !denominatorOk) {
+        setError("Invalid time signature");
+        return;
+    }
+    if (!host_) return;
+    sendCommand({{"type", "set_signature"}, {"tick", 0}, {"numerator", numerator}, {"denominator", denominator}});
+}
+
+void ProjectController::setMasterGain(double db) {
+    if (masterId_.isEmpty()) return;
+    setGain(masterId_, db);
+}
+
+void ProjectController::barBack() {
+    const double bar = std::floor(positionBeats_ / beatsPerBar_) * beatsPerBar_;
+    locateBeats(std::max(0.0, positionBeats_ - bar < 1.0 / 16.0 ? bar - beatsPerBar_ : bar));
+}
+
+void ProjectController::barForward() { locateBeats((std::floor(positionBeats_ / beatsPerBar_) + 1.0) * beatsPerBar_); }
 
 void ProjectController::setMute(const QString& trackId, bool on) { setStripField(trackId, "mute", on); }
 
@@ -563,6 +598,11 @@ void ProjectController::locateBeats(double beats) {
     const lpc::Ticks ticks = static_cast<lpc::Ticks>(std::llround(clamped * lpc::kPPQ));
     const std::int64_t frames = static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(ticks, sampleRate_)));
     host_->locate(frames);
+}
+
+void ProjectController::locateSeconds(double seconds) {
+    if (!host_ || !std::isfinite(seconds)) return;
+    host_->locate(static_cast<std::int64_t>(std::llround(std::clamp(seconds, 0.0, 86400.0) * sampleRate_)));
 }
 
 void ProjectController::setLoopBeats(double startBeats, double endBeats) {

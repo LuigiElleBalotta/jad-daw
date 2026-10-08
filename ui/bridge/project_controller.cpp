@@ -441,7 +441,7 @@ void ProjectController::setSnap(const QString& snap) {
 
 double ProjectController::snapBeats() const {
     if (snap_ == "off") return 0.0;
-    if (snap_ == "bar") return beatsPerBar_;
+    if (snap_ == "bar") return barBeats();
     if (snap_ == "half") return 2.0;
     if (snap_ == "eighth") return 0.5;
     if (snap_ == "sixteenth") return 0.25;
@@ -589,11 +589,11 @@ void ProjectController::setMasterGain(double db) {
 }
 
 void ProjectController::barBack() {
-    const double bar = std::floor(positionBeats_ / beatsPerBar_) * beatsPerBar_;
-    locateBeats(std::max(0.0, positionBeats_ - bar < 1.0 / 16.0 ? bar - beatsPerBar_ : bar));
+    const double bar = std::floor(positionBeats_ / barBeats()) * barBeats();
+    locateBeats(std::max(0.0, positionBeats_ - bar < 1.0 / 16.0 ? bar - barBeats() : bar));
 }
 
-void ProjectController::barForward() { locateBeats((std::floor(positionBeats_ / beatsPerBar_) + 1.0) * beatsPerBar_); }
+void ProjectController::barForward() { locateBeats((std::floor(positionBeats_ / barBeats()) + 1.0) * barBeats()); }
 
 void ProjectController::setMute(const QString& trackId, bool on) { setStripField(trackId, "mute", on); }
 

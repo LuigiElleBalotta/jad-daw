@@ -44,9 +44,9 @@ std::optional<Signature> parseSignature(const QString& text) {
     return Signature{num, den};
 }
 
-std::optional<double> parsePositionBeats(const QString& text, int beatsPerBar) {
+std::optional<double> parsePositionBeats(const QString& text, double barBeats) {
     const QString t = clean(text);
-    if (t.isEmpty() || t.size() > kMaxText || beatsPerBar < 1) return std::nullopt;
+    if (t.isEmpty() || t.size() > kMaxText || !(barBeats > 0.0)) return std::nullopt;
     static const QRegularExpression splitter("[ .]+");
     const QStringList parts = t.split(splitter, Qt::KeepEmptyParts);
     if (parts.size() < 1 || parts.size() > 4) return std::nullopt;
@@ -57,8 +57,8 @@ std::optional<double> parsePositionBeats(const QString& text, int beatsPerBar) {
         v[i] = *n;
     }
     const long long bar = v[0], beat = v[1], division = v[2], tick = v[3];
-    if (bar < 1 || beat < 1 || beat > beatsPerBar || division < 1 || division > 4 || tick < 1 || tick > 240) return std::nullopt;
-    return static_cast<double>((bar - 1) * beatsPerBar + (beat - 1)) + static_cast<double>((division - 1) * 240 + (tick - 1)) / 960.0;
+    if (bar < 1 || beat < 1 || beat > std::ceil(barBeats) || division < 1 || division > 4 || tick < 1 || tick > 240) return std::nullopt;
+    return static_cast<double>(bar - 1) * barBeats + static_cast<double>(beat - 1) + static_cast<double>((division - 1) * 240 + (tick - 1)) / 960.0;
 }
 
 std::optional<double> parseTimeSeconds(const QString& text) {
@@ -76,11 +76,11 @@ std::optional<double> parseTimeSeconds(const QString& text) {
     return total;
 }
 
-QString formatPosition(double beats, int beatsPerBar) {
+QString formatPosition(double beats, double barBeats) {
     if (!(beats > 0.0) || !std::isfinite(beats)) beats = 0.0;
-    const int bpb = std::max(1, beatsPerBar);
+    const double bb = (barBeats > 0.0 && std::isfinite(barBeats)) ? barBeats : 4.0;
     const long long total = std::llround(std::min(beats, 1e7) * 960.0);
-    const long long barTicks = static_cast<long long>(bpb) * 960;
+    const long long barTicks = std::max(1LL, std::llround(bb * 960.0));
     const long long bar = total / barTicks + 1;
     const long long rem = total % barTicks;
     const long long beat = rem / 960 + 1;
@@ -110,8 +110,8 @@ QVariantMap LcdParser::signature(const QString& text) const {
     if (!v) return {};
     return {{"numerator", v->numerator}, {"denominator", v->denominator}};
 }
-double LcdParser::positionBeats(const QString& text, int beatsPerBar) const {
-    const auto v = lcd::parsePositionBeats(text, beatsPerBar);
+double LcdParser::positionBeats(const QString& text, double barBeats) const {
+    const auto v = lcd::parsePositionBeats(text, barBeats);
     return v ? *v : -1.0;
 }
 double LcdParser::timeSeconds(const QString& text) const {

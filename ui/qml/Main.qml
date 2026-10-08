@@ -22,7 +22,7 @@ ApplicationWindow {
     // for screenshots: opens the menu at `index` of the menu bar
     function showMenu(index) { const m = menuBar.menuAt(index); if (m) m.open() }
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
-    function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.beatsPerBar * 4) }
+    function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.barBeats * 4) }
 
     FolderDialog {
         id: openDialog

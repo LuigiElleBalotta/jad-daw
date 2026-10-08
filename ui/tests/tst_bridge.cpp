@@ -610,6 +610,22 @@ private slots:
         QTest::qWait(300);
         QCOMPARE(lengthOf(), 2.0);
     }
+    // a bar is numerator * 4 / denominator quarter notes: 6/8 is 3 beats, 4/4 is 4
+    void barLengthFollowsTheDenominator() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        c.setSnap("bar");
+        c.locateBeats(0.0);
+        c.setSignature(6, 8);
+        QTRY_COMPARE(c.property("barBeats").toDouble(), 3.0);
+        QCOMPARE(c.snapBeats(), 3.0);
+        c.barForward();
+        QTRY_COMPARE(c.positionBeats(), 3.0);
+        c.setSignature(4, 4);
+        QTRY_COMPARE(c.property("barBeats").toDouble(), 4.0);
+        QCOMPARE(c.snapBeats(), 4.0);
+    }
     void splitAtPlayheadWorksOnSelectedRegionsOnly() {
         TempDir dir;
         jad::ProjectController c(false);

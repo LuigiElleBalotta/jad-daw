@@ -20,9 +20,9 @@ std::optional<double> parseBpm(const QString& text);        // 20 to 999, "." or
 std::optional<Signature> parseSignature(const QString& text);  // "3/4": numerator 1 to 32, denominator 1, 2, 4, 8, 16 or 32
 // "bar beat division tick", separated by spaces or dots, all 1-based; missing parts are 1. Division 1 to 4 (sixteenths),
 // tick 1 to 240. Returns beats from the start.
-std::optional<double> parsePositionBeats(const QString& text, int beatsPerBar);
+std::optional<double> parsePositionBeats(const QString& text, double barBeats);  // barBeats: quarter-note beats in a bar
 std::optional<double> parseTimeSeconds(const QString& text);   // "83.5", "1:23.5" or "0:01:23.5"; up to 24 hours
-QString formatPosition(double beats, int beatsPerBar);         // "5 2 3 1"; negative input shows the start
+QString formatPosition(double beats, double barBeats);         // "5 2 3 1"; negative input shows the start
 QString formatTime(double seconds);                            // "01:23.5"
 
 }  // namespace jad::lcd
@@ -38,9 +38,9 @@ public:
     explicit LcdParser(QObject* parent = nullptr) : QObject(parent) {}
     Q_INVOKABLE double bpm(const QString& text) const;
     Q_INVOKABLE QVariantMap signature(const QString& text) const;  // {numerator, denominator}
-    Q_INVOKABLE double positionBeats(const QString& text, int beatsPerBar) const;
+    Q_INVOKABLE double positionBeats(const QString& text, double barBeats) const;
     Q_INVOKABLE double timeSeconds(const QString& text) const;
-    Q_INVOKABLE QString formatPosition(double beats, int beatsPerBar) const { return lcd::formatPosition(beats, beatsPerBar); }
+    Q_INVOKABLE QString formatPosition(double beats, double barBeats) const { return lcd::formatPosition(beats, barBeats); }
     Q_INVOKABLE QString formatTime(double seconds) const { return lcd::formatTime(seconds); }
 };
 

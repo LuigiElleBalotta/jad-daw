@@ -104,7 +104,7 @@ Rectangle {
             id: posCell
             minWidth: 96
             shown: root.showTime ? LcdParser.formatTime(root.project.positionSeconds)
-                                 : LcdParser.formatPosition(root.project.positionBeats, root.project.beatsPerBar)
+                                 : LcdParser.formatPosition(root.project.positionBeats, root.project.barBeats)
             caption: root.showTime ? qsTr("TIME") : qsTr("BAR BEAT DIV TICK")
             onSingleClicked: root.showTime = !root.showTime
             onCommit: (text) => {
@@ -113,7 +113,7 @@ Rectangle {
                     if (s < 0) { root.message(qsTr("Invalid time")); return }
                     root.project.locateSeconds(s)
                 } else {
-                    const b = LcdParser.positionBeats(text, root.project.beatsPerBar)
+                    const b = LcdParser.positionBeats(text, root.project.barBeats)
                     if (b < 0) { root.message(qsTr("Invalid position")); return }
                     root.project.locateBeats(b)
                 }

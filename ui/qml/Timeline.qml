@@ -68,7 +68,7 @@ Item {
         height: root.rulerHeight
         pixelsPerBeat: root.pixelsPerBeat
         scrollBeats: root.scrollBeats
-        beatsPerBar: root.project.beatsPerBar
+        barBeats: root.project.barBeats
     }
 
     Item {
@@ -139,7 +139,7 @@ Item {
                 pencil = false
                 if (trackId === "") return
                 let length = Math.abs(endBeats - startBeats)
-                if (length < 1 / 16) length = root.project.beatsPerBar  // a click draws one bar
+                if (length < 1 / 16) length = root.project.barBeats  // a click draws one bar
                 root.project.createRegion(trackId, Math.min(startBeats, endBeats), length)
             }
             onCanceled: { pencil = false; band = false }

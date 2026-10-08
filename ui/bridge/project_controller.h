@@ -50,6 +50,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString projectName READ projectName NOTIFY projectChanged)
     Q_PROPERTY(double bpm READ bpm NOTIFY projectChanged)
     Q_PROPERTY(int beatsPerBar READ beatsPerBar NOTIFY projectChanged)
+    Q_PROPERTY(double barBeats READ barBeats NOTIFY projectChanged)  // quarter-note beats in a bar: numerator * 4 / denominator
     Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
     Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
     Q_PROPERTY(QString snap READ snap WRITE setSnap NOTIFY snapChanged)
@@ -82,6 +83,7 @@ public:
     QString projectName() const { return name_; }
     double bpm() const { return bpm_; }
     int beatsPerBar() const { return beatsPerBar_; }
+    double barBeats() const { return beatsPerBar_ * 4.0 / beatUnit_; }
     QString signatureText() const { return QStringLiteral("%1/%2").arg(beatsPerBar_).arg(beatUnit_); }
     double masterGainDb() const { return masterGain_; }
     bool mixerVisible() const { return mixerVisible_; }

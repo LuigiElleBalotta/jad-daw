@@ -422,12 +422,29 @@ void ProjectController::setTrackColor(const QString& trackId, const QString& col
     sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"color", color.toStdString()}});
 }
 
-void ProjectController::toggleMuteSelected() {
-    for (const QString& id : QStringList(selectedTracks_)) toggleMute(id);
+void ProjectController::toggleMuteSelected() { toggleSelectedFlag("mute", &TrackRow::mute); }
+
+void ProjectController::toggleSoloSelected() { toggleSelectedFlag("solo", &TrackRow::solo); }
+
+// Mute or solo of every selected track as one undo step: all go on when any of them is off, else all go off.
+void ProjectController::toggleSelectedFlag(const char* field, bool TrackRow::*flag) {
+    if (!host_) return;
+    std::vector<const TrackRow*> rows;
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id)) rows.push_back(t);
+    if (rows.empty()) return;
+    const bool on = std::any_of(rows.begin(), rows.end(), [flag](const TrackRow* t) { return !(t->*flag); });
+    nlohmann::json commands = nlohmann::json::array();
+    for (const TrackRow* t : rows) commands.push_back({{"type", "set_strip"}, {"trackId", t->id.toStdString()}, {field, on}});
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
 }
 
-void ProjectController::toggleSoloSelected() {
-    for (const QString& id : QStringList(selectedTracks_)) toggleSolo(id);
+void ProjectController::setSelectedColor(const QString& color) {
+    if (!host_ || selectedTracks_.isEmpty()) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedTracks_))
+        commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"color", color.toStdString()}});
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
 }
 
 void ProjectController::setTrackToggle(const QString& actionId, const QString& trackId, bool on) {

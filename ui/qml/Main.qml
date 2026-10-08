@@ -18,7 +18,7 @@ ApplicationWindow {
     ActionRegistry { id: actionRegistry; objectName: "registry" }
     Component.onCompleted: ActionHub.registry = actionRegistry
 
-    function colorSelected(name) { for (const id of controller.selectedTrackIds) controller.setTrackColor(id, name) }
+    function colorSelected(name) { controller.setSelectedColor(name) }
     function setSelectedToggle(actionId, on) { controller.setTrackToggle(actionId, controller.selectedTrackIds[0], on) }
     // for screenshots: opens the menu at `index` of the menu bar
     function showMenu(index) { const m = menuBar.menuAt(index); if (m) m.open() }

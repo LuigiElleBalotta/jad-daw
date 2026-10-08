@@ -177,6 +177,7 @@ public:
     Q_INVOKABLE void selectRegionsIn(double fromBeats, double toBeats, int fromRow, int toRow, const QString& mode);
     Q_INVOKABLE void joinWithNext(const QString& regionId);  // the region that starts where this one ends, same track
     Q_INVOKABLE void toggleSoloSelected();
+    Q_INVOKABLE void setSelectedColor(const QString& color);  // every selected track, one undo step
     // The R and I stubs keep their state per track here, so it survives track changes. Other action ids are ignored.
     Q_INVOKABLE void setTrackToggle(const QString& actionId, const QString& trackId, bool on);
     // Strip edits: one set_strip command each; values are clamped, NaN is ignored.
@@ -244,6 +245,7 @@ private:
     void tick();
     void pruneSelection();
     bool selectedToggle(const QString& actionId) const;
+    void toggleSelectedFlag(const char* field, bool TrackRow::*flag);
     std::int64_t regionPosition(const RegionRow& row, double beats) const;  // beats -> the region's own unit
     void setError(const QString& message);
     void teardown();

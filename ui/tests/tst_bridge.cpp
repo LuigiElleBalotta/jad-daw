@@ -707,6 +707,42 @@ private slots:
         QVERIFY(trackFlag(c, id, "inputMonitor"));
         QVERIFY(trackFlag(c, id, "recordArm"));
     }
+    void selectedMuteIsOneUndoStepAndUniform() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString a = c.tracks()->trackIdAt(0), b = c.tracks()->trackIdAt(1), d = c.tracks()->trackIdAt(2);
+        c.setMute(a, true);
+        c.setMute(d, true);  // mixed: a and d on, b off
+        QTRY_VERIFY(trackFlag(c, a, "mute") && !trackFlag(c, b, "mute") && trackFlag(c, d, "mute"));
+        c.selectTrack(a, "replace");
+        c.selectTrack(b, "extend");
+        c.selectTrack(d, "extend");
+        c.toggleMuteSelected();  // one of them is off: all go on
+        QTRY_VERIFY(trackFlag(c, a, "mute") && trackFlag(c, b, "mute") && trackFlag(c, d, "mute"));
+        c.undo();  // one step back to the mixed state
+        QTRY_VERIFY(trackFlag(c, a, "mute") && !trackFlag(c, b, "mute") && trackFlag(c, d, "mute"));
+        c.toggleMuteSelected();  // one of them is off again: all go on
+        QTRY_VERIFY(trackFlag(c, a, "mute") && trackFlag(c, b, "mute") && trackFlag(c, d, "mute"));
+        c.toggleMuteSelected();  // all on now: all go off
+        QTRY_VERIFY(!trackFlag(c, a, "mute") && !trackFlag(c, b, "mute") && !trackFlag(c, d, "mute"));
+    }
+    void selectedColorIsOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString a = c.tracks()->trackIdAt(0), b = c.tracks()->trackIdAt(1), d = c.tracks()->trackIdAt(2);
+        const QVariant colorA = trackField(c, a, "color"), colorB = trackField(c, b, "color"), colorD = trackField(c, d, "color");
+        c.selectTrack(a, "replace");
+        c.selectTrack(b, "extend");
+        c.selectTrack(d, "extend");
+        c.setSelectedColor("red");
+        QTRY_VERIFY(trackField(c, a, "color") == "red" && trackField(c, b, "color") == "red" && trackField(c, d, "color") == "red");
+        c.undo();
+        QTRY_VERIFY(trackField(c, a, "color") == colorA && trackField(c, b, "color") == colorB && trackField(c, d, "color") == colorD);
+    }
     void rectangleSelectionSelectsAllIds() {
         TempDir dir;
         jad::ProjectController c(false);

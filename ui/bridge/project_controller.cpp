@@ -466,7 +466,7 @@ void ProjectController::createRegion(const QString& trackId, double startBeats, 
         return;
     }
     if (track->kind != "instrument" && track->kind != "midi") {
-        setError("This track cannot hold MIDI regions");
+        emit notice("This track cannot hold MIDI regions");
         return;
     }
     const double start = std::clamp(startBeats, 0.0, kMaxBeats);
@@ -520,7 +520,7 @@ void ProjectController::splitSelectedAtPlayhead() {
                             {"newRegionId", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}});
     }
     if (commands.empty()) {
-        setError("No selected region at the playhead");
+        emit notice("No selected region at the playhead");
         return;
     }
     if (commands.size() == 1) {
@@ -532,7 +532,7 @@ void ProjectController::splitSelectedAtPlayhead() {
 
 void ProjectController::joinSelected() {
     if (selectedRegions_.size() < 2) {
-        setError("Select at least two regions to join");
+        emit notice("Select at least two regions to join");
         return;
     }
     joinRegions(selectedRegions_);
@@ -565,7 +565,7 @@ void ProjectController::joinWithNext(const QString& regionId) {
             return;
         }
     }
-    setError("Nothing to join after this region");
+    emit notice("Nothing to join after this region");
 }
 
 void ProjectController::setTempo(double bpm) {

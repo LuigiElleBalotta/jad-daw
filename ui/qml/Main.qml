@@ -167,6 +167,10 @@ ApplicationWindow {
         target: actionRegistry
         function onNotImplemented(label) { toast.show(qsTr("%1: not implemented yet").arg(label)) }
     }
+    Connections {
+        target: controller
+        function onNotice(message) { toast.show(message) }
+    }
 
     menuBar: ActionMenuBar {
         registry: actionRegistry

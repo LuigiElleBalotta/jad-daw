@@ -528,8 +528,11 @@ private slots:
         jad::ProjectController c(false);
         QVERIFY(c.openProject(url(makeDemo(dir))));
         QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
         c.joinWithNext(c.regions()->regionIdAt(0));
-        QVERIFY(c.lastError().contains("Nothing to join"));
+        QCOMPARE(notices.count(), 1);
+        QVERIFY(notices.at(0).at(0).toString().contains("Nothing to join"));
+        QVERIFY(c.lastError().isEmpty());
     }
     void pencilCreatesRegionsOnlyOnInstrumentTracks() {
         TempDir dir;
@@ -544,9 +547,8 @@ private slots:
         }
         const int n = c.regions()->rowCount();
         c.createRegion(audio, 8.0, 4.0);
-        QVERIFY(c.lastError().contains("MIDI"));
+        QVERIFY(c.lastError().isEmpty());
         QCOMPARE(c.regions()->rowCount(), n);
-        c.clearError();
         c.createRegion(instrument, 40.0, 4.0);
         QTRY_COMPARE(c.regions()->rowCount(), n + 1);
         c.createRegion(QStringLiteral("no-such-track"), 0.0, 1.0);
@@ -631,8 +633,10 @@ private slots:
         jad::ProjectController c(false);
         QVERIFY(c.openProject(url(makeDemo(dir))));
         QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
         c.splitSelectedAtPlayhead();  // nothing selected
-        QVERIFY(c.lastError().contains("No selected region"));
+        QCOMPARE(notices.count(), 1);
+        QVERIFY(notices.at(0).at(0).toString().contains("No selected region"));
     }
     void joinSelectedNeedsTwoRegions() {
         TempDir dir;
@@ -640,8 +644,35 @@ private slots:
         QVERIFY(c.openProject(url(makeDemo(dir))));
         QTRY_VERIFY(c.regions()->rowCount() > 0);
         c.selectRegion(c.regions()->regionIdAt(0), "replace");
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
         c.joinSelected();
-        QVERIFY(c.lastError().contains("at least two"));
+        QCOMPARE(notices.count(), 1);
+        QVERIFY(notices.at(0).at(0).toString().contains("at least two"));
+    }
+    void toolNoticesGoToTheToastNotTheErrorBar() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->data(c.tracks()->index(i), c.tracks()->roleNames().key("kind")).toString() == "audio")
+                audio = c.tracks()->trackIdAt(i);
+        QVERIFY(!audio.isEmpty());
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.createRegion(audio, 8.0, 4.0);  // pencil on a track that cannot hold MIDI
+        QCOMPARE(notices.count(), 1);
+        QVERIFY(notices.at(0).at(0).toString().contains("MIDI"));
+        QVERIFY(c.lastError().isEmpty());
+        c.splitSelectedAtPlayhead();  // nothing selected
+        QCOMPARE(notices.count(), 2);
+        QVERIFY(c.lastError().isEmpty());
+        c.joinSelected();  // fewer than two selected
+        QCOMPARE(notices.count(), 3);
+        QVERIFY(c.lastError().isEmpty());
+        c.joinWithNext(c.regions()->regionIdAt(0));  // nothing starts where it ends
+        QCOMPARE(notices.count(), 4);
+        QVERIFY(c.lastError().isEmpty());
     }
     void rectangleSelectionSelectsAllIds() {
         TempDir dir;

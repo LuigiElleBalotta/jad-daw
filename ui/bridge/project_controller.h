@@ -207,6 +207,8 @@ signals:
     void lastErrorChanged();
     void peakChanged();
     void commandSent(const QString& type);
+    // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
+    void notice(const QString& message);
     void audioEnabledChanged();
     void mixerVisibleChanged();
     void selectionChanged();

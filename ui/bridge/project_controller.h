@@ -180,6 +180,10 @@ public:
     Q_INVOKABLE void setSelectedColor(const QString& color);  // every selected track, one undo step
     // The R and I stubs keep their state per track here, so it survives track changes. Other action ids are ignored.
     Q_INVOKABLE void setTrackToggle(const QString& actionId, const QString& trackId, bool on);
+    // Test seam (tests have no audio device): sets the transport as the engine would report it, so that the views that
+    // follow the playhead can be driven from QML. The engine is no longer polled afterwards.
+    Q_INVOKABLE void simulatePlaybackForTest(bool playing, double positionBeats);
+    Q_INVOKABLE bool newProjectInTempForTest();  // a new project in a fresh folder of the temp directory
     // Strip edits: one set_strip command each; values are clamped, NaN is ignored.
     Q_INVOKABLE void setGain(const QString& trackId, double db);
     Q_INVOKABLE void setPan(const QString& trackId, double pan);

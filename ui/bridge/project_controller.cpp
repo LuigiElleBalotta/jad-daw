@@ -1,6 +1,7 @@
 #include "bridge/project_controller.h"
 
 #include <QCryptographicHash>
+#include <QDir>
 #include <QFile>
 #include <QStandardPaths>
 #include <QMetaObject>
@@ -445,6 +446,21 @@ void ProjectController::setSelectedColor(const QString& color) {
     for (const QString& id : std::as_const(selectedTracks_))
         commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"color", color.toStdString()}});
     sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
+bool ProjectController::newProjectInTempForTest() {
+    const QUrl folder = QUrl::fromLocalFile(QDir::tempPath() + "/jad-test-" + QUuid::createUuid().toString(QUuid::WithoutBraces));
+    return newProject(folder);
+}
+
+void ProjectController::simulatePlaybackForTest(bool playing, double positionBeats) {
+    timer_.stop();
+    if (playing != playing_) {
+        playing_ = playing;
+        emit playingChanged();
+    }
+    positionBeats_ = positionBeats;
+    emit positionChanged();
 }
 
 void ProjectController::setTrackToggle(const QString& actionId, const QString& trackId, bool on) {

@@ -4,6 +4,7 @@
 #include <QStringList>
 #include <QHash>
 #include <QSet>
+#include <QSettings>
 #include <QString>
 #include <QVariantList>
 #include <QTimer>
@@ -154,6 +155,8 @@ public:
     void setInspectorVisible(bool on) { if (on != inspectorVisible_) { inspectorVisible_ = on; emit panelsChanged(); } }
     void setLibraryVisible(bool on) { if (on != libraryVisible_) { libraryVisible_ = on; emit panelsChanged(); } }
     void setSmartControlsVisible(bool on) { if (on != smartControlsVisible_) { smartControlsVisible_ = on; emit panelsChanged(); } }
+    void loadPanelState(QSettings& settings);        // missing keys keep the defaults; sizes go through the clamps
+    void savePanelState(QSettings& settings) const;
     void setLeftColumnWidth(double width);       // clamped to 200..320, NaN ignored
     void setSmartControlsHeight(double height);  // clamped to 120..320, NaN ignored
 

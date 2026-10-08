@@ -16,6 +16,8 @@ Item {
     height: implicitHeight
     property real dragValue: value
     property bool dragging: false
+    property bool changed: false  // a plain click must not send a command
+    function cancel() { dragging = false; changed = false }
     readonly property real shown: dragging ? dragValue : value
 
     Rectangle {
@@ -43,15 +45,17 @@ Item {
         anchors.fill: parent
         property real startY: 0
         property real startValue: 0
-        onPressed: (m) => { root.dragging = true; startY = m.y; startValue = root.value; root.dragValue = root.value }
+        onPressed: (m) => { root.dragging = true; root.changed = false; startY = m.y; startValue = root.value; root.dragValue = root.value }
         onPositionChanged: (m) => {
             if (!pressed) return
             const span = root.to - root.from
             const travel = (m.modifiers & Qt.ShiftModifier) ? 800 : 200  // Shift: fine
             root.dragValue = Math.max(root.from, Math.min(root.to, startValue + (startY - m.y) / travel * span))
+            root.changed = true
             root.moved(root.dragValue)
         }
-        onReleased: { root.dragging = false; root.released(root.dragValue) }
-        onDoubleClicked: { root.dragValue = root.resetValue; root.released(root.resetValue) }
+        onReleased: { const send = root.dragging && root.changed; root.cancel(); if (send) root.released(root.dragValue) }
+        onCanceled: root.cancel()
+        onDoubleClicked: { root.cancel(); root.dragValue = root.resetValue; root.released(root.resetValue) }
     }
 }

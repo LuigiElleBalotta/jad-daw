@@ -14,6 +14,8 @@ Panel {
     property bool showSlots: true
 
     readonly property string trackId: info.trackId ?? ""
+    // a gesture in flight belongs to the track it started on: showing another track drops it, no command
+    onTrackIdChanged: { fader.cancel(); panKnob.cancel(); dragIndex = -1 }
     readonly property string trackName: info.name ?? ""
     readonly property string trackColor: info.color ?? "purple"
     readonly property string kind: info.kind ?? "audio"
@@ -28,6 +30,7 @@ Panel {
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
 
     readonly property alias fader: fader
+    readonly property alias panKnob: panKnob
     readonly property alias muteButton: muteButton
     readonly property alias soloButton: soloButton
     readonly property alias addInsertSlot: addInsertSlot
@@ -115,6 +118,7 @@ Panel {
                     root.dragGain = Math.max(-96, Math.min(24, modelData.gainDb + dx * 0.1))
                 }
                 onDragReleased: {
+                    if (root.dragIndex !== index) return
                     const db = root.dragGain
                     root.dragIndex = -1
                     root.insertGainReleased(root.trackId, index, db)
@@ -182,6 +186,7 @@ Panel {
             StripSlot { id: automationSlot; Layout.fillWidth: true; text: qsTr("Read"); dim: true; onClicked: root.stubUsed("Automation") }
         }
         Knob {
+            id: panKnob
             Layout.alignment: Qt.AlignHCenter
             value: root.pan
             onReleased: (v) => root.panReleased(root.trackId, v)

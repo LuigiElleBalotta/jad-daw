@@ -9,6 +9,8 @@
 #include <QTimer>
 #include <QUrl>
 
+#include <QSettings>
+
 #include "bridge/project_controller.h"
 
 int main(int argc, char** argv) {
@@ -67,6 +69,14 @@ int main(int argc, char** argv) {
     auto* controller = engine.rootObjects().first()->property("project").value<jad::ProjectController*>();
     if (controller) {
         if (parser.isSet(noAudioOption)) controller->setAudioEnabled(false);
+        if (!parser.isSet(screenshotOption)) {  // pictures start from the defaults, not from the last session
+            QSettings settings;
+            controller->loadPanelState(settings);
+            QObject::connect(&app, &QCoreApplication::aboutToQuit, controller, [controller] {
+                QSettings s;
+                controller->savePanelState(s);
+            });
+        }
         if (parser.isSet(projectOption)) controller->openProject(QUrl::fromLocalFile(parser.value(projectOption)));
     }
 

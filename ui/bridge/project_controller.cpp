@@ -979,6 +979,22 @@ void ProjectController::tick() {
     }
 }
 
+void ProjectController::loadPanelState(QSettings& s) {
+    setInspectorVisible(s.value("panels/inspector", inspectorVisible_).toBool());
+    setLibraryVisible(s.value("panels/library", libraryVisible_).toBool());
+    setSmartControlsVisible(s.value("panels/smartControls", smartControlsVisible_).toBool());
+    setLeftColumnWidth(s.value("panels/leftColumnWidth", leftColumnWidth_).toDouble());
+    setSmartControlsHeight(s.value("panels/smartControlsHeight", smartControlsHeight_).toDouble());
+}
+
+void ProjectController::savePanelState(QSettings& s) const {
+    s.setValue("panels/inspector", inspectorVisible_);
+    s.setValue("panels/library", libraryVisible_);
+    s.setValue("panels/smartControls", smartControlsVisible_);
+    s.setValue("panels/leftColumnWidth", leftColumnWidth_);
+    s.setValue("panels/smartControlsHeight", smartControlsHeight_);
+}
+
 void ProjectController::setLeftColumnWidth(double width) {
     if (!std::isfinite(width)) return;
     const double clamped = std::clamp(width, 200.0, 320.0);

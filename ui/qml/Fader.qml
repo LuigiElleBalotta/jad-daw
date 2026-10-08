@@ -21,6 +21,7 @@ Item {
     }
     property real dragValue: value
     property bool dragging: false
+    function cancel() { dragging = false }
 
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -41,6 +42,7 @@ Item {
         anchors.fill: parent
         onPressed: (m) => { root.dragging = true; root.dragValue = root.posToValue(m.y); root.moved(root.dragValue) }
         onPositionChanged: (m) => { if (pressed) { root.dragValue = root.posToValue(m.y); root.moved(root.dragValue) } }
-        onReleased: { root.dragging = false; root.released(root.dragValue) }
+        onReleased: { const send = root.dragging; root.cancel(); if (send) root.released(root.dragValue) }
+        onCanceled: root.cancel()
     }
 }

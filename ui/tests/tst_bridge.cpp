@@ -910,6 +910,36 @@ private slots:
         QCOMPARE(c.smartControlsHeight(), 120.0);
         QVERIFY(spy.count() >= 4);
     }
+    void panelLayoutSurvivesARestart() {
+        QTemporaryDir dir;
+        const QString ini = dir.filePath("jad.ini");
+        {
+            jad::ProjectController c(false);
+            c.setLibraryVisible(true);
+            c.setInspectorVisible(false);
+            c.setSmartControlsVisible(true);
+            c.setLeftColumnWidth(300);
+            c.setSmartControlsHeight(250);
+            QSettings s(ini, QSettings::IniFormat);
+            c.savePanelState(s);
+        }
+        jad::ProjectController d(false);
+        QSettings s(ini, QSettings::IniFormat);
+        d.loadPanelState(s);
+        QVERIFY(d.libraryVisible());
+        QVERIFY(!d.inspectorVisible());
+        QVERIFY(d.smartControlsVisible());
+        QCOMPARE(d.leftColumnWidth(), 300.0);
+        QCOMPARE(d.smartControlsHeight(), 250.0);
+        // nothing stored: the defaults stay
+        QTemporaryDir empty;
+        QSettings none(empty.filePath("x.ini"), QSettings::IniFormat);
+        jad::ProjectController e(false);
+        e.loadPanelState(none);
+        QVERIFY(e.inspectorVisible());
+        QVERIFY(!e.libraryVisible());
+        QCOMPARE(e.leftColumnWidth(), 240.0);
+    }
     void announceStubEmitsANotice() {
         jad::ProjectController c(false);
         QSignalSpy spy(&c, &jad::ProjectController::notice);

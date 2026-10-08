@@ -100,4 +100,28 @@ TestCase {
         mouseClick(s.automationSlot)
         compare(got, ["Group", "Automation"])
     }
+    function test_changing_track_mid_drag_sends_nothing() {
+        var s = createTemporaryObject(stripC, this)
+        var got = []
+        s.gainReleased.connect(function (id, v) { got.push([id, v]) })
+        mousePress(s.fader, 10, 100); mouseMove(s.fader, 10, 60, 0, Qt.LeftButton)
+        var other = JSON.parse(JSON.stringify(keys)); other.trackId = "u"
+        s.info = other
+        mouseRelease(s.fader, 10, 60)
+        compare(got.length, 0)
+    }
+    function test_a_plain_click_on_a_knob_sends_nothing() {
+        var s = createTemporaryObject(stripC, this)
+        var got = []
+        s.panReleased.connect(function (id, v) { got.push([id, v]) })
+        mouseClick(s.panKnob)
+        compare(got.length, 0)
+    }
+    function test_double_click_on_a_knob_resets_once() {
+        var s = createTemporaryObject(stripC, this)
+        var got = []
+        s.panReleased.connect(function (id, v) { got.push([id, v]) })
+        mouseDoubleClickSequence(s.panKnob)
+        compare(got, [["t", 0]])
+    }
 }

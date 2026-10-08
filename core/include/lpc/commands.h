@@ -23,6 +23,10 @@ CommandPtr makeRemoveMedia(Uuid mediaId);
 CommandPtr makeAddRegion(Uuid trackId, Region region, int index = -1);  // index -1 appends
 CommandPtr makeRemoveRegion(Uuid regionId);
 CommandPtr makeMoveRegion(Uuid regionId, std::int64_t newStart);        // ticks or microseconds, as the region's timeBase
+CommandPtr makeReplaceRegion(Region region);                                          // swaps the region with the same id
+CommandPtr makeResizeRegion(Uuid regionId, std::int64_t start, std::int64_t length);  // ticks or microseconds, as the region's timeBase
+CommandPtr makeSplitRegion(Uuid regionId, std::int64_t at, Uuid newRegionId);         // newRegionId names the right part
+CommandPtr makeJoinRegions(std::vector<Uuid> regionIds);                              // the earliest region keeps its id
 CommandPtr makeAddSend(Uuid trackId, Send send, int index = -1);
 CommandPtr makeRemoveSend(Uuid sendId);
 CommandPtr makeSetInserts(Uuid trackId, std::vector<ProcessorRef> inserts);

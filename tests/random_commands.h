@@ -25,7 +25,7 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
     std::vector<const Track*> senders = sources;
     senders.insert(senders.end(), busLike.begin(), busLike.end());
 
-    switch (pick(13)) {
+    switch (pick(17)) {
         case 0: {  // add track
             static const TrackKind kinds[] = {TrackKind::Audio, TrackKind::Midi, TrackKind::Instrument, TrackKind::Bus, TrackKind::Aux};
             Track t;
@@ -109,6 +109,35 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
                 chain.push_back(ProcessorRef{kProcGain, {{"gainDb", static_cast<double>(pick(12)) - 6.0}}, ""});
             return makeSetInserts(p.tracks[pick(p.tracks.size())].id, std::move(chain));
         }
+        case 13:  // replace region (gain change)
+            if (withRegions.empty()) return nullptr;
+            {
+                const Track& t = *withRegions[pick(withRegions.size())];
+                Region r = t.regions[pick(t.regions.size())];
+                r.gainDb = -static_cast<float>(pick(12));
+                return makeReplaceRegion(std::move(r));
+            }
+        case 14:  // resize
+            if (withRegions.empty()) return nullptr;
+            {
+                const Track& t = *withRegions[pick(withRegions.size())];
+                return makeResizeRegion(t.regions[pick(t.regions.size())].id, static_cast<Ticks>(pick(32)) * kPPQ / 2,
+                                        static_cast<Ticks>(1 + pick(8)) * kPPQ);
+            }
+        case 15:  // split (often inside the region, sometimes not)
+            if (withRegions.empty()) return nullptr;
+            {
+                const Track& t = *withRegions[pick(withRegions.size())];
+                const Region& r = t.regions[pick(t.regions.size())];
+                return makeSplitRegion(r.id, r.start + static_cast<Ticks>(1 + pick(7)) * kPPQ / 2, Uuid::random(rng));
+            }
+        case 16:  // join two regions of one track
+            if (withRegions.empty()) return nullptr;
+            {
+                const Track& t = *withRegions[pick(withRegions.size())];
+                if (t.regions.size() < 2) return nullptr;
+                return makeJoinRegions({t.regions[pick(t.regions.size())].id, t.regions[pick(t.regions.size())].id});
+            }
         default:
             return nullptr;
     }

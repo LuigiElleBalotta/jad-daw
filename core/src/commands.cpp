@@ -301,6 +301,193 @@ private:
     std::int64_t start_;
 };
 
+// Frames between two positions of a region's own time base (ticks or microseconds).
+std::int64_t framesBetween(const Project& p, TimeBase base, std::int64_t from, std::int64_t to) {
+    if (base == TimeBase::Musical) {
+        return static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(to, p.sampleRate))) -
+               static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(from, p.sampleRate)));
+    }
+    return static_cast<std::int64_t>(std::llround(static_cast<double>(to - from) * p.sampleRate / 1e6));
+}
+
+class ReplaceRegionCmd final : public Command {
+public:
+    explicit ReplaceRegionCmd(Region region) : region_(std::move(region)) {}
+    std::string type() const override { return "replace_region"; }
+    json toJson() const override { return {{"type", type()}, {"region", region_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        std::size_t idx = 0;
+        Track* t = p.findTrackOfRegion(region_.id, &idx);
+        if (!t) return fail("not_found", "no such region");
+        if (auto e = checkRegion(p, t->kind, region_)) return fail(*e);
+        Region previous = std::move(t->regions[idx]);
+        t->regions[idx] = region_;
+        return success(makeReplaceRegion(std::move(previous)));
+    }
+
+private:
+    Region region_;
+};
+
+class ResizeRegionCmd final : public Command {
+public:
+    ResizeRegionCmd(Uuid id, std::int64_t start, std::int64_t length) : id_(id), start_(start), length_(length) {}
+    std::string type() const override { return "resize_region"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"start", start_}, {"length", length_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        std::size_t idx = 0;
+        Track* t = p.findTrackOfRegion(id_, &idx);
+        if (!t) return fail("not_found", "no such region");
+        if (start_ < 0 || start_ > kMaxPosition || length_ <= 0 || length_ > kMaxPosition)
+            return fail("bad_region", "region start and length must be in (0, 2^40]");
+        const Region old = t->regions[idx];
+        Region r = old;
+        r.start = start_;
+        r.length = length_;
+        const std::int64_t moved = start_ - old.start;
+        if (t->kind == TrackKind::Audio) {
+            r.sourceOffsetFrames = old.sourceOffsetFrames + framesBetween(p, old.timeBase, old.start, start_);
+            if (r.sourceOffsetFrames < 0) return fail("bad_region", "the start cannot move before the beginning of the media");
+        } else {
+            r.notes.clear();
+            for (MidiNote n : old.notes) {
+                n.start -= moved;
+                if (n.start + n.length <= 0 || n.start >= length_) continue;  // entirely outside the new region
+                if (n.start < 0) {
+                    n.length += n.start;
+                    n.start = 0;
+                }
+                r.notes.push_back(n);
+            }
+        }
+        if (auto e = checkRegion(p, t->kind, r)) return fail(*e);
+        t->regions[idx] = std::move(r);
+        return success(makeReplaceRegion(old));
+    }
+
+private:
+    Uuid id_;
+    std::int64_t start_, length_;
+};
+
+class SplitRegionCmd final : public Command {
+public:
+    SplitRegionCmd(Uuid id, std::int64_t at, Uuid newId) : id_(id), at_(at), newId_(newId) {}
+    std::string type() const override { return "split_region"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"at", at_}, {"newRegionId", newId_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        std::size_t idx = 0;
+        Track* t = p.findTrackOfRegion(id_, &idx);
+        if (!t) return fail("not_found", "no such region");
+        if (newId_.isNull() || allRegionIds(p).count(newId_)) return fail("duplicate_id", "the id of the new region is missing or already used");
+        const Region old = t->regions[idx];
+        if (at_ <= old.start || at_ >= old.start + old.length) return fail("bad_region", "the split position must be inside the region");
+        Region left = old, right = old;
+        left.length = at_ - old.start;
+        right.id = newId_;
+        right.start = at_;
+        right.length = old.start + old.length - at_;
+        if (t->kind == TrackKind::Audio) {
+            right.sourceOffsetFrames = old.sourceOffsetFrames + framesBetween(p, old.timeBase, old.start, at_);
+        } else {
+            const std::int64_t cut = at_ - old.start;
+            left.notes.clear();
+            right.notes.clear();
+            for (MidiNote n : old.notes) {
+                if (n.start < cut) {
+                    n.length = std::min(n.length, cut - n.start);
+                    left.notes.push_back(n);
+                } else {
+                    n.start -= cut;
+                    right.notes.push_back(n);
+                }
+            }
+        }
+        if (auto e = checkRegion(p, t->kind, left)) return fail(*e);
+        if (auto e = checkRegion(p, t->kind, right)) return fail(*e);
+        t->regions[idx] = std::move(left);
+        t->regions.insert(t->regions.begin() + static_cast<std::ptrdiff_t>(idx) + 1, std::move(right));
+        std::vector<CommandPtr> undo;
+        undo.push_back(makeRemoveRegion(newId_));
+        undo.push_back(makeReplaceRegion(old));
+        return success(makeTransaction(std::move(undo)));
+    }
+
+private:
+    Uuid id_;
+    std::int64_t at_;
+    Uuid newId_;
+};
+
+class JoinRegionsCmd final : public Command {
+public:
+    explicit JoinRegionsCmd(std::vector<Uuid> ids) : ids_(std::move(ids)) {}
+    std::string type() const override { return "join_regions"; }
+    json toJson() const override { return {{"type", type()}, {"regionIds", ids_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        if (ids_.size() < 2) return fail("bad_value", "join needs at least two regions");
+        Track* track = nullptr;
+        std::vector<std::size_t> order;  // indices into track->regions
+        for (const Uuid& id : ids_) {
+            std::size_t idx = 0;
+            Track* t = p.findTrackOfRegion(id, &idx);
+            if (!t) return fail("not_found", "no such region");
+            if (track && t != track) return fail("bad_region", "regions must be on the same track");
+            track = t;
+            if (std::find(order.begin(), order.end(), idx) != order.end()) return fail("duplicate_id", "a region is listed twice");
+            order.push_back(idx);
+        }
+        auto& regions = track->regions;
+        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return regions[a].start < regions[b].start; });
+        for (std::size_t i = 1; i < order.size(); ++i) {
+            const Region& a = regions[order[i - 1]];
+            const Region& b = regions[order[i]];
+            if (a.timeBase != b.timeBase || a.start + a.length != b.start) return fail("bad_region", "regions must be adjacent");
+            if (a.gainDb != b.gainDb) return fail("bad_region", "regions must have the same gain");
+            if (track->kind == TrackKind::Audio) {
+                if (a.mediaId != b.mediaId) return fail("bad_region", "regions must use the same media");
+                if (b.sourceOffsetFrames != a.sourceOffsetFrames + framesBetween(p, a.timeBase, a.start, b.start))
+                    return fail("bad_region", "the audio of the regions is not continuous");
+            }
+        }
+        const Region first = regions[order.front()];
+        const Region& last = regions[order.back()];
+        Region joined = first;
+        joined.length = last.start + last.length - first.start;
+        if (track->kind != TrackKind::Audio) {
+            for (std::size_t i = 1; i < order.size(); ++i) {
+                const Region& r = regions[order[i]];
+                for (MidiNote n : r.notes) {
+                    n.start += r.start - first.start;
+                    joined.notes.push_back(n);
+                }
+            }
+        }
+        if (auto e = checkRegion(p, track->kind, joined)) return fail(*e);
+
+        std::vector<std::pair<std::size_t, Region>> removed;  // original index, region
+        for (std::size_t i = 1; i < order.size(); ++i) removed.emplace_back(order[i], regions[order[i]]);
+        std::sort(removed.begin(), removed.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+        for (const auto& [idx, r] : removed) regions.erase(regions.begin() + static_cast<std::ptrdiff_t>(idx));
+        std::size_t firstIdx = 0;
+        p.findTrackOfRegion(first.id, &firstIdx);
+        regions[firstIdx] = joined;
+
+        std::vector<CommandPtr> undo;
+        undo.push_back(makeReplaceRegion(first));
+        std::reverse(removed.begin(), removed.end());  // ascending original index restores the original order
+        for (const auto& [idx, r] : removed) undo.push_back(makeAddRegion(track->id, r, static_cast<int>(idx)));
+        return success(makeTransaction(std::move(undo)));
+    }
+
+private:
+    std::vector<Uuid> ids_;
+};
+
 // ---------------------------------------------------------------- sends
 
 class AddSendCmd final : public Command {
@@ -415,6 +602,10 @@ CommandPtr makeRemoveMedia(Uuid mediaId) { return std::make_unique<RemoveMediaCm
 CommandPtr makeAddRegion(Uuid trackId, Region region, int index) { return std::make_unique<AddRegionCmd>(trackId, std::move(region), index); }
 CommandPtr makeRemoveRegion(Uuid regionId) { return std::make_unique<RemoveRegionCmd>(regionId); }
 CommandPtr makeMoveRegion(Uuid regionId, std::int64_t newStart) { return std::make_unique<MoveRegionCmd>(regionId, newStart); }
+CommandPtr makeReplaceRegion(Region region) { return std::make_unique<ReplaceRegionCmd>(std::move(region)); }
+CommandPtr makeResizeRegion(Uuid regionId, std::int64_t start, std::int64_t length) { return std::make_unique<ResizeRegionCmd>(regionId, start, length); }
+CommandPtr makeSplitRegion(Uuid regionId, std::int64_t at, Uuid newRegionId) { return std::make_unique<SplitRegionCmd>(regionId, at, newRegionId); }
+CommandPtr makeJoinRegions(std::vector<Uuid> regionIds) { return std::make_unique<JoinRegionsCmd>(std::move(regionIds)); }
 CommandPtr makeAddSend(Uuid trackId, Send send, int index) { return std::make_unique<AddSendCmd>(trackId, send, index); }
 CommandPtr makeRemoveSend(Uuid sendId) { return std::make_unique<RemoveSendCmd>(sendId); }
 CommandPtr makeSetInserts(Uuid trackId, std::vector<ProcessorRef> inserts) { return std::make_unique<SetInsertsCmd>(trackId, std::move(inserts)); }
@@ -441,6 +632,10 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "add_region") return makeAddRegion(j.at("trackId").get<Uuid>(), j.at("region").get<Region>(), j.value("index", -1));
         if (type == "remove_region") return makeRemoveRegion(j.at("regionId").get<Uuid>());
         if (type == "move_region") return makeMoveRegion(j.at("regionId").get<Uuid>(), j.at("start").get<std::int64_t>());
+        if (type == "replace_region") return makeReplaceRegion(j.at("region").get<Region>());
+        if (type == "resize_region") return makeResizeRegion(j.at("regionId").get<Uuid>(), j.at("start").get<std::int64_t>(), j.at("length").get<std::int64_t>());
+        if (type == "split_region") return makeSplitRegion(j.at("regionId").get<Uuid>(), j.at("at").get<std::int64_t>(), j.at("newRegionId").get<Uuid>());
+        if (type == "join_regions") return makeJoinRegions(j.at("regionIds").get<std::vector<Uuid>>());
         if (type == "add_send") return makeAddSend(j.at("trackId").get<Uuid>(), j.at("send").get<Send>(), j.value("index", -1));
         if (type == "remove_send") return makeRemoveSend(j.at("sendId").get<Uuid>());
         if (type == "set_inserts") return makeSetInserts(j.at("trackId").get<Uuid>(), j.at("inserts").get<std::vector<ProcessorRef>>());

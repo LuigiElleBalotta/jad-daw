@@ -81,11 +81,17 @@ Rectangle {
                 font.pixelSize: Theme.fontTypeCaptionSize
             }
         }
+        // a single click waits out the double-click interval, so that a double click edits instead of switching first
+        Timer {
+            id: clickTimer
+            interval: Qt.styleHints.mouseDoubleClickInterval
+            onTriggered: cell.singleClicked()
+        }
         MouseArea {
             anchors.fill: parent
             enabled: !cell.editing
-            onClicked: cell.singleClicked()
-            onDoubleClicked: cell.begin()
+            onClicked: clickTimer.restart()
+            onDoubleClicked: { clickTimer.stop(); cell.begin() }
         }
     }
 

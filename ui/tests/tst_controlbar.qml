@@ -66,8 +66,8 @@ TestCase {
         var l = createTemporaryObject(lcdC, this)
         verify(!l.showTime)
         mouseClick(l.positionCell)
-        verify(l.showTime)
+        tryVerify(function () { return l.showTime })
         mouseClick(l.positionCell)
-        verify(!l.showTime)
+        tryVerify(function () { return !l.showTime })
     }
 }

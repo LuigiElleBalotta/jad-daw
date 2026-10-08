@@ -97,6 +97,23 @@ private slots:
         QTest::keyClick(window, Qt::Key_Return);
         QTRY_COMPARE(header->property("trackName").toString(), QStringLiteral("Lead"));
     }
+    // a double click opens the bars editor (the first click must not switch the view to time first)
+    void doubleClickOnThePositionEditsBars() {
+        QQmlApplicationEngine engine;
+        QObject* project = nullptr;
+        QTemporaryDir dir;
+        QQuickWindow* window = openMainWithProject(engine, project, dir);
+        QVERIFY(window);
+        auto* lcd = findWith(window, "positionCell");
+        QVERIFY(lcd);
+        auto* cell = qobject_cast<QQuickItem*>(lcd->property("positionCell").value<QObject*>());
+        QVERIFY(cell);
+        clickItem(window, cell, true);
+        QVERIFY(cell->property("editing").toBool());
+        typeText(window, QStringLiteral("5 1 1 1"));
+        QTest::keyClick(window, Qt::Key_Return);
+        QTRY_COMPARE(project->property("positionBeats").toDouble(), 16.0);  // bar 5 of 4/4
+    }
 
     void mainWindowLoadsWithTheme() {
         QQmlApplicationEngine engine;

@@ -17,12 +17,16 @@ Item {
 
     property real pixelsPerBeat: 40
     property real snapBeats: 1
+    property string tool: "pointer"
     property bool selected: false
     property real dragDeltaPx: 0
     readonly property bool dragging: area.moving
 
     signal moved(string id, real beats)
     signal selectRequested(string id, bool extend)
+    signal eraseRequested(string id)
+    signal splitRequested(string id, real atBeats)
+    signal glueRequested(string id)
 
     function snap(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
 
@@ -107,23 +111,30 @@ Item {
         preventStealing: true
         property real pressSceneX: 0
         property bool moving: false
+        property bool toolAction: false  // the press did something with a tool: no select, no drag
 
         function sceneX(m) { return mapToItem(null, m.x, m.y).x }
 
         onPressed: (m) => {
+            toolAction = true
+            if (root.tool === "eraser") { root.eraseRequested(root.regionId); return }
+            if (root.tool === "scissors") { root.splitRequested(root.regionId, root.startBeats + m.x / root.pixelsPerBeat); return }
+            if (root.tool === "glue") { root.glueRequested(root.regionId); return }
+            toolAction = false
             pressSceneX = sceneX(m)
             moving = false
             root.dragDeltaPx = 0
             root.selectRequested(root.regionId, (m.modifiers & Qt.ShiftModifier) !== 0)
         }
         onPositionChanged: (m) => {
-            if (!pressed) return
+            if (!pressed || toolAction) return
             const d = sceneX(m) - pressSceneX
             if (!moving && Math.abs(d) < 3) return  // a click, not a drag
             moving = true
             root.dragDeltaPx = d
         }
         onReleased: (m) => {
+            if (toolAction) { toolAction = false; return }
             const wasMoving = moving
             const d = root.dragDeltaPx
             moving = false

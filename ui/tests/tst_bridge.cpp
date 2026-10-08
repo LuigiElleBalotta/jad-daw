@@ -476,6 +476,82 @@ private slots:
         c.setTrackHeightIndex(-4);
         QCOMPARE(c.trackHeightIndex(), 0);
     }
+    void toolAndSnapState() {
+        jad::ProjectController c(false);
+        QCOMPARE(c.tool(), QStringLiteral("pointer"));
+        c.setTool("scissors");
+        QCOMPARE(c.tool(), QStringLiteral("scissors"));
+        c.setTool("banana");  // unknown: ignored
+        QCOMPARE(c.tool(), QStringLiteral("scissors"));
+        QCOMPARE(c.snap(), QStringLiteral("quarter"));
+        QCOMPARE(c.snapBeats(), 1.0);
+        c.setSnap("sixteenth");
+        QCOMPARE(c.snapBeats(), 0.25);
+        c.setSnap("off");
+        QCOMPARE(c.snapBeats(), 0.0);
+        c.setSnap("bar");
+        QCOMPARE(c.snapBeats(), 4.0);  // 4/4 project
+        c.setSnap("zzz");
+        QCOMPARE(c.snap(), QStringLiteral("bar"));
+        QVERIFY(c.followPlayhead());
+    }
+    void splitThenJoinThroughTheController() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        const QString id = c.regions()->regionIdAt(0);
+        const double start = c.regions()->data(c.regions()->index(0), c.regions()->roleNames().key("startBeats")).toDouble();
+        c.setSnap("off");
+        c.splitRegion(id, start + 0.5);
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+        c.joinWithNext(id);
+        QTRY_COMPARE(c.regions()->rowCount(), n);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+    }
+    void splitOutsideTheRegionIsRefusedWithAMessage() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString id = c.regions()->regionIdAt(0);
+        c.splitRegion(id, -5.0);
+        QTRY_VERIFY(!c.lastError().isEmpty());
+        c.clearError();
+        c.splitRegion(id, std::numeric_limits<double>::quiet_NaN());  // ignored, nothing sent
+        QVERIFY(c.lastError().isEmpty());
+    }
+    void joinWithNothingAfterItReportsIt() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        c.joinWithNext(c.regions()->regionIdAt(0));
+        QVERIFY(c.lastError().contains("Nothing to join"));
+    }
+    void pencilCreatesRegionsOnlyOnInstrumentTracks() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QString instrument, audio;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i) {
+            const QString kind = c.tracks()->data(c.tracks()->index(i), c.tracks()->roleNames().key("kind")).toString();
+            if (kind == "instrument") instrument = c.tracks()->trackIdAt(i);
+            if (kind == "audio") audio = c.tracks()->trackIdAt(i);
+        }
+        const int n = c.regions()->rowCount();
+        c.createRegion(audio, 8.0, 4.0);
+        QVERIFY(c.lastError().contains("MIDI"));
+        QCOMPARE(c.regions()->rowCount(), n);
+        c.clearError();
+        c.createRegion(instrument, 40.0, 4.0);
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+        c.createRegion(QStringLiteral("no-such-track"), 0.0, 1.0);
+        QVERIFY(!c.lastError().isEmpty());
+    }
 };
 
 QTEST_MAIN(BridgeTest)

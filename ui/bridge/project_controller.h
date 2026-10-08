@@ -51,6 +51,10 @@ class ProjectController : public QObject {
     Q_PROPERTY(double bpm READ bpm NOTIFY projectChanged)
     Q_PROPERTY(int beatsPerBar READ beatsPerBar NOTIFY projectChanged)
     Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
+    Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
+    Q_PROPERTY(QString snap READ snap WRITE setSnap NOTIFY snapChanged)
+    Q_PROPERTY(double snapBeats READ snapBeats NOTIFY snapChanged)
+    Q_PROPERTY(bool followPlayhead READ followPlayhead WRITE setFollowPlayhead NOTIFY followPlayheadChanged)
     Q_PROPERTY(QStringList selectedTrackIds READ selectedTrackIds NOTIFY selectionChanged)
     Q_PROPERTY(QStringList selectedRegionIds READ selectedRegionIds NOTIFY selectionChanged)
     Q_PROPERTY(int trackHeightIndex READ trackHeightIndex WRITE setTrackHeightIndex NOTIFY trackHeightChanged)
@@ -81,6 +85,17 @@ public:
     QString signatureText() const { return QStringLiteral("%1/%2").arg(beatsPerBar_).arg(beatUnit_); }
     double masterGainDb() const { return masterGain_; }
     bool mixerVisible() const { return mixerVisible_; }
+    QString tool() const { return tool_; }
+    void setTool(const QString& tool);  // pointer, pencil, eraser, scissors or glue; anything else is ignored
+    QString snap() const { return snap_; }
+    void setSnap(const QString& snap);  // off, bar, half, quarter, eighth or sixteenth; anything else is ignored
+    double snapBeats() const;           // the grid in beats (quarter notes); 0 when snapping is off
+    bool followPlayhead() const { return followPlayhead_; }
+    void setFollowPlayhead(bool on) {
+        if (on == followPlayhead_) return;
+        followPlayhead_ = on;
+        emit followPlayheadChanged();
+    }
     QStringList selectedTrackIds() const { return selectedTracks_; }
     QStringList selectedRegionIds() const { return selectedRegions_; }
     int trackHeightIndex() const { return trackHeightIndex_; }
@@ -144,6 +159,12 @@ public:
     Q_INVOKABLE void renameTrack(const QString& trackId, const QString& name);
     Q_INVOKABLE void setTrackColor(const QString& trackId, const QString& color);
     Q_INVOKABLE void toggleMuteSelected();
+    // Region tools. Positions are in beats, snapped to the grid and clamped before a command is built; the Core's
+    // refusals (a split outside the region, a join of regions that do not touch) show up in lastError.
+    Q_INVOKABLE void createRegion(const QString& trackId, double startBeats, double lengthBeats);  // empty MIDI region
+    Q_INVOKABLE void splitRegion(const QString& regionId, double atBeats);
+    Q_INVOKABLE void joinRegions(const QStringList& regionIds);
+    Q_INVOKABLE void joinWithNext(const QString& regionId);  // the region that starts where this one ends, same track
     Q_INVOKABLE void toggleSoloSelected();
     // Strip edits: one set_strip command each; values are clamped, NaN is ignored.
     Q_INVOKABLE void setGain(const QString& trackId, double db);
@@ -182,6 +203,9 @@ signals:
     void audioEnabledChanged();
     void mixerVisibleChanged();
     void selectionChanged();
+    void toolChanged();
+    void snapChanged();
+    void followPlayheadChanged();
     void trackHeightChanged();
     // The loader refused a folder; the message is the loader's. The previous project stays open.
     void projectOpenFailed(const QString& message);
@@ -203,6 +227,7 @@ private:
     void applySnapshot(Snapshot snapshot, std::uint64_t generation);
     void tick();
     void pruneSelection();
+    std::int64_t regionPosition(const RegionRow& row, double beats) const;  // beats -> the region's own unit
     void setError(const QString& message);
     void teardown();
     static std::filesystem::path toPath(const QUrl& url);
@@ -242,6 +267,9 @@ private:
     double masterGain_ = 0.0;
     QString masterId_;
     bool mixerVisible_ = true;
+    QString tool_ = QStringLiteral("pointer");
+    QString snap_ = QStringLiteral("quarter");
+    bool followPlayhead_ = true;
     QStringList selectedTracks_;
     QStringList selectedRegions_;
     int trackHeightIndex_ = 1;

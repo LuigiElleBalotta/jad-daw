@@ -55,4 +55,25 @@ TestCase {
         mouseClick(r, 10, 10, Qt.LeftButton, Qt.ShiftModifier)
         compare(picks[1][1], true)
     }
+
+    function test_tools_send_their_request_instead_of_selecting_or_moving() {
+        var r = createTemporaryObject(itemC, this)
+        var got = []
+        r.eraseRequested.connect(function (id) { got.push(["erase", id]) })
+        r.splitRequested.connect(function (id, at) { got.push(["split", id, at]) })
+        r.glueRequested.connect(function (id) { got.push(["glue", id]) })
+        var moves = 0
+        var selects = 0
+        r.moved.connect(function () { moves++ })
+        r.selectRequested.connect(function () { selects++ })
+        r.tool = "eraser"
+        mouseClick(r, 10, 10)
+        r.tool = "scissors"
+        mouseClick(r, 80, 10)  // 80 px at 40 px per beat: two beats after the start at beat 4
+        r.tool = "glue"
+        mouseClick(r, 10, 10)
+        compare(got, [["erase", "r1"], ["split", "r1", 6], ["glue", "r1"]])
+        compare(moves, 0)
+        compare(selects, 0)
+    }
 }

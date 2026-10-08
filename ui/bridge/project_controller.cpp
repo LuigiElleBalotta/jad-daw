@@ -425,6 +425,96 @@ void ProjectController::toggleSoloSelected() {
     for (const QString& id : QStringList(selectedTracks_)) toggleSolo(id);
 }
 
+void ProjectController::setTool(const QString& tool) {
+    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue"};
+    if (!known.contains(tool) || tool == tool_) return;
+    tool_ = tool;
+    emit toolChanged();
+}
+
+void ProjectController::setSnap(const QString& snap) {
+    static const QStringList known{"off", "bar", "half", "quarter", "eighth", "sixteenth"};
+    if (!known.contains(snap) || snap == snap_) return;
+    snap_ = snap;
+    emit snapChanged();
+}
+
+double ProjectController::snapBeats() const {
+    if (snap_ == "off") return 0.0;
+    if (snap_ == "bar") return beatsPerBar_;
+    if (snap_ == "half") return 2.0;
+    if (snap_ == "eighth") return 0.5;
+    if (snap_ == "sixteenth") return 0.25;
+    return 1.0;
+}
+
+// beats -> ticks, or microseconds for a region in absolute time
+std::int64_t ProjectController::regionPosition(const RegionRow& row, double beats) const {
+    std::int64_t position = static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeats) * lpc::kPPQ));
+    if (row.absolute) {
+        const double frames = tempoMap_.ticksToSamples(position, sampleRate_);
+        position = std::min<std::int64_t>(std::llround(frames * 1e6 / sampleRate_), lpc::kMaxPosition);
+    }
+    return position;
+}
+
+void ProjectController::createRegion(const QString& trackId, double startBeats, double lengthBeats) {
+    if (!std::isfinite(startBeats) || !std::isfinite(lengthBeats)) return;
+    const TrackRow* track = tracks_.find(trackId);
+    if (!track) {
+        setError("No such track");
+        return;
+    }
+    if (track->kind != "instrument" && track->kind != "midi") {
+        setError("This track cannot hold MIDI regions");
+        return;
+    }
+    const double start = std::clamp(startBeats, 0.0, kMaxBeats);
+    const double length = std::clamp(lengthBeats, 1.0 / 16.0, kMaxBeats);
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    nlohmann::json region = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()},
+                             {"timeBase", "musical"},
+                             {"start", static_cast<std::int64_t>(std::llround(start * lpc::kPPQ))},
+                             {"length", static_cast<std::int64_t>(std::llround(length * lpc::kPPQ))},
+                             {"mediaId", nullId},
+                             {"sourceOffsetFrames", 0},
+                             {"gainDb", 0},
+                             {"notes", nlohmann::json::array()}};
+    sendCommand({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"region", region}});
+}
+
+void ProjectController::splitRegion(const QString& regionId, double atBeats) {
+    if (!host_ || !std::isfinite(atBeats)) return;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row) return;
+    const double grid = snapBeats();
+    const double at = grid > 0.0 ? std::round(atBeats / grid) * grid : atBeats;
+    sendCommand({{"type", "split_region"},
+                 {"regionId", regionId.toStdString()},
+                 {"at", regionPosition(*row, at)},
+                 {"newRegionId", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}});
+}
+
+void ProjectController::joinRegions(const QStringList& regionIds) {
+    if (!host_ || regionIds.isEmpty()) return;
+    nlohmann::json ids = nlohmann::json::array();
+    for (const QString& id : regionIds) ids.push_back(id.toStdString());
+    sendCommand({{"type", "join_regions"}, {"regionIds", ids}});
+}
+
+void ProjectController::joinWithNext(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!row) return;
+    const double end = row->startBeats + row->lengthBeats;
+    for (const RegionRow& other : regions_.rows()) {
+        if (other.trackId == row->trackId && other.id != row->id && std::abs(other.startBeats - end) < 1e-6) {
+            joinRegions({row->id, other.id});
+            return;
+        }
+    }
+    setError("Nothing to join after this region");
+}
+
 void ProjectController::setTempo(double bpm) {
     if (!host_ || !std::isfinite(bpm)) return;
     sendCommand({{"type", "set_tempo"}, {"tick", 0}, {"bpm", std::clamp(bpm, 20.0, 999.0)}});

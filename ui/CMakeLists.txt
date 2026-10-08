@@ -45,6 +45,8 @@ qt_add_qml_module(jad_ui_lib
         qml/Lcd.qml
         qml/ControlBar.qml
         qml/TrackHeader.qml
+        qml/ActionMenu.qml
+        qml/ToolBar.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg
@@ -56,6 +58,13 @@ qt_add_qml_module(jad_ui_lib
         qml/icons/mute.svg
         qml/icons/solo.svg
         qml/icons/chevron-down.svg
+        qml/icons/pointer.svg
+        qml/icons/pencil.svg
+        qml/icons/eraser.svg
+        qml/icons/scissors.svg
+        qml/icons/glue.svg
+        qml/icons/zoom-in.svg
+        qml/icons/zoom-out.svg
         qml/icons/chevron-right.svg
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
         actions/actions.json

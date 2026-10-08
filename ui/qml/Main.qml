@@ -86,6 +86,19 @@ ApplicationWindow {
         "transport.barForward": () => controller.barForward(),
         "transport.goToPosition": () => controlBar.lcd.editPosition(),
         "view.mixer": () => { controller.mixerVisible = !controller.mixerVisible },
+        "tool.pointer": () => { controller.tool = "pointer" },
+        "tool.pencil": () => { controller.tool = "pencil" },
+        "tool.eraser": () => { controller.tool = "eraser" },
+        "tool.scissors": () => { controller.tool = "scissors" },
+        "tool.glue": () => { controller.tool = "glue" },
+        "snap.off": () => { controller.snap = "off" },
+        "snap.bar": () => { controller.snap = "bar" },
+        "snap.half": () => { controller.snap = "half" },
+        "snap.quarter": () => { controller.snap = "quarter" },
+        "snap.eighth": () => { controller.snap = "eighth" },
+        "snap.sixteenth": () => { controller.snap = "sixteenth" },
+        "drag.overlap": () => {},
+        "nav.followPlayhead": () => { controller.followPlayhead = !controller.followPlayhead },
         "view.zoomIn": () => timeline.zoomBy(1.25, timeline.width / 2),
         "view.zoomOut": () => timeline.zoomBy(0.8, timeline.width / 2)
     })
@@ -93,6 +106,19 @@ ApplicationWindow {
     readonly property var states: ({
         "transport.loop": controller.loopEnabled,
         "view.mixer": controller.mixerVisible,
+        "tool.pointer": controller.tool === "pointer",
+        "tool.pencil": controller.tool === "pencil",
+        "tool.eraser": controller.tool === "eraser",
+        "tool.scissors": controller.tool === "scissors",
+        "tool.glue": controller.tool === "glue",
+        "snap.off": controller.snap === "off",
+        "snap.bar": controller.snap === "bar",
+        "snap.half": controller.snap === "half",
+        "snap.quarter": controller.snap === "quarter",
+        "snap.eighth": controller.snap === "eighth",
+        "snap.sixteenth": controller.snap === "sixteenth",
+        "drag.overlap": true,
+        "nav.followPlayhead": controller.followPlayhead,
         "track.height.compact": controller.trackHeightIndex === 0,
         "track.height.normal": controller.trackHeightIndex === 1,
         "track.height.large": controller.trackHeightIndex === 2,
@@ -149,6 +175,10 @@ ApplicationWindow {
             Layout.fillWidth: true
             project: controller
             onMessage: (text) => toast.show(text)
+        }
+        ToolBar {
+            Layout.fillWidth: true
+            project: controller
         }
         RowLayout {
             Layout.fillWidth: true

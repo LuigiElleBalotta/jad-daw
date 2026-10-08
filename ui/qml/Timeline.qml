@@ -7,7 +7,7 @@ Item {
     property real pixelsPerBeat: 40
     property real scrollBeats: 0
     property real scrollY: 0
-    property real snapBeats: 1.0   // 0 disables snapping
+    readonly property real snapBeats: project.snapBeats   // 0 disables snapping
     readonly property real minPixelsPerBeat: 4
     readonly property real maxPixelsPerBeat: 400
     readonly property real rowHeight: Theme.sizeTrackHeight[project.trackHeightIndex]
@@ -47,6 +47,16 @@ Item {
 
     onRegionMoved: (id, beats) => project.moveRegion(id, beats)
 
+    // keep the playhead in view while playing: when it leaves the screen the view jumps to put it near the left edge
+    Connections {
+        target: root.project
+        function onPositionChanged() {
+            if (!root.project.followPlayhead || !root.project.playing) return
+            const x = root.beatsToX(root.project.positionBeats)
+            if (x < 0 || x > root.width) root.scrollBeats = Math.max(0, root.project.positionBeats - 0.1 * root.width / root.pixelsPerBeat)
+        }
+    }
+
     Keys.onDeletePressed: deleteSelected()
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_Backspace) { deleteSelected(); event.accepted = true }
@@ -81,10 +91,45 @@ Item {
             }
         }
 
-        // empty space: clears the selection and takes the keyboard focus
+        // empty space: clears the selection and takes the keyboard focus; with the pencil it draws a MIDI region
         MouseArea {
+            id: emptyArea
             anchors.fill: parent
-            onPressed: { root.forceActiveFocus(); root.project.clearSelection() }
+            property bool pencil: false
+            property real startBeats: 0
+            property real endBeats: 0
+            property int row: 0
+            property string trackId
+            onPressed: (m) => {
+                root.forceActiveFocus()
+                root.project.clearSelection()
+                pencil = root.project.tool === "pencil"
+                if (!pencil) return
+                trackId = root.trackIdAt(m.y + root.rulerHeight)
+                row = Math.floor((m.y + root.scrollY) / root.rowHeight)
+                startBeats = Math.max(0, root.snapBeat(root.xToBeats(m.x)))
+                endBeats = startBeats
+            }
+            onPositionChanged: (m) => { if (pencil && pressed) endBeats = Math.max(0, root.snapBeat(root.xToBeats(m.x))) }
+            onReleased: {
+                if (!pencil) return
+                pencil = false
+                if (trackId === "") return
+                let length = Math.abs(endBeats - startBeats)
+                if (length < 1 / 16) length = root.project.beatsPerBar  // a click draws one bar
+                root.project.createRegion(trackId, Math.min(startBeats, endBeats), length)
+            }
+            onCanceled: pencil = false
+        }
+        Rectangle {  // the region being drawn
+            visible: emptyArea.pencil
+            x: root.beatsToX(Math.min(emptyArea.startBeats, emptyArea.endBeats))
+            y: emptyArea.row * root.rowHeight - root.scrollY + 2
+            width: Math.max(2, Math.abs(emptyArea.endBeats - emptyArea.startBeats) * root.pixelsPerBeat)
+            height: root.rowHeight - 4
+            radius: Theme.radiusRegion
+            color: Qt.rgba(Theme.accentPrimary.r, Theme.accentPrimary.g, Theme.accentPrimary.b, 0.3)
+            border.color: Theme.accentPrimary
         }
 
         Repeater {
@@ -104,6 +149,7 @@ Item {
                 trackColor: model.trackColor
                 pixelsPerBeat: root.pixelsPerBeat
                 snapBeats: root.snapBeats
+                tool: root.project.tool
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 x: root.beatsToX(startBeats)
                 y: trackIndex * root.rowHeight - root.scrollY + 2
@@ -113,6 +159,9 @@ Item {
                 visible: x + width > 0 && x < body.width
                 onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.project.selectRegion(id, extend ? "extend" : "replace") }
                 onMoved: (id, beats) => root.regionMoved(id, beats)
+                onEraseRequested: (id) => root.project.deleteRegions([id])
+                onSplitRequested: (id, atBeats) => root.project.splitRegion(id, atBeats)
+                onGlueRequested: (id) => root.project.joinWithNext(id)
             }
         }
 

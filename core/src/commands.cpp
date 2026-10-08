@@ -642,14 +642,39 @@ public:
     }
 
     ApplyResult apply(Project& p) const override {
-        std::vector<CommandPtr> inverses;
-        for (std::size_t i = 0; i < cmds_.size(); ++i) {
-            ApplyResult r = cmds_[i]->apply(p);
-            if (!r.ok()) {
-                for (auto it = inverses.rbegin(); it != inverses.rend(); ++it) (*it)->apply(p);  // inverses cannot fail
-                return fail(r.error->code, "command " + std::to_string(i) + ": " + r.error->message);
+        // A command refused as in_use may need one that comes later (a bus is removed before the tracks sending to it):
+        // refused commands wait and are retried until none can go, so the order of the commands does not matter.
+        std::vector<CommandPtr> inverses;  // in the order they were applied
+        const auto rollback = [&] {
+            for (auto it = inverses.rbegin(); it != inverses.rend(); ++it) (*it)->apply(p);  // inverses cannot fail
+        };
+        std::vector<std::size_t> waiting(cmds_.size());
+        for (std::size_t i = 0; i < waiting.size(); ++i) waiting[i] = i;
+        std::size_t refusedIndex = 0;
+        std::string refusedCode, refusedMessage;
+        while (!waiting.empty()) {
+            std::vector<std::size_t> refused;
+            for (const std::size_t i : waiting) {
+                ApplyResult r = cmds_[i]->apply(p);
+                if (r.ok()) {
+                    inverses.push_back(std::move(r.inverse));
+                } else if (r.error->code == "in_use") {
+                    if (refused.empty()) {  // the message for the case that no command in this pass can go
+                        refusedIndex = i;
+                        refusedCode = r.error->code;
+                        refusedMessage = r.error->message;
+                    }
+                    refused.push_back(i);
+                } else {
+                    rollback();
+                    return fail(r.error->code, "command " + std::to_string(i) + ": " + r.error->message);
+                }
             }
-            inverses.push_back(std::move(r.inverse));
+            if (refused.size() == waiting.size()) {  // no progress: what is left cannot be applied
+                rollback();
+                return fail(refusedCode, "command " + std::to_string(refusedIndex) + ": " + refusedMessage);
+            }
+            waiting = std::move(refused);
         }
         std::reverse(inverses.begin(), inverses.end());
         return success(makeTransaction(std::move(inverses)));

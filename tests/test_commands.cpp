@@ -105,6 +105,36 @@ TEST_CASE("commands: remove track rejects master, unknown and referenced tracks"
     REQUIRE(makeRemoveTrack(bus.id)->apply(p).ok());
 }
 
+TEST_CASE("transaction: a bus and the tracks sending to it are removed together in either order", "[commands][transaction]") {
+    for (const bool busFirst : {true, false}) {
+        Project p(Uuid::random(gRng));
+        const Track bus = makeTrack(TrackKind::Bus, "Bus");
+        Track byOutput = makeTrack(TrackKind::Audio, "A");
+        byOutput.strip.output = bus.id;
+        Track bySend = makeTrack(TrackKind::Audio, "B");
+        Send send;
+        send.id = Uuid::random(gRng);
+        send.targetTrackId = bus.id;
+        bySend.strip.sends.push_back(send);
+        REQUIRE(makeAddTrack(bus)->apply(p).ok());
+        REQUIRE(makeAddTrack(byOutput)->apply(p).ok());
+        REQUIRE(makeAddTrack(bySend)->apply(p).ok());
+
+        std::vector<CommandPtr> cmds;
+        if (busFirst) {
+            cmds.push_back(makeRemoveTrack(bus.id));
+            cmds.push_back(makeRemoveTrack(byOutput.id));
+            cmds.push_back(makeRemoveTrack(bySend.id));
+        } else {
+            cmds.push_back(makeRemoveTrack(byOutput.id));
+            cmds.push_back(makeRemoveTrack(bySend.id));
+            cmds.push_back(makeRemoveTrack(bus.id));
+        }
+        requireRoundTrip(p, *makeTransaction(std::move(cmds)));
+        REQUIRE(p.tracks.size() == 1);  // only the master is left
+    }
+}
+
 TEST_CASE("commands: set strip patches only the given fields and undoes them", "[commands]") {
     Project p(Uuid::random(gRng));
     const Track a = makeTrack(TrackKind::Audio, "A");

@@ -62,6 +62,12 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   patches differ mostly in level, pan and a gain insert. Save, Delete and the Options menu are not implemented.
 
 ![Library](docs/images/library.png)
+
+- **Smart Controls** (`B`): the screen controls of the selected track's patch, grouped in panels; drag a knob (Shift for
+  fine, double click resets). A knob can move several parameters at once (the patch decides), and one release is one undo
+  step. Parameter Mapping, External Assignment, Compare and the EQ tab are not implemented.
+
+![Smart Controls](docs/images/smart-controls.png)
 ![Menus](docs/images/menus.png)
 
 - Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example
@@ -70,7 +76,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   action are ignored and logged. Only some default shortcuts are confirmed against Logic Pro; the checklist is in
   `docs/shortcuts-check.md`.
 - Screenshots (used above) are taken by the app itself:
-  `jad-daw --project demo.lpc --no-audio --screenshot out.png --size 1280x800 [--tool scissors] [--select-track 2] [--open-menu 2]`.
+  `jad-daw --project demo.lpc --no-audio --screenshot out.png --size 1280x800 [--tool scissors] [--select-track 2] [--select-region 1] [--open-menu 2] [--panels library,inspector,smart,mixer] [--apply-patch audio.bright-vocal]`.
 
 Known limits: a fader only changes the sound after it is released, the macOS bundle has no icon yet, several buttons
 use text labels because there are no icons for them yet, and the panels behind Library, Inspector, Smart Controls,

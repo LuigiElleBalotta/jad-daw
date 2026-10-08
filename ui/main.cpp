@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
     QCommandLineOption menuOption("open-menu", "Open the menu at <index> of the menu bar for --screenshot.", "index");
     QCommandLineOption panelsOption("panels", "Panels shown for --screenshot, comma separated: library, inspector, smart, mixer.", "list");
     QCommandLineOption selectRegionOption("select-region", "Select region number <n> (1-based) for --screenshot.", "n");
+    QCommandLineOption applyPatchOption("apply-patch", "Apply the patch <id> to the selected track for --screenshot.", "id");
     QCommandLineOption softwareOption("software", "Render without a GPU (icons are missing).");
     QCommandLineOption sizeOption("size", "Window size for --screenshot, for example 1280x800.", "WxH", "1280x800");
     QCommandLineOption delayOption("delay", "Milliseconds to wait before the screenshot.", "ms", "1500");
@@ -44,6 +45,7 @@ int main(int argc, char** argv) {
     parser.addOption(screenshotOption);
     parser.addOption(softwareOption);
     parser.addOption(panelsOption);
+    parser.addOption(applyPatchOption);
     parser.addOption(selectRegionOption);
     parser.addOption(toolOption);
     parser.addOption(selectTrackOption);
@@ -72,7 +74,7 @@ int main(int argc, char** argv) {
         const QString file = parser.value(screenshotOption);
         const int delay = parser.value(delayOption).toInt();
         // the state for the picture is set shortly before it is taken, once the project has been shown
-        QTimer::singleShot(delay, &app, [&parser, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &menuOption, controller, window, file, &app] {
+        QTimer::singleShot(delay, &app, [&parser, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &applyPatchOption, &menuOption, controller, window, file, &app] {
             if (controller && parser.isSet(toolOption)) controller->setTool(parser.value(toolOption));
             if (controller && parser.isSet(selectTrackOption))
                 controller->selectTrack(controller->tracks()->trackIdAt(parser.value(selectTrackOption).toInt() - 1), "replace");
@@ -83,6 +85,7 @@ int main(int argc, char** argv) {
                 controller->setSmartControlsVisible(shown.contains("smart"));
                 controller->setMixerVisible(shown.contains("mixer"));
             }
+            if (controller && parser.isSet(applyPatchOption)) controller->applyPatch(parser.value(applyPatchOption));
             if (controller && parser.isSet(selectRegionOption))
                 controller->selectRegion(controller->regions()->regionIdAt(parser.value(selectRegionOption).toInt() - 1), "replace");
             if (parser.isSet(menuOption)) QMetaObject::invokeMethod(window, "showMenu", Q_ARG(QVariant, parser.value(menuOption).toInt()));

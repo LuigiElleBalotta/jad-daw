@@ -63,6 +63,8 @@ qt_add_qml_module(jad_ui_lib
         qml/Splitter.qml
         qml/LeftColumn.qml
         qml/Library.qml
+        qml/ScreenKnob.qml
+        qml/SmartControls.qml
         qml/Inspector.qml
         qml/RegionInspector.qml
         qml/TrackInspector.qml

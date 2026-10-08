@@ -230,6 +230,12 @@ ApplicationWindow {
                 project: controller
             }
         }
+        SmartControls {
+            Layout.fillWidth: true
+            Layout.preferredHeight: controller.smartControlsHeight
+            visible: controller.smartControlsVisible
+            project: controller
+        }
         Mixer {
             Layout.fillWidth: true
             visible: controller.mixerVisible

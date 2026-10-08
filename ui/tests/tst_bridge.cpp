@@ -381,9 +381,16 @@ private slots:
         TempDir dir;
         jad::ProjectController c(false);
         QVERIFY(c.openProject(url(makeDemo(dir))));
-        c.barBack();  // at the start: stays at 0
-        c.barForward();
-        QTRY_VERIFY(c.positionBeats() >= 0.0);
+        const double bar = c.property("barBeats").toDouble();
+        c.barForward();  // to the second bar
+        QTRY_COMPARE(c.positionBeats(), bar);
+        c.barBack();  // to the start
+        QTRY_COMPARE(c.positionBeats(), 0.0);
+        for (int i = 0; i < 3; ++i) {  // past zero: the position clamps at 0, so a step forward lands on the first bar again
+            c.barBack();
+            c.barForward();
+            QTRY_COMPARE(c.positionBeats(), bar);
+        }
     }
     void mixerVisibilityIsAnObservableFlag() {
         jad::ProjectController c(false);

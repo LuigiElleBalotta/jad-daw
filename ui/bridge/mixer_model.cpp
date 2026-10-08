@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "bridge/row_maps.h"
+
 namespace jad {
 
 void MixerModel::reset(const std::vector<TrackRow>& rows) {
@@ -29,13 +31,14 @@ QVariant MixerModel::data(const QModelIndex& index, int role) const {
         case Solo: return r.solo;
         case GainDb: return r.gainDb;
         case Pan: return r.pan;
+        case Info: return trackToMap(r);
     }
     return {};
 }
 
 QHash<int, QByteArray> MixerModel::roleNames() const {
     return {{TrackId, "trackId"}, {Name, "name"}, {Color, "color"}, {IsMaster, "isMaster"},
-            {Mute, "mute"},       {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}};
+            {Mute, "mute"},       {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {Info, "info"}};
 }
 
 }  // namespace jad

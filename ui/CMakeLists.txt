@@ -36,7 +36,6 @@ qt_add_qml_module(jad_ui_lib
         qml/WaveformPreview.qml
         qml/TrackList.qml
         qml/Meter.qml
-        qml/MixerStrip.qml
         qml/Mixer.qml
         qml/ThemedMenu.qml
         qml/ThemedMenuItem.qml

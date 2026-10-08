@@ -7,7 +7,7 @@ Rectangle {
     required property ProjectController project
     property bool expanded: true
     readonly property real headerHeight: 24
-    readonly property real stripHeight: 300
+    readonly property real stripHeight: 420
 
     color: Theme.surfaceCanvas
     implicitHeight: expanded ? headerHeight + stripHeight : headerHeight
@@ -60,45 +60,25 @@ Rectangle {
             // tracks first, the master strip last
             Repeater {
                 model: root.project.mixer
-                delegate: MixerStrip {
+                delegate: ProjectStrip {
                     required property var model
                     visible: !model.isMaster
                     width: visible ? implicitWidth : 0
                     height: strips.height
-                    trackId: model.trackId
-                    name: model.name
-                    trackColor: model.color
-                    gainDb: model.gainDb
-                    pan: model.pan
-                    mute: model.mute
-                    solo: model.solo
-                    master: false
-                    onGainReleased: (id, v) => root.project.setGain(id, v)
-                    onPanReleased: (id, v) => root.project.setPan(id, v)
-                    onMuteToggled: (id, on) => root.project.setMute(id, on)
-                    onSoloToggled: (id, on) => root.project.setSolo(id, on)
+                    project: root.project
+                    info: model.info
                 }
             }
             Repeater {
                 model: root.project.mixer
-                delegate: MixerStrip {
+                delegate: ProjectStrip {
                     required property var model
                     visible: model.isMaster
                     width: visible ? implicitWidth : 0
                     height: strips.height
-                    trackId: model.trackId
-                    name: model.name
-                    trackColor: model.color
-                    gainDb: model.gainDb
-                    pan: model.pan
-                    mute: model.mute
-                    solo: model.solo
-                    master: true
+                    project: root.project
+                    info: model.info
                     peak: root.project.masterPeak
-                    onGainReleased: (id, v) => root.project.setGain(id, v)
-                    onPanReleased: (id, v) => root.project.setPan(id, v)
-                    onMuteToggled: (id, on) => root.project.setMute(id, on)
-                    onSoloToggled: (id, on) => root.project.setSolo(id, on)
                 }
             }
         }

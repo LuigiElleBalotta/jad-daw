@@ -3,6 +3,7 @@
 
 #include "bridge/mixer_model.h"
 #include "bridge/region_model.h"
+#include "bridge/row_maps.h"
 #include "bridge/snapshot.h"
 #include "bridge/track_list_model.h"
 #include "lpc/demo_project.h"
@@ -96,6 +97,26 @@ private slots:
         QCOMPARE(model.rowCount(), 1);
         QCOMPARE(model.data(model.index(0), model.roleNames().key("name")).toString(), QStringLiteral("Keys"));
         QCOMPARE(model.data(model.index(0), model.roleNames().key("regionCount")).toInt(), 2);
+    }
+    void mixerRowsCarryTheStripViewForQml() {
+        jad::MixerModel model;
+        jad::TrackRow a;
+        a.id = "a";
+        a.kind = "audio";
+        a.name = "Vox";
+        a.outputName = "Stereo Out";
+        a.inserts.push_back({"builtin.gain", 3.0});
+        jad::TrackRow m;
+        m.id = "m";
+        m.kind = "master";
+        m.master = true;
+        model.reset({m, a});
+        const int role = model.roleNames().key("info");
+        QVERIFY(role != 0);
+        const QVariantMap info = model.data(model.index(0), role).toMap();  // the master goes last: row 0 is the track
+        QCOMPARE(info.value("name").toString(), QStringLiteral("Vox"));
+        QCOMPARE(info.value("inserts").toList().size(), 1);
+        QVERIFY(model.data(model.index(1), role).toMap().value("master").toBool());
     }
     void regionModelExposesBeats() {
         jad::RegionModel model;

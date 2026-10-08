@@ -12,7 +12,7 @@ class MixerModel : public QAbstractListModel {
     Q_OBJECT
     QML_ANONYMOUS
 public:
-    enum Role { TrackId = Qt::UserRole + 1, Name, Color, IsMaster, Mute, Solo, GainDb, Pan };
+    enum Role { TrackId = Qt::UserRole + 1, Name, Color, IsMaster, Mute, Solo, GainDb, Pan, Info };
     explicit MixerModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
     void reset(const std::vector<TrackRow>& rows);
     int rowCount(const QModelIndex& parent = {}) const override { return parent.isValid() ? 0 : static_cast<int>(rows_.size()); }

@@ -210,6 +210,7 @@ Panel {
             Layout.fillWidth: true
             Layout.preferredHeight: 150
             Layout.minimumHeight: 56
+            Layout.fillHeight: false  // the spacer above absorbs the extra height: every strip lines up at the bottom
             spacing: Theme.spacing[3]
             Item { Layout.fillWidth: true }
             Fader {

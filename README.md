@@ -68,6 +68,11 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   step. Parameter Mapping, External Assignment, Compare and the EQ tab are not implemented.
 
 ![Smart Controls](docs/images/smart-controls.png)
+
+- **Mixer** (`X`): one strip per track, built from the same channel-strip component as the Inspector (instrument,
+  inserts, sends, output, pan, fader, mute, solo), the master strip last.
+
+![Mixer](docs/images/mixer.png)
 ![Menus](docs/images/menus.png)
 
 - Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example

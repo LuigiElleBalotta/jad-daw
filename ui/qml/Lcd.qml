@@ -68,6 +68,8 @@ Rectangle {
                     cell.editing = false
                     cell.commit(text)
                 }
+                // Return is also a global shortcut (go to beginning): it must confirm the field, not run the shortcut
+                Keys.onShortcutOverride: (event) => { if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) event.accepted = true }
                 Keys.onEscapePressed: cell.editing = false
                 onActiveFocusChanged: if (!activeFocus) cell.editing = false
             }

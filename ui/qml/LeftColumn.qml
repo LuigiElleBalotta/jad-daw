@@ -8,6 +8,7 @@ Rectangle {
     readonly property alias inspector: inspector
     readonly property alias library: library
     color: Theme.surfacePanel
+    clip: true
     visible: project.inspectorVisible || project.libraryVisible
     width: visible ? project.leftColumnWidth : 0
 

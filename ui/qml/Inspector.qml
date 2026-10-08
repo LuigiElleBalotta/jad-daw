@@ -1,7 +1,8 @@
 import QtQuick
 import Jad
 
-// The Inspector: Region and Track sections (they scroll) above the channel strips of the selected track and its output.
+// The Inspector: Region and Track sections above the channel strips of the selected track and its output. All of it
+// scrolls when the column is short; when there is room the strips sit at the bottom.
 Rectangle {
     id: root
     required property ProjectController project
@@ -16,11 +17,9 @@ Rectangle {
     clip: true
 
     Flickable {
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: parent.height - root.stripsHeight
-        contentHeight: col.height
+        id: flick
+        anchors.fill: parent
+        contentHeight: Math.max(col.height + root.stripsHeight, height)
         boundsBehavior: Flickable.StopAtBounds
         clip: true
         Column {
@@ -41,31 +40,30 @@ Rectangle {
             RegionInspector { id: region; width: parent.width; visible: root.insp.hasRegion; project: root.project; region: root.insp.region }
             TrackInspector { id: trackSec; width: parent.width; visible: root.insp.hasTrack; project: root.project; track: root.insp.track }
         }
-    }
-    Row {
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: root.stripsHeight
-        visible: root.insp.hasTrack
-        padding: Theme.spacing[2]
-        spacing: Theme.spacing[2]
-        ProjectStrip {
-            id: trackStrip
-            width: (parent.width - Theme.spacing[2] * 3) / 2
-            height: parent.height - Theme.spacing[2] * 2
-            project: root.project
-            info: root.insp.track
-        }
-        ProjectStrip {
-            id: outputStrip
-            visible: root.insp.hasTrack && Object.keys(root.insp.output).length > 0
-            width: (parent.width - Theme.spacing[2] * 3) / 2
-            height: parent.height - Theme.spacing[2] * 2
-            project: root.project
-            info: root.insp.output
-            showSlots: false
-            peak: info.master ? root.project.masterPeak : 0
+        Row {
+            y: flick.contentHeight - root.stripsHeight
+            width: parent.width
+            height: root.stripsHeight
+            visible: root.insp.hasTrack
+            padding: Theme.spacing[2]
+            spacing: Theme.spacing[2]
+            ProjectStrip {
+                id: trackStrip
+                width: (parent.width - Theme.spacing[2] * 3) / 2
+                height: parent.height - Theme.spacing[2] * 2
+                project: root.project
+                info: root.insp.track
+            }
+            ProjectStrip {
+                id: outputStrip
+                visible: root.insp.hasTrack && Object.keys(root.insp.output).length > 0
+                width: (parent.width - Theme.spacing[2] * 3) / 2
+                height: parent.height - Theme.spacing[2] * 2
+                project: root.project
+                info: root.insp.output
+                showSlots: false
+                peak: info.master ? root.project.masterPeak : 0
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 # UI-B, the panels: design
 
-Part of the UI line after UI-A (the frame, `2026-10-08-ui-a-frame-design.md`). Status: draft for review. Date: 2026-10-08.
+Part of the UI line after UI-A (the frame, `2026-10-08-ui-a-frame-design.md`). Status: implemented (plan `docs/superpowers/plans/2026-10-08-ui-b-panels.md`). Date: 2026-10-08.
 UI-C (editors, Loops, Quick Help content) follows with its own spec.
 
 ## 1. Purpose
@@ -57,6 +57,8 @@ panners, recording, Quick Help content (UI-C), releasing a version (the owner de
 So early patches differ only in strip values, an optional gain insert, name and category. That is deliberate: the
 panels, data format and commands are real and complete; the catalogue grows with the engine (new processors only
 add `patches.json` entries and one id in `processor_ids.h`). The README says so.
+
+Hosting real VST3 plug-ins is a Core and platform subsystem, not a panel: it needs its own spec and plan.
 
 ## 4. Layout
 

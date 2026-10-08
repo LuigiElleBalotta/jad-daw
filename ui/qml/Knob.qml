@@ -6,6 +6,7 @@ Item {
     property real value: 0
     property real from: -1
     property real to: 1
+    property real resetValue: 0
     signal moved(real value)
     signal released(real value)
 
@@ -46,10 +47,11 @@ Item {
         onPositionChanged: (m) => {
             if (!pressed) return
             const span = root.to - root.from
-            root.dragValue = Math.max(root.from, Math.min(root.to, startValue + (startY - m.y) / 200 * span))
+            const travel = (m.modifiers & Qt.ShiftModifier) ? 800 : 200  // Shift: fine
+            root.dragValue = Math.max(root.from, Math.min(root.to, startValue + (startY - m.y) / travel * span))
             root.moved(root.dragValue)
         }
         onReleased: { root.dragging = false; root.released(root.dragValue) }
-        onDoubleClicked: { root.dragValue = 0; root.released(0) }
+        onDoubleClicked: { root.dragValue = root.resetValue; root.released(root.resetValue) }
     }
 }

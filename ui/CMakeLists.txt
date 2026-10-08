@@ -51,6 +51,10 @@ qt_add_qml_module(jad_ui_lib
         qml/ActionMenu.qml
         qml/ToolBar.qml
         qml/AboutDialog.qml
+        qml/StripSlot.qml
+        qml/ChannelStrip.qml
+        qml/ProjectStrip.qml
+        qml/TrackIcon.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg
@@ -71,6 +75,10 @@ qt_add_qml_module(jad_ui_lib
         qml/icons/zoom-in.svg
         qml/icons/zoom-out.svg
         qml/icons/chevron-right.svg
+        qml/icons/track-audio.svg
+        qml/icons/track-instrument.svg
+        qml/icons/track-aux.svg
+        qml/icons/track-bus.svg
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
         actions/actions.json
         ${CMAKE_SOURCE_DIR}/core/data/patches.json

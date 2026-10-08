@@ -495,6 +495,59 @@ void ProjectController::splitRegion(const QString& regionId, double atBeats) {
                  {"newRegionId", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}});
 }
 
+void ProjectController::resizeRegion(const QString& regionId, double startBeats, double lengthBeats) {
+    if (!host_ || !std::isfinite(startBeats) || !std::isfinite(lengthBeats)) return;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row) return;
+    const double minLength = std::max(snapBeats(), 1.0 / 16.0);
+    const double start = std::clamp(startBeats, 0.0, kMaxBeats);
+    const double end = std::clamp(start + std::max(lengthBeats, minLength), 0.0, kMaxBeats);
+    const std::int64_t from = regionPosition(*row, start);
+    std::int64_t length = regionPosition(*row, end) - from;
+    if (length <= 0) length = 1;  // the Core refuses what is still wrong (a start at the very end of the range)
+    sendCommand({{"type", "resize_region"}, {"regionId", regionId.toStdString()}, {"start", from}, {"length", length}});
+}
+
+void ProjectController::splitSelectedAtPlayhead() {
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedRegions_)) {
+        const RegionRow* row = regions_.find(id);
+        if (!row) continue;
+        if (!(row->startBeats < positionBeats_ && positionBeats_ < row->startBeats + row->lengthBeats)) continue;
+        commands.push_back({{"type", "split_region"},
+                            {"regionId", id.toStdString()},
+                            {"at", regionPosition(*row, positionBeats_)},
+                            {"newRegionId", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}});
+    }
+    if (commands.empty()) {
+        setError("No selected region at the playhead");
+        return;
+    }
+    if (commands.size() == 1) {
+        sendCommand(commands.front());
+        return;
+    }
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::joinSelected() {
+    if (selectedRegions_.size() < 2) {
+        setError("Select at least two regions to join");
+        return;
+    }
+    joinRegions(selectedRegions_);
+}
+
+void ProjectController::selectRegionsIn(double fromBeats, double toBeats, int fromRow, int toRow, const QString& mode) {
+    if (!std::isfinite(fromBeats) || !std::isfinite(toBeats)) return;
+    const double a = std::min(fromBeats, toBeats), b = std::max(fromBeats, toBeats);
+    const int r0 = std::min(fromRow, toRow), r1 = std::max(fromRow, toRow);
+    QStringList ids;
+    for (const RegionRow& row : regions_.rows())
+        if (row.trackIndex >= r0 && row.trackIndex <= r1 && row.startBeats < b && row.startBeats + row.lengthBeats > a) ids.append(row.id);
+    selectRegions(ids, mode);
+}
+
 void ProjectController::joinRegions(const QStringList& regionIds) {
     if (!host_ || regionIds.isEmpty()) return;
     nlohmann::json ids = nlohmann::json::array();

@@ -76,4 +76,60 @@ TestCase {
         compare(moves, 0)
         compare(selects, 0)
     }
+
+    function test_right_edge_drag_resizes_once_on_release() {
+        var r = createTemporaryObject(itemC, this)  // 160 px wide, 4 beats at 40 px per beat, starting at beat 4
+        r.tool = "pointer"
+        var got = []
+        r.resized.connect(function (id, s, l) { got.push([id, s, l]) })
+        mousePress(r, 158, 10)
+        mouseMove(r, 190, 10)
+        mouseMove(r, 238, 10)
+        compare(got.length, 0)
+        mouseRelease(r, 238, 10)
+        compare(got.length, 1)
+        compare(got[0], ["r1", 4, 6])  // the right edge moved 80 px = 2 beats, snapped
+    }
+    function test_left_edge_drag_moves_the_start_and_shortens() {
+        var r = createTemporaryObject(itemC, this)
+        r.tool = "pointer"
+        var got = []
+        r.resized.connect(function (id, s, l) { got.push([id, s, l]) })
+        mousePress(r, 2, 10)
+        mouseMove(r, 42, 10)
+        mouseRelease(r, 42, 10)
+        compare(got, [["r1", 5, 3]])
+    }
+    function test_left_edge_cannot_pass_the_right_edge() {
+        var r = createTemporaryObject(itemC, this)
+        r.tool = "pointer"
+        var got = []
+        r.resized.connect(function (id, s, l) { got.push([id, s, l]) })
+        mousePress(r, 2, 10)
+        mouseMove(r, 400, 10)
+        mouseRelease(r, 400, 10)
+        compare(got.length, 1)
+        verify(got[0][2] >= 1)  // never a zero or negative length
+        verify(got[0][1] + got[0][2] <= 8 + 1e-9)  // the right edge did not move
+    }
+    function test_edges_do_nothing_with_other_tools() {
+        var r = createTemporaryObject(itemC, this)
+        r.tool = "scissors"
+        var got = []
+        r.resized.connect(function () { got.push(1) })
+        mousePress(r, 158, 10)
+        mouseMove(r, 238, 10)
+        mouseRelease(r, 238, 10)
+        compare(got.length, 0)
+    }
+    function test_a_tiny_edge_movement_is_a_click_not_a_resize() {
+        var r = createTemporaryObject(itemC, this)
+        r.tool = "pointer"
+        var got = []
+        r.resized.connect(function () { got.push(1) })
+        mousePress(r, 158, 10)
+        mouseMove(r, 159, 10)
+        mouseRelease(r, 159, 10)
+        compare(got.length, 0)
+    }
 }

@@ -164,6 +164,11 @@ public:
     Q_INVOKABLE void createRegion(const QString& trackId, double startBeats, double lengthBeats);  // empty MIDI region
     Q_INVOKABLE void splitRegion(const QString& regionId, double atBeats);
     Q_INVOKABLE void joinRegions(const QStringList& regionIds);
+    Q_INVOKABLE void resizeRegion(const QString& regionId, double startBeats, double lengthBeats);  // snapping is done by the caller
+    Q_INVOKABLE void splitSelectedAtPlayhead();  // every selected region that strictly contains the playhead, one undo step
+    Q_INVOKABLE void joinSelected();             // the selected regions, which must touch one another
+    // Selects the regions that overlap the rectangle (beats and timeline rows, both inclusive).
+    Q_INVOKABLE void selectRegionsIn(double fromBeats, double toBeats, int fromRow, int toRow, const QString& mode);
     Q_INVOKABLE void joinWithNext(const QString& regionId);  // the region that starts where this one ends, same track
     Q_INVOKABLE void toggleSoloSelected();
     // Strip edits: one set_strip command each; values are clamped, NaN is ignored.

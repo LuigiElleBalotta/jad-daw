@@ -20,15 +20,32 @@ Item {
     property string tool: "pointer"
     property bool selected: false
     property real dragDeltaPx: 0
+    property real leftEdgePx: 0   // live feedback while an edge is dragged
+    property real rightEdgePx: 0
     readonly property bool dragging: area.moving
 
     signal moved(string id, real beats)
     signal selectRequested(string id, bool extend)
+    signal resized(string id, real startBeats, real lengthBeats)
     signal eraseRequested(string id)
     signal splitRequested(string id, real atBeats)
     signal glueRequested(string id)
 
     function snap(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
+
+    // An edge was dragged by deltaPx: the other edge stays, the length never gets below one grid step.
+    function finishResize(left, deltaPx) {
+        const minLength = Math.max(snapBeats, 1 / 16)
+        let s = startBeats, l = lengthBeats
+        if (left) {
+            const newStart = Math.min(snap(startBeats + deltaPx / pixelsPerBeat), startBeats + lengthBeats - minLength)
+            s = Math.max(0, newStart)
+            l = startBeats + lengthBeats - s
+        } else {
+            l = Math.max(minLength, snap(startBeats + lengthBeats + deltaPx / pixelsPerBeat) - startBeats)
+        }
+        resized(regionId, s, l)
+    }
 
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
     readonly property color solid: Theme["track" + capitalColor + "Solid"]
@@ -53,8 +70,8 @@ Item {
     // the visuals follow the pointer while dragging; the item itself stays put until the model moves
     Item {
         id: content
-        x: root.dragDeltaPx
-        width: root.width
+        x: root.dragDeltaPx + root.leftEdgePx
+        width: Math.max(2, root.width - root.leftEdgePx + root.rightEdgePx)
         height: root.height
         opacity: area.moving ? 0.8 : 1
 
@@ -143,4 +160,33 @@ Item {
         }
         onCanceled: { moving = false; root.dragDeltaPx = 0 }
     }
+
+    // the edges resize the region (pointer tool only); they sit on top of the body
+    component Edge: MouseArea {
+        id: edge
+        required property bool isLeft
+        enabled: root.tool === "pointer"
+        width: 6
+        height: parent.height
+        cursorShape: Qt.SizeHorCursor
+        preventStealing: true
+        property real pressSceneX: 0
+        function sceneX(m) { return mapToItem(null, m.x, m.y).x }
+        onPressed: (m) => { pressSceneX = sceneX(m) }
+        onPositionChanged: (m) => {
+            if (!pressed) return
+            const d = sceneX(m) - pressSceneX
+            if (isLeft) root.leftEdgePx = d
+            else root.rightEdgePx = d
+        }
+        onReleased: {
+            const d = isLeft ? root.leftEdgePx : root.rightEdgePx
+            root.leftEdgePx = 0
+            root.rightEdgePx = 0
+            if (Math.abs(d) >= 3) root.finishResize(isLeft, d)  // a smaller movement is a click
+        }
+        onCanceled: { root.leftEdgePx = 0; root.rightEdgePx = 0 }
+    }
+    Edge { isLeft: true; anchors.left: parent.left }
+    Edge { isLeft: false; anchors.right: parent.right }
 }

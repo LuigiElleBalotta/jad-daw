@@ -80,6 +80,8 @@ ApplicationWindow {
         "track.height.large": () => { controller.trackHeightIndex = 2 },
         "track.height.xlarge": () => { controller.trackHeightIndex = 3 },
         "edit.selectAll": () => controller.selectAll(),
+        "edit.splitAtPlayhead": () => controller.splitSelectedAtPlayhead(),
+        "edit.joinRegions": () => controller.joinSelected(),
         "edit.deselectAll": () => controller.clearSelection(),
         "transport.stop": () => controller.stop(),
         "transport.barBack": () => controller.barBack(),

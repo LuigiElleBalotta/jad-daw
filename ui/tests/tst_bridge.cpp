@@ -552,6 +552,55 @@ private slots:
         c.createRegion(QStringLiteral("no-such-track"), 0.0, 1.0);
         QVERIFY(!c.lastError().isEmpty());
     }
+    void resizeSendsOneCommandAndClamps() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString id = c.regions()->regionIdAt(0);
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.resizeRegion(id, std::numeric_limits<double>::quiet_NaN(), 2.0);  // ignored
+        c.resizeRegion(id, 0.0, std::numeric_limits<double>::infinity());   // ignored
+        QCOMPARE(sent.count(), 0);
+        c.setSnap("off");
+        c.resizeRegion(id, -5.0, 0.0);  // clamped to start 0 and the minimum length
+        QTRY_COMPARE(sent.count(), 1);
+        QCOMPARE(sent.at(0).at(0).toString(), QStringLiteral("resize_region"));
+        c.undo();
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+    }
+    void splitAtPlayheadWorksOnSelectedRegionsOnly() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        c.splitSelectedAtPlayhead();  // nothing selected
+        QVERIFY(c.lastError().contains("No selected region"));
+    }
+    void joinSelectedNeedsTwoRegions() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        c.selectRegion(c.regions()->regionIdAt(0), "replace");
+        c.joinSelected();
+        QVERIFY(c.lastError().contains("at least two"));
+    }
+    void rectangleSelectionSelectsAllIds() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() >= 2);
+        QStringList ids{c.regions()->regionIdAt(0), c.regions()->regionIdAt(1), "ghost"};
+        c.selectRegions(ids, "replace");
+        QCOMPARE(c.selectedRegionIds().size(), 2);  // the unknown id is dropped
+        c.clearSelection();
+        c.selectRegionsIn(0.0, 1000.0, 0, 99, "replace");  // every row, every beat
+        QCOMPARE(c.selectedRegionIds().size(), c.regions()->rowCount());
+        c.clearSelection();
+        c.selectRegionsIn(900.0, 1000.0, 0, 99, "replace");  // nothing out there
+        QVERIFY(c.selectedRegionIds().isEmpty());
+    }
 };
 
 QTEST_MAIN(BridgeTest)

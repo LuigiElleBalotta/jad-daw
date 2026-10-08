@@ -100,18 +100,41 @@ Item {
             property real endBeats: 0
             property int row: 0
             property string trackId
+            property bool band: false  // a rectangle selection is being dragged
+            property real bx0: 0
+            property real by0: 0
+            property real bx1: 0
+            property real by1: 0
             onPressed: (m) => {
                 root.forceActiveFocus()
-                root.project.clearSelection()
+                if (!(m.modifiers & Qt.ShiftModifier)) root.project.clearSelection()
                 pencil = root.project.tool === "pencil"
-                if (!pencil) return
+                if (!pencil) {
+                    band = root.project.tool === "pointer"
+                    bx0 = bx1 = m.x
+                    by0 = by1 = m.y
+                    return
+                }
                 trackId = root.trackIdAt(m.y + root.rulerHeight)
                 row = Math.floor((m.y + root.scrollY) / root.rowHeight)
                 startBeats = Math.max(0, root.snapBeat(root.xToBeats(m.x)))
                 endBeats = startBeats
             }
-            onPositionChanged: (m) => { if (pencil && pressed) endBeats = Math.max(0, root.snapBeat(root.xToBeats(m.x))) }
-            onReleased: {
+            onPositionChanged: (m) => {
+                if (pencil && pressed) endBeats = Math.max(0, root.snapBeat(root.xToBeats(m.x)))
+                if (band && pressed) { bx1 = m.x; by1 = m.y }
+            }
+            onReleased: (m) => {
+                if (band) {
+                    band = false
+                    if (Math.abs(bx1 - bx0) > 3 || Math.abs(by1 - by0) > 3) {
+                        const row = (y) => Math.floor((y + root.scrollY) / root.rowHeight)
+                        root.project.selectRegionsIn(root.xToBeats(Math.min(bx0, bx1)), root.xToBeats(Math.max(bx0, bx1)),
+                                                     row(Math.min(by0, by1)), row(Math.max(by0, by1)),
+                                                     (m.modifiers & Qt.ShiftModifier) ? "extend" : "replace")
+                    }
+                    return
+                }
                 if (!pencil) return
                 pencil = false
                 if (trackId === "") return
@@ -119,7 +142,16 @@ Item {
                 if (length < 1 / 16) length = root.project.beatsPerBar  // a click draws one bar
                 root.project.createRegion(trackId, Math.min(startBeats, endBeats), length)
             }
-            onCanceled: pencil = false
+            onCanceled: { pencil = false; band = false }
+        }
+        Rectangle {  // the rectangle selection being dragged
+            visible: emptyArea.band
+            x: Math.min(emptyArea.bx0, emptyArea.bx1)
+            y: Math.min(emptyArea.by0, emptyArea.by1)
+            width: Math.abs(emptyArea.bx1 - emptyArea.bx0)
+            height: Math.abs(emptyArea.by1 - emptyArea.by0)
+            color: Qt.rgba(Theme.accentPrimary.r, Theme.accentPrimary.g, Theme.accentPrimary.b, 0.2)
+            border.color: Theme.accentPrimary
         }
         Rectangle {  // the region being drawn
             visible: emptyArea.pencil
@@ -159,6 +191,7 @@ Item {
                 visible: x + width > 0 && x < body.width
                 onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.project.selectRegion(id, extend ? "extend" : "replace") }
                 onMoved: (id, beats) => root.regionMoved(id, beats)
+                onResized: (id, s, l) => root.project.resizeRegion(id, s, l)
                 onEraseRequested: (id) => root.project.deleteRegions([id])
                 onSplitRequested: (id, atBeats) => root.project.splitRegion(id, atBeats)
                 onGlueRequested: (id) => root.project.joinWithNext(id)

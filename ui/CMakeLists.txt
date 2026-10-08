@@ -62,6 +62,7 @@ qt_add_qml_module(jad_ui_lib
         qml/StubValue.qml
         qml/Splitter.qml
         qml/LeftColumn.qml
+        qml/Library.qml
         qml/Inspector.qml
         qml/RegionInspector.qml
         qml/TrackInspector.qml

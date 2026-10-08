@@ -17,7 +17,7 @@ Rectangle {
     signal dragged(real dx)
     signal dragReleased()
 
-    implicitHeight: 20
+    implicitHeight: 18
     implicitWidth: 84
     radius: Theme.radiusControl - 2
     color: filled ? fillColor : (area.containsMouse ? Theme.surfaceRaisedHover : Theme.surfaceRaised)

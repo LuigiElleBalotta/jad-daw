@@ -82,7 +82,7 @@ Panel {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacing[2]
-        spacing: Theme.spacing[1]
+        spacing: Theme.spacing[0]
 
         StripSlot {
             Layout.fillWidth: true
@@ -209,6 +209,7 @@ Panel {
         RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: 150
+            Layout.minimumHeight: 56
             spacing: Theme.spacing[3]
             Item { Layout.fillWidth: true }
             Fader {

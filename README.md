@@ -55,6 +55,13 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   like have no engine yet: they are visual only and say so when switched on.
 
 ![Inspector](docs/images/inspector.png)
+
+- **Library** (`Y`): the patches of the selected track's kind, by category, with search; click a patch or step with the
+  Up and Down keys to apply it (strip values, inserts and instrument in one undo step); Revert applies the track's patch
+  again. The catalogue is `core/data/patches.json`; the engine has one effect and one synth for now, so the built-in
+  patches differ mostly in level, pan and a gain insert. Save, Delete and the Options menu are not implemented.
+
+![Library](docs/images/library.png)
 ![Menus](docs/images/menus.png)
 
 - Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example

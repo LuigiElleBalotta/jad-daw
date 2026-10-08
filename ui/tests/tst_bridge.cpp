@@ -196,12 +196,6 @@ private slots:
         c.setSolo(id, true);
         QTRY_VERIFY(c.mixer()->data(c.mixer()->index(0), c.mixer()->roleNames().key("solo")).toBool());
     }
-    void shortcutsComeFromTheModuleResource() {
-        jad::ProjectController c(false);
-        QCOMPARE(c.shortcut("transport.playStop"), QStringLiteral("Space"));
-        QCOMPARE(c.shortcut("edit.undo"), QStringLiteral("Ctrl+Z"));
-        QVERIFY(c.shortcut("no.such.action").isEmpty());
-    }
     void toggleMuteAndSoloFlipTheCurrentState() {
         TempDir dir; const auto proj = dir.path() / "d.lpc";
         std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);

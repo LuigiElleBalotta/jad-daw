@@ -5,15 +5,25 @@ import Jad
 MenuItem {
     id: root
     implicitHeight: 28
-    implicitWidth: 220
+    implicitWidth: 240
+    readonly property bool checkedState: root.action && root.action.on === true
 
     contentItem: Item {
         Text {
             anchors.left: parent.left
+            anchors.leftMargin: 16
             anchors.verticalCenter: parent.verticalCenter
             text: root.text
             color: root.enabled ? Theme.textPrimary : Theme.textDisabled
             font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontTypeBodySize
+        }
+        Text {  // a check mark for toggles and the selected radio entry
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            text: "✓"
+            visible: root.checkedState
+            color: Theme.accentPrimary
             font.pixelSize: Theme.fontTypeBodySize
         }
         Text {

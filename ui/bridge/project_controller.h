@@ -24,7 +24,6 @@
 #include "bridge/snapshot.h"
 #include "bridge/track_list_model.h"
 #include "bridge/waveform_cache.h"
-#include "shortcuts/shortcut_map.h"
 
 namespace lpc {
 class MediaStore;
@@ -109,8 +108,6 @@ public:
     Q_INVOKABLE void setSolo(const QString& trackId, bool on);
     Q_INVOKABLE void toggleMute(const QString& trackId);
     Q_INVOKABLE void toggleSolo(const QString& trackId);
-    // The key sequence (portable text) of an action id, empty when unknown; see shortcuts/default-shortcuts.json.
-    Q_INVOKABLE QString shortcut(const QString& actionId) const;
     Q_INVOKABLE void moveRegion(const QString& regionId, double startBeats);
     Q_INVOKABLE void deleteRegions(const QStringList& regionIds);
     // Copies a 1-2 channel WAV of the project sample rate into <project>/audio and adds it as media plus a region
@@ -146,7 +143,6 @@ signals:
 private:
     // `done(accepted)` runs on the Qt thread once the project thread has answered, or at once when nothing could be sent.
     void setStripField(const QString& trackId, const char* field, nlohmann::json value);
-    void loadShortcuts();
     struct PendingImport {
         QUrl file;
         QString trackId;
@@ -178,7 +174,6 @@ private:
     std::filesystem::path dir_;
     QTimer timer_;
 
-    std::unique_ptr<ShortcutMap> shortcuts_;
     std::deque<PendingImport> importQueue_;
     bool importRunning_ = false;
     double lastImportEnd_ = 0.0;

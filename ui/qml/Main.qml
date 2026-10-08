@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQml.Models
 import Jad
 
 ApplicationWindow {
@@ -14,6 +15,7 @@ ApplicationWindow {
 
     property alias project: controller
     ProjectController { id: controller }
+    ActionRegistry { id: actionRegistry; objectName: "registry" }
 
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
     function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.beatsPerBar * 4) }
@@ -43,52 +45,68 @@ ApplicationWindow {
         }
     }
 
-    // actions that appear in the menus carry their sequence; the shortcut map decides it
-    Action { id: newAction; text: qsTr("New…"); onTriggered: newDialog.open() }
-    Action { id: openAction; text: qsTr("Open…"); shortcut: controller.shortcut("file.open"); onTriggered: openDialog.open() }
-    Action { id: saveAction; text: qsTr("Save"); shortcut: controller.shortcut("file.save"); enabled: controller.hasProject; onTriggered: controller.saveProject() }
-    Action { id: quitAction; text: qsTr("Quit"); onTriggered: Qt.quit() }
-    Action { id: undoAction; text: qsTr("Undo"); shortcut: controller.shortcut("edit.undo"); onTriggered: controller.undo() }
-    Action { id: redoAction; text: qsTr("Redo"); shortcut: controller.shortcut("edit.redo"); onTriggered: controller.redo() }
-    Action { id: deleteAction; text: qsTr("Delete"); shortcut: controller.shortcut("edit.delete"); onTriggered: timeline.deleteSelected() }
+    // what each real action does; every other id in the table is a stub (see actions/actions.json)
+    readonly property var handlers: ({
+        "file.new": () => newDialog.open(),
+        "file.open": () => openDialog.open(),
+        "file.save": () => controller.saveProject(),
+        "file.quit": () => Qt.quit(),
+        "edit.undo": () => controller.undo(),
+        "edit.redo": () => controller.redo(),
+        "edit.delete": () => timeline.deleteSelected(),
+        "transport.playStop": () => root.togglePlay(),
+        "transport.toStart": () => controller.locateBeats(0),
+        "transport.loop": () => root.toggleLoop(),
+        "track.mute": () => root.forSelectedTracks((id) => controller.toggleMute(id)),
+        "track.solo": () => root.forSelectedTracks((id) => controller.toggleSolo(id)),
+        "view.zoomIn": () => timeline.zoomBy(1.25, timeline.width / 2),
+        "view.zoomOut": () => timeline.zoomBy(0.8, timeline.width / 2)
+    })
+    // the displayed state of real toggles and radio entries (stubs keep their own)
+    readonly property var states: ({
+        "transport.loop": controller.loopEnabled
+    })
+    readonly property var disabledStates: ({
+        "file.save": !controller.hasProject
+    })
 
-    menuBar: MenuBar {
-        background: Rectangle { color: Theme.surfacePanel }
-        delegate: MenuBarItem {
-            id: barItem
-            contentItem: Text {
-                text: barItem.text
-                color: Theme.textPrimary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontTypeBodySize
-                verticalAlignment: Text.AlignVCenter
-            }
-            background: Rectangle { color: barItem.highlighted ? Theme.surfaceRaisedHover : "transparent" }
+    property var actionMap: ({})
+    property int actionsVersion: 0
+    function actionFor(id) { return actionMap[id] ?? null }
+
+    Instantiator {
+        id: actions
+        model: actionRegistry.ids()
+        delegate: JadAction {
+            required property string modelData
+            registry: actionRegistry
+            actionId: modelData
+            handler: root.handlers[modelData] ?? null
+            on: root.states[modelData] ?? false
+            enabled: !(root.disabledStates[modelData] ?? false)
         }
-        ThemedMenu {
-            title: qsTr("File")
-            ThemedMenuItem { action: newAction }
-            ThemedMenuItem { action: openAction }
-            ThemedMenuItem { action: saveAction }
-            MenuSeparator {}
-            ThemedMenuItem { action: quitAction }
-        }
-        ThemedMenu {
-            title: qsTr("Edit")
-            ThemedMenuItem { action: undoAction }
-            ThemedMenuItem { action: redoAction }
-            MenuSeparator {}
-            ThemedMenuItem { action: deleteAction }
+        onObjectAdded: (index, object) => {
+            root.actionMap[object.actionId] = object
+            root.actionsVersion++
         }
     }
 
-    Shortcut { sequence: controller.shortcut("transport.playStop"); onActivated: root.togglePlay() }
-    Shortcut { sequence: controller.shortcut("transport.toStart"); onActivated: controller.locateBeats(0) }
-    Shortcut { sequence: controller.shortcut("transport.loop"); onActivated: root.toggleLoop() }
-    Shortcut { sequence: controller.shortcut("track.mute"); onActivated: root.forSelectedTracks((id) => controller.toggleMute(id)) }
-    Shortcut { sequence: controller.shortcut("track.solo"); onActivated: root.forSelectedTracks((id) => controller.toggleSolo(id)) }
-    Shortcut { sequence: controller.shortcut("view.zoomIn"); onActivated: timeline.zoomBy(1.25, timeline.width / 2) }
-    Shortcut { sequence: controller.shortcut("view.zoomOut"); onActivated: timeline.zoomBy(0.8, timeline.width / 2) }
+    Toast {
+        id: toast
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 56
+    }
+    Connections {
+        target: actionRegistry
+        function onNotImplemented(label) { toast.show(qsTr("%1: not implemented yet").arg(label)) }
+    }
+
+    menuBar: ActionMenuBar {
+        registry: actionRegistry
+        actionFor: root.actionFor
+        actionsVersion: root.actionsVersion
+    }
 
     ColumnLayout {
         anchors.fill: parent

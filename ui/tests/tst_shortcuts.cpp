@@ -1,5 +1,8 @@
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QtTest>
+#include "actions/action_registry.h"
 #include "shortcuts/shortcut_map.h"
 
 class ShortcutsTest : public QObject {
@@ -51,10 +54,13 @@ private slots:
         QVERIFY(m.sequence("edit.undo") != m.sequence("edit.redo"));
     }
     void shippedDefaultsAreValidAndClashFree() {
-        QFile f(QStringLiteral(JAD_DEFAULT_SHORTCUTS));
+        QFile f(QStringLiteral(JAD_ACTIONS_JSON));
         QVERIFY(f.open(QIODevice::ReadOnly));
         QStringList p;
-        auto m = jad::ShortcutMap::fromFiles(QString::fromUtf8(f.readAll()), "{}", &p);
+        QJsonObject defaults;  // the registry derives the defaults from the table in the same way
+        for (const auto& d : jad::ActionRegistry::parseTable(QString::fromUtf8(f.readAll()), &p))
+            if (!d.shortcut.isEmpty()) defaults.insert(d.id, d.shortcut);
+        auto m = jad::ShortcutMap::fromFiles(QString::fromUtf8(QJsonDocument(defaults).toJson()), "{}", &p);
         QVERIFY2(p.isEmpty(), qPrintable(p.join("; ")));
         QCOMPARE(m.sequence("transport.playStop"), QStringLiteral("Space"));
         QCOMPARE(m.sequence("edit.redo"), QStringLiteral("Ctrl+Shift+Z"));

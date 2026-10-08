@@ -60,6 +60,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 
 Known limits: a fader only changes the sound after it is released, the macOS bundle has no icon yet, several buttons
 use text labels because there are no icons for them yet, and the panels behind Library, Inspector, Smart Controls,
-Editors and Loops do not exist yet.
+Editors and Loops do not exist yet. A project with a track name that is empty, longer than 64 characters or has
+control characters, or with an unknown track colour is rejected on load.
 
 Design: `docs/superpowers/specs/2026-10-07-core-engine-design.md`, UI: `docs/superpowers/specs/2026-10-07-ui-shell-design.md` and `docs/superpowers/specs/2026-10-08-ui-a-frame-design.md`. Third-party licences: `THIRD_PARTY.md`.

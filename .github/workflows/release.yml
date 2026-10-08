@@ -56,7 +56,7 @@ jobs:
           - os: windows-latest
             name: windows-x64
             configure: -A x64 -T host=x64
-          - os: macos-latest
+          - os: macos-15   # Qt 6.8 links AGL, missing from the macOS 26 SDK that macos-latest now has
             name: macos-arm64
             configure: -DCMAKE_BUILD_TYPE=Release
     runs-on: ${{ matrix.os }}

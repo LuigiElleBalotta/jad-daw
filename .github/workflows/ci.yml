@@ -41,7 +41,7 @@ jobs:
         include:
           - os: windows-latest
             configure: -A x64 -T host=x64
-          - os: macos-latest
+          - os: macos-15   # Qt 6.8 links the AGL framework, which the macOS 26 SDK (macos-latest) no longer has
             configure: -DCMAKE_BUILD_TYPE=Release
     runs-on: ${{ matrix.os }}
     steps:

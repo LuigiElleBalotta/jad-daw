@@ -1,5 +1,6 @@
 #include <QSignalSpy>
 #include <QtTest>
+#include <cmath>
 #include <limits>
 
 #include "bridge/project_controller.h"
@@ -33,6 +34,13 @@ bool trackFlag(jad::ProjectController& c, const QString& id, const char* role) {
 class BridgeTest : public QObject {
     Q_OBJECT
 private:
+    static QString trackIdOfKind(jad::ProjectController& c, const char* kind) {
+        const auto roles = c.tracks()->roleNames();
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->data(c.tracks()->index(i), roles.key("kind")).toString() == kind)
+                return c.tracks()->data(c.tracks()->index(i), roles.key("trackId")).toString();
+        return {};
+    }
     static QString firstAudioTrackId(jad::ProjectController& c) {
         const auto roles = c.tracks()->roleNames();
         for (int i = 0; i < c.tracks()->rowCount(); ++i)
@@ -764,6 +772,155 @@ private slots:
         c.clearSelection();
         c.selectRegionsIn(900.0, 1000.0, 0, 99, "replace");  // nothing out there
         QVERIFY(c.selectedRegionIds().isEmpty());
+    }
+    void applyingAPatchIsOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        c.selectTrack(trackIdOfKind(c, "audio"), "replace");
+        c.applyPatch("audio.bright-vocal");
+        QTRY_COMPARE(c.inspector()->track().value("patchId").toString(), QStringLiteral("audio.bright-vocal"));
+        QCOMPARE(c.inspector()->track().value("gainDb").toDouble(), -2.0);
+        QCOMPARE(c.inspector()->track().value("inserts").toList().size(), 1);
+        QCOMPARE(c.inspector()->track().value("patchName").toString(), QStringLiteral("Bright Vocal"));
+        QCOMPARE(c.library()->currentPatchId(), QStringLiteral("audio.bright-vocal"));
+        c.undo();
+        QTRY_COMPARE(c.inspector()->track().value("patchId").toString(), QString());
+        QCOMPARE(c.inspector()->track().value("inserts").toList().size(), 0);
+    }
+    void aPatchOfAnotherKindOrNoTrackGivesANoticeAndChangesNothing() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.applyPatch("audio.bright-vocal");  // nothing selected
+        QCOMPARE(notices.count(), 1);
+        c.selectTrack(trackIdOfKind(c, "instrument"), "replace");
+        c.applyPatch("audio.bright-vocal");  // an audio patch on an instrument track
+        QCOMPARE(notices.count(), 2);
+        c.applyPatch("gone.patch");
+        QCOMPARE(notices.count(), 3);
+        QVERIFY(c.inspector()->track().value("patchId").toString().isEmpty());
+    }
+    void revertReappliesThePatchOfTheTrack() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        c.selectTrack(audio, "replace");
+        c.applyPatch("audio.warm-guitar");
+        QTRY_COMPARE(c.inspector()->track().value("gainDb").toDouble(), -4.0);
+        c.setGain(audio, 3.0);
+        QTRY_COMPARE(c.inspector()->track().value("gainDb").toDouble(), 3.0);
+        c.revertPatch();
+        QTRY_COMPARE(c.inspector()->track().value("gainDb").toDouble(), -4.0);
+    }
+    void aSmartControlMovesEveryTargetAndIsOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        c.selectTrack(audio, "replace");
+        c.applyPatch("audio.bright-vocal");
+        QTRY_COMPARE(c.inspector()->smartControls().size(), 3);
+        c.setSmartControl(audio, "boost", 1.0);
+        QTRY_COMPARE(c.inspector()->track().value("gainDb").toDouble(), -5.0);
+        QCOMPARE(c.inspector()->track().value("inserts").toList().first().toMap().value("gainDb").toDouble(), 12.0);
+        double boost = 0;
+        for (const QVariant& s : c.inspector()->smartControls())
+            if (s.toMap().value("id").toString() == "boost") boost = s.toMap().value("value").toDouble();
+        QCOMPARE(boost, 1.0);  // the knob reads its value back from the track
+        c.undo();
+        QTRY_COMPARE(c.inspector()->track().value("gainDb").toDouble(), -2.0);
+        c.setSmartControl(audio, "nope", 1.0);              // unknown control: ignored
+        c.setSmartControl(audio, "boost", std::nan(""));     // NaN: ignored
+        c.setSmartControl("not-a-track", "boost", 1.0);      // stale track: ignored
+        QTest::qWait(100);
+        QCOMPARE(c.inspector()->track().value("gainDb").toDouble(), -2.0);
+    }
+    void insertsSendsOutputAndRegionGainGoThroughCommands() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        const QString bus = trackIdOfKind(c, "bus");
+        c.selectTrack(audio, "replace");
+        c.addInsert(audio, "builtin.gain");
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 1);
+        c.setInsertParam(audio, 0, "gainDb", 4.5);
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().first().toMap().value("gainDb").toDouble(), 4.5);
+        c.removeInsert(audio, 0);
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 0);
+        c.addSend(audio, bus);
+        QTRY_COMPARE(c.inspector()->track().value("sends").toList().size(), 1);
+        const QString sendId = c.inspector()->track().value("sends").toList().first().toMap().value("id").toString();
+        c.setSendLevel(sendId, -20.0);
+        QTRY_COMPARE(c.inspector()->track().value("sends").toList().first().toMap().value("levelDb").toDouble(), -20.0);
+        c.setSendPreFader(sendId, true);
+        QTRY_VERIFY(c.inspector()->track().value("sends").toList().first().toMap().value("preFader").toBool());
+        c.removeSend(sendId);
+        QTRY_COMPARE(c.inspector()->track().value("sends").toList().size(), 0);
+        c.setOutput(audio, bus);
+        QTRY_COMPARE(c.inspector()->output().value("trackId").toString(), bus);
+        c.setOutput(audio, QString());
+        QTRY_VERIFY(c.inspector()->output().value("master").toBool());
+        c.createRegion(trackIdOfKind(c, "instrument"), 0.0, 4.0);
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString region = c.regions()->regionIdAt(c.regions()->rowCount() - 1);
+        c.selectRegion(region, "replace");
+        c.setRegionGain(region, -6.0);
+        QTRY_COMPARE(c.inspector()->region().value("gainDb").toDouble(), -6.0);
+    }
+    void theInspectorGoesNeutralWhenItsTrackIsDeleted() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const int before = c.tracks()->rowCount();
+        c.addTrack("audio");
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 1);
+        const QString last = c.tracks()->trackIdAt(c.tracks()->rowCount() - 1);
+        c.selectTrack(last, "replace");
+        QTRY_VERIFY(c.inspector()->hasTrack());
+        c.deleteSelectedTracks();
+        QTRY_VERIFY(!c.inspector()->hasTrack());
+        QVERIFY(c.library()->categories().isEmpty());
+    }
+    void panelStateHasDefaultsAndClampsSizes() {
+        jad::ProjectController c(false);
+        QVERIFY(c.inspectorVisible());
+        QVERIFY(!c.libraryVisible());
+        QVERIFY(!c.smartControlsVisible());
+        QSignalSpy spy(&c, &jad::ProjectController::panelsChanged);
+        c.setLibraryVisible(true);
+        c.setLeftColumnWidth(5000);
+        QCOMPARE(c.leftColumnWidth(), 320.0);
+        c.setLeftColumnWidth(10);
+        QCOMPARE(c.leftColumnWidth(), 200.0);
+        c.setLeftColumnWidth(std::nan(""));
+        QCOMPARE(c.leftColumnWidth(), 200.0);
+        c.setSmartControlsHeight(1000);
+        QCOMPARE(c.smartControlsHeight(), 320.0);
+        c.setSmartControlsHeight(0);
+        QCOMPARE(c.smartControlsHeight(), 120.0);
+        QVERIFY(spy.count() >= 4);
+    }
+    void announceStubEmitsANotice() {
+        jad::ProjectController c(false);
+        QSignalSpy spy(&c, &jad::ProjectController::notice);
+        c.announceStub("Quantize");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().first().toString(), QStringLiteral("Quantize: not implemented yet"));
+    }
+    void theCatalogueLoadsFromTheResources() {
+        jad::ProjectController c(false);
+        QVERIFY(c.library()->problems().isEmpty());
+        QVERIFY(c.library()->patchCount() >= 8);
     }
 };
 

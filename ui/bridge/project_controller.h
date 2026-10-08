@@ -15,10 +15,13 @@
 #include <functional>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <thread>
 
 #include <nlohmann/json_fwd.hpp>
 
+#include "bridge/inspector_model.h"
+#include "bridge/library_model.h"
 #include "bridge/mixer_model.h"
 #include "bridge/region_model.h"
 #include "bridge/snapshot.h"
@@ -27,6 +30,7 @@
 
 namespace lpc {
 class MediaStore;
+class PatchLibrary;
 class ProjectHost;
 class IAudioDevice;
 class IAudioCallback;
@@ -75,6 +79,13 @@ class ProjectController : public QObject {
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
     Q_PROPERTY(jad::MixerModel* mixer READ mixer CONSTANT)
+    Q_PROPERTY(jad::InspectorModel* inspector READ inspector CONSTANT)
+    Q_PROPERTY(jad::LibraryModel* library READ library CONSTANT)
+    Q_PROPERTY(bool inspectorVisible READ inspectorVisible WRITE setInspectorVisible NOTIFY panelsChanged)
+    Q_PROPERTY(bool libraryVisible READ libraryVisible WRITE setLibraryVisible NOTIFY panelsChanged)
+    Q_PROPERTY(bool smartControlsVisible READ smartControlsVisible WRITE setSmartControlsVisible NOTIFY panelsChanged)
+    Q_PROPERTY(double leftColumnWidth READ leftColumnWidth WRITE setLeftColumnWidth NOTIFY panelsChanged)
+    Q_PROPERTY(double smartControlsHeight READ smartControlsHeight WRITE setSmartControlsHeight NOTIFY panelsChanged)
 
 public:
     explicit ProjectController(QObject* parent = nullptr);
@@ -133,6 +144,18 @@ public:
     TrackListModel* tracks() { return &tracks_; }
     RegionModel* regions() { return &regions_; }
     MixerModel* mixer() { return &mixer_; }
+    InspectorModel* inspector() { return &inspector_; }
+    LibraryModel* library() { return &library_; }
+    bool inspectorVisible() const { return inspectorVisible_; }
+    bool libraryVisible() const { return libraryVisible_; }
+    bool smartControlsVisible() const { return smartControlsVisible_; }
+    double leftColumnWidth() const { return leftColumnWidth_; }
+    double smartControlsHeight() const { return smartControlsHeight_; }
+    void setInspectorVisible(bool on) { if (on != inspectorVisible_) { inspectorVisible_ = on; emit panelsChanged(); } }
+    void setLibraryVisible(bool on) { if (on != libraryVisible_) { libraryVisible_ = on; emit panelsChanged(); } }
+    void setSmartControlsVisible(bool on) { if (on != smartControlsVisible_) { smartControlsVisible_ = on; emit panelsChanged(); } }
+    void setLeftColumnWidth(double width);       // clamped to 200..320, NaN ignored
+    void setSmartControlsHeight(double height);  // clamped to 120..320, NaN ignored
 
     Q_INVOKABLE bool openProject(const QUrl& folder);
     Q_INVOKABLE bool newProject(const QUrl& folder);
@@ -191,6 +214,20 @@ public:
     Q_INVOKABLE void setSolo(const QString& trackId, bool on);
     Q_INVOKABLE void toggleMute(const QString& trackId);
     Q_INVOKABLE void toggleSolo(const QString& trackId);
+    // Panels. Every edit is one command (or one transaction); values are clamped, NaN is ignored.
+    Q_INVOKABLE void applyPatch(const QString& patchId);  // to the track the panels show; a notice when it does not fit
+    Q_INVOKABLE void revertPatch();                       // applies the patch of that track again
+    Q_INVOKABLE void addInsert(const QString& trackId, const QString& processorId);
+    Q_INVOKABLE void removeInsert(const QString& trackId, int index);
+    Q_INVOKABLE void setInsertParam(const QString& trackId, int index, const QString& param, double value);
+    Q_INVOKABLE void addSend(const QString& trackId, const QString& targetId);
+    Q_INVOKABLE void removeSend(const QString& sendId);
+    Q_INVOKABLE void setSendLevel(const QString& sendId, double db);
+    Q_INVOKABLE void setSendPreFader(const QString& sendId, bool on);
+    Q_INVOKABLE void setOutput(const QString& trackId, const QString& outputId);  // "" = master
+    Q_INVOKABLE void setRegionGain(const QString& regionId, double db);
+    Q_INVOKABLE void setSmartControl(const QString& trackId, const QString& controlId, double value);
+    Q_INVOKABLE void announceStub(const QString& label);  // a visual-only control was used: the usual notice
     Q_INVOKABLE void moveRegion(const QString& regionId, double startBeats);
     Q_INVOKABLE void deleteRegions(const QStringList& regionIds);
     // Copies a 1-2 channel WAV of the project sample rate into <project>/audio and adds it as media plus a region
@@ -222,6 +259,7 @@ signals:
     void notice(const QString& message);
     void audioEnabledChanged();
     void mixerVisibleChanged();
+    void panelsChanged();
     void selectionChanged();
     void trackTogglesChanged();
     void toolChanged();
@@ -248,6 +286,8 @@ private:
     void applySnapshot(Snapshot snapshot, std::uint64_t generation);
     void tick();
     void pruneSelection();
+    void refreshPanels();
+    const TrackRow* rowOf(const QString& trackId) const;
     bool selectedToggle(const QString& actionId) const;
     void toggleSelectedFlag(const char* field, bool TrackRow::*flag);
     std::int64_t regionPosition(const RegionRow& row, double beats) const;  // beats -> the region's own unit
@@ -259,6 +299,13 @@ private:
     TrackListModel tracks_;
     RegionModel regions_;
     MixerModel mixer_;
+    InspectorModel inspector_;
+    LibraryModel library_;
+    std::shared_ptr<const lpc::PatchLibrary> patches_;  // the built-in catalogue; also read on the project thread
+    std::vector<TrackRow> allRows_;                     // every track of the last snapshot, the master included
+    std::vector<RegionRow> regionRows_;
+    bool inspectorVisible_ = true, libraryVisible_ = false, smartControlsVisible_ = false;
+    double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0;
 
     std::unique_ptr<JuceInit> juce_;
     std::unique_ptr<lpc::audio::AudioEngine> engine_;

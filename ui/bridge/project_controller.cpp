@@ -22,6 +22,7 @@
 #include "lpc/commands.h"
 #include "lpc/device.h"
 #include "lpc/media_store.h"
+#include "lpc/patch_library.h"
 #include "lpc/model_json.h"
 #include "lpc/project_host.h"
 #include "lpc/project_io.h"
@@ -53,6 +54,26 @@ struct EngineCallback final : lpc::IAudioCallback {
 };
 
 constexpr double kMaxBeats = static_cast<double>(lpc::kMaxPosition) / lpc::kPPQ;
+
+std::shared_ptr<const lpc::PatchLibrary> loadPatchCatalogue() {
+    QFile file(QStringLiteral(":/qt/qml/Jad/patches/patches.json"));
+    if (!file.open(QIODevice::ReadOnly)) return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::fromJson(nlohmann::json::object()));  // reports one problem
+    try {
+        const QByteArray bytes = file.readAll();
+        return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::fromJson(nlohmann::json::parse(bytes.constData(), bytes.constData() + bytes.size())));
+    } catch (const std::exception&) {
+        return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::fromJson(nlohmann::json::object()));  // reports one problem
+    }
+}
+
+std::optional<lpc::TrackKind> kindFromName(const QString& k) {
+    if (k == "audio") return lpc::TrackKind::Audio;
+    if (k == "instrument") return lpc::TrackKind::Instrument;
+    if (k == "aux") return lpc::TrackKind::Aux;
+    if (k == "bus") return lpc::TrackKind::Bus;
+    return std::nullopt;
+}
+std::optional<lpc::Uuid> uuidOf(const QString& id) { return lpc::Uuid::parse(id.toStdString()); }
 
 }  // namespace
 
@@ -88,6 +109,9 @@ ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QO
     timer_.setInterval(33);
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackTogglesChanged);
+    patches_ = loadPatchCatalogue();
+    library_.setLibrary(patches_.get());
+    connect(this, &ProjectController::selectionChanged, this, &ProjectController::refreshPanels);
 }
 
 ProjectController::~ProjectController() { teardown(); }
@@ -210,8 +234,8 @@ void ProjectController::refresh(std::uint64_t /*lowerBound*/) {
     const lpc::ProjectHost* host = host_.get();
     // The read runs on the project thread, which also bumps the revision right after each change: inside the read,
     // revision() is exactly the revision of the state being copied (the listener's `revision` is only a lower bound).
-    auto future = std::make_shared<std::future<Snapshot>>(host_->read([host, media](const lpc::Project& p) {
-        return makeSnapshot(p, host->revision(), [media](const lpc::MediaItem& item) { return media->open(item) != nullptr; });
+    auto future = std::make_shared<std::future<Snapshot>>(host_->read([host, media, patches = patches_](const lpc::Project& p) {
+        return makeSnapshot(p, host->revision(), [media](const lpc::MediaItem& item) { return media->open(item) != nullptr; }, patches.get());
     }));
     QPointer<ProjectController> self(this);
     const std::uint64_t generation = generation_;
@@ -243,6 +267,8 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     tracks_.reset(withoutMaster);
     mixer_.reset(s.tracks);
     regions_.reset(s.regions);
+    allRows_ = s.tracks;
+    regionRows_ = s.regions;
     tempoMap_ = s.tempoMap;
     mediaPaths_ = s.mediaPaths;
     sampleRate_ = s.sampleRate;
@@ -259,6 +285,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         }
     emit projectChanged();
     pruneSelection();
+    refreshPanels();
 }
 
 void ProjectController::sendCommand(const nlohmann::json& command, std::function<void(bool)> done) {
@@ -950,6 +977,114 @@ void ProjectController::tick() {
         degraded_ = deg;
         emit degradedChanged();
     }
+}
+
+void ProjectController::setLeftColumnWidth(double width) {
+    if (!std::isfinite(width)) return;
+    const double clamped = std::clamp(width, 200.0, 320.0);
+    if (clamped == leftColumnWidth_) return;
+    leftColumnWidth_ = clamped;
+    emit panelsChanged();
+}
+
+void ProjectController::setSmartControlsHeight(double height) {
+    if (!std::isfinite(height)) return;
+    const double clamped = std::clamp(height, 120.0, 320.0);
+    if (clamped == smartControlsHeight_) return;
+    smartControlsHeight_ = clamped;
+    emit panelsChanged();
+}
+
+const TrackRow* ProjectController::rowOf(const QString& trackId) const {
+    for (const TrackRow& r : allRows_)
+        if (r.id == trackId) return &r;
+    return nullptr;
+}
+
+void ProjectController::refreshPanels() {
+    inspector_.update(allRows_, regionRows_, selectedTracks_, selectedRegions_);
+    library_.setTrack(inspector_.shownKind(), inspector_.shownPatchId());
+}
+
+void ProjectController::announceStub(const QString& label) { emit notice(tr("%1: not implemented yet").arg(label)); }
+
+void ProjectController::applyPatch(const QString& patchId) {
+    const QString trackId = inspector_.trackId();
+    const TrackRow* row = rowOf(trackId);
+    const auto id = uuidOf(trackId);
+    const auto kind = row ? kindFromName(row->kind) : std::nullopt;
+    if (!row || !id || !kind) {
+        emit notice(tr("Select a track to choose a patch"));
+        return;
+    }
+    lpc::CommandPtr cmd = patches_->applyCommand(*id, *kind, patchId.toStdString());
+    if (!cmd) {
+        emit notice(tr("This patch does not fit the selected track"));
+        return;
+    }
+    sendCommand(cmd->toJson());
+}
+
+void ProjectController::revertPatch() {
+    const TrackRow* row = rowOf(inspector_.trackId());
+    if (!row || row->patchId.isEmpty()) {
+        emit notice(tr("This track has no patch to revert"));
+        return;
+    }
+    applyPatch(row->patchId);
+}
+
+void ProjectController::setSmartControl(const QString& trackId, const QString& controlId, double value) {
+    const TrackRow* row = rowOf(trackId);
+    const auto id = uuidOf(trackId);
+    if (!row || !id || !std::isfinite(value)) return;
+    const lpc::Patch* patch = patches_->find(row->patchId.toStdString());
+    if (!patch) return;
+    for (const lpc::SmartControl& c : patch->smartControls) {
+        if (QString::fromStdString(c.id) != controlId) continue;
+        if (lpc::CommandPtr cmd = lpc::PatchLibrary::smartControlCommand(*id, c, value)) sendCommand(cmd->toJson());
+        return;
+    }
+}
+
+void ProjectController::addInsert(const QString& trackId, const QString& processorId) {
+    sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
+                 {"insert", {{"processorId", processorId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}}}});
+}
+
+void ProjectController::removeInsert(const QString& trackId, int index) {
+    sendCommand({{"type", "remove_insert"}, {"trackId", trackId.toStdString()}, {"index", index}});
+}
+
+void ProjectController::setInsertParam(const QString& trackId, int index, const QString& param, double value) {
+    if (!std::isfinite(value)) return;
+    const double v = param == "gainDb" ? std::clamp(value, -96.0, 24.0) : value;
+    sendCommand({{"type", "set_insert_param"}, {"trackId", trackId.toStdString()}, {"index", index}, {"param", param.toStdString()}, {"value", v}});
+}
+
+void ProjectController::addSend(const QString& trackId, const QString& targetId) {
+    sendCommand({{"type", "add_send"}, {"trackId", trackId.toStdString()}, {"index", -1},
+                 {"send", {{"id", lpc::Uuid::random().toString()}, {"targetTrackId", targetId.toStdString()}, {"levelDb", -12.0}, {"preFader", false}}}});
+}
+
+void ProjectController::removeSend(const QString& sendId) { sendCommand({{"type", "remove_send"}, {"sendId", sendId.toStdString()}}); }
+
+void ProjectController::setSendLevel(const QString& sendId, double db) {
+    if (!std::isfinite(db)) return;
+    sendCommand({{"type", "set_send"}, {"sendId", sendId.toStdString()}, {"levelDb", std::clamp(db, -96.0, 12.0)}});
+}
+
+void ProjectController::setSendPreFader(const QString& sendId, bool on) {
+    sendCommand({{"type", "set_send"}, {"sendId", sendId.toStdString()}, {"preFader", on}});
+}
+
+void ProjectController::setOutput(const QString& trackId, const QString& outputId) {
+    sendCommand({{"type", "set_output"}, {"trackId", trackId.toStdString()}, {"output", outputId.isEmpty() ? lpc::Uuid{}.toString() : outputId.toStdString()}});
+}
+
+void ProjectController::setRegionGain(const QString& regionId, double db) {
+    if (!std::isfinite(db)) return;
+    sendCommand({{"type", "set_region_gain"}, {"regionId", regionId.toStdString()}, {"gainDb", std::clamp(db, -96.0, 24.0)}});
 }
 
 }  // namespace jad

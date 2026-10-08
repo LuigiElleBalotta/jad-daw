@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "lpc/patch_library.h"
+
 namespace jad {
 
 namespace {
@@ -35,7 +37,8 @@ double toBeats(const lpc::Project& p, const lpc::Region& r, std::int64_t value) 
 
 }  // namespace
 
-Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::function<bool(const lpc::MediaItem&)>& mediaPresent) {
+Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::function<bool(const lpc::MediaItem&)>& mediaPresent,
+                      const lpc::PatchLibrary* patches) {
     Snapshot s;
     s.revision = revision;
     s.name = QString::fromStdString(p.name);
@@ -60,6 +63,42 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.gainDb = t.strip.gainDb;
         tr.pan = t.strip.pan;
         tr.regionCount = static_cast<int>(t.regions.size());
+        tr.patchId = QString::fromStdString(t.patchId);
+        tr.instrument = t.instrument ? QString::fromStdString(t.instrument->processorId) : QString();
+        if (!master) {
+            const lpc::Track* out = t.strip.output.isNull() ? p.master() : p.findTrack(t.strip.output);
+            if (out) {
+                tr.outputId = QString::fromStdString(out->id.toString());
+                tr.outputName = QString::fromStdString(out->name);
+            }
+        }
+        for (const lpc::ProcessorRef& ins : t.strip.inserts) {
+            const auto g = ins.params.find("gainDb");
+            tr.inserts.push_back({QString::fromStdString(ins.processorId), g == ins.params.end() ? 0.0 : g->second});
+        }
+        for (const lpc::Send& s : t.strip.sends) {
+            const lpc::Track* target = p.findTrack(s.targetTrackId);
+            tr.sends.push_back({QString::fromStdString(s.id.toString()), QString::fromStdString(s.targetTrackId.toString()),
+                                target ? QString::fromStdString(target->name) : QString(), s.levelDb, s.preFader});
+        }
+        if (patches && !t.patchId.empty()) {
+            if (const lpc::Patch* patch = patches->find(t.patchId)) {
+                tr.patchName = QString::fromStdString(patch->name);
+                for (const lpc::SmartControl& c : patch->smartControls) {
+                    const auto value = lpc::PatchLibrary::smartControlValue(t, c);
+                    if (!value) continue;  // the insert it drives is gone
+                    SmartRow sr;
+                    sr.id = QString::fromStdString(c.id);
+                    sr.label = QString::fromStdString(c.label);
+                    sr.group = QString::fromStdString(c.group);
+                    sr.min = c.min;
+                    sr.max = c.max;
+                    sr.value = *value;
+                    sr.def = c.def;
+                    tr.smart.push_back(sr);
+                }
+            }
+        }
         s.tracks.push_back(tr);
         if (master) continue;
         for (const lpc::Region& r : t.regions) {
@@ -68,6 +107,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.trackId = tr.id;
             rr.trackIndex = row;
             rr.color = tr.color;
+            rr.gainDb = r.gainDb;
             rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
             rr.startBeats = toBeats(p, r, r.start);
             rr.lengthBeats = toBeats(p, r, r.start + r.length) - rr.startBeats;

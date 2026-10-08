@@ -7,7 +7,25 @@
 
 #include "lpc/model.h"
 
+namespace lpc {
+class PatchLibrary;
+}
+
 namespace jad {
+
+struct InsertRow {
+    QString processorId;
+    double gainDb = 0.0;  // the "gainDb" parameter (0 when absent)
+};
+struct SendRow {
+    QString id, targetId, targetName;
+    double levelDb = 0.0;
+    bool preFader = false;
+};
+struct SmartRow {
+    QString id, label, group;
+    double min = 0.0, max = 1.0, value = 0.0, def = 0.0;
+};
 
 struct TrackRow {
     QString id, name, kind, color;
@@ -15,6 +33,10 @@ struct TrackRow {
     bool recordArm = false, inputMonitor = false;  // the R and I stubs: their state is kept by the controller
     double gainDb = 0.0, pan = 0.0;
     int regionCount = 0;
+    QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
+    std::vector<InsertRow> inserts;
+    std::vector<SendRow> sends;
+    std::vector<SmartRow> smart;  // the Smart Controls of the track's patch, with their current values
 };
 
 struct RegionRow {
@@ -24,6 +46,7 @@ struct RegionRow {
     bool audio = false, missing = false, absolute = false;  // absolute: positions are in real time, not musical time
     QString mediaId;
     QString color;  // the colour name of its track
+    double gainDb = 0.0;
 };
 
 // True when `a` and `b` hold the same ids in the same order: the models then update in place (dataChanged) instead of
@@ -51,6 +74,6 @@ struct Snapshot {
 };
 
 Snapshot makeSnapshot(const lpc::Project& project, std::uint64_t revision,
-                      const std::function<bool(const lpc::MediaItem&)>& mediaPresent);
+                      const std::function<bool(const lpc::MediaItem&)>& mediaPresent, const lpc::PatchLibrary* patches = nullptr);
 
 }  // namespace jad

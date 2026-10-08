@@ -72,10 +72,10 @@
  {"id":"mix.showAutomation","label":"Show Automation","menu":"Mix","shortcut":"","kind":"toggle","status":"stub"},
  {"id":"mix.bounceInPlace","label":"Bounce in Place","menu":"Mix","shortcut":"","kind":"command","status":"stub"},
 
- {"id":"view.library","label":"Library","menu":"View","shortcut":"Y","kind":"toggle","status":"stub"},
- {"id":"view.inspector","label":"Inspector","menu":"View","shortcut":"I","kind":"toggle","status":"stub"},
+ {"id":"view.library","label":"Library","menu":"View","shortcut":"Y","kind":"toggle","status":"ready"},
+ {"id":"view.inspector","label":"Inspector","menu":"View","shortcut":"I","kind":"toggle","status":"ready"},
  {"id":"view.quickHelp","label":"Quick Help","menu":"View","shortcut":"","kind":"toggle","status":"stub"},
- {"id":"view.smartControls","label":"Smart Controls","menu":"View","shortcut":"B","kind":"toggle","status":"stub"},
+ {"id":"view.smartControls","label":"Smart Controls","menu":"View","shortcut":"B","kind":"toggle","status":"ready"},
  {"id":"view.mixer","label":"Mixer","menu":"View","shortcut":"X","kind":"toggle","status":"ready"},
  {"id":"view.editors","label":"Editors","menu":"View","shortcut":"E","kind":"toggle","status":"stub"},
  {"id":"view.loops","label":"Loops","menu":"View","shortcut":"O","kind":"toggle","status":"stub"},

@@ -4,6 +4,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 set_source_files_properties(qml/Theme.qml qml/ActionHub.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf PROPERTIES QT_RESOURCE_ALIAS fonts/InterVariable.ttf)
 set_source_files_properties(actions/actions.json PROPERTIES QT_RESOURCE_ALIAS actions/actions.json)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/core/data/patches.json PROPERTIES QT_RESOURCE_ALIAS patches/patches.json)
 
 qt_add_library(jad_ui_lib STATIC)
 qt_add_qml_module(jad_ui_lib
@@ -17,6 +18,8 @@ qt_add_qml_module(jad_ui_lib
         bridge/project_controller.cpp
         bridge/waveform_cache.cpp
         bridge/lcd_parse.cpp
+        bridge/inspector_model.cpp
+        bridge/library_model.cpp
         shortcuts/shortcut_map.cpp
         actions/action_registry.cpp
     QML_FILES
@@ -70,6 +73,7 @@ qt_add_qml_module(jad_ui_lib
         qml/icons/chevron-right.svg
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
         actions/actions.json
+        ${CMAKE_SOURCE_DIR}/core/data/patches.json
 )
 target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent lpc_core)
 target_include_directories(jad_ui_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bridge ${CMAKE_CURRENT_SOURCE_DIR}/actions)

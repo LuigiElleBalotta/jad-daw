@@ -32,6 +32,24 @@ private slots:
         QVERIFY(audio != s.regions.end());
         QVERIFY(audio->missing);
     }
+    void snapshotCarriesTheStripDetailsOfEachTrack() {
+        TempDir dir;
+        const lpc::Project p = lpc::makeDemoProject(dir.path());
+        const jad::Snapshot s = jad::makeSnapshot(p, 1, [](const lpc::MediaItem&) { return true; });
+        const auto keys = std::find_if(s.tracks.begin(), s.tracks.end(), [](const jad::TrackRow& t) { return t.kind == "instrument"; });
+        QVERIFY(keys != s.tracks.end());
+        QCOMPARE(keys->instrument, QStringLiteral("builtin.sine"));
+        QCOMPARE(int(keys->sends.size()), 1);
+        QCOMPARE(keys->sends[0].targetName, QStringLiteral("Reverb Bus"));
+        QVERIFY(!keys->outputId.isEmpty());  // the master
+        QVERIFY(keys->patchId.isEmpty());
+        QVERIFY(keys->smart.empty());
+        const auto master = std::find_if(s.tracks.begin(), s.tracks.end(), [](const jad::TrackRow& t) { return t.master; });
+        QVERIFY(master != s.tracks.end());
+        QVERIFY(master->outputId.isEmpty());
+        QVERIFY(!s.regions.empty());
+        QCOMPARE(s.regions.front().gainDb, 0.0);
+    }
     void sameRowsAreUpdatedInPlace() {
         // a model reset rebuilds every delegate (and drops a drag in progress): same ids must only emit dataChanged
         auto track = [](const char* id, double gain) { jad::TrackRow t; t.id = id; t.name = id; t.kind = "audio"; t.gainDb = gain; return t; };

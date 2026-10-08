@@ -17,6 +17,16 @@ private slots:
         QCOMPARE(window->title(), QStringLiteral("JAD Daw"));
         QCOMPARE(window->color(), QColor("#0e0e0e"));  // Theme.surfaceApp
     }
+    void aboutDialogOpens() {
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Jad", "Main");
+        QVERIFY(!engine.rootObjects().isEmpty());
+        auto* dialog = engine.rootObjects().first()->findChild<QObject*>("aboutDialog");
+        QVERIFY(dialog);
+        QVERIFY(!dialog->property("visible").toBool());
+        QMetaObject::invokeMethod(dialog, "open");
+        QVERIFY(dialog->property("visible").toBool());
+    }
     void everyReadyActionHasAHandler() {
         QQmlApplicationEngine engine;
         engine.loadFromModule("Jad", "Main");

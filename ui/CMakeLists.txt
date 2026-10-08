@@ -47,6 +47,7 @@ qt_add_qml_module(jad_ui_lib
         qml/TrackHeader.qml
         qml/ActionMenu.qml
         qml/ToolBar.qml
+        qml/AboutDialog.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg
@@ -58,6 +59,7 @@ qt_add_qml_module(jad_ui_lib
         qml/icons/mute.svg
         qml/icons/solo.svg
         qml/icons/chevron-down.svg
+        qml/icons/app-icon.png
         qml/icons/pointer.svg
         qml/icons/pencil.svg
         qml/icons/eraser.svg

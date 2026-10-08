@@ -29,18 +29,37 @@ The UI needs Qt 6.8 (LGPLv3, linked dynamically) and is off by default.
     cmake --build build-ui --config Debug
     build-ui/ui/Debug/jad-daw --project demo.lpc
 
-Put Qt's `bin` folder on `PATH` to run the executables and tests, and set `QT_QPA_PLATFORM=offscreen` for the tests
-(`ctest --test-dir build-ui -C Debug`).
+On Windows the Qt DLLs are copied next to the executables after each build, so they start by double click and
+`ctest --test-dir build-ui -C Debug` needs nothing on `PATH`.
 
-- Open, create and save projects from the File menu (a project is a `.lpc` folder). Undo/redo: Ctrl+Z / Ctrl+Shift+Z.
-- Drag regions to move them, Delete removes the selected ones, drop a `.wav` (same sample rate as the project,
-  mono or stereo) on an audio track to import it.
-- Shortcuts: defaults are in `ui/shortcuts/default-shortcuts.json`. To change some, create `shortcuts.json` in the
-  application config folder (for example `%LOCALAPPDATA%/JAD/JAD Daw/` on Windows, `~/.config/JAD/JAD Daw/` on Linux) with
-  only the actions you want to change, e.g. `{"transport.playStop": "P"}`. Unknown actions, invalid sequences and
-  sequences already used by another action are ignored and logged.
+![The main window](docs/images/main-window.png)
 
-Known limits: regions cannot be resized yet, a fader only changes the sound after it is released, there is no
-track selection (M and S act on the tracks of the selected regions), and the macOS bundle has no icon yet.
+### Window and shortcuts
 
-Design: `docs/superpowers/specs/2026-10-07-core-engine-design.md`, UI: `docs/superpowers/specs/2026-10-07-ui-shell-design.md`. Third-party licences: `THIRD_PARTY.md`.
+- Menus (File, Edit, Track, Navigate, Record, Mix, View, Window, Help), control bar with LCD, local toolbar, track
+  headers, timeline and mixer. Every action comes from one table, `ui/actions/actions.json`: label, menu, default
+  shortcut (Logic Pro's), and whether it is **ready** or a **stub**.
+- A stub is present and can be switched on, but nothing is behind it yet (recording, metronome, count-in, punch,
+  library, inspector, editors, copy/paste...). Switching a stub on shows a "not implemented yet" notice; switching it off
+  shows nothing. Everything else works through the Core's JSON commands, with undo/redo.
+- Real today: open/create/save projects (a `.lpc` folder), play, locate, cycle, tempo and time signature (double click
+  the LCD), master volume, tracks (new, delete, rename, colour, heights, select with click / Shift / Ctrl), mute, solo,
+  fader and pan, regions (select, rectangle select, move, resize from the edges, split, join, delete, draw an empty
+  MIDI region with the pencil, import `.wav` by dropping it on a track), snap, zoom, catch playhead.
+
+![Tools and selection](docs/images/tools-and-selection.png)
+![Menus](docs/images/menus.png)
+
+- Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example
+  `%LOCALAPPDATA%/JAD/JAD Daw/` on Windows, `~/.config/JAD/JAD Daw/` on Linux) with only the actions you want to
+  change, e.g. `{"transport.playStop": "P"}`. Unknown actions, invalid sequences and sequences already used by another
+  action are ignored and logged. Only some default shortcuts are confirmed against Logic Pro; the checklist is in
+  `docs/shortcuts-check.md`.
+- Screenshots (used above) are taken by the app itself:
+  `jad-daw --project demo.lpc --no-audio --screenshot out.png --size 1280x800 [--tool scissors] [--select-track 2] [--open-menu 2]`.
+
+Known limits: a fader only changes the sound after it is released, the macOS bundle has no icon yet, several buttons
+use text labels because there are no icons for them yet, and the panels behind Library, Inspector, Smart Controls,
+Editors and Loops do not exist yet.
+
+Design: `docs/superpowers/specs/2026-10-07-core-engine-design.md`, UI: `docs/superpowers/specs/2026-10-07-ui-shell-design.md` and `docs/superpowers/specs/2026-10-08-ui-a-frame-design.md`. Third-party licences: `THIRD_PARTY.md`.

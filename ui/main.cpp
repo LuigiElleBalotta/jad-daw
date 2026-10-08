@@ -31,6 +31,9 @@ int main(int argc, char** argv) {
     QCommandLineOption projectOption("project", "Open the project in <folder> at startup.", "folder");
     QCommandLineOption noAudioOption("no-audio", "Do not open the audio device.");
     QCommandLineOption screenshotOption("screenshot", "Save a picture of the window to <file> and quit (for the README).", "file");
+    QCommandLineOption toolOption("tool", "Active tool for --screenshot.", "name");
+    QCommandLineOption selectTrackOption("select-track", "Select track number <n> (1-based) for --screenshot.", "n");
+    QCommandLineOption menuOption("open-menu", "Open the menu at <index> of the menu bar for --screenshot.", "index");
     QCommandLineOption softwareOption("software", "Render without a GPU (icons are missing).");
     QCommandLineOption sizeOption("size", "Window size for --screenshot, for example 1280x800.", "WxH", "1280x800");
     QCommandLineOption delayOption("delay", "Milliseconds to wait before the screenshot.", "ms", "1500");
@@ -38,6 +41,9 @@ int main(int argc, char** argv) {
     parser.addOption(noAudioOption);
     parser.addOption(screenshotOption);
     parser.addOption(softwareOption);
+    parser.addOption(toolOption);
+    parser.addOption(selectTrackOption);
+    parser.addOption(menuOption);
     parser.addOption(sizeOption);
     parser.addOption(delayOption);
     parser.process(app);
@@ -60,9 +66,17 @@ int main(int argc, char** argv) {
 
     if (parser.isSet(screenshotOption) && window) {
         const QString file = parser.value(screenshotOption);
-        QTimer::singleShot(parser.value(delayOption).toInt(), &app, [window, file] {
-            const QImage image = window->grabWindow();
-            QCoreApplication::exit(!image.isNull() && image.save(file) ? 0 : 2);
+        const int delay = parser.value(delayOption).toInt();
+        // the state for the picture is set shortly before it is taken, once the project has been shown
+        QTimer::singleShot(delay, &app, [&parser, &toolOption, &selectTrackOption, &menuOption, controller, window, file, &app] {
+            if (controller && parser.isSet(toolOption)) controller->setTool(parser.value(toolOption));
+            if (controller && parser.isSet(selectTrackOption))
+                controller->selectTrack(controller->tracks()->trackIdAt(parser.value(selectTrackOption).toInt() - 1), "replace");
+            if (parser.isSet(menuOption)) QMetaObject::invokeMethod(window, "showMenu", Q_ARG(QVariant, parser.value(menuOption).toInt()));
+            QTimer::singleShot(400, &app, [window, file] {
+                const QImage image = window->grabWindow();
+                QCoreApplication::exit(!image.isNull() && image.save(file) ? 0 : 2);
+            });
         });
     }
     return app.exec();

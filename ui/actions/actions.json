@@ -98,6 +98,6 @@
  {"id":"window.zoom","label":"Zoom","menu":"Window","shortcut":"","kind":"command","status":"stub"},
 
  {"id":"lcd.key","label":"Key Display","menu":"","shortcut":"","kind":"command","status":"stub"},
- {"id":"help.about","label":"About JAD Daw","menu":"Help","shortcut":"","kind":"command","status":"stub"},
+ {"id":"help.about","label":"About JAD Daw","menu":"Help","shortcut":"","kind":"command","status":"ready"},
  {"id":"help.keyCommands","label":"Key Commands…","menu":"Help","shortcut":"Alt+K","kind":"command","status":"stub"}
 ]

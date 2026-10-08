@@ -19,6 +19,8 @@ ApplicationWindow {
     Component.onCompleted: ActionHub.registry = actionRegistry
 
     function colorSelected(name) { for (const id of controller.selectedTrackIds) controller.setTrackColor(id, name) }
+    // for screenshots: opens the menu at `index` of the menu bar
+    function showMenu(index) { const m = menuBar.menuAt(index); if (m) m.open() }
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
     function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.beatsPerBar * 4) }
 
@@ -32,6 +34,8 @@ ApplicationWindow {
         title: qsTr("New project folder")
         onAccepted: controller.newProject(selectedFolder)
     }
+
+    AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
 
     MessageDialog {
         id: openErrorDialog
@@ -48,6 +52,7 @@ ApplicationWindow {
 
     // what each real action does; every other id in the table is a stub (see actions/actions.json)
     readonly property var handlers: ({
+        "help.about": () => aboutDialog.open(),
         "file.new": () => newDialog.open(),
         "file.open": () => openDialog.open(),
         "file.save": () => controller.saveProject(),

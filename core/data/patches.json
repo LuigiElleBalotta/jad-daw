@@ -1,0 +1,59 @@
+{
+  "patches": [
+    { "id": "audio.clean-vocal", "category": "01 Vocals", "name": "Clean Vocal", "kind": "audio", "instrument": null,
+      "strip": { "gainDb": -3.0, "pan": 0.0 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -3, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] },
+        { "id": "pan", "label": "Pan", "group": "Main", "min": -1, "max": 1, "default": 0, "targets": [ { "path": "strip.pan", "from": -1, "to": 1 } ] } ] },
+    { "id": "audio.bright-vocal", "category": "01 Vocals", "name": "Bright Vocal", "kind": "audio", "instrument": null,
+      "strip": { "gainDb": -2.0, "pan": 0.0 }, "inserts": [ { "processorId": "builtin.gain", "params": { "gainDb": 3.0 } } ],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -2, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] },
+        { "id": "pan", "label": "Pan", "group": "Main", "min": -1, "max": 1, "default": 0, "targets": [ { "path": "strip.pan", "from": -1, "to": 1 } ] },
+        { "id": "boost", "label": "Boost", "group": "Tone", "min": 0, "max": 1, "default": 0.25,
+          "targets": [ { "path": "insert.0.gainDb", "from": 0, "to": 12 }, { "path": "strip.gainDb", "from": -2, "to": -5 } ] } ] },
+    { "id": "audio.warm-guitar", "category": "02 Guitars", "name": "Warm Guitar", "kind": "audio", "instrument": null,
+      "strip": { "gainDb": -4.0, "pan": -0.2 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -4, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] },
+        { "id": "pan", "label": "Pan", "group": "Main", "min": -1, "max": 1, "default": -0.2, "targets": [ { "path": "strip.pan", "from": -1, "to": 1 } ] } ] },
+    { "id": "audio.wide-guitar", "category": "02 Guitars", "name": "Wide Guitar", "kind": "audio", "instrument": null,
+      "strip": { "gainDb": -5.0, "pan": 0.5 }, "inserts": [ { "processorId": "builtin.gain", "params": { "gainDb": 2.0 } } ],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -5, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] },
+        { "id": "pan", "label": "Pan", "group": "Main", "min": -1, "max": 1, "default": 0.5, "targets": [ { "path": "strip.pan", "from": -1, "to": 1 } ] },
+        { "id": "boost", "label": "Boost", "group": "Tone", "min": 0, "max": 1, "default": 0.17, "targets": [ { "path": "insert.0.gainDb", "from": 0, "to": 12 } ] } ] },
+    { "id": "instrument.sine-lead", "category": "01 Leads", "name": "Sine Lead", "kind": "instrument", "instrument": { "processorId": "builtin.sine" },
+      "strip": { "gainDb": -6.0, "pan": 0.0 }, "inserts": [ { "processorId": "builtin.gain", "params": { "gainDb": 0.0 } } ],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -6, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] },
+        { "id": "pan", "label": "Pan", "group": "Main", "min": -1, "max": 1, "default": 0, "targets": [ { "path": "strip.pan", "from": -1, "to": 1 } ] },
+        { "id": "boost", "label": "Boost", "group": "Tone", "min": 0, "max": 1, "default": 0, "targets": [ { "path": "insert.0.gainDb", "from": 0, "to": 12 } ] } ] },
+    { "id": "instrument.soft-lead", "category": "01 Leads", "name": "Soft Lead", "kind": "instrument", "instrument": { "processorId": "builtin.sine" },
+      "strip": { "gainDb": -10.0, "pan": 0.1 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -10, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] },
+        { "id": "pan", "label": "Pan", "group": "Main", "min": -1, "max": 1, "default": 0.1, "targets": [ { "path": "strip.pan", "from": -1, "to": 1 } ] } ] },
+    { "id": "instrument.sine-pad", "category": "02 Pads", "name": "Sine Pad", "kind": "instrument", "instrument": { "processorId": "builtin.sine" },
+      "strip": { "gainDb": -12.0, "pan": 0.0 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -12, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] },
+        { "id": "pan", "label": "Pan", "group": "Main", "min": -1, "max": 1, "default": 0, "targets": [ { "path": "strip.pan", "from": -1, "to": 1 } ] } ] },
+    { "id": "instrument.deep-sub", "category": "03 Bass", "name": "Deep Sub", "kind": "instrument", "instrument": { "processorId": "builtin.sine" },
+      "strip": { "gainDb": -4.0, "pan": 0.0 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -4, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] } ] },
+    { "id": "bus.reverb-return", "category": "01 Returns", "name": "Reverb Return", "kind": "bus", "instrument": null,
+      "strip": { "gainDb": -6.0, "pan": 0.0 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -6, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] } ] },
+    { "id": "bus.group-bus", "category": "02 Groups", "name": "Group Bus", "kind": "bus", "instrument": null,
+      "strip": { "gainDb": 0.0, "pan": 0.0 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": 0, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] } ] },
+    { "id": "aux.fx-return", "category": "01 Returns", "name": "FX Return", "kind": "aux", "instrument": null,
+      "strip": { "gainDb": -3.0, "pan": 0.0 }, "inserts": [],
+      "smartControls": [
+        { "id": "level", "label": "Level", "group": "Main", "min": -24, "max": 6, "default": -3, "targets": [ { "path": "strip.gainDb", "from": -24, "to": 6 } ] } ] }
+  ]
+}

@@ -130,7 +130,7 @@ fine, double click resets). Compare and the EQ tab are shown disabled.
 ```
 
 - `kind`: `audio`, `instrument`, `aux`, `bus` (a patch applies only to tracks of its kind).
-- `path` grammar: `strip.gainDb`, `strip.pan`, `insert.<index>.<param>`, `send.<index>.levelDb`. A target maps the
+- `path` grammar: `strip.gainDb`, `strip.pan`, `insert.<index>.<param>` (the index refers to the inserts of the patch itself). A target maps the
   control range linearly (`from` to `to`, either direction) onto the parameter. Unknown paths and out-of-range indexes
   are load errors.
 - `PatchLibrary` (Core, `lpc/patch_library.h`): loads and validates the file (unique ids, known processors, valid
@@ -151,13 +151,14 @@ refused), unit tests, and in the random undo/redo property test.
   command with the old value.
 - `set_patch_id {trackId, patchId|null}`: records the patch in the project; inverse: old value. Only used inside the
   transactions below.
-- `set_inserts`, `set_strip`, `add_send`, `remove_send`, `set_track_props` already exist. `set_inserts` and
-  `add_send` are extended where needed: a send level range check, an insert `params` check (known parameter names and
-  finite values) shared with the loader.
+- New: `set_output {trackId, output|null}` (bus or aux, no self, no cycle; null is master), `set_send {sendId, levelDb?,
+  preFader?}`, `set_region_gain {regionId, gainDb}`, `add_insert {trackId, insert, index}`, `remove_insert {trackId,
+  index}`, `set_insert_param {trackId, index, param, value|null}`; each with exact inverse and tests. `set_inserts`,
+  `set_strip`, `add_send`, `remove_send`, `set_track_props` already exist.
 - Apply patch = transaction `[set_patch_id, set_instrument?, set_inserts, set_strip{gain,pan}]`. It leaves mute, solo,
   sends and output alone (as Logic keeps routing choices of the track unless the patch carries them). One undo step.
-- Smart Control move = transaction of `set_strip` / `set_inserts` / send level commands for the targets. The controller
-  coalesces a drag into one undo step on release (same mechanism as the faders).
+- Smart Control move = transaction of `set_strip` / `set_insert_param` commands for the targets, sent when the knob is
+  released (as the faders do): one command per gesture.
 
 Error codes reuse the existing ones: `bad_value`, `not_found`, `invalid_kind`, `duplicate_id`.
 
@@ -171,12 +172,12 @@ Error codes reuse the existing ones: `bad_value`, `not_found`, `invalid_kind`, `
   strips). Models are read-only views of the controller; edits go through controller wrappers.
 - `ProjectController` gains: `inspectorVisible`, `libraryVisible`, `smartControlsVisible` (replacing the stub state of the
   three actions, so menu, button and shortcut agree), panel sizes, `applyPatch`, `revertPatch`, `setSmartControl`,
-  `beginSmartControlDrag` / `endSmartControlDrag`, `setInstrument`, `addInsert`, `removeInsert`, `setInsertParam`,
-  `addSend`, `removeSend`, `setSendLevel`, `setOutput`. QML never builds JSON for these.
+  `addInsert`, `removeInsert`, `setInsertParam`, `addSend`, `removeSend`, `setSendLevel`, `setSendPreFader`, `setOutput`,
+  `setRegionGain`. QML never builds JSON for these.
 - `actions.json`: `view.library`, `view.inspector`, `view.smartControls` change from `stub` to `ready`; new actions in
   the Track menu for the Library (next/previous patch) with no default shortcut. Shortcuts unchanged
   (`Y`, `I`, `B`).
-- Panel visibility and sizes persist in the existing UI settings file.
+- Panel visibility and sizes persist with `QSettings` (read and written by `main.cpp`, so tests never touch them).
 
 ## 8. Errors and edge cases
 
@@ -198,7 +199,7 @@ Error codes reuse the existing ones: `bad_value`, `not_found`, `invalid_kind`, `
   patch applications and knob moves mixed with the existing commands, a project with `patchId` round trips and old
   files without it load unchanged.
 - Bridge (QtTest): models follow the selection, search filters, `ProjectController` panel state survives project
-  replacement, a drag is one undo step, wrappers build valid commands.
+  replacement, a knob release is one undo step, wrappers build valid commands.
 - QML (`qmltestrunner`, offscreen): Inspector sections collapse and expand, the strip edits send one command per
   gesture, Library arrow keys apply patches, a knob moves every target, the toast appears for stubs only when switched
   on, mixer and Inspector show the same `ChannelStrip`.

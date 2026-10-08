@@ -2,6 +2,7 @@ file(GLOB_RECURSE LPC_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}
 add_executable(lpc_tests ${LPC_TEST_SOURCES})
 target_link_libraries(lpc_tests PRIVATE lpc_core Catch2::Catch2WithMain)
 target_compile_definitions(lpc_tests PRIVATE LPC_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(lpc_tests PRIVATE LPC_PATCHES_JSON="${CMAKE_SOURCE_DIR}/core/data/patches.json")
 if(TARGET lpc_cli_lib)
     target_link_libraries(lpc_tests PRIVATE lpc_cli_lib)
     target_compile_definitions(lpc_tests PRIVATE LPC_HAVE_CLI_LIB=1)

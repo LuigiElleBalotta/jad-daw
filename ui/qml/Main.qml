@@ -208,6 +208,12 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
+            LeftColumn {
+                id: leftColumn
+                Layout.fillHeight: true
+                Layout.preferredWidth: width
+                project: controller
+            }
             TrackList {
                 id: trackList
                 Layout.preferredWidth: 230

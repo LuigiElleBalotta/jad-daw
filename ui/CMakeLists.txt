@@ -55,6 +55,16 @@ qt_add_qml_module(jad_ui_lib
         qml/ChannelStrip.qml
         qml/ProjectStrip.qml
         qml/TrackIcon.qml
+        qml/PanelHeader.qml
+        qml/InspectorRow.qml
+        qml/NumberField.qml
+        qml/StubCheck.qml
+        qml/StubValue.qml
+        qml/Splitter.qml
+        qml/LeftColumn.qml
+        qml/Inspector.qml
+        qml/RegionInspector.qml
+        qml/TrackInspector.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg

@@ -48,6 +48,13 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   MIDI region with the pencil, import `.wav` by dropping it on a track), snap, zoom, catch playhead.
 
 ![Tools and selection](docs/images/tools-and-selection.png)
+
+- **Inspector** (`I`, or the Inspector button): the Region and Track sections of the selected region and track, and two
+  channel strips (the track and its output). Real: region gain, track name and colour, and everything on the strips
+  (insert gain, sends, output, pan, fader, mute, solo). Quantize, Loop, Transpose, Key and Velocity limits, Delay and the
+  like have no engine yet: they are visual only and say so when switched on.
+
+![Inspector](docs/images/inspector.png)
 ![Menus](docs/images/menus.png)
 
 - Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example

@@ -19,7 +19,8 @@ Action {
         const toggle = registry.isToggle(actionId)
         if (stub) {
             const next = toggle ? !on : on
-            if (toggle) on = next
+            if (handler) handler(next)  // an owner that keeps the state (a track's R, I)
+            else if (toggle) on = next
             registry.stubTriggered(actionId, next)
             return
         }

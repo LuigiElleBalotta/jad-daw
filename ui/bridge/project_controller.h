@@ -58,6 +58,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool followPlayhead READ followPlayhead WRITE setFollowPlayhead NOTIFY followPlayheadChanged)
     Q_PROPERTY(QStringList selectedTrackIds READ selectedTrackIds NOTIFY selectionChanged)
     Q_PROPERTY(QStringList selectedRegionIds READ selectedRegionIds NOTIFY selectionChanged)
+    Q_PROPERTY(bool selectedRecordArm READ selectedRecordArm NOTIFY trackTogglesChanged)  // of the first selected track
+    Q_PROPERTY(bool selectedInputMonitor READ selectedInputMonitor NOTIFY trackTogglesChanged)
     Q_PROPERTY(int trackHeightIndex READ trackHeightIndex WRITE setTrackHeightIndex NOTIFY trackHeightChanged)
     Q_PROPERTY(double masterGainDb READ masterGainDb NOTIFY projectChanged)
     Q_PROPERTY(bool mixerVisible READ mixerVisible WRITE setMixerVisible NOTIFY mixerVisibleChanged)
@@ -80,6 +82,8 @@ public:
     ~ProjectController() override;
 
     bool hasProject() const { return host_ != nullptr; }
+    bool selectedRecordArm() const { return selectedToggle(QStringLiteral("track.recordArm")); }
+    bool selectedInputMonitor() const { return selectedToggle(QStringLiteral("track.inputMonitor")); }
     QString projectName() const { return name_; }
     double bpm() const { return bpm_; }
     int beatsPerBar() const { return beatsPerBar_; }
@@ -173,6 +177,8 @@ public:
     Q_INVOKABLE void selectRegionsIn(double fromBeats, double toBeats, int fromRow, int toRow, const QString& mode);
     Q_INVOKABLE void joinWithNext(const QString& regionId);  // the region that starts where this one ends, same track
     Q_INVOKABLE void toggleSoloSelected();
+    // The R and I stubs keep their state per track here, so it survives track changes. Other action ids are ignored.
+    Q_INVOKABLE void setTrackToggle(const QString& actionId, const QString& trackId, bool on);
     // Strip edits: one set_strip command each; values are clamped, NaN is ignored.
     Q_INVOKABLE void setGain(const QString& trackId, double db);
     Q_INVOKABLE void setPan(const QString& trackId, double pan);
@@ -212,6 +218,7 @@ signals:
     void audioEnabledChanged();
     void mixerVisibleChanged();
     void selectionChanged();
+    void trackTogglesChanged();
     void toolChanged();
     void snapChanged();
     void followPlayheadChanged();
@@ -236,6 +243,7 @@ private:
     void applySnapshot(Snapshot snapshot, std::uint64_t generation);
     void tick();
     void pruneSelection();
+    bool selectedToggle(const QString& actionId) const;
     std::int64_t regionPosition(const RegionRow& row, double beats) const;  // beats -> the region's own unit
     void setError(const QString& message);
     void teardown();
@@ -280,6 +288,7 @@ private:
     QString snap_ = QStringLiteral("quarter");
     bool followPlayhead_ = true;
     QStringList selectedTracks_;
+    QHash<QString, QSet<QString>> trackToggles_;  // action id -> the tracks it is on for
     QStringList selectedRegions_;
     int trackHeightIndex_ = 1;
     bool playing_ = false;

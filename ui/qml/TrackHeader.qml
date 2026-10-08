@@ -15,6 +15,8 @@ Item {
     property real pan: 0
     property bool mute: false
     property bool solo: false
+    property bool recordArm: false
+    property bool inputMonitor: false
     property bool selected: false
 
     readonly property bool slidersVisible: height >= 56
@@ -32,7 +34,7 @@ Item {
     signal selectRequested(string id, string mode)
     signal gainReleased(string id, real db)
     signal panReleased(string id, real pan)
-    signal stubTriggered(string actionId, bool on)
+    signal trackToggled(string trackId, string actionId, bool on)
 
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
     readonly property string kindLabel: ({ "audio": "Au", "instrument": "Inst", "midi": "MIDI", "bus": "Bus", "aux": "Aux" })[kind] ?? kind
@@ -151,15 +153,15 @@ Item {
                 id: armButton
                 implicitWidth: 20; implicitHeight: 20
                 label: "R"
-                toggle: true
-                onClicked: root.stubTriggered("track.recordArm", active)
+                active: root.recordArm
+                onClicked: root.trackToggled(root.trackId, "track.recordArm", !root.recordArm)
             }
             IconButton {
                 id: monitorButton
                 implicitWidth: 20; implicitHeight: 20
                 label: "I"
-                toggle: true
-                onClicked: root.stubTriggered("track.inputMonitor", active)
+                active: root.inputMonitor
+                onClicked: root.trackToggled(root.trackId, "track.inputMonitor", !root.inputMonitor)
             }
             IconButton {
                 id: muteButton

@@ -56,6 +56,8 @@ Rectangle {
             required kind
             required mute
             required solo
+            required recordArm
+            required inputMonitor
             required gainDb
             required pan
             width: ListView.view.width
@@ -70,7 +72,7 @@ Rectangle {
             onRenamed: (id, newName) => root.project.renameTrack(id, newName)
             onGainReleased: (id, db) => root.project.setGain(id, db)
             onPanReleased: (id, p) => root.project.setPan(id, p)
-            onStubTriggered: (actionId, on) => root.stubTriggered(actionId, on)
+            onTrackToggled: (id, actionId, on) => { root.project.setTrackToggle(actionId, id, on); root.stubTriggered(actionId, on) }
         }
     }
 }

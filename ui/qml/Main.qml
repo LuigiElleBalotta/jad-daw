@@ -19,6 +19,7 @@ ApplicationWindow {
     Component.onCompleted: ActionHub.registry = actionRegistry
 
     function colorSelected(name) { for (const id of controller.selectedTrackIds) controller.setTrackColor(id, name) }
+    function setSelectedToggle(actionId, on) { controller.setTrackToggle(actionId, controller.selectedTrackIds[0], on) }
     // for screenshots: opens the menu at `index` of the menu bar
     function showMenu(index) { const m = menuBar.menuAt(index); if (m) m.open() }
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
@@ -70,6 +71,8 @@ ApplicationWindow {
         "track.newBus": () => controller.addTrack("bus"),
         "track.delete": () => controller.deleteSelectedTracks(),
         "track.rename": () => { if (controller.selectedTrackIds.length > 0) trackList.beginRename(controller.selectedTrackIds[0]) },
+        "track.recordArm": (on) => root.setSelectedToggle("track.recordArm", on),
+        "track.inputMonitor": (on) => root.setSelectedToggle("track.inputMonitor", on),
         "track.color.purple": () => root.colorSelected("purple"),
         "track.color.indigo": () => root.colorSelected("indigo"),
         "track.color.blue": () => root.colorSelected("blue"),
@@ -118,6 +121,8 @@ ApplicationWindow {
         "tool.eraser": controller.tool === "eraser",
         "tool.scissors": controller.tool === "scissors",
         "tool.glue": controller.tool === "glue",
+        "track.recordArm": controller.selectedRecordArm,
+        "track.inputMonitor": controller.selectedInputMonitor,
         "snap.off": controller.snap === "off",
         "snap.bar": controller.snap === "bar",
         "snap.half": controller.snap === "half",
@@ -132,7 +137,9 @@ ApplicationWindow {
         "track.height.xlarge": controller.trackHeightIndex === 3
     })
     readonly property var disabledStates: ({
-        "file.save": !controller.hasProject
+        "file.save": !controller.hasProject,
+        "track.recordArm": controller.selectedTrackIds.length === 0,
+        "track.inputMonitor": controller.selectedTrackIds.length === 0
     })
 
     property var actionMap: ({})

@@ -86,6 +86,7 @@ ProjectController::ProjectController(QObject* parent) : ProjectController(true, 
 ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QObject(parent), openAudioDevice_(openAudioDevice) {
     timer_.setInterval(33);
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
+    connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackTogglesChanged);
 }
 
 ProjectController::~ProjectController() { teardown(); }
@@ -234,6 +235,10 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     std::vector<TrackRow> withoutMaster;
     for (const TrackRow& t : s.tracks)
         if (!t.master) withoutMaster.push_back(t);
+    for (TrackRow& t : withoutMaster) {
+        t.recordArm = trackToggles_.value(QStringLiteral("track.recordArm")).contains(t.id);
+        t.inputMonitor = trackToggles_.value(QStringLiteral("track.inputMonitor")).contains(t.id);
+    }
     tracks_.reset(withoutMaster);
     mixer_.reset(s.tracks);
     regions_.reset(s.regions);
@@ -423,6 +428,21 @@ void ProjectController::toggleMuteSelected() {
 
 void ProjectController::toggleSoloSelected() {
     for (const QString& id : QStringList(selectedTracks_)) toggleSolo(id);
+}
+
+void ProjectController::setTrackToggle(const QString& actionId, const QString& trackId, bool on) {
+    if (actionId != QStringLiteral("track.recordArm") && actionId != QStringLiteral("track.inputMonitor")) return;
+    if (!tracks_.find(trackId)) return;
+    QSet<QString>& ids = trackToggles_[actionId];
+    if (on) ids.insert(trackId);
+    else ids.remove(trackId);
+    tracks_.setToggle(trackId, actionId == QStringLiteral("track.recordArm") ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
+    emit trackTogglesChanged();
+}
+
+bool ProjectController::selectedToggle(const QString& actionId) const {
+    if (selectedTracks_.isEmpty()) return false;
+    return trackToggles_.value(actionId).contains(selectedTracks_.first());
 }
 
 void ProjectController::setTool(const QString& tool) {

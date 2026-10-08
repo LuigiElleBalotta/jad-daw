@@ -68,13 +68,15 @@ TestCase {
         mouseClick(h, 20, 20, Qt.LeftButton, Qt.ControlModifier)
         compare(modes, ["replace", "extend", "toggle"])
     }
-    function test_arm_and_monitor_are_stubs_that_report_their_state() {
-        var h = createTemporaryObject(hdr, this, { height: 72 })
+    function test_arm_and_monitor_ask_the_owner_for_the_new_state() {
+        var h = createTemporaryObject(hdr, this, { height: 72, trackId: "t1" })
         var got = []
-        h.stubTriggered.connect(function (id, on) { got.push([id, on]) })
+        h.trackToggled.connect(function (id, action, on) { got.push([id, action, on]) })
         mouseClick(h.armButton)
+        h.recordArm = true  // the owner stores the state and gives it back: the button follows it
+        compare(h.armButton.active, true)
         mouseClick(h.armButton)
         mouseClick(h.monitorButton)
-        compare(got, [["track.recordArm", true], ["track.recordArm", false], ["track.inputMonitor", true]])
+        compare(got, [["t1", "track.recordArm", true], ["t1", "track.recordArm", false], ["t1", "track.inputMonitor", true]])
     }
 }

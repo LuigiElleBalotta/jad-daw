@@ -21,6 +21,15 @@ std::filesystem::path makeDemo(const TempDir& dir, const char8_t* name = u8"d.lp
 
 }  // namespace
 
+// The value of one track row field (by role name) for the track `id`; invalid when there is no such track.
+QVariant trackField(jad::ProjectController& c, const QString& id, const char* role) {
+    const int key = c.tracks()->roleNames().key(role);
+    for (int i = 0; i < c.tracks()->rowCount(); ++i)
+        if (c.tracks()->trackIdAt(i) == id) return c.tracks()->data(c.tracks()->index(i), key);
+    return {};
+}
+bool trackFlag(jad::ProjectController& c, const QString& id, const char* role) { return trackField(c, id, role).toBool(); }
+
 class BridgeTest : public QObject {
     Q_OBJECT
 private:
@@ -673,6 +682,30 @@ private slots:
         c.joinWithNext(c.regions()->regionIdAt(0));  // nothing starts where it ends
         QCOMPARE(notices.count(), 4);
         QVERIFY(c.lastError().isEmpty());
+    }
+    void trackToggleStateSurvivesTrackChanges() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 2);
+        const QString id = c.tracks()->trackIdAt(1);
+        c.setTrackToggle("track.recordArm", id, true);
+        QVERIFY(trackFlag(c, id, "recordArm"));
+        QVERIFY(!trackFlag(c, id, "inputMonitor"));
+        c.selectTrack(id, "replace");
+        QVERIFY(c.property("selectedRecordArm").toBool());  // the Track menu shows the selected track's state
+        QVERIFY(!c.property("selectedInputMonitor").toBool());
+        c.selectTrack(c.tracks()->trackIdAt(0), "replace");
+        QVERIFY(!c.property("selectedRecordArm").toBool());
+        c.selectTrack(id, "replace");
+        const int n = c.tracks()->rowCount();
+        c.addTrack("audio");
+        QTRY_COMPARE(c.tracks()->rowCount(), n + 1);
+        QVERIFY(trackFlag(c, id, "recordArm"));
+        QVERIFY(c.property("selectedRecordArm").toBool());
+        c.setTrackToggle("track.inputMonitor", id, true);
+        QVERIFY(trackFlag(c, id, "inputMonitor"));
+        QVERIFY(trackFlag(c, id, "recordArm"));
     }
     void rectangleSelectionSelectsAllIds() {
         TempDir dir;

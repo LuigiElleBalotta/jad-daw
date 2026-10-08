@@ -12,6 +12,7 @@ namespace jad {
 struct TrackRow {
     QString id, name, kind, color;
     bool master = false, mute = false, solo = false;
+    bool recordArm = false, inputMonitor = false;  // the R and I stubs: their state is kept by the controller
     double gainDb = 0.0, pan = 0.0;
     int regionCount = 0;
 };

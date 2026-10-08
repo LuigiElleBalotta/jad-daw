@@ -13,6 +13,18 @@ void TrackListModel::reset(const std::vector<TrackRow>& rows) {
     endResetModel();
 }
 
+void TrackListModel::setToggle(const QString& trackId, Role role, bool on) {
+    for (int i = 0; i < static_cast<int>(rows_.size()); ++i) {
+        TrackRow& t = rows_[static_cast<std::size_t>(i)];
+        if (t.id != trackId) continue;
+        bool& field = role == RecordArm ? t.recordArm : t.inputMonitor;
+        if (field == on) return;
+        field = on;
+        emit dataChanged(index(i), index(i), {role});
+        return;
+    }
+}
+
 const TrackRow* TrackListModel::find(const QString& trackId) const {
     for (const TrackRow& t : rows_)
         if (t.id == trackId) return &t;
@@ -33,12 +45,14 @@ QVariant TrackListModel::data(const QModelIndex& index, int role) const {
         case Solo: return r.solo;
         case GainDb: return r.gainDb;
         case Pan: return r.pan;
+        case RecordArm: return r.recordArm;
+        case InputMonitor: return r.inputMonitor;
     }
     return {};
 }
 
 QHash<int, QByteArray> TrackListModel::roleNames() const {
-    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}};
+    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {RecordArm, "recordArm"}, {InputMonitor, "inputMonitor"}};
 }
 
 }  // namespace jad

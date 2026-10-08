@@ -18,9 +18,9 @@ ApplicationWindow {
     ActionRegistry { id: actionRegistry; objectName: "registry" }
     Component.onCompleted: ActionHub.registry = actionRegistry
 
+    function colorSelected(name) { for (const id of controller.selectedTrackIds) controller.setTrackColor(id, name) }
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
     function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.beatsPerBar * 4) }
-    function forSelectedTracks(fn) { for (const id of timeline.selectedTrackIds()) fn(id) }
 
     FolderDialog {
         id: openDialog
@@ -58,8 +58,29 @@ ApplicationWindow {
         "transport.playStop": () => root.togglePlay(),
         "transport.toStart": () => controller.locateBeats(0),
         "transport.loop": () => root.toggleLoop(),
-        "track.mute": () => root.forSelectedTracks((id) => controller.toggleMute(id)),
-        "track.solo": () => root.forSelectedTracks((id) => controller.toggleSolo(id)),
+        "track.mute": () => controller.toggleMuteSelected(),
+        "track.solo": () => controller.toggleSoloSelected(),
+        "track.newAudio": () => controller.addTrack("audio"),
+        "track.newInstrument": () => controller.addTrack("instrument"),
+        "track.newBus": () => controller.addTrack("bus"),
+        "track.delete": () => controller.deleteSelectedTracks(),
+        "track.rename": () => { if (controller.selectedTrackIds.length > 0) trackList.beginRename(controller.selectedTrackIds[0]) },
+        "track.color.purple": () => root.colorSelected("purple"),
+        "track.color.indigo": () => root.colorSelected("indigo"),
+        "track.color.blue": () => root.colorSelected("blue"),
+        "track.color.teal": () => root.colorSelected("teal"),
+        "track.color.green": () => root.colorSelected("green"),
+        "track.color.yellow": () => root.colorSelected("yellow"),
+        "track.color.orange": () => root.colorSelected("orange"),
+        "track.color.red": () => root.colorSelected("red"),
+        "track.color.pink": () => root.colorSelected("pink"),
+        "track.color.magenta": () => root.colorSelected("magenta"),
+        "track.height.compact": () => { controller.trackHeightIndex = 0 },
+        "track.height.normal": () => { controller.trackHeightIndex = 1 },
+        "track.height.large": () => { controller.trackHeightIndex = 2 },
+        "track.height.xlarge": () => { controller.trackHeightIndex = 3 },
+        "edit.selectAll": () => controller.selectAll(),
+        "edit.deselectAll": () => controller.clearSelection(),
         "transport.stop": () => controller.stop(),
         "transport.barBack": () => controller.barBack(),
         "transport.barForward": () => controller.barForward(),
@@ -71,7 +92,11 @@ ApplicationWindow {
     // the displayed state of real toggles and radio entries (stubs keep their own)
     readonly property var states: ({
         "transport.loop": controller.loopEnabled,
-        "view.mixer": controller.mixerVisible
+        "view.mixer": controller.mixerVisible,
+        "track.height.compact": controller.trackHeightIndex === 0,
+        "track.height.normal": controller.trackHeightIndex === 1,
+        "track.height.large": controller.trackHeightIndex === 2,
+        "track.height.xlarge": controller.trackHeightIndex === 3
     })
     readonly property var disabledStates: ({
         "file.save": !controller.hasProject
@@ -130,11 +155,13 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 0
             TrackList {
-                Layout.preferredWidth: 220
+                id: trackList
+                Layout.preferredWidth: 230
                 Layout.fillHeight: true
                 project: controller
                 scrollY: timeline.scrollY
                 headerHeight: timeline.rulerHeight
+                onStubTriggered: (id, on) => actionRegistry.stubTriggered(id, on)
             }
             Timeline {
                 id: timeline

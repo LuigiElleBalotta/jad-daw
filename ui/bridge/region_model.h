@@ -16,6 +16,7 @@ public:
     void reset(const std::vector<RegionRow>& rows);
     const RegionRow* find(const QString& regionId) const;
     Q_INVOKABLE bool hasRegion(const QString& regionId) const { return find(regionId) != nullptr; }
+    Q_INVOKABLE QString regionIdAt(int row) const { return row >= 0 && row < static_cast<int>(rows_.size()) ? rows_[static_cast<std::size_t>(row)].id : QString(); }
     int rowCount(const QModelIndex& parent = {}) const override { return parent.isValid() ? 0 : static_cast<int>(rows_.size()); }
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;

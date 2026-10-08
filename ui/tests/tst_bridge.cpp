@@ -386,6 +386,96 @@ private slots:
         c.setMixerVisible(false);  // no change: no signal
         QCOMPARE(spy.count(), 1);
     }
+    void trackSelectionModesAndStaleIds() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString a = c.tracks()->trackIdAt(0), b = c.tracks()->trackIdAt(1);
+        c.selectTrack(a, "replace");
+        QCOMPARE(c.selectedTrackIds(), QStringList{a});
+        c.selectTrack(b, "extend");
+        QCOMPARE(c.selectedTrackIds().size(), 2);
+        c.selectTrack(a, "toggle");
+        QCOMPARE(c.selectedTrackIds(), QStringList{b});
+        c.selectTrack("nope", "replace");  // unknown ids are ignored
+        QCOMPARE(c.selectedTrackIds(), QStringList{b});
+        c.selectRegion(c.regions()->regionIdAt(0), "replace");
+        QCOMPARE(c.selectedTrackIds(), QStringList{b});  // selecting a region does not touch the track selection
+        QCOMPARE(c.selectedRegionIds().size(), 1);
+        c.clearSelection();
+        QVERIFY(c.selectedTrackIds().isEmpty());
+        QVERIFY(c.selectedRegionIds().isEmpty());
+    }
+    void selectionIsPrunedWhenTracksDisappear() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        c.addTrack("audio");
+        QTRY_COMPARE(c.tracks()->rowCount(), 4);
+        c.selectTrack(c.tracks()->trackIdAt(3), "replace");
+        QCOMPARE(c.selectedTrackIds().size(), 1);
+        c.undo();  // the track disappears
+        QTRY_COMPARE(c.tracks()->rowCount(), 3);
+        QTRY_VERIFY(c.selectedTrackIds().isEmpty());
+    }
+    void muteAndSoloActOnSelectedTracksOnly() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.toggleMuteSelected();  // nothing selected: nothing happens
+        c.toggleSoloSelected();
+        QCOMPARE(sent.count(), 0);
+        c.selectTrack(c.tracks()->trackIdAt(0), "replace");
+        c.toggleMuteSelected();
+        QTRY_COMPARE(sent.count(), 1);
+    }
+    void trackManagement() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 4);
+        const QString id = c.tracks()->trackIdAt(3);
+        c.renameTrack(id, "Lead");
+        QTRY_COMPARE(c.tracks()->data(c.tracks()->index(3), c.tracks()->roleNames().key("name")).toString(), QStringLiteral("Lead"));
+        c.renameTrack(id, "");  // rejected by the Core: shown, nothing changes
+        QTRY_VERIFY(c.lastError().startsWith("bad_value"));
+        c.setTrackColor(id, "orange");
+        QTRY_COMPARE(c.tracks()->data(c.tracks()->index(3), c.tracks()->roleNames().key("color")).toString(), QStringLiteral("orange"));
+        c.selectTrack(id, "replace");
+        c.deleteSelectedTracks();
+        QTRY_COMPARE(c.tracks()->rowCount(), 3);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), 4);
+    }
+    void deletingATrackThatIsRoutedToIsRefused() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));  // the demo's Keys track sends to the Reverb Bus
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QString busId;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->data(c.tracks()->index(i), c.tracks()->roleNames().key("kind")).toString() == "bus") busId = c.tracks()->trackIdAt(i);
+        QVERIFY(!busId.isEmpty());
+        c.selectTrack(busId, "replace");
+        c.deleteSelectedTracks();
+        QTRY_VERIFY(c.lastError().startsWith("in_use"));
+        QCOMPARE(c.tracks()->rowCount(), 3);
+    }
+    void trackHeightIsClampedToTheFourSteps() {
+        jad::ProjectController c(false);
+        QCOMPARE(c.trackHeightIndex(), 1);
+        c.setTrackHeightIndex(9);
+        QCOMPARE(c.trackHeightIndex(), 3);
+        c.setTrackHeightIndex(-4);
+        QCOMPARE(c.trackHeightIndex(), 0);
+    }
 };
 
 QTEST_MAIN(BridgeTest)

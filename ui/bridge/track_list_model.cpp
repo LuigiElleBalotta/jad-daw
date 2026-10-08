@@ -29,12 +29,16 @@ QVariant TrackListModel::data(const QModelIndex& index, int role) const {
         case Color: return r.color;
         case IsMaster: return r.master;
         case RegionCount: return r.regionCount;
+        case Mute: return r.mute;
+        case Solo: return r.solo;
+        case GainDb: return r.gainDb;
+        case Pan: return r.pan;
     }
     return {};
 }
 
 QHash<int, QByteArray> TrackListModel::roleNames() const {
-    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}};
+    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}};
 }
 
 }  // namespace jad

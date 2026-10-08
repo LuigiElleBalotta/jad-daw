@@ -12,7 +12,7 @@ class TrackListModel : public QAbstractListModel {
     Q_OBJECT
     QML_ANONYMOUS
 public:
-    enum Role { TrackId = Qt::UserRole + 1, Name, Kind, Color, IsMaster, RegionCount };
+    enum Role { TrackId = Qt::UserRole + 1, Name, Kind, Color, IsMaster, RegionCount, Mute, Solo, GainDb, Pan };
     explicit TrackListModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
     void reset(const std::vector<TrackRow>& rows);
     const TrackRow* find(const QString& trackId) const;

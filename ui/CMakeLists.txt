@@ -44,6 +44,7 @@ qt_add_qml_module(jad_ui_lib
         qml/ActionButton.qml
         qml/Lcd.qml
         qml/ControlBar.qml
+        qml/TrackHeader.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg

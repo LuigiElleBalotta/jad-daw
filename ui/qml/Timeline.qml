@@ -8,10 +8,9 @@ Item {
     property real scrollBeats: 0
     property real scrollY: 0
     property real snapBeats: 1.0   // 0 disables snapping
-    property var selectedIds: ({})  // region id -> true
     readonly property real minPixelsPerBeat: 4
     readonly property real maxPixelsPerBeat: 400
-    readonly property real rowHeight: Theme.sizeTrackHeight[1]
+    readonly property real rowHeight: Theme.sizeTrackHeight[project.trackHeightIndex]
     readonly property real rulerHeight: 24
     readonly property real contentHeight: project.tracks.rowCount() * rowHeight
 
@@ -36,23 +35,10 @@ Item {
         scrollY = Math.max(0, Math.min(maxY, scrollY + d))
     }
 
-    function select(id, extend, trackId) {
-        const next = extend ? Object.assign({}, selectedIds) : ({})
-        next[id] = trackId
-        selectedIds = next
-    }
-    // the tracks that hold the selected regions
-    function selectedTrackIds() {
-        const seen = ({})
-        for (const id of Object.keys(selectedIds)) seen[selectedIds[id]] = true
-        return Object.keys(seen)
-    }
-    function clearSelection() { selectedIds = ({}) }
     function deleteSelected() {
-        const ids = Object.keys(selectedIds)
+        const ids = project.selectedRegionIds
         if (ids.length === 0) return
         project.deleteRegions(ids)
-        clearSelection()
     }
     function trackIdAt(y) {
         return project.tracks.trackIdAt(Math.floor((y - rulerHeight + scrollY) / rowHeight))
@@ -64,17 +50,6 @@ Item {
     Keys.onDeletePressed: deleteSelected()
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_Backspace) { deleteSelected(); event.accepted = true }
-    }
-
-    // forget selected regions that no longer exist (deleted, undone, project replaced)
-    Connections {
-        target: root.project.regions
-        function onModelReset() {
-            const kept = ({})
-            for (const id of Object.keys(root.selectedIds))
-                if (root.project.regions.hasRegion(id)) kept[id] = root.selectedIds[id]
-            root.selectedIds = kept
-        }
     }
 
     Ruler {
@@ -109,7 +84,7 @@ Item {
         // empty space: clears the selection and takes the keyboard focus
         MouseArea {
             anchors.fill: parent
-            onPressed: { root.forceActiveFocus(); root.clearSelection() }
+            onPressed: { root.forceActiveFocus(); root.project.clearSelection() }
         }
 
         Repeater {
@@ -129,14 +104,14 @@ Item {
                 trackColor: model.trackColor
                 pixelsPerBeat: root.pixelsPerBeat
                 snapBeats: root.snapBeats
-                selected: root.selectedIds[model.regionId] !== undefined
+                selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 x: root.beatsToX(startBeats)
                 y: trackIndex * root.rowHeight - root.scrollY + 2
                 width: lengthBeats * root.pixelsPerBeat
                 height: root.rowHeight - 4
                 // only what is on screen is drawn
                 visible: x + width > 0 && x < body.width
-                onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.select(id, extend, region.trackId) }
+                onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.project.selectRegion(id, extend ? "extend" : "replace") }
                 onMoved: (id, beats) => root.regionMoved(id, beats)
             }
         }

@@ -51,6 +51,9 @@ class ProjectController : public QObject {
     Q_PROPERTY(double bpm READ bpm NOTIFY projectChanged)
     Q_PROPERTY(int beatsPerBar READ beatsPerBar NOTIFY projectChanged)
     Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
+    Q_PROPERTY(QStringList selectedTrackIds READ selectedTrackIds NOTIFY selectionChanged)
+    Q_PROPERTY(QStringList selectedRegionIds READ selectedRegionIds NOTIFY selectionChanged)
+    Q_PROPERTY(int trackHeightIndex READ trackHeightIndex WRITE setTrackHeightIndex NOTIFY trackHeightChanged)
     Q_PROPERTY(double masterGainDb READ masterGainDb NOTIFY projectChanged)
     Q_PROPERTY(bool mixerVisible READ mixerVisible WRITE setMixerVisible NOTIFY mixerVisibleChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
@@ -78,6 +81,15 @@ public:
     QString signatureText() const { return QStringLiteral("%1/%2").arg(beatsPerBar_).arg(beatUnit_); }
     double masterGainDb() const { return masterGain_; }
     bool mixerVisible() const { return mixerVisible_; }
+    QStringList selectedTrackIds() const { return selectedTracks_; }
+    QStringList selectedRegionIds() const { return selectedRegions_; }
+    int trackHeightIndex() const { return trackHeightIndex_; }
+    void setTrackHeightIndex(int index) {
+        const int clamped = index < 0 ? 0 : (index > 3 ? 3 : index);
+        if (clamped == trackHeightIndex_) return;
+        trackHeightIndex_ = clamped;
+        emit trackHeightChanged();
+    }
     void setMixerVisible(bool visible) {
         if (visible == mixerVisible_) return;
         mixerVisible_ = visible;
@@ -119,6 +131,20 @@ public:
     Q_INVOKABLE void setMasterGain(double db);
     Q_INVOKABLE void barBack();
     Q_INVOKABLE void barForward();
+    // Selection lives here so that menus, shortcuts and the views agree. `mode` is "replace", "extend" or "toggle";
+    // ids that do not exist are ignored. Selecting regions does not touch the track selection and vice versa.
+    Q_INVOKABLE void selectTrack(const QString& id, const QString& mode);
+    Q_INVOKABLE void selectRegion(const QString& id, const QString& mode);
+    Q_INVOKABLE void selectRegions(const QStringList& ids, const QString& mode);
+    Q_INVOKABLE void clearSelection();
+    Q_INVOKABLE void selectAll();  // every region
+    // Track management: one command each (deleting several tracks is one transaction, one undo step).
+    Q_INVOKABLE void addTrack(const QString& kind);  // "audio", "instrument" or "bus"
+    Q_INVOKABLE void deleteSelectedTracks();
+    Q_INVOKABLE void renameTrack(const QString& trackId, const QString& name);
+    Q_INVOKABLE void setTrackColor(const QString& trackId, const QString& color);
+    Q_INVOKABLE void toggleMuteSelected();
+    Q_INVOKABLE void toggleSoloSelected();
     // Strip edits: one set_strip command each; values are clamped, NaN is ignored.
     Q_INVOKABLE void setGain(const QString& trackId, double db);
     Q_INVOKABLE void setPan(const QString& trackId, double pan);
@@ -155,6 +181,8 @@ signals:
     void commandSent(const QString& type);
     void audioEnabledChanged();
     void mixerVisibleChanged();
+    void selectionChanged();
+    void trackHeightChanged();
     // The loader refused a folder; the message is the loader's. The previous project stays open.
     void projectOpenFailed(const QString& message);
     void waveformReady(const QString& mediaId);
@@ -174,6 +202,7 @@ private:
     void refresh(std::uint64_t revision);
     void applySnapshot(Snapshot snapshot, std::uint64_t generation);
     void tick();
+    void pruneSelection();
     void setError(const QString& message);
     void teardown();
     static std::filesystem::path toPath(const QUrl& url);
@@ -213,6 +242,9 @@ private:
     double masterGain_ = 0.0;
     QString masterId_;
     bool mixerVisible_ = true;
+    QStringList selectedTracks_;
+    QStringList selectedRegions_;
+    int trackHeightIndex_ = 1;
     bool playing_ = false;
     bool loop_ = false;
     bool degraded_ = false;

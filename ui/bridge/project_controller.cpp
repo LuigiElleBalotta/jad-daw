@@ -7,6 +7,8 @@
 #include <QPointer>
 #include <QtConcurrent>
 
+#include <QUuid>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -250,6 +252,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
             masterGain_ = t.gainDb;
         }
     emit projectChanged();
+    pruneSelection();
 }
 
 void ProjectController::sendCommand(const nlohmann::json& command, std::function<void(bool)> done) {
@@ -310,6 +313,116 @@ void ProjectController::setGain(const QString& trackId, double db) {
 void ProjectController::setPan(const QString& trackId, double pan) {
     if (!std::isfinite(pan)) return;
     setStripField(trackId, "pan", std::clamp(pan, -1.0, 1.0));
+}
+
+namespace {
+
+void applyMode(QStringList& list, const QStringList& ids, const QString& mode) {
+    if (mode == "replace") {
+        list = ids;
+    } else if (mode == "extend") {
+        for (const QString& id : ids)
+            if (!list.contains(id)) list.append(id);
+    } else if (mode == "toggle") {
+        for (const QString& id : ids) {
+            if (!list.removeOne(id)) list.append(id);
+        }
+    }
+}
+
+}  // namespace
+
+void ProjectController::selectTrack(const QString& id, const QString& mode) {
+    if (!tracks_.find(id)) return;
+    QStringList next = selectedTracks_;
+    applyMode(next, {id}, mode);
+    if (next == selectedTracks_) return;
+    selectedTracks_ = next;
+    emit selectionChanged();
+}
+
+void ProjectController::selectRegions(const QStringList& ids, const QString& mode) {
+    QStringList known;
+    for (const QString& id : ids)
+        if (regions_.find(id) && !known.contains(id)) known.append(id);
+    if (known.isEmpty() && mode != "replace") return;
+    QStringList next = selectedRegions_;
+    applyMode(next, known, mode);
+    if (next == selectedRegions_) return;
+    selectedRegions_ = next;
+    emit selectionChanged();
+}
+
+void ProjectController::selectRegion(const QString& id, const QString& mode) { selectRegions({id}, mode); }
+
+void ProjectController::clearSelection() {
+    if (selectedTracks_.isEmpty() && selectedRegions_.isEmpty()) return;
+    selectedTracks_.clear();
+    selectedRegions_.clear();
+    emit selectionChanged();
+}
+
+void ProjectController::selectAll() {
+    QStringList all;
+    for (int i = 0; i < regions_.rowCount(); ++i) all.append(regions_.regionIdAt(i));
+    selectRegions(all, "replace");
+}
+
+void ProjectController::pruneSelection() {
+    const auto prune = [](QStringList& list, const auto& exists) {
+        const int before = list.size();
+        list.erase(std::remove_if(list.begin(), list.end(), [&](const QString& id) { return !exists(id); }), list.end());
+        return list.size() != before;
+    };
+    const bool a = prune(selectedTracks_, [this](const QString& id) { return tracks_.find(id) != nullptr; });
+    const bool b = prune(selectedRegions_, [this](const QString& id) { return regions_.find(id) != nullptr; });
+    if (a || b) emit selectionChanged();
+}
+
+void ProjectController::addTrack(const QString& kind) {
+    if (kind != "audio" && kind != "instrument" && kind != "bus") return;
+    const QString label = kind == "audio" ? "Audio" : (kind == "instrument" ? "Instrument" : "Bus");
+    const std::string name = (label + " " + QString::number(tracks_.rowCount() + 1)).toStdString();
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    nlohmann::json instrument = nullptr;
+    if (kind == "instrument") instrument = {{"processorId", "builtin.sine"}, {"params", nlohmann::json::object()}, {"state", ""}};
+    nlohmann::json track = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()},
+                            {"kind", kind.toStdString()},
+                            {"name", name},
+                            {"color", ""},
+                            {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()},
+                                       {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                            {"regions", nlohmann::json::array()},
+                            {"automation", nlohmann::json::array()},
+                            {"instrument", instrument}};
+    sendCommand({{"type", "add_track"}, {"index", -1}, {"track", track}});
+}
+
+void ProjectController::deleteSelectedTracks() {
+    if (selectedTracks_.isEmpty()) return;
+    if (selectedTracks_.size() == 1) {
+        sendCommand({{"type", "remove_track"}, {"trackId", selectedTracks_.first().toStdString()}});
+        return;
+    }
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedTracks_)) commands.push_back({{"type", "remove_track"}, {"trackId", id.toStdString()}});
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::renameTrack(const QString& trackId, const QString& name) {
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"name", name.toStdString()}});
+}
+
+void ProjectController::setTrackColor(const QString& trackId, const QString& color) {
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"color", color.toStdString()}});
+}
+
+void ProjectController::toggleMuteSelected() {
+    for (const QString& id : QStringList(selectedTracks_)) toggleMute(id);
+}
+
+void ProjectController::toggleSoloSelected() {
+    for (const QString& id : QStringList(selectedTracks_)) toggleSolo(id);
 }
 
 void ProjectController::setTempo(double bpm) {

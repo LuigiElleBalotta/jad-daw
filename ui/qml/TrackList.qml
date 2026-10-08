@@ -5,7 +5,8 @@ Rectangle {
     id: root
     required property ProjectController project
     property real scrollY: 0
-    property real rowHeight: Theme.sizeTrackHeight[1]
+    property real rowHeight: Theme.sizeTrackHeight[project.trackHeightIndex]
+    signal stubTriggered(string actionId, bool on)
     property real headerHeight: 24
 
     color: Theme.surfacePanel
@@ -29,7 +30,15 @@ Rectangle {
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.borderSubtle }
     }
 
+    function beginRename(id) {
+        for (let i = 0; i < list.count; ++i) {
+            const item = list.itemAtIndex(i)
+            if (item && item.trackId === id) { item.beginRename(); return }
+        }
+    }
+
     ListView {
+        id: list
         y: root.headerHeight
         width: parent.width
         height: parent.height - root.headerHeight
@@ -37,52 +46,31 @@ Rectangle {
         interactive: false
         contentY: root.scrollY
         model: root.project.tracks
-        delegate: Item {
+        delegate: TrackHeader {
             id: row
+            // the model roles; roles named like properties of TrackHeader mark those properties required
+            required property int index
             required property string name
-            required property string kind
             required property string color
+            required trackId
+            required kind
+            required mute
+            required solo
+            required gainDb
+            required pan
             width: ListView.view.width
             height: root.rowHeight
-            readonly property string capitalColor: color.charAt(0).toUpperCase() + color.slice(1)
-
-            Rectangle {
-                anchors.fill: parent
-                color: "transparent"
-                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.borderSubtle }
-            }
-            Rectangle {
-                id: chip
-                x: Theme.spacing[3]
-                anchors.verticalCenter: parent.verticalCenter
-                width: 4
-                height: parent.height - 16
-                radius: 2
-                color: Theme["track" + row.capitalColor + "Solid"]
-            }
-            Column {
-                anchors.left: chip.right
-                anchors.leftMargin: Theme.spacing[4]
-                anchors.right: parent.right
-                anchors.rightMargin: Theme.spacing[3]
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
-                Text {
-                    width: parent.width
-                    text: row.name
-                    elide: Text.ElideRight
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontTypeBodySize
-                    font.weight: Theme.fontTypeTitleWeight
-                }
-                Text {
-                    text: row.kind
-                    color: Theme.textSecondary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontTypeCaptionSize
-                }
-            }
+            trackName: name
+            trackColor: color
+            number: index + 1
+            selected: root.project.selectedTrackIds.indexOf(trackId) >= 0
+            onSelectRequested: (id, mode) => root.project.selectTrack(id, mode)
+            onMuteToggled: (id, on) => root.project.setMute(id, on)
+            onSoloToggled: (id, on) => root.project.setSolo(id, on)
+            onRenamed: (id, newName) => root.project.renameTrack(id, newName)
+            onGainReleased: (id, db) => root.project.setGain(id, db)
+            onPanReleased: (id, p) => root.project.setPan(id, p)
+            onStubTriggered: (actionId, on) => root.stubTriggered(actionId, on)
         }
     }
 }

@@ -25,7 +25,7 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
     std::vector<const Track*> senders = sources;
     senders.insert(senders.end(), busLike.begin(), busLike.end());
 
-    switch (pick(17)) {
+    switch (pick(20)) {
         case 0: {  // add track
             static const TrackKind kinds[] = {TrackKind::Audio, TrackKind::Midi, TrackKind::Instrument, TrackKind::Bus, TrackKind::Aux};
             Track t;
@@ -138,6 +138,17 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
                 if (t.regions.size() < 2) return nullptr;
                 return makeJoinRegions({t.regions[pick(t.regions.size())].id, t.regions[pick(t.regions.size())].id});
             }
+        case 17: {  // rename / recolour
+            if (nonMaster.empty()) return nullptr;
+            TrackPatch patch;
+            if (chance(70)) patch.name = "R" + std::to_string(pick(1000));
+            if (chance(40)) patch.color = chance(85) ? "green" : "chartreuse";  // sometimes invalid
+            return makeSetTrackProps(nonMaster[pick(nonMaster.size())]->id, patch);
+        }
+        case 18:
+            return makeSetSignature(static_cast<Ticks>(pick(6)) * kPPQ * 4, static_cast<int>(1 + pick(8)), chance(90) ? 4 : 8);
+        case 19:
+            return makeRemoveSignature(static_cast<Ticks>(pick(6)) * kPPQ * 4);
         default:
             return nullptr;
     }

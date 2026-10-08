@@ -71,3 +71,15 @@ TEST_CASE("tempo map: signatures and fromEvents", "[tempo]") {
     REQUIRE(built.signatures().size() == 1);
     REQUIRE_THROWS_AS(TempoMap::fromEvents({{kPPQ, 100.0}}, {}), std::invalid_argument);  // no tick-0 event
 }
+
+TEST_CASE("tempo map: signature events can be read and removed", "[tempo]") {
+    TempoMap m;
+    REQUIRE(m.signatureEventAt(0) == std::optional<std::pair<int, int>>{{4, 4}});
+    REQUIRE_FALSE(m.signatureEventAt(960).has_value());
+    REQUIRE(m.setSignature(3840, 3, 4));
+    REQUIRE(m.signatureEventAt(3840) == std::optional<std::pair<int, int>>{{3, 4}});
+    REQUIRE(m.removeSignature(3840));
+    REQUIRE_FALSE(m.removeSignature(3840));  // already gone
+    REQUIRE_FALSE(m.removeSignature(0));     // the first event stays
+    REQUIRE(m.signatures().size() == 1);
+}

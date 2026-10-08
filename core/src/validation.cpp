@@ -67,6 +67,29 @@ MaybeError checkInsert(const ProcessorRef& insert) {
     return std::nullopt;
 }
 
+bool isKnownTrackColor(const std::string& color) {
+    static const char* const names[] = {"purple", "indigo", "blue", "teal", "green", "yellow", "orange", "red", "pink", "magenta"};
+    if (color.empty()) return true;
+    for (const char* n : names)
+        if (color == n) return true;
+    return false;
+}
+
+bool validTrackName(const std::string& name) {
+    std::size_t points = 0;
+    for (unsigned char c : name) {
+        if (c < 0x20 || c == 0x7f) return false;
+        if ((c & 0xC0) != 0x80) ++points;  // count lead bytes, skip continuation bytes
+    }
+    return points >= 1 && points <= 64;
+}
+
+MaybeError checkTrackProps(const std::string& name, const std::string& color) {
+    if (!validTrackName(name)) return CommandError{"bad_value", "a track name has 1 to 64 characters and no control characters"};
+    if (!isKnownTrackColor(color)) return CommandError{"bad_value", "unknown track colour: " + color};
+    return std::nullopt;
+}
+
 bool validRelativeMediaPath(const std::string& path) {
     if (path.empty() || path.front() == '/' || path.find(':') != std::string::npos || path.find('\\') != std::string::npos) return false;
     std::size_t start = 0;
@@ -113,6 +136,7 @@ MaybeError checkProject(const Project& p) {
     }
 
     for (const Track& t : p.tracks) {
+        if (auto e = checkTrackProps(t.name, t.color)) return e;
         if (auto e = checkStripValues(t.strip.gainDb, t.strip.pan)) return e;
         const bool wantsInstrument = t.kind == TrackKind::Instrument;
         if (wantsInstrument != t.instrument.has_value() || (wantsInstrument && !isKnownInstrument(t.instrument->processorId)))

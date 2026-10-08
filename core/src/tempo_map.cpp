@@ -69,6 +69,20 @@ bool TempoMap::setSignature(Ticks tick, int numerator, int denominator) {
     return true;
 }
 
+std::optional<std::pair<int, int>> TempoMap::signatureEventAt(Ticks tick) const {
+    for (const SigEvent& e : sigs_)
+        if (e.tick == tick) return std::make_pair(e.numerator, e.denominator);
+    return std::nullopt;
+}
+
+bool TempoMap::removeSignature(Ticks tick) {
+    if (tick <= 0) return false;
+    const auto it = std::find_if(sigs_.begin(), sigs_.end(), [&](const SigEvent& e) { return e.tick == tick; });
+    if (it == sigs_.end()) return false;
+    sigs_.erase(it);
+    return true;
+}
+
 double TempoMap::bpmAt(Ticks tick) const {
     double bpm = tempos_.front().bpm;
     for (const auto& e : tempos_) {

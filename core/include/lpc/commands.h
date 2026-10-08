@@ -13,11 +13,19 @@ struct StripPatch {
     std::optional<bool> solo;
 };
 
+struct TrackPatch {
+    std::optional<std::string> name;
+    std::optional<std::string> color;
+};
+
 CommandPtr makeAddTrack(Track track, int index = -1);  // index -1 appends
 CommandPtr makeRemoveTrack(Uuid trackId);
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch);
 CommandPtr makeSetTempo(Ticks tick, double bpm);
 CommandPtr makeRemoveTempo(Ticks tick);
+CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch);
+CommandPtr makeSetSignature(Ticks tick, int numerator, int denominator);
+CommandPtr makeRemoveSignature(Ticks tick);
 CommandPtr makeAddMedia(MediaItem item, int index = -1);  // index -1 appends
 CommandPtr makeRemoveMedia(Uuid mediaId);
 CommandPtr makeAddRegion(Uuid trackId, Region region, int index = -1);  // index -1 appends

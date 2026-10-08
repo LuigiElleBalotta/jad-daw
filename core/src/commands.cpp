@@ -63,6 +63,7 @@ private:
         if (track_.kind == TrackKind::Master) return CommandError{"invalid_kind", "a master track already exists"};
         if (p.tracks.size() >= kMaxProjectTracks) return CommandError{"limit", "a project holds at most 1024 tracks"};
         if (track_.id.isNull() || p.findTrack(track_.id)) return CommandError{"duplicate_id", "track id missing or already used"};
+        if (auto e = checkTrackProps(track_.name, track_.color)) return e;
         if (index_ < -1 || index_ > static_cast<int>(p.tracks.size())) return CommandError{"bad_index", "track index out of range"};
         if (auto e = checkStripValues(track_.strip.gainDb, track_.strip.pan)) return e;
         if (!track_.strip.output.isNull()) {
@@ -183,6 +184,73 @@ public:
         if (!previous || !p.tempoMap.removeTempo(tick_))
             return fail("bad_tempo", "no removable tempo event at this tick (tick 0 cannot be removed)");
         return success(makeSetTempo(tick_, *previous));
+    }
+
+private:
+    Ticks tick_;
+};
+
+class SetTrackPropsCmd final : public Command {
+public:
+    SetTrackPropsCmd(Uuid id, TrackPatch patch) : id_(id), patch_(std::move(patch)) {}
+    std::string type() const override { return "set_track_props"; }
+    json toJson() const override {
+        json j = {{"type", type()}, {"trackId", id_}};
+        if (patch_.name) j["name"] = *patch_.name;
+        if (patch_.color) j["color"] = *patch_.color;
+        return j;
+    }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(id_);
+        if (!t) return fail("not_found", "no such track");
+        if (t->kind == TrackKind::Master) return fail("invalid_kind", "the master track cannot be renamed or recoloured");
+        if (auto e = checkTrackProps(patch_.name.value_or(t->name), patch_.color.value_or(t->color))) return fail(*e);
+        TrackPatch previous;
+        if (patch_.name) {
+            previous.name = t->name;
+            t->name = *patch_.name;
+        }
+        if (patch_.color) {
+            previous.color = t->color;
+            t->color = *patch_.color;
+        }
+        return success(makeSetTrackProps(id_, std::move(previous)));
+    }
+
+private:
+    Uuid id_;
+    TrackPatch patch_;
+};
+
+class SetSignatureCmd final : public Command {
+public:
+    SetSignatureCmd(Ticks tick, int num, int den) : tick_(tick), num_(num), den_(den) {}
+    std::string type() const override { return "set_signature"; }
+    json toJson() const override { return {{"type", type()}, {"tick", tick_}, {"numerator", num_}, {"denominator", den_}}; }
+    ApplyResult apply(Project& p) const override {
+        const bool denominatorOk = den_ == 1 || den_ == 2 || den_ == 4 || den_ == 8 || den_ == 16 || den_ == 32;
+        if (tick_ < 0 || tick_ > kMaxPosition || num_ < 1 || num_ > 32 || !denominatorOk)
+            return fail("bad_value", "signature: numerator 1 to 32, denominator 1, 2, 4, 8, 16 or 32, tick >= 0");
+        const auto previous = p.tempoMap.signatureEventAt(tick_);
+        if (!p.tempoMap.setSignature(tick_, num_, den_)) return fail("bad_value", "invalid time signature");
+        return success(previous ? makeSetSignature(tick_, previous->first, previous->second) : makeRemoveSignature(tick_));
+    }
+
+private:
+    Ticks tick_;
+    int num_, den_;
+};
+
+class RemoveSignatureCmd final : public Command {
+public:
+    explicit RemoveSignatureCmd(Ticks tick) : tick_(tick) {}
+    std::string type() const override { return "remove_signature"; }
+    json toJson() const override { return {{"type", type()}, {"tick", tick_}}; }
+    ApplyResult apply(Project& p) const override {
+        const auto previous = p.tempoMap.signatureEventAt(tick_);
+        if (!previous || !p.tempoMap.removeSignature(tick_))
+            return fail("bad_value", "no removable signature event at this tick (tick 0 cannot be removed)");
+        return success(makeSetSignature(tick_, previous->first, previous->second));
     }
 
 private:
@@ -597,6 +665,9 @@ CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCm
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
+CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch) { return std::make_unique<SetTrackPropsCmd>(trackId, std::move(patch)); }
+CommandPtr makeSetSignature(Ticks tick, int numerator, int denominator) { return std::make_unique<SetSignatureCmd>(tick, numerator, denominator); }
+CommandPtr makeRemoveSignature(Ticks tick) { return std::make_unique<RemoveSignatureCmd>(tick); }
 CommandPtr makeAddMedia(MediaItem item, int index) { return std::make_unique<AddMediaCmd>(std::move(item), index); }
 CommandPtr makeRemoveMedia(Uuid mediaId) { return std::make_unique<RemoveMediaCmd>(mediaId); }
 CommandPtr makeAddRegion(Uuid trackId, Region region, int index) { return std::make_unique<AddRegionCmd>(trackId, std::move(region), index); }
@@ -627,6 +698,14 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         }
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());
+        if (type == "set_track_props") {
+            TrackPatch patch;
+            if (j.contains("name")) patch.name = j["name"].get<std::string>();
+            if (j.contains("color")) patch.color = j["color"].get<std::string>();
+            return makeSetTrackProps(j.at("trackId").get<Uuid>(), patch);
+        }
+        if (type == "set_signature") return makeSetSignature(j.at("tick").get<Ticks>(), j.at("numerator").get<int>(), j.at("denominator").get<int>());
+        if (type == "remove_signature") return makeRemoveSignature(j.at("tick").get<Ticks>());
         if (type == "add_media") return makeAddMedia(j.at("item").get<MediaItem>(), j.value("index", -1));
         if (type == "remove_media") return makeRemoveMedia(j.at("mediaId").get<Uuid>());
         if (type == "add_region") return makeAddRegion(j.at("trackId").get<Uuid>(), j.at("region").get<Region>(), j.value("index", -1));

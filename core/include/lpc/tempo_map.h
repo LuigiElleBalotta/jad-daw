@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace lpc {
@@ -31,6 +32,8 @@ public:
     bool removeTempo(Ticks tick);
     std::optional<double> tempoEventAt(Ticks tick) const;
     bool setSignature(Ticks tick, int numerator, int denominator);
+    std::optional<std::pair<int, int>> signatureEventAt(Ticks tick) const;  // numerator, denominator of the event exactly at tick
+    bool removeSignature(Ticks tick);                                       // the event at tick 0 cannot be removed
 
     const std::vector<TempoEvent>& tempos() const { return tempos_; }
     const std::vector<SigEvent>& signatures() const { return sigs_; }

@@ -24,6 +24,9 @@ MaybeError checkStripValues(float gainDb, float pan);
 MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r);
 MaybeError checkSendFields(const Project& p, const Uuid& owner, const Send& s);
 MaybeError checkInsert(const ProcessorRef& insert);
+bool isKnownTrackColor(const std::string& color);  // "" (automatic) or a palette name
+bool validTrackName(const std::string& name);      // 1 to 64 UTF-8 code points, no control characters
+MaybeError checkTrackProps(const std::string& name, const std::string& color);
 bool validRelativeMediaPath(const std::string& path);
 // True when `goal` can be reached from `from` by following outputs and sends.
 bool reaches(const Project& p, const Uuid& from, const Uuid& goal);

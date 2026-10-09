@@ -81,6 +81,12 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   inserts, sends, output, pan, fader, mute, solo), the master strip last. Double click a strip name to rename the track (Return
   or a click elsewhere confirms, Escape cancels); a click selects it. "New Bus" in a Send or Output menu makes a bus that lives in
   the Mixer only; Track > Show in Tracks Area puts a bus or aux in the Tracks area (and takes it out again).
+  Inserts: the power dot on the left of an insert switches it off (it keeps its delay compensation, so nothing shifts in time);
+  Alt-click on the name does the same. Drag an insert up or down to reorder the chain, or onto another strip to move it to that
+  track (a plug-in keeps its state and its live instance; a Gain insert moves with a vertical drag, a horizontal drag changes its
+  gain until the pointer leaves the strip). Shift-click on a send or on the Output slot shows that bus in the right strip of the
+  Inspector; right-click on a send sets it pre-fader. A click on the instrument slot, or a double click on a track header, opens
+  the Library. The Smart Controls pane has a drag handle on its top edge.
 
 ![Mixer](docs/images/mixer.png)
 ![Menus](docs/images/menus.png)

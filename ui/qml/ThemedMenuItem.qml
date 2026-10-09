@@ -5,11 +5,13 @@ import Jad
 MenuItem {
     id: root
     implicitHeight: 28
-    implicitWidth: 240
+    implicitWidth: Math.max(240, contentItem.implicitWidth)
     readonly property bool checkedState: root.action ? root.action.on === true : (root.checkable && root.checked)
 
     contentItem: Item {
+        implicitWidth: 16 + labelText.implicitWidth + 28 + shortcutText.implicitWidth + 12
         Text {
+            id: labelText
             anchors.left: parent.left
             anchors.leftMargin: 16
             anchors.verticalCenter: parent.verticalCenter
@@ -27,6 +29,7 @@ MenuItem {
             font.pixelSize: Theme.fontTypeBodySize
         }
         Text {
+            id: shortcutText
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             text: root.action && root.action.shortcut ? String(root.action.shortcut) : ""

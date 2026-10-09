@@ -10,6 +10,7 @@ Rectangle {
     property bool filled: false
     property color fillColor: Theme.accentPrimary
     property bool dim: false
+    property color textColor: "transparent"  // when set, replaces the label colour
     property bool removable: false
     property bool missing: false  // a plug-in that is not installed
     property bool movable: false          // an insert: it can be dragged to another place
@@ -61,7 +62,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         text: root.text
         elide: Text.ElideRight
-        color: root.missing ? Theme.stateClip : (root.filled ? Theme.textPrimary : Theme.textSecondary)
+        color: root.missing ? Theme.stateClip : (root.textColor.a > 0 ? root.textColor : (root.filled ? Theme.textPrimary : Theme.textSecondary))
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontTypeLabelSize
         font.weight: Theme.fontTypeLabelWeight

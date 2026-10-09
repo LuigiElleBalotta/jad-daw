@@ -8,7 +8,9 @@ Rectangle {
     property bool expanded: true
     readonly property real headerHeight: 24
     readonly property real filterHeight: 24
-    property real stripHeight: header2.longFaders ? 600 : 460
+    // the strips take what the window can spare (a short window gets compact strips, without the legend)
+    property real stripHeight: Math.min(header2.longFaders ? 640 : 500, Math.max(380, (Window.height - 300) * 0.55))
+    readonly property bool compact: stripHeight - Theme.spacing[3] * 2 < 470
     // the type filter id of a strip: Logic's aux is our bus kind
     function typeOf(info) { return info.master ? "master" : (info.kind === "bus" ? "aux" : info.kind) }
     // does the strip pass the Single | Tracks | All choice and the type filters
@@ -16,7 +18,7 @@ Rectangle {
         if (header2.hiddenTypes[typeOf(info)] === true) return false
         if (header2.scope === "all") return true
         if (header2.scope === "single") return project.selectedTrackIds.indexOf(info.trackId) >= 0
-        return !info.master && info.kind !== "bus"
+        return info.master || info.kind !== "bus"  // Tracks: the track strips and the master
     }
 
     color: Theme.surfaceCanvas
@@ -78,16 +80,17 @@ Rectangle {
         y: root.headerHeight + root.filterHeight
         width: parent.width
         height: root.stripHeight
-        contentWidth: strips.width + Theme.spacing[4] * 2
+        contentWidth: strips.width + legend.width + Theme.spacing[4] * 2
         contentHeight: height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         // a click on the empty mixer takes the focus away from a name being edited, which confirms it
         TapHandler { onPressedChanged: if (pressed) root.forceActiveFocus() }
 
+        MixerLegend { id: legend; y: Theme.spacing[3]; height: parent.height; visible: !header2.legendHidden && !root.compact }
         Row {
             id: strips
-            x: Theme.spacing[4]
+            x: (legend.visible ? legend.width : 0) + Theme.spacing[2]
             y: Theme.spacing[3]
             height: parent.height - Theme.spacing[3] * 2
             spacing: Theme.spacing[2]

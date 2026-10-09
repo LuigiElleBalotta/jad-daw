@@ -15,6 +15,7 @@ Item {
         { id: "bus", label: qsTr("Bus") }, { id: "input", label: qsTr("Input") }, { id: "output", label: qsTr("Output") },
         { id: "master", label: qsTr("Master/VCA") }, { id: "midi", label: qsTr("MIDI") }]
     property bool longFaders: false
+    property bool legendHidden: false
     signal scopeSelected(string scope)
     signal typeToggled(string typeId, bool visible)
     signal onlyTypeRequested(string typeId)               // Option-click: only this type
@@ -82,7 +83,7 @@ Item {
             onClicked: viewMenu.popup(0, height)
             ThemedMenu {
                 id: viewMenu
-                Entry { text: qsTr("Hide Legend") }
+                Entry { text: root.legendHidden ? qsTr("Show Legend") : qsTr("Hide Legend"); onTriggered: root.legendHidden = !root.legendHidden }
                 Entry { text: qsTr("Link Control Surfaces"); checkable: true; checked: true }
                 Entry { text: qsTr("Autoscroll to Selection"); checkable: true; checked: true }
                 MenuSeparator {}

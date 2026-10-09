@@ -87,6 +87,13 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   gain until the pointer leaves the strip). Shift-click on a send or on the Output slot shows that bus in the right strip of the
   Inspector; right-click on a send sets it pre-fader. A click on the instrument slot, or a double click on a track header, opens
   the Library. The Smart Controls pane has a drag handle on its top edge.
+  The Mixer follows Logic's layout: a legend column, rows at fixed heights (Setting, Gain Reduction, EQ, Input, Audio FX, Sends,
+  Output, Group, Automation, icon, Pan, dB), a fader with Logic's taper (+6 dB at the top, 0 dB at 74% of the travel) and a dB scale,
+  a level meter with its scale, R and I, M (blue) and S (yellow), and a name bar in the colour of the strip type. Click the dB field
+  to type a value; Option-click on a fader or a knob resets it, Shift-drag moves the fader finely, Option-click on S solos that
+  strip alone (or clears every solo). A lit solo shows an S indicator in the Tracks toolbar and turns the playhead yellow. The
+  Mixer header has Edit, Options and View menus, Single | Tracks | All and the strip type filters (most menu entries are not
+  implemented yet). In a short window the strips become compact and the legend is hidden.
 
 ![Mixer](docs/images/mixer.png)
 ![Menus](docs/images/menus.png)

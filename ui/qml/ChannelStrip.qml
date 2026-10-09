@@ -130,6 +130,8 @@ Panel {
     implicitWidth: 104
     radius: Theme.radiusRegion
     color: selected ? Theme.surfaceRaised : Theme.surfacePanel  // the selected strip is lighter
+    // a strip that is not tall enough (the Inspector with other panes open) drops the gain reduction and EQ rows and shortens the rest
+    readonly property bool tight: height < 470
     readonly property bool hasInput: !master && kind === "audio"  // R and I are on audio strips
     readonly property color typeColor: master ? "#8e5bd6" : (kind === "instrument" ? Theme.trackGreenSolid : (kind === "audio" ? Theme.trackBlueSolid : Theme.trackPinkSolid))
 
@@ -217,154 +219,236 @@ Panel {
         z: 50
     }
 
+    // the rows have fixed heights (StripMetrics) so that the legend of the Mixer lines up with every strip
+    component FixedRow: Item {
+        property real rowHeight
+        Layout.fillWidth: true
+        Layout.preferredHeight: rowHeight
+    }
+
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Theme.spacing[2]
-        spacing: Theme.spacing[0]
+        anchors.margins: StripMetrics.margin
+        spacing: StripMetrics.spacing
 
-        StripSlot {
-            Layout.fillWidth: true
-            visible: root.slotsVisible
-            text: root.info.patchName && root.info.patchName !== "" ? root.info.patchName : qsTr("Setting")
-            dim: true
-            onClicked: root.stubUsed(qsTr("Setting"))
-        }
-        StripSlot {
-            id: instrumentSlot
-            Layout.fillWidth: true
-            visible: root.slotsVisible && root.kind === "instrument"
-            text: root.info.instrument === "builtin.sine" ? qsTr("Sine") : (root.info.instrument ?? "")
-            filled: true
-            fillColor: Theme.statePlay
-            onClicked: root.libraryRequested()
-        }
-        Repeater {
-            id: insertRepeater
-            model: root.slotsVisible ? root.inserts : []
-            delegate: StripSlot {
-                required property var modelData
-                required property int index
-                Layout.fillWidth: true
-                text: root.insertLabel(modelData)
-                value: modelData.plugin ? "" : (root.dragIndex === index ? root.dragGain : modelData.gainDb).toFixed(1)
-                missing: root.isMissing(modelData)
-                filled: true
-                removable: true
-                movable: true
-                boundsItem: root
-                onDragAborted: root.dragIndex = -1
-                horizontalDrag: !modelData.plugin
-                showBypass: true
-                bypassed: modelData.bypass === true
-                onBypassToggled: (on) => root.insertBypassToggled(root.trackId, index, on)
-                onMoveStarted: InsertDrag.begin(root, index)
-                onMoved: (x, y) => InsertDrag.update(x, y)
-                onMoveCancelled: InsertDrag.cancel()
-                onMoveReleased: (x, y) => {
-                    const place = InsertDrag.end(x, y)  // null: the drag was dropped or ended over no strip
-                    if (!place || (place.trackId === root.trackId && place.to === index)) return
-                    root.insertMoveRequested(root.trackId, index, place.to, place.trackId === root.trackId ? "" : place.trackId)
-                }
-                onRemoveRequested: root.insertRemoveRequested(root.trackId, index)
-                onDoubleClicked: { if (modelData.plugin) root.insertEditorRequested(root.trackId, index) }
-                onDragged: (dx) => {
-                    if (modelData.plugin) return
-                    root.dragIndex = index
-                    root.dragGain = Math.max(-96, Math.min(24, modelData.gainDb + dx * 0.1))
-                }
-                onDragReleased: {
-                    if (root.dragIndex !== index) return
-                    const db = root.dragGain
-                    root.dragIndex = -1
-                    root.insertGainReleased(root.trackId, index, db)
-                }
+        FixedRow {
+            rowHeight: StripMetrics.setting
+            StripSlot {
+                anchors.fill: parent
+                visible: root.slotsVisible
+                text: root.info.patchName && root.info.patchName !== "" ? root.info.patchName : qsTr("Setting")
+                dim: true
+                onClicked: root.stubUsed(qsTr("Setting"))
             }
         }
-        StripSlot {
-            id: addInsertSlot
-            Layout.fillWidth: true
-            visible: root.slotsVisible
-            text: "+"
-            onClicked: insertMenu.popup(addInsertSlot, 0, addInsertSlot.height)
+        FixedRow {  // the gain reduction bar
+            rowHeight: root.tight ? 0 : StripMetrics.gainReduction
+            visible: !root.tight
+            Rectangle { anchors.fill: parent; visible: root.slotsVisible; radius: 1; color: Theme.surfaceCanvas }
         }
-        Repeater {
-            id: sendRepeater
-            model: root.slotsVisible ? root.sends : []
-            delegate: RowLayout {
-                id: sendRow
-                required property var modelData
-                property alias knob: sendKnob
-                property alias slot: sendSlot
-                property alias menu: preMenu
-                Layout.fillWidth: true
-                spacing: Theme.spacing[1]
-                StripSlot {
-                    id: sendSlot
-                    Layout.fillWidth: true
-                    text: sendRow.modelData.targetName
-                    filled: true
-                    fillColor: Theme.accentPrimaryHover
-                    removable: true
-                    value: sendRow.modelData.preFader ? qsTr("pre") : ""
-                    onRemoveRequested: root.sendRemoveRequested(sendRow.modelData.id)
-                    onClicked: (modifiers) => { if (modifiers & Qt.ShiftModifier) root.busViewRequested(sendRow.modelData.targetId) }
-                    onRightClicked: preMenu.popup(sendSlot, 0, sendSlot.height)
-                }
-                ThemedMenu {
-                    id: preMenu
-                    ThemedMenuItem {
-                        text: qsTr("Pre Fader")
-                        checkable: true
-                        checked: sendRow.modelData.preFader
-                        onTriggered: root.sendPreFaderToggled(sendRow.modelData.id, checked)
+        FixedRow {  // the EQ display: a click would insert a Channel EQ
+            rowHeight: root.tight ? 0 : StripMetrics.eq
+            visible: !root.tight
+            Rectangle {
+                id: eqDisplay
+                anchors.fill: parent
+                visible: root.slotsVisible
+                radius: Theme.radiusControl - 2
+                color: Theme.surfaceCanvas
+                border.color: Theme.borderSubtle
+                MouseArea { anchors.fill: parent; onClicked: root.stubUsed(qsTr("EQ")) }
+            }
+        }
+        FixedRow {  // the input of an audio strip, the instrument of an instrument strip
+            rowHeight: StripMetrics.input
+            StripSlot {
+                id: inputSlot
+                anchors.fill: parent
+                visible: root.slotsVisible && root.kind === "audio"
+                text: qsTr("In 1")
+                dim: true
+                onClicked: root.stubUsed(qsTr("Input"))
+            }
+            StripSlot {
+                id: instrumentSlot
+                anchors.fill: parent
+                visible: root.slotsVisible && root.kind === "instrument"
+                text: root.info.instrument === "builtin.sine" ? qsTr("Sine") : (root.info.instrument ?? "")
+                filled: true
+                fillColor: Theme.statePlay
+                onClicked: root.libraryRequested()
+            }
+        }
+        FixedRow {  // the audio effects
+            rowHeight: Math.max(root.tight ? 44 : StripMetrics.fx, fxColumn.implicitHeight)  // grows with its slots
+            ColumnLayout {
+                id: fxColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: StripMetrics.spacing
+                Repeater {
+                    id: insertRepeater
+                    model: root.slotsVisible ? root.inserts : []
+                    delegate: StripSlot {
+                        required property var modelData
+                        required property int index
+                        Layout.fillWidth: true
+                        text: root.insertLabel(modelData)
+                        value: modelData.plugin ? "" : (root.dragIndex === index ? root.dragGain : modelData.gainDb).toFixed(1)
+                        missing: root.isMissing(modelData)
+                        filled: true
+                        removable: true
+                        movable: true
+                        boundsItem: root
+                        onDragAborted: root.dragIndex = -1
+                        horizontalDrag: !modelData.plugin
+                        showBypass: true
+                        bypassed: modelData.bypass === true
+                        onBypassToggled: (on) => root.insertBypassToggled(root.trackId, index, on)
+                        onMoveStarted: InsertDrag.begin(root, index)
+                        onMoved: (x, y) => InsertDrag.update(x, y)
+                        onMoveCancelled: InsertDrag.cancel()
+                        onMoveReleased: (x, y) => {
+                            const place = InsertDrag.end(x, y)  // null: the drag was dropped or ended over no strip
+                            if (!place || (place.trackId === root.trackId && place.to === index)) return
+                            root.insertMoveRequested(root.trackId, index, place.to, place.trackId === root.trackId ? "" : place.trackId)
+                        }
+                        onRemoveRequested: root.insertRemoveRequested(root.trackId, index)
+                        onDoubleClicked: { if (modelData.plugin) root.insertEditorRequested(root.trackId, index) }
+                        onDragged: (dx) => {
+                            if (modelData.plugin) return
+                            root.dragIndex = index
+                            root.dragGain = Math.max(-96, Math.min(24, modelData.gainDb + dx * 0.1))
+                        }
+                        onDragReleased: {
+                            if (root.dragIndex !== index) return
+                            const db = root.dragGain
+                            root.dragIndex = -1
+                            root.insertGainReleased(root.trackId, index, db)
+                        }
                     }
                 }
-                Knob {
-                    id: sendKnob
-                    width: 20
-                    height: 20
-                    from: -96
-                    to: 12
-                    resetValue: 0
-                    value: sendRow.modelData.levelDb
-                    onReleased: (v) => root.sendLevelReleased(sendRow.modelData.id, v)
+                StripSlot {
+                    id: addInsertSlot
+                    Layout.fillWidth: true
+                    visible: root.slotsVisible
+                    text: "+"
+                    onClicked: insertMenu.popup(addInsertSlot, 0, addInsertSlot.height)
                 }
             }
         }
-        StripSlot {
-            id: addSendSlot
-            Layout.fillWidth: true
-            visible: root.slotsVisible
-            text: qsTr("Send +")
-            onClicked: sendMenu.popup(addSendSlot, 0, addSendSlot.height)
-        }
-        Item { Layout.fillHeight: true; Layout.minimumHeight: 0 }
-        StripSlot {
-            id: outputSlot
-            Layout.fillWidth: true
-            visible: root.slotsVisible
-            text: root.info.outputName && root.info.outputName !== "" ? root.info.outputName : qsTr("Stereo Out")
-            onClicked: (modifiers) => {
-                if (modifiers & Qt.ShiftModifier) root.busViewRequested(root.info.outputId ?? "")
-                else outputMenu.popup(outputSlot, 0, outputSlot.height)
+        FixedRow {  // the sends
+            rowHeight: Math.max(StripMetrics.sends, sendsColumn.implicitHeight)
+            ColumnLayout {
+                id: sendsColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: StripMetrics.spacing
+                Repeater {
+                    id: sendRepeater
+                    model: root.slotsVisible ? root.sends : []
+                    delegate: RowLayout {
+                        id: sendRow
+                        required property var modelData
+                        property alias knob: sendKnob
+                        property alias slot: sendSlot
+                        property alias menu: preMenu
+                        Layout.fillWidth: true
+                        spacing: Theme.spacing[1]
+                        StripSlot {
+                            id: sendSlot
+                            Layout.fillWidth: true
+                            text: sendRow.modelData.targetName
+                            filled: true
+                            fillColor: Theme.accentPrimaryHover
+                            removable: true
+                            value: sendRow.modelData.preFader ? qsTr("pre") : ""
+                            onRemoveRequested: root.sendRemoveRequested(sendRow.modelData.id)
+                            onClicked: (modifiers) => { if (modifiers & Qt.ShiftModifier) root.busViewRequested(sendRow.modelData.targetId) }
+                            onRightClicked: preMenu.popup(sendSlot, 0, sendSlot.height)
+                        }
+                        ThemedMenu {
+                            id: preMenu
+                            ThemedMenuItem {
+                                text: qsTr("Pre Fader")
+                                checkable: true
+                                checked: sendRow.modelData.preFader
+                                onTriggered: root.sendPreFaderToggled(sendRow.modelData.id, checked)
+                            }
+                        }
+                        Knob {
+                            id: sendKnob
+                            width: 20
+                            height: 20
+                            from: -96
+                            to: 12
+                            resetValue: 0
+                            value: sendRow.modelData.levelDb
+                            onReleased: (v) => root.sendLevelReleased(sendRow.modelData.id, v)
+                        }
+                    }
+                }
+                StripSlot {
+                    id: addSendSlot
+                    Layout.fillWidth: true
+                    visible: root.slotsVisible
+                    text: qsTr("Send +")
+                    onClicked: sendMenu.popup(addSendSlot, 0, addSendSlot.height)
+                }
             }
         }
-        RowLayout {
-            Layout.fillWidth: true
-            visible: root.slotsVisible
-            spacing: Theme.spacing[1]
-            StripSlot { id: groupSlot; Layout.fillWidth: true; text: qsTr("Group"); dim: true; onClicked: root.stubUsed("Group") }
-            StripSlot { id: automationSlot; Layout.fillWidth: true; text: qsTr("Read"); dim: true; onClicked: root.stubUsed("Automation") }
+        FixedRow {
+            rowHeight: StripMetrics.output
+            StripSlot {
+                id: outputSlot
+                anchors.fill: parent
+                visible: root.slotsVisible
+                text: root.info.outputName && root.info.outputName !== "" && root.info.outputName !== "Master" ? root.info.outputName : qsTr("St Out")
+                onClicked: (modifiers) => {
+                    if (modifiers & Qt.ShiftModifier) root.busViewRequested(root.info.outputId ?? "")
+                    else outputMenu.popup(outputSlot, 0, outputSlot.height)
+                }
+            }
         }
-        Knob {
-            id: panKnob
-            visible: !root.master
-            Layout.alignment: Qt.AlignHCenter
-            value: root.pan
-            onReleased: (v) => root.panReleased(root.trackId, v)
+        FixedRow {
+            rowHeight: StripMetrics.group
+            StripSlot { id: groupSlot; anchors.fill: parent; text: root.master ? "" : qsTr("Group"); dim: true; onClicked: root.stubUsed("Group") }
         }
-        RowLayout {  // field and peak
+        FixedRow {
+            rowHeight: StripMetrics.automation
+            StripSlot {
+                id: automationSlot
+                anchors.fill: parent
+                text: qsTr("Read")
+                dim: true
+                textColor: root.master ? Theme.textPrimary : Theme.statePlay  // Logic: green on tracks, white on the master
+                onClicked: root.stubUsed("Automation")
+            }
+        }
+        FixedRow {  // the track icon tile, in the colour of the strip type
+            rowHeight: StripMetrics.icon
+            Rectangle {
+                anchors.centerIn: parent
+                width: 28
+                height: StripMetrics.icon
+                radius: Theme.radiusControl - 2
+                color: root.typeColor
+                TrackIcon { anchors.centerIn: parent; size: 16; kind: root.master ? "master" : root.kind; tint: Theme.textPrimary }
+            }
+        }
+        FixedRow {
+            rowHeight: StripMetrics.pan
+            Knob {
+                id: panKnob
+                visible: !root.master
+                anchors.centerIn: parent
+                value: root.pan
+                onReleased: (v) => root.panReleased(root.trackId, v)
+            }
+        }
+        RowLayout {  // the dB field and the peak field
             Layout.fillWidth: true
+            Layout.preferredHeight: StripMetrics.db
             spacing: Theme.spacing[0]
             DbField {
                 id: dbField
@@ -376,7 +460,7 @@ Panel {
                 id: peakField
                 visible: !root.master
                 Layout.preferredWidth: 34
-                implicitHeight: 18
+                implicitHeight: StripMetrics.db
                 radius: Theme.radiusControl - 2
                 color: Theme.surfaceCanvas
                 border.color: Theme.borderSubtle
@@ -390,11 +474,10 @@ Panel {
                 MouseArea { anchors.fill: parent; onClicked: root.peakReset() }
             }
         }
-        RowLayout {  // fader with its scale, and the level meter
+        RowLayout {  // fader with its scale, and the level meter with its own scale: takes the height that is left
             Layout.fillWidth: true
-            Layout.preferredHeight: root.longFader ? 290 : 150
-            Layout.minimumHeight: 56
-            Layout.fillHeight: false  // the spacer above absorbs the extra height: every strip lines up at the bottom
+            Layout.fillHeight: true
+            Layout.minimumHeight: root.tight ? 28 : StripMetrics.faderMin
             spacing: Theme.spacing[1]
             FaderScale { fader: fader; Layout.fillHeight: true }
             Fader {
@@ -404,21 +487,26 @@ Panel {
                 value: root.gainDb
                 onReleased: (v) => root.gainReleased(root.trackId, v)
             }
+            MeterScale { Layout.fillHeight: true; visible: !root.master }
             Meter {
                 Layout.preferredWidth: 10
                 Layout.fillHeight: true
-                peak: root.master ? root.peak : 0
+                visible: !root.master
+                peak: 0
             }
             Item { Layout.fillWidth: true }
         }
-        RowLayout {  // R and I (audio), M and S, D (master)
+        RowLayout {  // R and I: flat while off, red and orange when on
             Layout.alignment: Qt.AlignHCenter
+            Layout.preferredHeight: 18
             spacing: Theme.spacing[1]
+            opacity: root.master ? 0 : 1  // the master keeps the row, so that M and the name line up with the other strips
             IconButton {
                 id: armButton
-                visible: root.hasInput
-                implicitWidth: Theme.sizeControlCompact
-                implicitHeight: Theme.sizeControlCompact
+                opacity: root.hasInput ? 1 : 0
+                enabled: root.hasInput
+                implicitWidth: 22
+                implicitHeight: 16
                 label: "R"
                 active: root.info.recordArm === true
                 activeColor: Theme.stateRecord
@@ -428,18 +516,23 @@ Panel {
             }
             IconButton {
                 id: monitorButton
-                visible: root.hasInput
-                implicitWidth: Theme.sizeControlCompact
-                implicitHeight: Theme.sizeControlCompact
+                opacity: root.hasInput ? 1 : 0
+                enabled: root.hasInput
+                implicitWidth: 22
+                implicitHeight: 16
                 label: "I"
                 active: root.info.inputMonitor === true
                 activeColor: Theme.trackOrangeSolid
                 fillActive: true
                 onClicked: root.trackToggled(root.trackId, "track.inputMonitor", !active)
             }
+        }
+        RowLayout {  // M and S (D on the master)
+            Layout.alignment: Qt.AlignHCenter
+            spacing: Theme.spacing[1]
             IconButton {
                 id: muteButton
-                implicitWidth: Theme.sizeControlCompact
+                implicitWidth: 28
                 implicitHeight: Theme.sizeControlCompact
                 label: "M"
                 active: root.mute
@@ -451,7 +544,7 @@ Panel {
             IconButton {
                 id: soloButton
                 visible: !root.master
-                implicitWidth: Theme.sizeControlCompact
+                implicitWidth: 28
                 implicitHeight: Theme.sizeControlCompact
                 label: "S"
                 active: root.solo
@@ -470,7 +563,7 @@ Panel {
             IconButton {  // dim, on the master strip
                 id: dimButton
                 visible: root.master
-                implicitWidth: Theme.sizeControlCompact
+                implicitWidth: 28
                 implicitHeight: Theme.sizeControlCompact
                 label: "D"
                 toggle: true

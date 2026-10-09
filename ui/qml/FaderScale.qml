@@ -7,8 +7,18 @@ Item {
     required property Fader fader
     implicitWidth: 18
     readonly property var marks: [6, 3, 0, -3, -6, -10, -15, -20, -30, -40]
+    // the marks that fit: a label is left out when it would touch the one above
+    readonly property var shown: {
+        const out = []
+        let last = -100
+        for (const m of marks) {
+            const y = fader.valueToPos(m)
+            if (m === 0 || y - last >= 10) { out.push(m); last = y }
+        }
+        return out
+    }
     Repeater {
-        model: root.marks
+        model: root.shown
         delegate: Text {
             required property int modelData
             anchors.right: parent.right

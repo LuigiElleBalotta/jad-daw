@@ -6,7 +6,7 @@ Rectangle {
     id: root
     property real peak: 0
     readonly property real db: peak > 0 ? 20 * Math.log(peak) / Math.LN10 : -120
-    readonly property real fraction: Math.max(0, Math.min(1, (db + 60) / 66))  // -60 .. +6 dB
+    readonly property real fraction: Math.max(0, Math.min(1, (db + 60) / 60))  // -60 .. 0 dB, the scale of MeterScale
 
     implicitWidth: 8
     color: Theme.surfaceLcd

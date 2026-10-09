@@ -1,7 +1,7 @@
 find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickControls2 QuickTest Test Concurrent)
 qt_standard_project_setup(REQUIRES 6.8)
 
-set_source_files_properties(qml/Theme.qml qml/ActionHub.qml qml/InsertDrag.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/ActionHub.qml qml/InsertDrag.qml qml/StripMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf PROPERTIES QT_RESOURCE_ALIAS fonts/InterVariable.ttf)
 set_source_files_properties(actions/actions.json PROPERTIES QT_RESOURCE_ALIAS actions/actions.json)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/core/data/patches.json PROPERTIES QT_RESOURCE_ALIAS patches/patches.json)
@@ -30,6 +30,9 @@ qt_add_qml_module(jad_ui_lib
         qml/Panel.qml
         qml/Fader.qml
         qml/FaderScale.qml
+        qml/StripMetrics.qml
+        qml/MeterScale.qml
+        qml/MixerLegend.qml
         qml/DbField.qml
         qml/MixerHeader.qml
         qml/Knob.qml

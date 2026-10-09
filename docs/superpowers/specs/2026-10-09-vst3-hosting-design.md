@@ -49,30 +49,39 @@ Adds two non-real-time virtuals with defaults, so `GainProcessor` and test proce
 ### 3.2 `IPluginHost`
 
 ```cpp
-struct PluginDescriptor { std::string id; std::string name, vendor, version, path; };   // id = "vst3:<hex class id>"
+struct PluginDescriptor { std::string id, name, vendor, version, path, native; };  // id = "vst3:<32 hex>", native = opaque host data
+struct InsertSlot { Uuid track; int index = 0; };                                   // which insert of which track
 class IPluginHost {
 public:
     virtual ~IPluginHost() = default;
     virtual std::vector<PluginDescriptor> catalogue() const = 0;
-    // Project thread. Returns nullptr when the plug-in is not in the catalogue or fails to load.
-    virtual std::unique_ptr<audio::IProcessor> instantiate(const ProcessorRef& ref, double sampleRate, int maxBlock) = 0;
-    // Project thread. Serialises the live state of the instance behind `ref` (base64); empty string if there is none.
-    virtual std::string captureState(const ProcessorRef& ref) = 0;
+    // Project thread. Never blocks. The live, prepared processor behind `slot`, reused while the insert's id and state are
+    // unchanged; nullptr while it is not available (loading, missing, failed). A first call starts loading in the background
+    // and `readyListener` fires when the instance exists.
+    virtual std::shared_ptr<audio::IProcessor> acquire(const InsertSlot&, const ProcessorRef&, double sampleRate, int maxBlock) = 0;
+    // Project thread. Drops every instance not listed (slot and the ref it must match).
+    virtual void prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) = 0;
+    // UI thread. Serialises the live state (base64) and remembers it as "already in the model", so the command that stores it
+    // does not make the next acquire reload the instance. Empty string when there is no live instance.
+    virtual std::string captureState(const InsertSlot&) = 0;
+    virtual void setReadyListener(std::function<void(const InsertSlot&)>) = 0;  // may be called from any thread
 };
 ```
 
-`makeEffect(ref)` becomes `makeEffect(ref, IPluginHost*)`. For an id starting `vst3:` it asks the host; if that returns `nullptr`
-(plug-in missing, load failure, no host in the CLI build without JUCE) it returns a `MissingPluginProcessor`: pure pass-through,
-latency 0, `describe()` reports `{"missing": true}`. The audible result is the dry signal, the model keeps the reference and its
-state untouched, and saving never destroys data.
+`makeInsert(ref, host, slot, sampleRate, maxBlock)` (new, `plugin_host.h`) builds an insert: built-ins as before; for ids starting
+`vst3:` it asks the host and wraps the result in a `SharedProcessor`. When the host returns `nullptr` (not loaded yet, plug-in
+missing, load failure, no host in the build) it returns a `MissingPluginProcessor`: pure pass-through, latency 0, `describe()`
+reports `{"missing": true}`. The audible result is the dry signal, the model keeps the reference and its state untouched, and
+saving never destroys data. When a background load finishes, `ProjectHost` rebuilds every track config so the real processor
+replaces the pass-through.
 
 ### 3.3 Model and validation
 
-- `ProcessorRef.processorId` for plug-ins is `vst3:<32 hex digits>` (the VST3 class ID). `state` holds the base64 of the plug-in's
-  saved state, `params` stays empty.
+- `ProcessorRef.processorId` for plug-ins is `vst3:<32 lowercase hex digits>`: the MD5 of name, vendor and JUCE's unique ids, so it
+  does not change when the file moves. `state` holds the base64 of the plug-in's saved state, `params` stays empty.
 - `ProcessorRef` gains `label` (display name, informational, default empty) so a missing plug-in can still be named in the UI.
   JSON uses the `_WITH_DEFAULT` macro, so existing `.lpc` files load unchanged.
-- `checkInsert`: ids starting `vst3:` are valid when the rest is 32 hex digits, `params` is empty and `state` is valid base64 of at
+- `checkInsert`: ids starting `vst3:` are valid when the rest is 32 lowercase hex digits, `params` is empty and `state` is valid base64 of at
   most 16 MiB. It does **not** check the catalogue: a project must load on a machine without the plug-in.
 - New command `set_insert_state {trackId, index, state}`: undoable, replaces the state of one insert. It is the only way plug-in
   state enters the model (section 5.3).
@@ -82,14 +91,16 @@ state untouched, and saving never destroys data.
 Without PDC a plug-in with look-ahead puts its track out of time. PDC is part of this spec because hosting is the first real source
 of latency.
 
-- Latency of a node = sum of its inserts' `latencySamples()`.
-- For every path to the master, the total latency is the sum along the chain track → (sends/outputs) → bus → master. The graph
-  builder computes the maximum over all tracks and gives each track input a compensation delay of `max - its own path latency`.
-  Sends feeding a bus count as part of the source track's path; a bus's own latency is added after the merge.
-- Compensation is a fixed delay line (preallocated in `TrackConfig`, sample-accurate, zero when a path is already the longest).
-- Latency is delivered to the audio thread as plain numbers in the existing config swap. No allocation on the audio thread.
-- Transport position and the playhead are not shifted; audible output is simply `max` samples behind, as in any DAW. The offline
-  render drops the leading `max` samples so the file is aligned with the timeline.
+- Latency of a track = sum of its inserts' `latencySamples()` (pass-through while a plug-in is not loaded: 0).
+- Compensation is **per edge** (the track's output and each send), because a bus receives signals from several sources. In
+  processing order, `in[node]` = the largest `in[source] + latency[source]` over the edges that feed it (0 for a node nothing
+  feeds). The delay of an edge is `in[target] - (in[source] + latency[source])`, so every signal reaches each bus, and the master,
+  aligned. `PdcPlan::totalLatency` = `in[master] + latency[master]`.
+- A delay is a fixed `DelayLine` owned by the track config (preallocated on the project thread, zero frames when the edge is
+  already the longest). A delay or latency change rebuilds the configs involved; the in-flight audio of the delay lines is lost
+  once, on a graph change.
+- Transport position and the playhead are not shifted; audible output is `totalLatency` samples behind, as in any DAW. The offline
+  render renders `totalLatency` extra frames and drops the first `totalLatency`, so the file is aligned with the timeline.
 
 ## 4. Platform: `platform/juce`
 
@@ -115,11 +126,15 @@ Adapter from `juce::AudioPluginInstance` to `IProcessor`.
 
 - Holds the catalogue (from the scan cache) and one `AudioPluginFormatManager` with the VST3 format.
 - `instantiate` loads by id, calls `setStateInformation` from `ref.state` if not empty, then `prepare`.
-- **Threading.** VST3 creation and editors must happen on the JUCE message thread. `instantiate` is callable from the project
-  thread: if it is not on the message thread it posts the work with `MessageManager::callAsync` and waits on a future. The rule
-  that makes this safe is that **the message thread never blocks on the project thread**. Qt's Windows event loop and the JUCE
-  message window share the thread's Win32 message queue; JUCE is initialised with `ScopedJuceInitialiser_GUI` on the Qt main
-  thread. Verified early in the plan (task 1), because it is the main technical risk.
+- **Threading.** VST3 creation and editors must happen on the JUCE message thread, and the project thread must never wait for
+  it (the UI thread, which is the message thread, already blocks on the project thread in places such as `openProject`).
+  `acquire` therefore never blocks: on a miss it posts the creation to the message thread with `MessageManager::callAsync` and
+  returns `nullptr`; when the instance is ready it calls the ready listener, and `ProjectHost` rebuilds the configs. A plug-in
+  is pass-through for a moment after a project opens. Where the caller already is the message thread (`lpc-cli render`), creation
+  is synchronous, so offline renders have every plug-in loaded. Instances are destroyed on the message thread (the shared
+  pointer's deleter hops there). Qt's Windows event loop and the JUCE message window share the thread's Win32 message queue;
+  JUCE is initialised with `ScopedJuceInitialiser_GUI` on the Qt main thread. Verified early in the plan (task 2), because it is
+  the main technical risk.
 - A live-instance registry maps (track id, insert index) to the instance so the editor window and `captureState` act on the
   instance that is actually playing, not on a copy.
 
@@ -163,9 +178,10 @@ Plug-in state changes happen inside the plug-in's editor, outside the command sy
   (one editing session is one undo step);
 - **before saving** the project, any open instance whose state differs is committed the same way, so Save always writes what is
   playing;
-- undo and redo of that command replace the instance's state. The new instance may be rebuilt by the normal strip diff; the command
-  issued from the editor itself must not reload the live instance (its state is already current). The plan resolves this with a
-  "state already applied" flag on the command message, not by comparing blobs on the audio thread.
+- undo and redo of that command change the model's state; `acquire` sees that the ref's state differs from the state the live
+  instance was loaded with or last captured, and loads a new instance with the model's state (pass-through until it is ready).
+  `captureState` records the captured string as the instance's current state before the command is issued, so the command issued
+  from the editor itself does not reload the live instance.
 
 Changes made inside an editor while it stays open are not undoable until it closes. This is stated in the README limits.
 

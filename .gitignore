@@ -9,3 +9,4 @@ CMakeUserPresets.json
 .qt-venv/
 build-ui/
 build-core/
+build-plugin/

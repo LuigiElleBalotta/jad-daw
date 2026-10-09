@@ -7,6 +7,18 @@
 
 namespace lpc {
 
+void to_json(nlohmann::json& j, const ProcessorRef& r) {
+    j = {{"processorId", r.processorId}, {"params", r.params}, {"state", r.state}};
+    if (!r.label.empty()) j["label"] = r.label;
+}
+
+void from_json(const nlohmann::json& j, ProcessorRef& r) {
+    j.at("processorId").get_to(r.processorId);
+    j.at("params").get_to(r.params);
+    j.at("state").get_to(r.state);
+    r.label = j.value("label", std::string());
+}
+
 namespace {
 
 template <typename E>

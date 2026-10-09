@@ -58,7 +58,32 @@ MaybeError checkSendFields(const Project& p, const Uuid& owner, const Send& s) {
     return std::nullopt;
 }
 
+bool validBase64(const std::string& s) {
+    if (s.size() % 4 != 0) return false;
+    std::size_t padding = 0;
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        const char c = s[i];
+        if (c == '=') {
+            ++padding;
+            if (i < s.size() - 2) return false;  // padding only in the last two places
+            continue;
+        }
+        if (padding > 0) return false;
+        const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/';
+        if (!ok) return false;
+    }
+    return padding <= 2;
+}
+
 MaybeError checkInsert(const ProcessorRef& insert) {
+    if (insert.label.size() > kMaxInsertLabelBytes) return CommandError{"bad_value", "insert label is too long"};
+    if (isVst3Id(insert.processorId)) {
+        if (!insert.params.empty()) return CommandError{"bad_value", "plug-in inserts take no parameters"};
+        if (insert.state.size() > kMaxPluginStateChars || !validBase64(insert.state))
+            return CommandError{"bad_value", "plug-in state must be base64 of at most 16 MiB"};
+        return std::nullopt;
+    }
+    if (insert.processorId.rfind("vst3:", 0) == 0) return CommandError{"bad_value", "malformed plug-in id: " + insert.processorId};
     if (!isKnownEffect(insert.processorId)) return CommandError{"bad_value", "unknown insert processor: " + insert.processorId};
     // builtin.gain is the only effect for now: one parameter, gainDb
     for (const auto& [name, value] : insert.params) {

@@ -18,6 +18,10 @@ inline constexpr std::size_t kMaxProjectTracks = 1024;               // equals t
 
 using MaybeError = std::optional<CommandError>;
 
+inline constexpr std::size_t kMaxPluginStateChars = 22369624;  // base64 of 16 MiB
+inline constexpr std::size_t kMaxInsertLabelBytes = 128;
+bool validBase64(const std::string& s);  // "" or standard base64 with padding
+
 inline bool isBusLike(TrackKind k) { return k == TrackKind::Bus || k == TrackKind::Aux; }
 
 MaybeError checkStripValues(float gainDb, float pan);

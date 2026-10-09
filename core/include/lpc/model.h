@@ -38,6 +38,7 @@ struct ProcessorRef {
     std::string processorId;  // e.g. "builtin.gain"
     std::map<std::string, double> params;
     std::string state;  // opaque, base64 for real plugins
+    std::string label;  // display name of a plug-in (informational; empty for built-ins)
     bool operator==(const ProcessorRef&) const = default;
 };
 

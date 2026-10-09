@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     QCommandLineOption toolOption("tool", "Active tool for --screenshot.", "name");
     QCommandLineOption selectTrackOption("select-track", "Select track number <n> (1-based) for --screenshot.", "n");
     QCommandLineOption menuOption("open-menu", "Open the menu at <index> of the menu bar for --screenshot.", "index");
-    QCommandLineOption panelsOption("panels", "Panels shown for --screenshot, comma separated: library, inspector, smart, mixer.", "list");
+    QCommandLineOption panelsOption("panels", "Panels shown for --screenshot, comma separated: library, inspector, smart, mixer, editors.", "list");
     QCommandLineOption selectRegionOption("select-region", "Select region number <n> (1-based) for --screenshot.", "n");
     QCommandLineOption applyPatchOption("apply-patch", "Apply the patch <id> to the selected track for --screenshot.", "id");
     QCommandLineOption softwareOption("software", "Render without a GPU (icons are missing).");
@@ -95,6 +95,7 @@ int main(int argc, char** argv) {
                 controller->setInspectorVisible(shown.contains("inspector"));
                 controller->setSmartControlsVisible(shown.contains("smart"));
                 controller->setMixerVisible(shown.contains("mixer"));
+                window->setProperty("editorsVisible", shown.contains("editors"));
             }
             if (controller && parser.isSet(applyPatchOption)) controller->applyPatch(parser.value(applyPatchOption));
             if (controller && parser.isSet(selectRegionOption))

@@ -35,6 +35,7 @@ Item {
     signal splitRequested(string id, real atBeats)
     signal glueRequested(string id)
     signal muteRequested(string id)
+    signal editRequested(string id)  // a double click opens the region in the editor (Piano Roll)
 
     // "bar beat" of a position in beats, or the length as "bars beats"
     function barBeat(b, length) {
@@ -196,6 +197,7 @@ Track: %3")
             if (wasMoving) root.moved(root.regionId, Math.max(0, root.snap(root.startBeats + d / root.pixelsPerBeat)))
         }
         onCanceled: { moving = false; root.dragDeltaPx = 0 }
+        onDoubleClicked: { if (root.tool === "pointer" || root.tool === "pencil") root.editRequested(root.regionId) }
     }
 
     // the edges resize the region (pointer tool only); they sit on top of the body

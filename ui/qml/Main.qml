@@ -2,18 +2,23 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQuick.Window
 import QtQml.Models
 import Jad
 
 ApplicationWindow {
     id: root
     width: 1280
-    height: 800
+    height: 860
+    minimumWidth: 900
+    // the docked Mixer is never shorter than its strips with their legend: the window leaves room for it and for the rest
+    minimumHeight: 200 + (controller.mixerVisible && !controller.mixerDetached ? 530 : 0)
     visible: true
     title: "JAD Daw"
     color: Theme.surfaceApp
 
     property alias project: controller
+    property bool editorsVisible: false
     ProjectController { id: controller }
     ActionRegistry { id: actionRegistry; objectName: "registry" }
     Component.onCompleted: ActionHub.registry = actionRegistry
@@ -37,6 +42,25 @@ ApplicationWindow {
     }
 
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
+    // the Mixer in a window of its own (View > Mixer when it is detached, Window > Open Mixer)
+    Window {
+        id: mixerWindow
+        objectName: "mixerWindow"
+        title: qsTr("JAD Daw - Mixer")
+        width: 960
+        height: 620
+        minimumWidth: 360
+        minimumHeight: 24 + 482  // the bar and the shortest strip with its legend
+        color: Theme.surfaceCanvas
+        visible: controller.mixerVisible && controller.mixerDetached
+        onClosing: controller.mixerVisible = false
+        MixerView {
+            anchors.fill: parent
+            project: controller
+            detached: true
+            onDetachToggled: controller.mixerDetached = false
+        }
+    }
     PluginManager {
         id: pluginManager
         objectName: "pluginManager"
@@ -125,6 +149,8 @@ ApplicationWindow {
         "transport.barForward": () => controller.barForward(),
         "transport.goToPosition": () => controlBar.lcd.editPosition(),
         "view.mixer": () => { controller.mixerVisible = !controller.mixerVisible },
+        "window.openMixer": () => { controller.mixerDetached = true },
+        "view.editors": () => { root.editorsVisible = !root.editorsVisible },
         "window.pluginManager": () => { controller.pluginManagerOpen = !controller.pluginManagerOpen },
         "view.library": () => { controller.libraryVisible = !controller.libraryVisible },
         "view.inspector": () => { controller.inspectorVisible = !controller.inspectorVisible },
@@ -151,6 +177,7 @@ ApplicationWindow {
     readonly property var states: ({
         "transport.loop": controller.loopEnabled,
         "view.mixer": controller.mixerVisible,
+        "view.editors": root.editorsVisible,
         "view.library": controller.libraryVisible,
         "view.inspector": controller.inspectorVisible,
         "view.smartControls": controller.smartControlsVisible,
@@ -261,6 +288,7 @@ ApplicationWindow {
             }
             Timeline {
                 id: timeline
+                onEditRequested: root.editorsVisible = true
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 project: controller
@@ -279,9 +307,17 @@ ApplicationWindow {
                 onDragged: (dy) => controller.smartControlsHeight = controller.smartControlsHeight - dy
             }
         }
+        EditorArea {
+            Layout.fillWidth: true
+            Layout.preferredHeight: implicitHeight
+            visible: root.editorsVisible
+            project: controller
+        }
         Mixer {
             Layout.fillWidth: true
-            visible: controller.mixerVisible
+            Layout.preferredHeight: implicitHeight
+            maxHeight: root.height - 200 - (root.editorsVisible ? 160 : 0)
+            visible: controller.mixerVisible && !controller.mixerDetached
             project: controller
         }
         ErrorBar {

@@ -1111,6 +1111,8 @@ void ProjectController::loadPanelState(QSettings& s) {
     setSmartControlsVisible(s.value("panels/smartControls", smartControlsVisible_).toBool());
     setLeftColumnWidth(s.value("panels/leftColumnWidth", leftColumnWidth_).toDouble());
     setSmartControlsHeight(s.value("panels/smartControlsHeight", smartControlsHeight_).toDouble());
+    setMixerHeight(s.value("panels/mixerHeight", mixerHeight_).toDouble());
+    mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
 }
 
 void ProjectController::savePanelState(QSettings& s) const {
@@ -1119,6 +1121,8 @@ void ProjectController::savePanelState(QSettings& s) const {
     s.setValue("panels/smartControls", smartControlsVisible_);
     s.setValue("panels/leftColumnWidth", leftColumnWidth_);
     s.setValue("panels/smartControlsHeight", smartControlsHeight_);
+    s.setValue("panels/mixerHeight", mixerHeight_);
+    s.setValue("panels/mixerDetached", mixerDetached_);
 }
 
 void ProjectController::setLeftColumnWidth(double width) {
@@ -1134,6 +1138,21 @@ void ProjectController::setSmartControlsHeight(double height) {
     const double clamped = std::clamp(height, 120.0, 320.0);
     if (clamped == smartControlsHeight_) return;
     smartControlsHeight_ = clamped;
+    emit panelsChanged();
+}
+
+void ProjectController::setMixerHeight(double height) {
+    if (!std::isfinite(height)) return;
+    const double clamped = std::clamp(height, 530.0, 1400.0);  // never shorter than the strips with their legend
+    if (clamped == mixerHeight_) return;
+    mixerHeight_ = clamped;
+    emit panelsChanged();
+}
+
+void ProjectController::setMixerDetached(bool detached) {
+    if (detached) setMixerVisible(true);
+    if (detached == mixerDetached_) return;
+    mixerDetached_ = detached;
     emit panelsChanged();
 }
 

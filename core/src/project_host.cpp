@@ -157,6 +157,20 @@ std::future<std::optional<CommandError>> ProjectHost::submit(CommandPtr command)
     });
 }
 
+std::future<void> ProjectHost::beginGesture() {
+    return call([this] {
+        gestureOpen_ = true;
+        gestureMark_ = undo_.size();
+    });
+}
+
+std::future<void> ProjectHost::endGesture() {
+    return call([this] {
+        if (gestureOpen_) undo_.coalesceFrom(gestureMark_);
+        gestureOpen_ = false;
+    });
+}
+
 std::future<std::optional<CommandError>> ProjectHost::undo() {
     return call([this]() -> std::optional<CommandError> {
         const Project before = project_;

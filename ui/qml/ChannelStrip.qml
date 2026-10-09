@@ -79,6 +79,9 @@ Panel {
     signal soloClearRequested()                                 // Option-click on a lit S: every solo off
     signal muteAllRequested(bool on)                            // Command-click on M
     signal soloAllRequested(bool on)                            // Command-click on S
+    signal gestureStarted()                                     // a fader or knob drag begins: the moves below follow
+    signal gainMoved(string id, real db)
+    signal panMoved(string id, real pan)
     signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
@@ -448,7 +451,12 @@ Panel {
                 entryScale: 64
                 centerMark: true
                 value: root.pan
-                onReleased: (v) => root.panReleased(root.trackId, v)
+                property bool started: false
+                onMoved: (v) => {
+                    if (!started) { started = true; root.gestureStarted() }
+                    root.panMoved(root.trackId, v)
+                }
+                onReleased: (v) => { started = false; root.panReleased(root.trackId, v) }
             }
         }
         RowLayout {  // the dB field and the peak field
@@ -458,7 +466,7 @@ Panel {
             DbField {
                 id: dbField
                 Layout.fillWidth: true
-                value: root.gainDb
+                value: fader.dragging ? fader.dragValue : root.gainDb  // the field follows the fader while it is dragged
                 onCommitted: (db) => root.gainReleased(root.trackId, db)
             }
             Rectangle {  // the peak field: a darker box, a click resets every peak
@@ -482,7 +490,7 @@ Panel {
         RowLayout {  // fader with its scale, and the level meter with its own scale: takes the height that is left
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.minimumHeight: root.tight ? 28 : StripMetrics.faderMin
+            Layout.minimumHeight: root.tight ? 28 : (root.longFader ? 260 : StripMetrics.faderMin)
             spacing: Theme.spacing[1]
             FaderScale { fader: fader; Layout.fillHeight: true }
             Fader {
@@ -490,7 +498,12 @@ Panel {
                 Layout.preferredWidth: 28
                 Layout.fillHeight: true
                 value: root.gainDb
-                onReleased: (v) => root.gainReleased(root.trackId, v)
+                property bool started: false
+                onMoved: (v) => {
+                    if (!started) { started = true; root.gestureStarted() }
+                    root.gainMoved(root.trackId, v)
+                }
+                onReleased: (v) => { started = false; root.gainReleased(root.trackId, v) }
             }
             MeterScale { Layout.fillHeight: true; visible: !root.master }
             Meter {

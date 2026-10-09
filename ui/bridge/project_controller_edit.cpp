@@ -1,5 +1,6 @@
 // The Edit menu of the Tracks area on regions: copy, cut, paste, duplicate, mute, the Select, Trim, Length and Move commands.
 // Each change is one command (or one transaction) and so one undo step, like the Core's own commands.
+#include <QTimer>
 #include <QUuid>
 
 #include <algorithm>
@@ -249,6 +250,100 @@ void ProjectController::nudgeSelectedRegions(int direction) {
     const double delta = direction * nudgeBeats_;
     for (const RegionRow* r : selectedRegionRows()) commands.push_back(moveCommand(*r, std::max(0.0, r->startBeats + delta)));
     if (!commands.empty()) sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+QVariantList ProjectController::regionNotes(const QString& regionId) const {
+    QVariantList out;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row || row->audio) return out;
+    const nlohmann::json j = nlohmann::json::parse(row->json, nullptr, false);
+    if (j.is_discarded() || !j.contains("notes") || !j["notes"].is_array()) return out;
+    for (const auto& n : j["notes"]) {
+        out.append(QVariantMap{{"start", n.value("start", 0) / static_cast<double>(lpc::kPPQ)},
+                               {"length", n.value("length", 0) / static_cast<double>(lpc::kPPQ)},
+                               {"note", n.value("note", 60)},
+                               {"velocity", n.value("velocity", 100)}});
+    }
+    return out;
+}
+
+void ProjectController::setRegionNotes(const QString& regionId, const QVariantList& notes) {
+    if (!host_) return;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row || row->audio) return;
+    nlohmann::json region = nlohmann::json::parse(row->json, nullptr, false);
+    if (region.is_discarded()) return;
+    nlohmann::json list = nlohmann::json::array();
+    for (const QVariant& v : notes) {
+        const QVariantMap m = v.toMap();
+        const double start = m.value("start").toDouble(), length = m.value("length").toDouble();
+        if (!std::isfinite(start) || !std::isfinite(length)) continue;
+        list.push_back({{"start", static_cast<std::int64_t>(std::llround(std::clamp(start, 0.0, kMaxBeatsEdit) * lpc::kPPQ))},
+                        {"length", std::max<std::int64_t>(1, static_cast<std::int64_t>(std::llround(std::clamp(length, 0.0, kMaxBeatsEdit) * lpc::kPPQ)))},
+                        {"note", std::clamp(m.value("note").toInt(), 0, 127)},
+                        {"velocity", std::clamp(m.value("velocity", 100).toInt(), 1, 127)}});
+    }
+    region["notes"] = list;
+    sendCommand({{"type", "replace_region"}, {"region", region}});
+}
+
+QVariantMap ProjectController::regionInfo(const QString& regionId) const {
+    const RegionRow* row = regions_.find(regionId);
+    if (!row) return {{"found", false}};
+    QString trackName;
+    for (const TrackRow& t : allRows_)
+        if (t.id == row->trackId) trackName = t.name;
+    return {{"found", true}, {"trackId", row->trackId}, {"trackName", trackName}, {"startBeats", row->startBeats},
+            {"lengthBeats", row->lengthBeats}, {"audio", row->audio}, {"color", row->color}};
+}
+
+void ProjectController::beginGesture() {
+    if (!host_) return;
+    if (!liveWired_) {
+        liveWired_ = true;
+        liveTimer_.setInterval(33);
+        connect(&liveTimer_, &QTimer::timeout, this, [this] {
+            if (liveGain_.isEmpty() && livePan_.isEmpty()) liveTimer_.stop();
+            else flushLive();
+        });
+    }
+    liveGain_.clear();
+    livePan_.clear();
+    host_->beginGesture();
+}
+
+void ProjectController::flushLive() {
+    const auto gains = liveGain_;
+    const auto pans = livePan_;
+    liveGain_.clear();
+    livePan_.clear();
+    for (auto it = gains.begin(); it != gains.end(); ++it) setStripField(it.key(), "gainDb", std::clamp(it.value(), -96.0, 24.0));
+    for (auto it = pans.begin(); it != pans.end(); ++it) setStripField(it.key(), "pan", std::clamp(it.value(), -1.0, 1.0));
+}
+
+void ProjectController::endGesture() {
+    liveTimer_.stop();
+    liveGain_.clear();  // the final value follows as an ordinary command
+    livePan_.clear();
+    if (host_) host_->endGesture();
+}
+
+void ProjectController::setGainLive(const QString& trackId, double db) {
+    if (!host_ || !std::isfinite(db)) return;
+    liveGain_[trackId] = db;
+    if (!liveTimer_.isActive()) {
+        flushLive();
+        liveTimer_.start();
+    }
+}
+
+void ProjectController::setPanLive(const QString& trackId, double pan) {
+    if (!host_ || !std::isfinite(pan)) return;
+    livePan_[trackId] = pan;
+    if (!liveTimer_.isActive()) {
+        flushLive();
+        liveTimer_.start();
+    }
 }
 
 void ProjectController::setNudgeBeats(double beats) {

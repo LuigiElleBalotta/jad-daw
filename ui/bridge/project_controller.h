@@ -98,6 +98,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool smartControlsVisible READ smartControlsVisible WRITE setSmartControlsVisible NOTIFY panelsChanged)
     Q_PROPERTY(double leftColumnWidth READ leftColumnWidth WRITE setLeftColumnWidth NOTIFY panelsChanged)
     Q_PROPERTY(double smartControlsHeight READ smartControlsHeight WRITE setSmartControlsHeight NOTIFY panelsChanged)
+    Q_PROPERTY(double mixerHeight READ mixerHeight WRITE setMixerHeight NOTIFY panelsChanged)       // the docked Mixer
+    Q_PROPERTY(bool mixerDetached READ mixerDetached WRITE setMixerDetached NOTIFY panelsChanged)  // shown in its own window
 
 public:
     explicit ProjectController(QObject* parent = nullptr);
@@ -180,6 +182,8 @@ public:
     bool smartControlsVisible() const { return smartControlsVisible_; }
     double leftColumnWidth() const { return leftColumnWidth_; }
     double smartControlsHeight() const { return smartControlsHeight_; }
+    double mixerHeight() const { return mixerHeight_; }
+    bool mixerDetached() const { return mixerDetached_; }
     void setInspectorVisible(bool on) { if (on != inspectorVisible_) { inspectorVisible_ = on; emit panelsChanged(); } }
     void setLibraryVisible(bool on) { if (on != libraryVisible_) { libraryVisible_ = on; emit panelsChanged(); } }
     void setSmartControlsVisible(bool on) { if (on != smartControlsVisible_) { smartControlsVisible_ = on; emit panelsChanged(); } }
@@ -187,6 +191,8 @@ public:
     void savePanelState(QSettings& settings) const;
     void setLeftColumnWidth(double width);       // clamped to 200..320, NaN ignored
     void setSmartControlsHeight(double height);  // clamped to 120..320, NaN ignored
+    void setMixerHeight(double height);          // clamped to 530..1400 (the strips with their legend), NaN ignored
+    void setMixerDetached(bool detached);        // detaching also shows the Mixer
 
     Q_INVOKABLE bool openProject(const QUrl& folder);
     Q_INVOKABLE bool newProject(const QUrl& folder);
@@ -246,6 +252,12 @@ public:
     Q_INVOKABLE void doubleSelectedRegions();
     Q_INVOKABLE void nudgeSelectedRegions(int direction);  // by the nudge value
     Q_INVOKABLE void setNudgeBeats(double beats);
+    // Piano Roll: the notes of a MIDI region, in beats from the region start: [{start, length, note, velocity}]
+    Q_INVOKABLE QVariantList regionNotes(const QString& regionId) const;
+    Q_INVOKABLE void setRegionNotes(const QString& regionId, const QVariantList& notes);  // one undo step
+    Q_INVOKABLE QVariantMap regionInfo(const QString& regionId) const;  // {trackName, trackId, startBeats, lengthBeats, audio, found}
+    Q_PROPERTY(int revision READ revision NOTIFY projectChanged)  // grows with every snapshot: bindings on regionNotes() follow it
+    int revision() const { return static_cast<int>(shownRevision_ & 0x7fffffff); }
     Q_PROPERTY(double nudgeBeats READ nudgeBeats NOTIFY nudgeChanged)
     double nudgeBeats() const { return nudgeBeats_; }
     Q_INVOKABLE void splitSelectedAtPlayhead();  // every selected region that strictly contains the playhead, one undo step
@@ -301,6 +313,13 @@ public:
     Q_INVOKABLE void setSmartControl(const QString& trackId, const QString& controlId, double value);
     Q_INVOKABLE void soloExclusive(const QString& trackId);
     Q_INVOKABLE void muteAll(bool on);
+    // A drag of a fader or knob: beginGesture() first, then setGainLive/setPanLive as the pointer moves (sent at most every 33 ms,
+    // so that every strip, header and field follows and the sound changes at once), then the final setGain/setPan and
+    // endGesture(): the whole drag is one undo step.
+    Q_INVOKABLE void beginGesture();
+    Q_INVOKABLE void endGesture();
+    Q_INVOKABLE void setGainLive(const QString& trackId, double db);
+    Q_INVOKABLE void setPanLive(const QString& trackId, double pan);
     Q_INVOKABLE void soloAll(bool on);
     Q_INVOKABLE void clearSolo();
     Q_INVOKABLE void announceStub(const QString& label);  // a visual-only control was used: the usual notice
@@ -404,9 +423,14 @@ private:
     double nudgeBeats_ = 0.25;
     std::vector<const RegionRow*> selectedRegionRows() const;
     void setAllStrips(const char* field, bool on);
+    void flushLive();
+    QTimer liveTimer_;
+    bool liveWired_ = false;
+    QHash<QString, double> liveGain_, livePan_;  // the latest value of each strip, waiting for the next tick
     void pasteClipboard(double offsetBeats, bool keepTrack);
     bool inspectorVisible_ = true, libraryVisible_ = false, smartControlsVisible_ = false;
-    double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0;
+    double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0, mixerHeight_ = 560.0;
+    bool mixerDetached_ = false;
 
     std::unique_ptr<JuceInit> juce_;
 #ifdef JAD_HAVE_JUCE

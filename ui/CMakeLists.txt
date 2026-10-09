@@ -45,6 +45,9 @@ qt_add_qml_module(jad_ui_lib
         qml/TrackList.qml
         qml/Meter.qml
         qml/Mixer.qml
+        qml/MixerView.qml
+        qml/PianoRoll.qml
+        qml/EditorArea.qml
         qml/ThemedMenu.qml
         qml/ThemedMenuItem.qml
         qml/ActionTreeMenu.qml

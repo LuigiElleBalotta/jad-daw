@@ -15,6 +15,7 @@ Item {
     readonly property real contentHeight: project.tracks.rowCount() * rowHeight
 
     signal regionMoved(string id, real beats)
+    signal editRequested(string id)
 
     focus: true
     activeFocusOnTab: true
@@ -214,6 +215,7 @@ Item {
                 onEraseRequested: (id) => root.project.deleteRegions([id])
                 onSplitRequested: (id, atBeats) => root.project.splitRegion(id, atBeats)
                 onGlueRequested: (id) => root.project.joinWithNext(id)
+                onEditRequested: (id) => root.editRequested(id)
                 onMuteRequested: (id) => { root.project.selectRegion(id, "replace"); root.project.toggleMuteSelectedRegions() }
             }
         }

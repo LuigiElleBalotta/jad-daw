@@ -15,6 +15,8 @@ Item {
         { id: "bus", label: qsTr("Bus") }, { id: "input", label: qsTr("Input") }, { id: "output", label: qsTr("Output") },
         { id: "master", label: qsTr("Master/VCA") }, { id: "midi", label: qsTr("MIDI") }]
     property bool longFaders: false
+    property bool detached: false
+    signal detachToggled()
     property bool legendHidden: false
     signal scopeSelected(string scope)
     signal typeToggled(string typeId, bool visible)
@@ -101,6 +103,7 @@ Item {
         Item { Layout.fillWidth: true }
 
         Row {  // Single | Tracks | All
+            visible: root.width >= 560
             spacing: 0
             Repeater {
                 model: [{ id: "single", label: qsTr("Single") }, { id: "tracks", label: qsTr("Tracks") }, { id: "all", label: qsTr("All") }]
@@ -119,6 +122,7 @@ Item {
         Item { Layout.fillWidth: true }
 
         Row {  // the type filters: lit = shown; Option-click shows only that type
+            visible: root.width >= 900
             spacing: Theme.spacing[1]
             Repeater {
                 model: root.types
@@ -139,6 +143,11 @@ Item {
                     }
                 }
             }
+        }
+        IconButton {  // Mixer window: detach it from the main window, or dock it again
+            implicitHeight: 20
+            label: root.detached ? qsTr("Dock") : qsTr("Detach")
+            onClicked: root.detachToggled()
         }
     }
 }

@@ -33,6 +33,10 @@ public:
     ProjectHost& operator=(const ProjectHost&) = delete;
 
     std::future<std::optional<CommandError>> submit(CommandPtr command);
+    // A gesture (a fader drag): every command submitted between beginGesture() and endGesture() takes effect at once, and
+    // endGesture() turns them into a single undo step. Use it only for commands that set the same thing again and again.
+    std::future<void> beginGesture();
+    std::future<void> endGesture();
     std::future<std::optional<CommandError>> undo();
     std::future<std::optional<CommandError>> redo();
 
@@ -92,6 +96,8 @@ private:
     std::function<void(std::uint64_t)> listener_;  // project thread only
     std::atomic<std::uint64_t> revision_{0};
     std::atomic<bool> degraded_{false};      // the audio graph may have missed messages; cleared by a rebuild
+    bool gestureOpen_ = false;               // project thread only
+    std::size_t gestureMark_ = 0;
     std::unordered_set<Uuid> everAdded_;     // project thread only: every track id ever sent to the engine
 
     std::mutex mutex_;

@@ -10,8 +10,11 @@ ChannelStrip {
     pluginGroups: project.plugins.menu
     knownPluginIds: project.plugins.knownIds
 
-    onGainReleased: (id, db) => project.setGain(id, db)
-    onPanReleased: (id, pan) => project.setPan(id, pan)
+    onGestureStarted: project.beginGesture()
+    onGainMoved: (id, db) => project.setGainLive(id, db)
+    onPanMoved: (id, pan) => project.setPanLive(id, pan)
+    onGainReleased: (id, db) => { project.setGain(id, db); project.endGesture() }
+    onPanReleased: (id, pan) => { project.setPan(id, pan); project.endGesture() }
     onMuteToggled: (id, on) => project.setMute(id, on)
     onSoloToggled: (id, on) => project.setSolo(id, on)
     onInsertAddRequested: (id) => project.addInsert(id, "builtin.gain")

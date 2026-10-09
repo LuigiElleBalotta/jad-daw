@@ -2,27 +2,18 @@ import QtQuick
 import QtQuick.Layouts
 import Jad
 
+// The Mixer docked at the bottom of the main window: a thin title row (collapse), a drag handle on its top edge for the
+// height, and the Mixer itself. The Mixer window (Main.qml) shows the same MixerView when the Mixer is detached.
 Rectangle {
     id: root
     required property ProjectController project
     property bool expanded: true
+    property real maxHeight: 100000  // what the window can give it (the rest of the window keeps a little room)
     readonly property real headerHeight: 24
-    readonly property real filterHeight: 24
-    // the strips take what the window can spare (a short window gets compact strips, without the legend)
-    property real stripHeight: Math.min(header2.longFaders ? 640 : 500, Math.max(380, (Window.height - 300) * 0.55))
-    readonly property bool compact: stripHeight - Theme.spacing[3] * 2 < 470
-    // the type filter id of a strip: Logic's aux is our bus kind
-    function typeOf(info) { return info.master ? "master" : (info.kind === "bus" ? "aux" : info.kind) }
-    // does the strip pass the Single | Tracks | All choice and the type filters
-    function shown(info) {
-        if (header2.hiddenTypes[typeOf(info)] === true) return false
-        if (header2.scope === "all") return true
-        if (header2.scope === "single") return project.selectedTrackIds.indexOf(info.trackId) >= 0
-        return info.master || info.kind !== "bus"  // Tracks: the track strips and the master
-    }
+    readonly property alias view: view
 
     color: Theme.surfaceCanvas
-    implicitHeight: expanded ? headerHeight + filterHeight + stripHeight : headerHeight
+    implicitHeight: expanded ? Math.min(Math.max(project.mixerHeight, 530), Math.max(530, maxHeight)) : headerHeight
     clip: true
 
     Rectangle {
@@ -52,75 +43,22 @@ Rectangle {
         }
     }
 
-    MixerHeader {
-        id: header2
+    MixerView {
+        id: view
         visible: root.expanded
         y: root.headerHeight
         width: parent.width
-        height: root.filterHeight
+        height: parent.height - root.headerHeight
         project: root.project
-        onScopeSelected: (scope) => { header2.scope = scope }
-        onTypeToggled: (typeId, on) => {
-            const h = Object.assign({}, header2.hiddenTypes)
-            if (on) delete h[typeId]; else h[typeId] = true
-            header2.hiddenTypes = h
-        }
-        onOnlyTypeRequested: (typeId) => {
-            // Option-click: only this type; again (when it is the only one) shows all
-            const h = {}
-            let others = 0
-            for (const t of header2.types) if (t.id !== typeId && header2.hiddenTypes[t.id] !== true) ++others
-            if (others > 0 || header2.hiddenTypes[typeId] === true) for (const t of header2.types) if (t.id !== typeId) h[t.id] = true
-            header2.hiddenTypes = h
-        }
+        onDetachToggled: root.project.mixerDetached = true
     }
 
-    Flickable {
+    Splitter {  // the top edge: dragging up makes the Mixer taller
+        orientation: Qt.Vertical
         visible: root.expanded
-        y: root.headerHeight + root.filterHeight
+        anchors.top: parent.top
         width: parent.width
-        height: root.stripHeight
-        contentWidth: strips.width + legend.width + Theme.spacing[4] * 2
-        contentHeight: height
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        // a click on the empty mixer takes the focus away from a name being edited, which confirms it
-        TapHandler { onPressedChanged: if (pressed) root.forceActiveFocus() }
-
-        MixerLegend { id: legend; y: Theme.spacing[3]; height: parent.height; visible: !header2.legendHidden && !root.compact }
-        Row {
-            id: strips
-            x: (legend.visible ? legend.width : 0) + Theme.spacing[2]
-            y: Theme.spacing[3]
-            height: parent.height - Theme.spacing[3] * 2
-            spacing: Theme.spacing[2]
-
-            // tracks first, the master strip last
-            Repeater {
-                model: root.project.mixer
-                delegate: ProjectStrip {
-                    required property var model
-                    visible: !model.isMaster && root.shown(model.info)
-                    width: visible ? implicitWidth : 0
-                    height: strips.height
-                    project: root.project
-                    info: model.info
-                    longFader: header2.longFaders
-                }
-            }
-            Repeater {
-                model: root.project.mixer
-                delegate: ProjectStrip {
-                    required property var model
-                    visible: model.isMaster && root.shown(model.info)
-                    width: visible ? implicitWidth : 0
-                    height: strips.height
-                    project: root.project
-                    info: model.info
-                    longFader: header2.longFaders
-                    peak: root.project.masterPeak
-                }
-            }
-        }
+        z: 10
+        onDragged: (dy) => root.project.mixerHeight = Math.min(root.project.mixerHeight - dy, Math.max(530, root.maxHeight))
     }
 }

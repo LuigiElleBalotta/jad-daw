@@ -68,3 +68,28 @@ TEST_CASE("undo stack: undo and redo on empty history report an error", "[undo]"
     REQUIRE(s.undo(p)->code == "nothing_to_undo");
     REQUIRE(s.redo(p)->code == "nothing_to_redo");
 }
+
+TEST_CASE("undo stack: coalesceFrom turns many steps on one parameter into one step", "[undo]") {
+    std::mt19937_64 rng(9);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track t = audioTrack(rng, "A");
+    const Uuid id = t.id;
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    const std::size_t mark = s.size();
+    for (float db : {-1.0f, -2.0f, -3.0f, -4.0f}) {
+        StripPatch patch;
+        patch.gainDb = db;
+        REQUIRE_FALSE(s.execute(p, makeSetStrip(id, patch)).has_value());
+    }
+    s.coalesceFrom(mark);
+    REQUIRE(s.size() == mark + 1);
+    REQUIRE(p.findTrack(id)->strip.gainDb == -4.0f);
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.findTrack(id)->strip.gainDb == 0.0f);  // back to what it was before the drag
+    REQUIRE_FALSE(s.redo(p).has_value());
+    REQUIRE(p.findTrack(id)->strip.gainDb == -4.0f);
+    s.coalesceFrom(s.size());  // nothing to merge
+    s.coalesceFrom(s.size() + 5);
+    REQUIRE(s.size() == mark + 1);
+}

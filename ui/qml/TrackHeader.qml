@@ -33,6 +33,9 @@ Item {
     signal renamed(string id, string name)
     signal libraryRequested(string id)  // a double click on the header outside the name and the buttons
     signal selectRequested(string id, string mode)
+    signal gestureStarted()
+    signal gainMoved(string id, real db)
+    signal panMoved(string id, real pan)
     signal gainReleased(string id, real db)
     signal panReleased(string id, real pan)
     signal trackToggled(string trackId, string actionId, bool on)
@@ -203,7 +206,12 @@ Item {
             from: -96
             to: 24
             // the slider shows its own value while it is dragged; the command goes out on release
-            onPressedChanged: if (!pressed) root.gainReleased(root.trackId, value)
+            property bool started: false
+            onMoved: {  // live: the strips and fields elsewhere follow
+                if (!started) { started = true; root.gestureStarted() }
+                root.gainMoved(root.trackId, value)
+            }
+            onPressedChanged: if (!pressed) { started = false; root.gainReleased(root.trackId, value) }
             Binding { target: volume; property: "value"; value: root.gainDb; when: !volume.pressed }
             ToolTip.visible: hovered
             ToolTip.text: qsTr("Volume: %1 dB").arg(Math.round(value))
@@ -230,7 +238,12 @@ Item {
             implicitWidth: 20
             implicitHeight: 20
             value: root.pan
-            onReleased: (v) => root.panReleased(root.trackId, v)
+            property bool started: false
+            onMoved: (v) => {
+                if (!started) { started = true; root.gestureStarted() }
+                root.panMoved(root.trackId, v)
+            }
+            onReleased: (v) => { started = false; root.panReleased(root.trackId, v) }
         }
     }
 }

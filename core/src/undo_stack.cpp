@@ -10,6 +10,13 @@ std::optional<CommandError> UndoStack::execute(Project& project, CommandPtr comm
     return std::nullopt;
 }
 
+void UndoStack::coalesceFrom(std::size_t mark) {
+    if (mark >= undo_.size() || undo_.size() - mark < 2) return;
+    Entry merged{undo_.back().forward, undo_[mark].inverse};
+    undo_.resize(mark);
+    undo_.push_back(std::move(merged));
+}
+
 std::optional<CommandError> UndoStack::undo(Project& project) {
     if (undo_.empty()) return CommandError{"nothing_to_undo", "undo history is empty"};
     ApplyResult r = undo_.back().inverse->apply(project);

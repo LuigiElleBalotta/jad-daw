@@ -80,7 +80,15 @@ Recordings* (two columns, MIDI and Audio): Cycle Off ▾ (Merge / Create Take Fo
 
 **General:** ☑ MIDI 2.0 · ☑ External stop message ends recording · button Reset All MIDI Drivers. *Articulation Switches* (a small table with a
 "Set" column header): MIDI Remote ▾ (Off | Global) · MIDI Channel ▾ (All | Global) · Octave Offset (stepper, 0, dim | Per Channel Strip ▾).
-Other sub-tabs not captured.
+**Reset Messages** (what Logic sends when playback stops or the project is reset). *Software Instruments:* ☑ Control 64 (Sustain) off · ☑ Control 4
+(Foot Control) to zero · ☑ Control 2 (Breath) to zero · ☑ Control 1 (Modulation) to zero · ☑ Aftertouch to zero · ☑ Pitch Bend to center position.
+*External MIDI:* ☐ Control 123 (All Notes Off) · ☐ Control 121 (Reset Controls) · ☑ the same six as above · ☐ Send used instrument settings on reset.
+So by default Logic does **not** send All Notes Off to software instruments: it resets controllers; notes still held are ended by their own note-offs.
+**Sync:** *All MIDI Output:* Delay (stepper, 0 ms). *MIDI Time Code (MTC):* MTC Pickup Delay (0 Frames) · Delay MTC Transmission By (0 ms). *MIDI Machine
+Control (MMC):* MMC Uses ▾ (MMC Standard Messages) · Output ID (Transport) (All ☑ + 127, dim) · Input ID (Transport) (same) · Transmit Locate Commands
+When: ☑ Pressing Stop twice ☑ Dragging regions or events · ☐ Transmit record-enable commands for audio tracks. Button MIDI Sync Project Settings….
+**Inputs:** "Enable MIDI ports to use as inputs in Logic": a table with columns On (checkbox) and Device or Port, rows "Logic Pro Virtual In" ☐ and the
+connected interface ☑.
 
 ### Automation
 

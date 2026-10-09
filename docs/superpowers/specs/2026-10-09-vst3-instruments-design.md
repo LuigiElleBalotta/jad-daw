@@ -20,7 +20,7 @@ instrument's state is saved with the project and restored when it opens. A missi
 loss. The slot and its menu behave like Logic Pro's, and the insert slots get the same gestures because they share the component.
 
 In scope: Windows; VST3 instruments with a stereo output as the first output bus (no audio input needed); MIDI notes from regions
-(note on, note off, and CC 123 all-notes-off); instrument latency in plug-in delay compensation; the instrument slot with the
+(note on and note off, plus controller resets on stop as Logic sends them); instrument latency in plug-in delay compensation; the instrument slot with the
 Logic menu (section 8: search field, current plug-in, "No Plug-in", Recent, the built-in Sine, VST3 instruments by manufacturer);
 bypass of the instrument; the same menu shape for insert slots (effects only, including the built-in effect); slot gestures
 (below); the plug-in window opening on insertion.
@@ -86,8 +86,11 @@ Seen on Logic Pro 11.2 (Audio Effect slot, empty, clicked):
   an Instrument popup, Audio Output popup, "Open Library", and "Number of tracks to create"). Not part of this feature.
 
 Not verified (to check against the real Logic Pro before the UI is built): the middle hover icon, the exact pixel size of the hover
-controls, the delay before they appear, and what Option-click shows beyond "Legacy". Not verifiable from a remote desktop (no audio):
-whether All Notes Off on stop also resets tails; the spec keeps CC 123 with no hard reset.
+controls, the delay before they appear, and what Option-click shows beyond "Legacy".
+
+Verified in Logic's Settings > MIDI > Reset Messages (see `docs/logic-reference/settings-and-app-menu.md`): on stop Logic sends software
+instruments Control 64 (sustain) off, Control 4, 2 and 1 to zero, aftertouch to zero and pitch bend to centre, and does **not** send Control 123
+(All Notes Off) by default. Settings > Audio > General also has Plug-in Latency Compensation (All) and "Playback pre-roll".
 
 On Windows, Command maps to Ctrl and Option to Alt. Icons are our own SVGs.
 
@@ -133,9 +136,11 @@ again. `kMaxBlockEvents` (256) stays the per-block cap.
 `renderInstrument` collects note on/off from the regions into `MidiEvent`s (status 0x90 / 0x80) exactly as it does now, sorts them
 and makes **one** call `instrument->render(l, r, n, events, count)`. The per-segment rendering moves into `SineInstrument`.
 
-All Notes Off: `RenderGraph::allNotesOff` (stop, seek, loop jump, instrument replaced) delivers CC 123 to each instrument track on
-the next block: it sets a flag per node that `renderInstrument` turns into one `MidiEvent{0, 0xB0, 123, 0}` at offset 0. No hard
-reset: tails and releases keep sounding (to verify, section 2).
+Stop, seek and loop jump: `RenderGraph::allNotesOff` (existing name kept) flags each instrument node, and `renderInstrument` emits on the next
+block, at offset 0, what Logic sends (section 2): for notes still held a note-off each, then CC 64 = 0, CC 4 = 0, CC 2 = 0, CC 1 = 0, channel
+aftertouch 0 and pitch bend centre (`0xE0 0x00 0x40`). It does not send CC 123 and does not reset the plug-in: tails and releases keep
+sounding. When the instrument is replaced or bypassed the old instance is simply dropped (nothing to send); for a bypassed instrument that
+stays loaded the same stop messages are sent once when bypass is turned on.
 
 ### 4.3 `IPluginHost`
 
@@ -171,7 +176,7 @@ insert latencies. The same-track rebuild test (`a.instrument != b.instrument`) s
   state validated like an insert's, undo restores the previous state. Its JSON round-trips like the others.
 - The instrument slot has a bypass (power icon on hover, seen in Logic): `ProcessorRef::bypass` is used for the instrument too.
   A bypassed instrument renders silence and ignores events (the instance stays loaded and keeps its latency, as a bypassed insert
-  does); turning bypass on sends All Notes Off first. A command `set_instrument_bypass(trackId, on)` mirrors the insert's bypass
+  does); turning bypass on sends the stop messages first. A command `set_instrument_bypass(trackId, on)` mirrors the insert's bypass
   command, with undo.
 
 ## 6. Platform: `platform/juce`
@@ -234,10 +239,10 @@ the state is kept in the project.
 ## 10. Testing
 
 - Core: `SineInstrument` and `SilentInstrument` unit tests (events at offsets, silence); renderer test that notes at known frames
-  reach a recording fake instrument with the right offsets, across block boundaries; All Notes Off on stop; PDC with an instrument
+  reach a recording fake instrument with the right offsets, across block boundaries; stop messages on stop (note-offs for held notes, CC resets, pitch bend centre); PDC with an instrument
   latency; offline render equals live render for the sine (regression of the old path).
 - Commands: `set_instrument` with none, with a vst3 id, undo and JSON round trip, rejection of effect ids; `set_instrument_state`;
-  `set_instrument_bypass` (silence, All Notes Off on bypass, undo);
+  `set_instrument_bypass` (silence, stop messages on bypass, undo);
   `add_track` of an instrument track with no instrument; random command generator extended; old projects load.
 - Fake host (`tests/fake_plugin_host.h`) gains `acquireInstrument` and an event-recording instrument; integration test in
   `test_plugin_host_integration.cpp` (instrument state commit does not reload, undo reloads).
@@ -259,7 +264,7 @@ the state is kept in the project.
 
 ## 12. Order of work (for the plan)
 
-1. Core: `MidiEvent`, `IInstrument`, `SineInstrument`, `SilentInstrument`, renderer, All Notes Off.
+1. Core: `MidiEvent`, `IInstrument`, `SineInstrument`, `SilentInstrument`, renderer, stop messages.
 2. Model: optional instrument, validation, `set_instrument` with none, `set_instrument_state`, `set_instrument_bypass`, tests.
 3. Host interface, fake host, graph builder, PDC.
 4. JUCE: `PluginProcessor` MIDI, `acquireInstrument`, scanner and cache, test instrument plug-in, tests.

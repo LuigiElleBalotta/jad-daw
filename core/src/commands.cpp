@@ -215,6 +215,45 @@ private:
     std::vector<Marker> markers_;
 };
 
+class SetAutomationCmd final : public Command {
+public:
+    SetAutomationCmd(Uuid id, std::string target, std::vector<AutomationPoint> points) : id_(id), target_(std::move(target)), points_(std::move(points)) {}
+    std::string type() const override { return "set_automation"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", id_}, {"target", target_}, {"points", points_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(id_);
+        if (!t) return fail("not_found", "no such track");
+        if (target_ != "volume" && target_ != "pan") return fail("bad_target", "automation target must be volume or pan");
+        if (points_.size() > 4096) return fail("too_many", "at most 4096 automation points per lane");
+        const double lo = target_ == "volume" ? -96.0 : -1.0, hi = target_ == "volume" ? 24.0 : 1.0;
+        for (const AutomationPoint& pt : points_)
+            if (pt.tick < 0 || pt.tick > kMaxPosition || !(pt.value >= lo && pt.value <= hi)) return fail("bad_point", "an automation point is out of range");
+        std::vector<AutomationPoint> sorted = points_;
+        std::stable_sort(sorted.begin(), sorted.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.tick < b.tick; });
+        auto it = std::find_if(t->automation.begin(), t->automation.end(), [&](const AutomationLane& l) { return l.target == target_; });
+        std::vector<AutomationPoint> previous;
+        if (it != t->automation.end()) previous = it->points;
+        if (sorted.empty()) {
+            if (it != t->automation.end()) t->automation.erase(it);
+        } else if (it != t->automation.end()) {
+            it->points = std::move(sorted);
+        } else {
+            AutomationLane lane;
+            lane.id = Uuid::random();
+            lane.target = target_;
+            lane.points = std::move(sorted);
+            t->automation.push_back(std::move(lane));
+        }
+        return success(makeSetAutomation(id_, target_, std::move(previous)));
+    }
+
+private:
+    Uuid id_;
+    std::string target_;
+    std::vector<AutomationPoint> points_;
+};
+
 class SetTrackPropsCmd final : public Command {
 public:
     SetTrackPropsCmd(Uuid id, TrackPatch patch) : id_(id), patch_(std::move(patch)) {}
@@ -722,6 +761,7 @@ CommandPtr makeAddTrack(Track track, int index) { return std::make_unique<AddTra
 CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCmd>(trackId); }
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
+CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch) { return std::make_unique<SetTrackPropsCmd>(trackId, std::move(patch)); }
@@ -756,6 +796,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             return makeSetStrip(j.at("trackId").get<Uuid>(), patch);
         }
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
+        if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_markers") return makeSetMarkers(j.at("markers").get<std::vector<Marker>>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());
         if (type == "set_track_props") {

@@ -671,4 +671,38 @@ double ProjectController::projectEndBeats() const {
     return end;
 }
 
+void ProjectController::setAutomationVisible(bool on) {
+    if (on == automationVisible_) return;
+    automationVisible_ = on;
+    emit automationViewChanged();
+}
+
+void ProjectController::setAutomationParam(const QString& param) {
+    if ((param != "volume" && param != "pan") || param == automationParam_) return;
+    automationParam_ = param;
+    emit automationViewChanged();
+}
+
+QVariantList ProjectController::automationPoints(const QString& trackId, const QString& target) const {
+    QVariantList out;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId) continue;
+        for (const AutoRow& p : target == "pan" ? t.panAuto : t.volumeAuto) out.append(QVariantMap{{"beats", p.beats}, {"value", p.value}});
+    }
+    return out;
+}
+
+void ProjectController::setAutomationPoints(const QString& trackId, const QString& target, const QVariantList& points) {
+    if (!host_ || (target != "volume" && target != "pan")) return;
+    const double lo = target == "volume" ? -96.0 : -1.0, hi = target == "volume" ? 24.0 : 1.0;
+    nlohmann::json list = nlohmann::json::array();
+    for (const QVariant& v : points) {
+        const QVariantMap m = v.toMap();
+        const double beats = m.value("beats").toDouble(), value = m.value("value").toDouble();
+        if (!std::isfinite(beats) || !std::isfinite(value)) continue;
+        list.push_back({{"tick", static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))}, {"value", std::clamp(value, lo, hi)}});
+    }
+    sendCommand({{"type", "set_automation"}, {"trackId", trackId.toStdString()}, {"target", target.toStdString()}, {"points", list}});
+}
+
 }  // namespace jad

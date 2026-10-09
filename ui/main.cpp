@@ -97,6 +97,7 @@ int main(int argc, char** argv) {
                 controller->setMixerVisible(shown.contains("mixer"));
                 window->setProperty("editorsVisible", shown.contains("editors"));
                 controller->setGlobalTracksVisible(shown.contains("global"));
+                controller->setAutomationVisible(shown.contains("automation"));
             }
             if (controller && parser.isSet(applyPatchOption)) controller->applyPatch(parser.value(applyPatchOption));
             if (controller && parser.isSet(selectRegionOption))

@@ -89,6 +89,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool audioEnabled READ audioEnabled WRITE setAudioEnabled NOTIFY audioEnabledChanged)
     Q_PROPERTY(double masterPeak READ masterPeak NOTIFY peakChanged)
     Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
+    Q_PROPERTY(bool automationVisible READ automationVisible WRITE setAutomationVisible NOTIFY automationViewChanged)  // Mix > Show Automation
+    Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume" or "pan"
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -165,6 +167,12 @@ public:
     QString lastError() const { return lastError_; }
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
+    bool automationVisible() const { return automationVisible_; }
+    void setAutomationVisible(bool on);
+    QString automationParam() const { return automationParam_; }
+    void setAutomationParam(const QString& param);
+    Q_INVOKABLE QVariantList automationPoints(const QString& trackId, const QString& target) const;  // {beats, value}; follows `revision`
+    Q_INVOKABLE void setAutomationPoints(const QString& trackId, const QString& target, const QVariantList& points);
     bool globalTracksVisible() const { return globalTracksVisible_; }
     void setGlobalTracksVisible(bool on);
     // the global tracks; every list follows `revision`
@@ -400,6 +408,7 @@ signals:
     void peakChanged();
     void peaksChanged();
     void globalTracksVisibleChanged();
+    void automationViewChanged();
     void commandSent(const QString& type);
     // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
     void notice(const QString& message);
@@ -533,6 +542,8 @@ private:
     double peak_ = 0.0;
     int peaksRevision_ = 0;
     bool globalTracksVisible_ = false;
+    bool automationVisible_ = false;
+    QString automationParam_ = QStringLiteral("volume");
     std::vector<MarkerRow> markerRows_;
     void sendMarkers(const std::vector<MarkerRow>& rows);
     QHash<QString, double> meter_, hold_;

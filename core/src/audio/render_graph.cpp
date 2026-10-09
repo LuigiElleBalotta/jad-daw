@@ -149,6 +149,19 @@ void RenderGraph::renderInstrument(TrackNode& t, const TrackConfig& cfg, std::in
     if (pos < n) t.synth.render(l + pos, r + pos, n - pos);
 }
 
+namespace {
+float autoValue(const std::vector<AutoPoint>& pts, std::int64_t frame) noexcept {
+    if (frame <= pts.front().frame) return pts.front().value;
+    if (frame >= pts.back().frame) return pts.back().value;
+    std::size_t hi = 1;
+    while (hi < pts.size() && pts[hi].frame <= frame) ++hi;
+    const AutoPoint& a = pts[hi - 1];
+    const AutoPoint& b = pts[hi];
+    const float t = static_cast<float>(frame - a.frame) / static_cast<float>(b.frame - a.frame);
+    return a.value + (b.value - a.value) * t;
+}
+}  // namespace
+
 void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool anySolo) noexcept {
     float* l = t.l.data();
     float* r = t.r.data();
@@ -163,9 +176,12 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     std::copy_n(r, n, preR_.data());
 
     const bool muted = t.strip.mute || (anySolo && !t.strip.solo && isSource(t.kind));
-    const float g = muted ? 0.0f : t.strip.gain;
-    const float targetL = g * (t.strip.pan > 0.0f ? 1.0f - t.strip.pan : 1.0f);
-    const float targetR = g * (t.strip.pan < 0.0f ? 1.0f + t.strip.pan : 1.0f);
+    // with automation the lane drives the fader and the pan (the position is the start of this block)
+    const float gain = cfg && !cfg->volumeAuto.empty() ? autoValue(cfg->volumeAuto, blockStart) : t.strip.gain;
+    const float pan = cfg && !cfg->panAuto.empty() ? autoValue(cfg->panAuto, blockStart) : t.strip.pan;
+    const float g = muted ? 0.0f : gain;
+    const float targetL = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
+    const float targetR = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
     if (!t.smoothInit) {
         t.smoothL = targetL;
         t.smoothR = targetR;

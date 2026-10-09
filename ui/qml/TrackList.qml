@@ -29,6 +29,15 @@ Rectangle {
             elide: Text.ElideRight
             width: parent.width - Theme.spacing[4] * 2
         }
+        IconButton {  // Show Automation: the parameter the lanes show
+            visible: root.project.automationVisible
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.spacing[2]
+            y: 2
+            implicitHeight: 20
+            label: root.project.automationParam === "volume" ? qsTr("Volume") : qsTr("Pan")
+            onClicked: root.project.automationParam = root.project.automationParam === "volume" ? "pan" : "volume"
+        }
         Repeater {  // the names of the global tracks, next to their lanes
             model: root.project.globalTracksVisible ? [qsTr("Marker"), qsTr("Tempo"), qsTr("Signature")] : []
             delegate: Text {

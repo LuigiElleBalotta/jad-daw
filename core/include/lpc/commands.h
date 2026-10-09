@@ -27,6 +27,9 @@ CommandPtr makeRemoveTempo(Ticks tick);
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch);
 CommandPtr makeSetSignature(Ticks tick, int numerator, int denominator);
 CommandPtr makeRemoveSignature(Ticks tick);
+// Replaces the points of one automation lane of a track; target is "volume" (dB) or "pan" (-1..1). No points removes the lane.
+// The points are sorted by tick; the undo restores the previous points (or the absence of the lane).
+CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points);
 CommandPtr makeSetMarkers(std::vector<Marker> markers);  // replaces the whole list (sorted by tick, unique ids); the undo is the previous list
 CommandPtr makeAddMedia(MediaItem item, int index = -1);  // index -1 appends
 CommandPtr makeRemoveMedia(Uuid mediaId);

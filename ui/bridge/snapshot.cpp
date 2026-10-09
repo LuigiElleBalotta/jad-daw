@@ -108,6 +108,11 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
                 }
             }
         }
+        for (const lpc::AutomationLane& lane : t.automation) {
+            std::vector<AutoRow>* out = lane.target == "volume" ? &tr.volumeAuto : (lane.target == "pan" ? &tr.panAuto : nullptr);
+            if (!out) continue;
+            for (const lpc::AutomationPoint& pt : lane.points) out->push_back({static_cast<double>(pt.tick) / lpc::kPPQ, pt.value});
+        }
         s.tracks.push_back(tr);
         if (master) continue;
         for (const lpc::Region& r : t.regions) {

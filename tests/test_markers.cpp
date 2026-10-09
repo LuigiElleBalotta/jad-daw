@@ -42,3 +42,26 @@ TEST_CASE("markers: the command round-trips through JSON", "[markers]") {
     REQUIRE(again);
     REQUIRE(again->toJson() == j);
 }
+
+TEST_CASE("automation: set_automation creates, replaces and removes a lane with undo", "[automation]") {
+    std::mt19937_64 rng(6);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Audio;
+    t.name = "A";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume", {{4 * kPPQ, -6.0}, {0, 0.0}})).has_value());
+    REQUIRE(p.findTrack(t.id)->automation.size() == 1);
+    REQUIRE(p.findTrack(t.id)->automation[0].points[0].tick == 0);  // sorted
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume", {{0, -3.0}})).has_value());
+    REQUIRE(p.findTrack(t.id)->automation[0].points.size() == 1);
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume", {})).has_value());
+    REQUIRE(p.findTrack(t.id)->automation.empty());
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.findTrack(t.id)->automation[0].points[0].value == -3.0);
+    REQUIRE(s.execute(p, makeSetAutomation(t.id, "cutoff", {{0, 0.0}})).has_value());   // unknown target
+    REQUIRE(s.execute(p, makeSetAutomation(t.id, "pan", {{0, 2.0}})).has_value());      // out of range
+    REQUIRE(s.execute(p, makeSetAutomation(Uuid::random(rng), "pan", {{0, 0.0}})).has_value());  // no such track
+}

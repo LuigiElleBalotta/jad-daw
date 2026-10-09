@@ -79,7 +79,7 @@ bool stripChanged(const Track& a, const Track& b) {
 }
 
 bool configChanged(const Track& a, const Track& b) {
-    return a.kind != b.kind || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
+    return a.kind != b.kind || a.automation != b.automation || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
            a.strip.sends != b.strip.sends || a.strip.output != b.strip.output;
 }
 
@@ -188,6 +188,13 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             std::stable_sort(rp.notes.begin(), rp.notes.end(), [](const NoteSpan& a, const NoteSpan& b) { return a.onFrame < b.onFrame; });
         }
         cfg->regions.push_back(std::move(rp));
+    }
+    for (const AutomationLane& lane : t.automation) {
+        std::vector<AutoPoint>& out = lane.target == "volume" ? cfg->volumeAuto : cfg->panAuto;
+        if (lane.target != "volume" && lane.target != "pan") continue;
+        for (const AutomationPoint& pt : lane.points)
+            out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)),
+                                    lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value)});
     }
     int slotIndex = 0;
     for (const ProcessorRef& ref : t.strip.inserts) {

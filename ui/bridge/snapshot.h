@@ -31,6 +31,10 @@ struct SmartRow {
     double min = 0.0, max = 1.0, value = 0.0, def = 0.0;
 };
 
+struct AutoRow {
+    double beats = 0, value = 0;  // volume in dB, pan in -1..1
+};
+
 struct TrackRow {
     QString id, name, kind, color;
     bool master = false, mute = false, solo = false;
@@ -42,6 +46,7 @@ struct TrackRow {
     std::vector<InsertRow> inserts;
     std::vector<SendRow> sends;
     std::vector<SmartRow> smart;  // the Smart Controls of the track's patch, with their current values
+    std::vector<AutoRow> volumeAuto, panAuto;  // the automation lanes
 };
 
 struct RegionRow {

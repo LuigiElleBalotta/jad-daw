@@ -162,7 +162,7 @@
  {"id":"record.overlappingMidiRecordings","label":"Overlapping MIDI Recordings","menu":"Record","shortcut":"","kind":"command","status":"stub"},
  {"id":"record.overlappingAudioRecordings","label":"Overlapping Audio Recordings","menu":"Record","shortcut":"","kind":"command","status":"stub"},
  {"id":"record.recordingSettings","label":"Recording Settings…","menu":"Record","shortcut":"","kind":"command","status":"stub"},
- {"id":"mix.showAutomation","label":"Show Automation","menu":"Mix","shortcut":"A","kind":"toggle","status":"stub"},
+ {"id":"mix.showAutomation","label":"Show Automation","menu":"Mix","shortcut":"A","kind":"toggle","status":"ready"},
  {"id":"mix.createTrackAutomation","label":"Create Track Automation","menu":"Mix","shortcut":"","kind":"command","status":"stub"},
  {"id":"mix.convertAutomation","label":"Convert Automation","menu":"Mix","shortcut":"","kind":"command","status":"stub"},
  {"id":"mix.deleteAutomation","label":"Delete Automation","menu":"Mix","shortcut":"","kind":"command","status":"stub"},

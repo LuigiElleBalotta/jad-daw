@@ -78,7 +78,16 @@ struct SendPlayback {
     DelayLine delay;  // plug-in delay compensation
 };
 
+// Automation of the fader and the pan: a value (linear gain, or -1..1) from a frame on, linear in between; before the first
+// point the first value holds, after the last one the last.
+struct AutoPoint {
+    std::int64_t frame = 0;
+    float value = 0.0f;
+};
+
 struct TrackConfig {
+    std::vector<AutoPoint> volumeAuto;  // linear gain
+    std::vector<AutoPoint> panAuto;
     std::vector<RegionPlayback> regions;
     std::vector<std::unique_ptr<IProcessor>> inserts;
     std::vector<SendPlayback> sends;

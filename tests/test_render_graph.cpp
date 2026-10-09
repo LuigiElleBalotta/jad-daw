@@ -430,3 +430,17 @@ TEST_CASE("graph: every track reports its post-fader peak and reading clears it"
     rig.g.takeTrackPeaks(peaks);  // nothing played since: cleared
     REQUIRE(peakOf(1) == 0.0f);
 }
+
+TEST_CASE("graph: automation drives the fader and the pan from the block start", "[graph][automation]") {
+    Rig rig;
+    TrackConfig* cfg = rig.dcConfig(0.5f, 0, 2000);
+    cfg->volumeAuto = {{0, 1.0f}, {1000, 0.0f}};
+    cfg->panAuto = {{0, 1.0f}};  // hard right all the time
+    rig.addNode(1, TrackKind::Audio, cfg, strip(0.1f));  // the fader value is ignored while a lane exists
+    rig.addMaster();
+    const Stereo s = rig.render(1792, 256);
+    REQUIRE(s.l[10] == 0.0f);                          // pan right: nothing on the left
+    REQUIRE(s.r[10] == Catch::Approx(0.5f).margin(0.01f));  // the first block: gain 1 at frame 0 (smoothing starts there)
+    REQUIRE(s.r[600] < s.r[10]);                       // falling along the lane
+    REQUIRE(s.r[1500] == Catch::Approx(0.0f).margin(1e-5f));  // after the last point: its value
+}

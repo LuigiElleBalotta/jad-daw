@@ -272,6 +272,22 @@ Item {
             }
         }
 
+        Repeater {  // the automation lanes, over the rows while Show Automation is on
+            model: root.project.automationVisible ? root.project.tracks : null
+            delegate: AutomationLane {
+                required property int index
+                required property string trackId
+                project: root.project
+                param: root.project.automationParam
+                pixelsPerBeat: root.pixelsPerBeat
+                scrollBeats: root.scrollBeats
+                snapBeats: root.snapBeats
+                y: index * root.rowHeight - root.scrollY
+                width: body.width
+                height: root.rowHeight
+            }
+        }
+
         Rectangle {
             id: playhead
             x: root.beatsToX(root.project.positionBeats)

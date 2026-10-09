@@ -66,6 +66,17 @@ to right: Articulation · Track Zoom · Note Repeat · Spot Erase · Split by Pl
 *(dim)* · Move to Playhead · Nudge Value (a stepper popup showing "Tick" with arrows) · Repeat Section · Cut Section · Insert Section
 *(dim)* · Insert Silence · Set Locators *(dim)* · Zoom · Colors. "Customize Toolbar…" in View lets the user choose the buttons.
 
+## Plug-in window (verified: a click on the centre of an occupied slot opens it)
+
+A floating window titled with the **track name** ("Inst 1") centred in its title bar, a red close dot at the top-left and a small icon at the top-right
+(hide/show header). Below the title bar a **header strip common to all plug-ins**:
+- Row 1: a round **power button** (bypass, blue when active) at the far left · a popup showing the plug-in setting name ("Manual", dim) ·
+  at the right **Side Chain:** popup ("None").
+- Row 2: **‹ ›** (previous/next setting) · **Compare** · **Copy** · **Paste** · **Undo** · **Redo** · at the right **View:** popup ("Editor") and a **link**
+  button.
+Under the header the plug-in's own UI (here AmpliTube's full interface) in its native size; the window resizes to the plug-in's view; a resize
+handle sits at the bottom-right. The header is the part the clone must draw itself around a hosted plug-in's native window.
+
 ## Not captured yet
 
 Smart Controls and Editors areas, Loop Browser, Note Pad, Browsers, List Editors, Piano Roll, plug-in windows, Settings dialogs.

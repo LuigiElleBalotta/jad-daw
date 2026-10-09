@@ -67,26 +67,14 @@ Item {
         TapHandler { onPressedChanged: if (pressed) root.forceActiveFocus() }
 
         // Swipe over M or S: a press on one button and a drag across the others sets them all to the state the first one took
-        property string swipeKind: ""
-        property bool swipeOn: false
-        property var swiped: ({})
-        PointHandler {
-            acceptedButtons: Qt.LeftButton
-            grabPermissions: PointerHandler.ApprovesTakeOverByAnything
-            onActiveChanged: if (!active) flick.swipeKind = ""
-            onPointChanged: {
-                const f = parent
-                if (!active || f.swipeKind === "") return
-                const hit = strips.childAt(strips.mapFromItem(null, point.scenePosition).x, 4)
-                if (!hit || !hit.visible || !hit.muteButton) return
-                const button = f.swipeKind === "mute" ? hit.muteButton : hit.soloButton
-                const local = button.mapFromItem(null, point.scenePosition)
-                if (local.x < 0 || local.y < 0 || local.x > button.width || local.y > button.height) return
-                if (f.swiped[hit.trackId]) return
-                f.swiped[hit.trackId] = true
-                if (f.swipeKind === "mute") { if (hit.mute !== f.swipeOn) root.project.setMute(hit.trackId, f.swipeOn) }
-                else if (hit.solo !== f.swipeOn) root.project.setSolo(hit.trackId, f.swipeOn)
-            }
+        function swipeTo(kind, on, scenePos, from) {
+            const hit = strips.childAt(strips.mapFromItem(null, scenePos).x, 4)
+            if (!hit || hit === from || !hit.visible || !hit.muteButton) return
+            const button = kind === "mute" ? hit.muteButton : hit.soloButton
+            const local = button.mapFromItem(null, scenePos)
+            if (local.x < 0 || local.y < 0 || local.x > button.width || local.y > button.height) return
+            if (kind === "mute") { if (hit.mute !== on) root.project.setMute(hit.trackId, on) }
+            else if (hit.solo !== on) root.project.setSolo(hit.trackId, on)
         }
 
         MixerLegend { id: legend; y: Theme.spacing[3]; height: root.stripHeight; visible: !bar.legendHidden && !root.compact }
@@ -101,6 +89,7 @@ Item {
             Repeater {
                 model: root.project.mixer
                 delegate: ProjectStrip {
+                    id: strip
                     required property var model
                     visible: !model.isMaster && root.shown(model.info)
                     width: visible ? implicitWidth : 0
@@ -108,7 +97,7 @@ Item {
                     project: root.project
                     info: model.info
                     longFader: bar.longFaders
-                    onSwipeStarted: (kind, on) => { flick.swipeKind = kind; flick.swipeOn = on; flick.swiped = ({}); flick.swiped[trackId] = true }
+                    onSwiped: (kind, on, p, from) => flick.swipeTo(kind, on, p, from)
                 }
             }
             Repeater {
@@ -122,6 +111,7 @@ Item {
                     info: model.info
                     longFader: bar.longFaders
                     peak: root.project.masterPeak
+                    onSwiped: (kind, on, p, from) => flick.swipeTo(kind, on, p, from)
                 }
             }
         }

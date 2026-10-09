@@ -17,6 +17,7 @@ Item {
     readonly property real regionStart: hasMidi ? info.startBeats : 0
     readonly property var notes: { project.revision; return hasMidi ? project.regionNotes(regionId) : [] }
     property var working: null                      // the notes while a gesture is under way (shown instead of `notes`)
+    readonly property alias grid: grid
     readonly property var shown: working !== null ? working : notes
     property var selected: []                       // indexes into the notes
     property string tool: "pointer"                 // "pointer", "pencil" or "eraser"
@@ -60,7 +61,7 @@ Item {
     function beatsToX(b) { return (b - scrollBeats) * pixelsPerBeat }
     function xToBeats(x) { return x / pixelsPerBeat + scrollBeats }
     function noteTop(n) { return (scrollNote - n) * rowHeight }
-    function noteAt(y) { return Math.max(0, Math.min(127, Math.floor(scrollNote - y / rowHeight))) }
+    function noteAt(y) { return Math.max(0, Math.min(127, Math.ceil(scrollNote - y / rowHeight))) }  // the row drawn at noteTop(n) holds n
     function snap(b) { return Math.round(b / gridUnit) * gridUnit }
     function barBeatText(b) {
         const bb = project.barBeats

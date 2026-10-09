@@ -77,7 +77,7 @@ Panel {
     signal trackToggled(string id, string actionId, bool on)   // the R and I buttons
     signal soloExclusiveRequested(string id)                    // Option-click on S: this strip alone
     signal soloClearRequested()                                 // Option-click on a lit S: every solo off
-    signal swipeBegan(string kind, bool on)                     // a plain press on M or S: dragging over the other strips sets them to `on`
+    signal swipeMoved(string kind, bool on, point scenePos)     // a plain press on M or S dragged: the strip under the pointer takes `on`
     signal muteAllRequested(bool on)                            // Command-click on M
     signal soloAllRequested(bool on)                            // Command-click on S
     signal gestureStarted()                                     // a fader or knob drag begins: the moves below follow
@@ -564,10 +564,20 @@ Panel {
                 MouseArea {  // Command-click (Ctrl): every strip in this state switches
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
+                    property bool swiping: false   // a plain press: a click, or a swipe once the pointer leaves the button
+                    property bool exited: false
+                    property bool target: false
                     onPressed: (m) => {
-                        if (!(m.modifiers & Qt.ControlModifier)) { root.swipeBegan("mute", !root.mute); m.accepted = false; return }
-                        root.muteAllRequested(!root.mute)
+                        if (m.modifiers & Qt.ControlModifier) { root.muteAllRequested(!root.mute); return }
+                        swiping = true; exited = false; target = !root.mute
                     }
+                    onPositionChanged: (m) => {
+                        if (!swiping || !pressed) return
+                        if (!exited && (m.x < 0 || m.y < 0 || m.x > width || m.y > height)) { exited = true; if (root.mute !== target) root.muteToggled(root.trackId, target) }
+                        if (exited) root.swipeMoved("mute", target, mapToItem(null, m.x, m.y))
+                    }
+                    onReleased: { if (swiping && !exited) root.muteToggled(root.trackId, target); swiping = false }
+                    onCanceled: swiping = false
                 }
             }
             IconButton {
@@ -583,13 +593,23 @@ Panel {
                 MouseArea {  // Option-click: solo exclusive, or every solo off when this one is lit
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
+                    property bool swiping: false
+                    property bool exited: false
+                    property bool target: false
+                    onPositionChanged: (m) => {
+                        if (!swiping || !pressed) return
+                        if (!exited && (m.x < 0 || m.y < 0 || m.x > width || m.y > height)) { exited = true; if (root.solo !== target) root.soloToggled(root.trackId, target) }
+                        if (exited) root.swipeMoved("solo", target, mapToItem(null, m.x, m.y))
+                    }
+                    onReleased: { if (swiping && !exited) root.soloToggled(root.trackId, target); swiping = false }
+                    onCanceled: swiping = false
                     onPressed: (m) => {
                         if (m.modifiers & Qt.ControlModifier) {  // Control-click on the Mac: solo-safe; Ctrl+Shift here, Ctrl alone is Command
                             if (m.modifiers & Qt.ShiftModifier) root.trackToggled(root.trackId, "track.soloSafe", root.info.soloSafe !== true)
                             else root.soloAllRequested(!root.solo)
                             return
                         }
-                        if (!(m.modifiers & Qt.AltModifier)) { root.swipeBegan("solo", !root.solo); m.accepted = false; return }
+                        if (!(m.modifiers & Qt.AltModifier)) { swiping = true; exited = false; target = !root.solo; return }
                         if (root.solo) root.soloClearRequested(); else root.soloExclusiveRequested(root.trackId)
                     }
                 }

@@ -11,6 +11,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "juce_plugin_host.h"
+#include "lpc/validation.h"
+#include "plugin_processor.h"
 
 using namespace lpc;
 
@@ -79,7 +81,7 @@ std::string stateWithGain(const PluginDescriptor& d, float gain) {
     instance->getParameters()[0]->setValue(gain / 2.0f);  // normalised 0..1 over the range 0..2
     juce::MemoryBlock block;
     instance->getStateInformation(block);
-    return block.toBase64Encoding().toStdString();
+    return PluginProcessor::encodeState(block);
 }
 
 }  // namespace
@@ -114,6 +116,17 @@ TEST_CASE("juce host: state is applied and captured", "[juce][plugin]") {
     proc->process(l.data(), r.data(), 64);
     REQUIRE(l[32] == Catch::Approx(0.5f));
     REQUIRE(host.captureState(slot) == half);
+}
+
+TEST_CASE("juce host: a captured state is standard base64 the Core accepts", "[juce][plugin]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const InsertSlot slot{Uuid{1, 9}, 0};
+    REQUIRE(host.acquire(slot, refOf(d), 48000.0, 512));
+    const std::string state = host.captureState(slot);
+    REQUIRE_FALSE(state.empty());
+    REQUIRE(validBase64(state));  // JUCE's own MemoryBlock encoding is not base64: the Core rejected it
 }
 
 TEST_CASE("juce host: the same insert reuses the instance, another state replaces it", "[juce][plugin]") {

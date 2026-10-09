@@ -21,6 +21,10 @@ public:
     int latencySamples() const override { return latency_; }
     nlohmann::json describe() const override { return {{"plugin", name_}, {"latency", latency_}}; }
 
+    // The model keeps plug-in state as standard base64 (padded); JUCE's own MemoryBlock encoding is a different alphabet.
+    static std::string encodeState(const juce::MemoryBlock& block);
+    static bool decodeState(const std::string& base64, juce::MemoryBlock& out);
+
     std::string captureState();                     // base64 of the plug-in's saved state
     bool hasEditor() const { return instance_->hasEditor(); }
     juce::AudioProcessorEditor* createEditor();     // the caller owns it and must delete it before this object goes

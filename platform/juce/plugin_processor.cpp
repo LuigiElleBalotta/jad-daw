@@ -21,7 +21,7 @@ std::shared_ptr<PluginProcessor> PluginProcessor::create(std::unique_ptr<juce::A
 
     if (!stateBase64.empty()) {
         juce::MemoryBlock block;
-        if (block.fromBase64Encoding(juce::String(stateBase64)) && block.getSize() > 0)
+        if (decodeState(stateBase64, block) && block.getSize() > 0)
             instance->setStateInformation(block.getData(), static_cast<int>(block.getSize()));
     }
     instance->setPlayConfigDetails(2, 2, sampleRate, maxBlock);
@@ -47,10 +47,19 @@ void PluginProcessor::process(float* l, float* r, int frames) noexcept {
     }
 }
 
+std::string PluginProcessor::encodeState(const juce::MemoryBlock& block) {
+    return juce::Base64::toBase64(block.getData(), block.getSize()).toStdString();
+}
+
+bool PluginProcessor::decodeState(const std::string& base64, juce::MemoryBlock& out) {
+    juce::MemoryOutputStream stream(out, false);
+    return juce::Base64::convertFromBase64(stream, juce::String(base64));
+}
+
 std::string PluginProcessor::captureState() {
     juce::MemoryBlock block;
     instance_->getStateInformation(block);
-    return block.toBase64Encoding().toStdString();
+    return encodeState(block);
 }
 
 juce::AudioProcessorEditor* PluginProcessor::createEditor() { return instance_->hasEditor() ? instance_->createEditor() : nullptr; }

@@ -32,6 +32,25 @@ Item {
     property real quantizeBeats: 0.25               // Time Quantize: the note value
     property real strength: 100
     property int defaultVelocity: 80
+    property string scaleName: "Off"                 // Scale Quantize: the scale, its key and Snap to Scale
+    property int scaleKey: 0                        // 0 = C
+    property bool snapToScale: false
+    readonly property var scales: ({ "Major": [0, 2, 4, 5, 7, 9, 11], "Minor": [0, 2, 3, 5, 7, 8, 10], "Dorian": [0, 2, 3, 5, 7, 9, 10], "Phrygian": [0, 1, 3, 5, 7, 8, 10],
+        "Lydian": [0, 2, 4, 6, 7, 9, 11], "Mixolydian": [0, 2, 4, 5, 7, 9, 10], "Harmonic Minor": [0, 2, 3, 5, 7, 8, 11], "Melodic Minor": [0, 2, 3, 5, 7, 9, 11],
+        "Major Pentatonic": [0, 2, 4, 7, 9], "Minor Pentatonic": [0, 3, 5, 7, 10], "Blues": [0, 3, 5, 6, 7, 10] })
+    // the nearest pitch of the scale (the lower one on a tie); every pitch when the scale is Off
+    function toScale(pitch) {
+        const degrees = scales[scaleName]
+        if (!degrees) return pitch
+        let best = pitch, bestDistance = 99
+        for (let candidate = Math.max(0, pitch - 6); candidate <= Math.min(127, pitch + 6); ++candidate) {
+            const rel = ((candidate - scaleKey) % 12 + 12) % 12
+            if (degrees.indexOf(rel) < 0) continue
+            const d = Math.abs(candidate - pitch)
+            if (d < bestDistance) { best = candidate; bestDistance = d }
+        }
+        return best
+    }
     property real swing: 50                         // 50 = straight; 75 puts the off-beats on the triplet
     property var preQuantize: ({})                  // region id -> the starts before the last Quantize, for Dequantize
     property var noteClip: []                       // copied notes: start relative to the first, length, note, velocity
@@ -193,6 +212,13 @@ Item {
         for (const i of idx) list[i].muted = !unmute
         commit(list)
     }
+    // Quantize Notes to Scale: every selected note (all when none are) moves to the nearest pitch of the scale
+    function quantizeToScale() {
+        if (!hasMidi || !scales[scaleName]) return
+        const list = copyNotes(notes)
+        for (const i of targets()) list[i].note = toScale(list[i].note)
+        commit(list)
+    }
     function setLength(beats) {
         if (!hasMidi) return
         const list = copyNotes(notes)
@@ -286,7 +312,37 @@ Item {
                 SliderField { value: root.swing; from: 0; to: 100; onMoved: (v) => root.swing = Math.round(v) }
             }
             Text { x: Theme.spacing[3]; text: qsTr("Scale Quantize"); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
-            InspectorRow { label: qsTr("Scale"); StubValue { project: root.project; label: qsTr("Scale Quantize"); text: qsTr("Off"); width: parent.width } }
+            InspectorRow {
+                label: qsTr("Scale")
+                Rectangle {
+                    width: parent.width - 30
+                    height: 20
+                    radius: Theme.radiusControl - 2
+                    color: scaleArea.containsMouse ? Theme.surfaceRaisedHover : Theme.surfaceRaised
+                    Text { anchors.fill: parent; anchors.leftMargin: Theme.spacing[2]; verticalAlignment: Text.AlignVCenter; text: root.scaleName === "Off" ? qsTr("Off") : root.noteNames[root.scaleKey] + " " + root.scaleName; color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize; elide: Text.ElideRight }
+                    MouseArea { id: scaleArea; anchors.fill: parent; hoverEnabled: true; onClicked: scaleMenu.popup(parent, 0, parent.height) }
+                }
+                IconButton {  // quantize the notes to the scale now
+                    x: parent.width - 26
+                    implicitWidth: 24
+                    implicitHeight: 20
+                    label: "Q"
+                    enabled: root.scaleName !== "Off"
+                    onClicked: root.quantizeToScale()
+                }
+            }
+            InspectorRow {
+                label: qsTr("Snap to Scale")
+                IconButton {
+                    implicitWidth: 44
+                    implicitHeight: 20
+                    label: root.snapToScale ? qsTr("On") : qsTr("Off")
+                    active: root.snapToScale
+                    fillActive: true
+                    enabled: root.scaleName !== "Off"
+                    onClicked: root.snapToScale = !root.snapToScale
+                }
+            }
             InspectorRow {
                 label: qsTr("Velocity")
                 SliderField { value: root.defaultVelocity; from: 1; to: 127; onMoved: (v) => root.defaultVelocity = Math.round(v) }
@@ -303,6 +359,28 @@ Item {
             delegate: ThemedMenuItem { required property var modelData; text: modelData.label; onTriggered: root.quantizeBeats = modelData.beats }
             onObjectAdded: (index, object) => quantizeMenu.insertItem(index, object)
             onObjectRemoved: (index, object) => quantizeMenu.removeItem(object)
+        }
+    }
+    ThemedMenu {
+        id: scaleMenu
+        ThemedMenuItem { text: qsTr("Off"); onTriggered: { root.scaleName = "Off"; root.snapToScale = false } }
+        MenuSeparator {}
+        ThemedMenu {
+            id: keyMenu
+            title: qsTr("Key")
+            Instantiator {
+                model: root.noteNames
+                delegate: ThemedMenuItem { required property string modelData; required property int index; text: modelData; onTriggered: root.scaleKey = index }
+                onObjectAdded: (index, object) => keyMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => keyMenu.removeItem(object)
+            }
+        }
+        MenuSeparator {}
+        Instantiator {
+            model: Object.keys(root.scales)
+            delegate: ThemedMenuItem { required property string modelData; text: modelData; onTriggered: root.scaleName = modelData }
+            onObjectAdded: (index, object) => scaleMenu.addItem(object)
+            onObjectRemoved: (index, object) => scaleMenu.removeItem(object)
         }
     }
     // a slider with its value next to it, in the style of the Inspector fields
@@ -406,6 +484,7 @@ Item {
     ThemedMenu {
         id: functionsMenu
         ThemedMenuItem { text: qsTr("Quantize Notes"); onTriggered: root.quantize() }
+        ThemedMenuItem { text: qsTr("Quantize Notes to Scale"); enabled: root.scaleName !== "Off"; onTriggered: root.quantizeToScale() }
         ThemedMenuItem { text: qsTr("Dequantize"); enabled: root.preQuantize[root.regionId] !== undefined; onTriggered: root.dequantize() }
         MenuSeparator {}
         ThemedMenu {
@@ -662,7 +741,7 @@ Item {
                         const db = root.snap(b - pressBeat), dn = root.noteAt(m.y) - pressNote
                         for (const i of root.selected) {
                             list[i].start = Math.max(0, origin[i].start + db)
-                            list[i].note = Math.max(0, Math.min(127, origin[i].note + dn))
+                            list[i].note = Math.max(0, Math.min(127, root.snapToScale ? root.toScale(origin[i].note + dn) : origin[i].note + dn))
                         }
                     } else if (mode === "resize") {
                         const d = root.snap(b - pressBeat)
@@ -698,7 +777,7 @@ Item {
                         if (hit >= 0) { root.selected = [hit]; return }
                         const start = Math.max(0, root.snap(b))
                         const list = root.copyNotes(root.notes)
-                        list.push({ start: start, length: root.gridUnit, note: pressNote, velocity: root.defaultVelocity, muted: false })
+                        list.push({ start: start, length: root.gridUnit, note: root.snapToScale ? root.toScale(pressNote) : pressNote, velocity: root.defaultVelocity, muted: false })
                         origin = root.copyNotes(list)
                         root.selected = [list.length - 1]
                         root.working = list

@@ -81,4 +81,17 @@ TestCase {
         p.muteNotes()
         tryVerify(function () { return p.notes[0].muted === false })
     }
+
+    function test_scale_quantize_moves_notes_to_the_nearest_scale_pitch() {
+        const p = setup()
+        p.scaleName = "Major"; p.scaleKey = 0
+        compare(p.toScale(61), 60)   // C#: the lower neighbour wins a tie
+        compare(p.toScale(63), 62)   // D# -> D
+        compare(p.toScale(66), 65)   // F# -> F
+        compare(p.toScale(60), 60)
+        p.scaleName = "Minor"; p.scaleKey = 9   // A minor has the same notes as C major
+        compare(p.toScale(61), 60)
+        p.scaleName = "Off"
+        compare(p.toScale(61), 61)
+    }
 }

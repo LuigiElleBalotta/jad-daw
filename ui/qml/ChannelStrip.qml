@@ -453,6 +453,8 @@ Panel {
                 visible: !root.master
                 anchors.centerIn: parent
                 doubleClickEdits: true  // a double click types a position from -64 to +63
+                fillArc: true
+                format: (v) => { const n = Math.max(-64, Math.min(63, Math.round(v * 64))); return (n > 0 ? "+" : "") + n }
                 entryScale: 64
                 centerMark: true
                 value: root.pan

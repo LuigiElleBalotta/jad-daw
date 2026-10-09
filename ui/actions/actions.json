@@ -105,7 +105,7 @@
  {"id":"edit.tempo","label":"Tempo","menu":"Edit","shortcut":"","kind":"command","status":"stub"},
  {"id":"edit.openInExternalSampleEditor","label":"Open in External Sample Editor","menu":"Edit","shortcut":"Shift+W","kind":"command","status":"stub"},
  {"id":"edit.openSmartTempoEditor","label":"Open Smart Tempo Editor","menu":"Edit","shortcut":"","kind":"command","status":"stub"},
- {"id":"track.newTracks","label":"New Tracks…","menu":"Track","shortcut":"Ctrl+Alt+N","kind":"command","status":"stub"},
+ {"id":"track.newTracks","label":"New Tracks…","menu":"Track","shortcut":"Ctrl+Alt+N","kind":"command","status":"ready"},
  {"id":"track.newAudio","label":"New Audio Track","menu":"Track","shortcut":"Ctrl+Alt+A","kind":"command","status":"ready"},
  {"id":"track.newInstrument","label":"New Software Instrument Track","menu":"Track","shortcut":"Ctrl+Alt+S","kind":"command","status":"ready"},
  {"id":"track.newSessionPlayerSiTrack","label":"New Session Player SI Track…","menu":"Track","shortcut":"Ctrl+Alt+U","kind":"command","status":"stub"},

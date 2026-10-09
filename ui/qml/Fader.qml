@@ -84,5 +84,9 @@ Item {
         onPositionChanged: (m) => { if (pressed) root.dragTo(m.y, m.modifiers & Qt.ShiftModifier) }
         onReleased: { const send = root.dragging; root.cancel(); if (send) root.released(root.dragValue) }
         onCanceled: root.cancel()
+        onDoubleClicked: {  // the second press already started a drag: it ends at 0 dB
+            root.dragValue = 0
+            root.moved(0)
+        }
     }
 }

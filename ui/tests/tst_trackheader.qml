@@ -20,6 +20,24 @@ TestCase {
         h.height = 56
         verify(h.slidersVisible)
     }
+    function test_the_volume_slider_stops_at_plus_6_like_the_mixer_fader() {
+        var h = createTemporaryObject(hdr, this, { height: 72 })
+        var found = null
+        var find = function (item) {
+            if (item.from === -96 && item.to !== undefined && item.moved !== undefined && item.pressed !== undefined) found = item
+            for (var i = 0; i < item.children.length; ++i) find(item.children[i])
+        }
+        find(h)
+        verify(found !== null)
+        compare(found.to, 6)
+    }
+    function test_pan_text_is_logics_minus_64_to_plus_63() {
+        var h = createTemporaryObject(hdr, this, { height: 72 })
+        compare(h.panText(0), "0")
+        compare(h.panText(-1), "-64")
+        compare(h.panText(1), "+63")
+        compare(h.panText(0.5), "+32")
+    }
     function test_mute_and_solo_emit_with_the_new_state() {
         var h = createTemporaryObject(hdr, this, { height: 72 })
         var got = []

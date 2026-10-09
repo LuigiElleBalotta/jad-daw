@@ -867,6 +867,24 @@ private slots:
         c.setCountInChoice(-4);
         QCOMPARE(c.countInChoice(), -3);
     }
+    void newTracksMakesSeveralInOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        const int before = c.tracks()->rowCount();
+        c.addTracks("audio", 3, "Gtr");
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 3);
+        auto names = [&] { QStringList out; for (int i = 0; i < c.tracks()->rowCount(); ++i) out << c.tracks()->nameAt(i); return out; };
+        QVERIFY(names().contains("Gtr 1") && names().contains("Gtr 2") && names().contains("Gtr 3"));
+        c.addTracks("instrument", 1, "Lead");
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 4);
+        QVERIFY(names().contains("Lead"));
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 3);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), before);
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

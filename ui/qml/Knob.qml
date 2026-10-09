@@ -10,6 +10,8 @@ Item {
     property bool doubleClickEdits: false  // a double click types a value (value * entryScale) instead of resetting
     property real entryScale: 1
     property bool centerMark: false         // a small green tick at the top: the centre position
+    property bool fillArc: false            // the ring is coloured from the centre position to the pointer (the pan knob)
+    property var format: null               // value -> text; shown above the knob while it is dragged
     signal moved(real value)
     signal released(real value)
 
@@ -35,6 +37,27 @@ Item {
             height: width
             radius: width / 2
             color: "#7d7d82"
+        }
+    }
+    Canvas {  // the coloured part of the ring, from the centre towards the pointer
+        id: arc
+        visible: root.fillArc
+        anchors.fill: parent
+        readonly property real shownValue: root.shown
+        onShownValueChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onPaint: {
+            const ctx = getContext("2d")
+            ctx.reset()
+            const centre = (root.from + root.to) / 2
+            if (Math.abs(root.shown - centre) < 1e-4) return
+            const turn = (root.shown - root.from) / (root.to - root.from) * 270 - 135  // degrees from the top, clockwise
+            const r = width / 2 - 1.5
+            ctx.lineWidth = 3
+            ctx.strokeStyle = Theme.accentPrimary
+            ctx.beginPath()
+            ctx.arc(width / 2, height / 2, r, -Math.PI / 2, (turn - 90) * Math.PI / 180, turn < 0)
+            ctx.stroke()
         }
     }
     Rectangle {  // the centre mark
@@ -86,6 +109,25 @@ Item {
             if (root.doubleClickEdits) { entry.text = Math.round(root.value * root.entryScale).toString(); entry.visible = true; entry.forceActiveFocus(); entry.selectAll(); return }
             root.dragValue = root.resetValue
             root.released(root.resetValue)
+        }
+    }
+    Rectangle {  // the value while the knob is dragged
+        visible: root.dragging && root.changed && root.format !== null
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: -height - 2
+        width: valueText.implicitWidth + 8
+        height: valueText.implicitHeight + 4
+        radius: 3
+        color: Theme.surfaceLcd
+        border.color: Theme.borderStrong
+        z: 10
+        Text {
+            id: valueText
+            anchors.centerIn: parent
+            text: root.format !== null ? root.format(root.shown) : ""
+            color: Theme.textValue
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontTypeLabelSize
         }
     }
     TextInput {  // the typed value of a double click

@@ -51,6 +51,7 @@ qt_add_qml_module(jad_ui_lib
         qml/GlobalTracks.qml
         qml/AutomationLane.qml
         qml/MetronomeSettings.qml
+        qml/NewTracksDialog.qml
         qml/ThemedMenu.qml
         qml/ThemedMenuItem.qml
         qml/ActionTreeMenu.qml

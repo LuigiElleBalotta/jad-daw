@@ -895,4 +895,30 @@ void ProjectController::finishRecording() {
     });
 }
 
+void ProjectController::addTracks(const QString& kind, int count, const QString& name) {
+    if (!host_ || (kind != "audio" && kind != "instrument" && kind != "bus")) return;
+    count = std::clamp(count, 1, 64);
+    const QString label = name.isEmpty() ? (kind == "audio" ? "Audio" : (kind == "instrument" ? "Instrument" : "Bus")) : name.left(60);
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    nlohmann::json commands = nlohmann::json::array();
+    for (int i = 0; i < count; ++i) {
+        // a single track keeps the name it was given; several get a number
+        const QString full = name.isEmpty() ? label + " " + QString::number(tracks_.totalCount() + 1 + i) : (count == 1 ? label : label + " " + QString::number(i + 1));
+        nlohmann::json instrument = nullptr;
+        if (kind == "instrument") instrument = {{"processorId", "builtin.sine"}, {"params", nlohmann::json::object()}, {"state", ""}};
+        commands.push_back({{"type", "add_track"},
+                            {"index", -1},
+                            {"track", {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()},
+                                       {"kind", kind.toStdString()},
+                                       {"name", full.toStdString()},
+                                       {"color", ""},
+                                       {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()},
+                                                  {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                                       {"regions", nlohmann::json::array()},
+                                       {"automation", nlohmann::json::array()},
+                                       {"instrument", instrument}}}});
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

@@ -33,6 +33,8 @@ Item {
     signal renamed(string id, string name)
     signal libraryRequested(string id)  // a double click on the header outside the name and the buttons
     signal selectRequested(string id, string mode)
+    // the pan as Logic shows it: -64 (hard left) to +63 (hard right), 0 in the centre
+    function panText(v) { const n = Math.max(-64, Math.min(63, Math.round(v * 64))); return (n > 0 ? "+" : "") + n }
     signal gestureStarted()
     signal gainMoved(string id, real db)
     signal panMoved(string id, real pan)
@@ -204,7 +206,7 @@ Item {
             anchors.rightMargin: Theme.spacing[3]
             anchors.verticalCenter: parent.verticalCenter
             from: -96
-            to: 24
+            to: 6
             // the slider shows its own value while it is dragged; the command goes out on release
             property bool started: false
             onMoved: {  // live: the strips and fields elsewhere follow
@@ -237,6 +239,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             implicitWidth: 20
             implicitHeight: 20
+            fillArc: true
+            format: (v) => root.panText(v)
             value: root.pan
             property bool started: false
             onMoved: (v) => {

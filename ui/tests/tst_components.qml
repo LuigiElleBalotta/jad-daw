@@ -23,6 +23,14 @@ TestCase {
         compare(released.length, 1)
         verify(released[0] <= f.to && released[0] >= f.from)
     }
+    function test_fader_double_click_is_back_to_zero_db() {
+        var f = createTemporaryObject(faderC, this, { value: -20 })
+        var released = []
+        f.released.connect(function (v) { released.push(v) })
+        mouseDoubleClickSequence(f, 14, 150)
+        verify(released.length >= 1)
+        compare(released[released.length - 1], 0)
+    }
     function test_fader_clamps_to_range() {
         var f = createTemporaryObject(faderC, this)
         var last

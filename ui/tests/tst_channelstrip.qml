@@ -161,12 +161,23 @@ TestCase {
         mouseClick(s.panKnob)
         compare(got.length, 0)
     }
-    function test_double_click_on_a_knob_resets_once() {
+    function test_alt_click_on_a_knob_resets_once() {
+        var s = createTemporaryObject(stripC, this)
+        var moved = JSON.parse(JSON.stringify(keys)); moved.pan = 0.5
+        s.info = moved
+        var got = []
+        s.panReleased.connect(function (id, v) { got.push([id, v]) })
+        mouseClick(s.panKnob, 5, 5, Qt.LeftButton, Qt.AltModifier)
+        compare(got, [["t", 0]])
+    }
+    function test_double_click_on_the_pan_knob_types_a_position_from_minus_64_to_63() {
         var s = createTemporaryObject(stripC, this)
         var got = []
         s.panReleased.connect(function (id, v) { got.push([id, v]) })
         mouseDoubleClickSequence(s.panKnob)
-        compare(got, [["t", 0]])
+        compare(got.length, 0)               // nothing is sent by the double click itself
+        keyClick(Qt.Key_3); keyClick(Qt.Key_2); keyClick(Qt.Key_Return)
+        compare(got, [["t", 0.5]])           // 32 / 64
     }
 
     function test_new_bus_entries_lead_the_send_and_output_menus() {

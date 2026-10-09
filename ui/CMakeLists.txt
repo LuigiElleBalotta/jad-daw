@@ -16,6 +16,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/region_model.cpp
         bridge/mixer_model.cpp
         bridge/project_controller.cpp
+        bridge/project_controller_edit.cpp
         bridge/waveform_cache.cpp
         bridge/lcd_parse.cpp
         bridge/inspector_model.cpp

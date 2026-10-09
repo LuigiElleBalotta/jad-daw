@@ -33,6 +33,8 @@ ChannelStrip {
     onLibraryRequested: project.libraryVisible = true
     onNewBusRequested: (id, role) => project.newBusFor(id, role)
     onTrackToggled: (id, actionId, on) => project.setTrackToggle(actionId, id, on)
+    onMuteAllRequested: (on) => project.muteAll(on)
+    onSoloAllRequested: (on) => project.soloAll(on)
     onSoloExclusiveRequested: (id) => project.soloExclusive(id)
     onSoloClearRequested: project.clearSolo()
     onPeakReset: project.announceStub(qsTr("Peak reset"))

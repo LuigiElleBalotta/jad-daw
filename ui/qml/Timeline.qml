@@ -201,6 +201,7 @@ Item {
                 trackName: root.project.tracks.nameAt(trackIndex)
                 tool: root.project.tool
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
+                muted: model.muted
                 x: root.beatsToX(startBeats)
                 y: trackIndex * root.rowHeight - root.scrollY + 2
                 width: lengthBeats * root.pixelsPerBeat
@@ -213,6 +214,7 @@ Item {
                 onEraseRequested: (id) => root.project.deleteRegions([id])
                 onSplitRequested: (id, atBeats) => root.project.splitRegion(id, atBeats)
                 onGlueRequested: (id) => root.project.joinWithNext(id)
+                onMuteRequested: (id) => { root.project.selectRegion(id, "replace"); root.project.toggleMuteSelectedRegions() }
             }
         }
 

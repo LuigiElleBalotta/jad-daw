@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include <nlohmann/json.hpp>
+
+#include "lpc/model_json.h"
 #include "lpc/patch_library.h"
 #include "lpc/processor_ids.h"
 
@@ -112,6 +115,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.trackIndex = shownRow;
             rr.color = tr.color;
             rr.gainDb = r.gainDb;
+            rr.json = nlohmann::json(r).dump();
             rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
             rr.startBeats = toBeats(p, r, r.start);
             rr.lengthBeats = toBeats(p, r, r.start + r.length) - rr.startBeats;

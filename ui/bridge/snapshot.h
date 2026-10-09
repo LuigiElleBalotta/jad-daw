@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <QHash>
 #include <QString>
 #include <cstdint>
@@ -33,7 +34,7 @@ struct SmartRow {
 struct TrackRow {
     QString id, name, kind, color;
     bool master = false, mute = false, solo = false;
-    bool recordArm = false, inputMonitor = false;  // the R and I stubs: their state is kept by the controller
+    bool recordArm = false, inputMonitor = false, soloSafe = false;  // the R and I stubs: their state is kept by the controller
     double gainDb = 0.0, pan = 0.0;
     int regionCount = 0;
     bool showInTracks = true;  // false: a bus or aux that is listed in the Mixer only
@@ -51,6 +52,8 @@ struct RegionRow {
     QString mediaId;
     QString color;  // the colour name of its track
     double gainDb = 0.0;
+    std::string json;  // the whole region as the Core stores it (copy and paste)
+    bool muted = false;  // Ctrl+M: shown grey (kept by the controller, like the R and I states)
 };
 
 // True when `a` and `b` hold the same ids in the same order: the models then update in place (dataChanged) instead of

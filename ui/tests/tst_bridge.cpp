@@ -673,6 +673,79 @@ private slots:
         QCOMPARE(notices.count(), 1);
         QVERIFY(notices.at(0).at(0).toString().contains("at least two"));
     }
+    void copyAndPasteMakeAnotherRegionAtThePlayheadAndSelectIt() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        const QString id = c.regions()->regionIdAt(0);
+        c.selectRegion(id, "replace");
+        c.copySelectedRegions();
+        c.locateBeats(40.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 40.0) < 0.01);  // the Core moves the playhead on its own thread
+        c.pasteRegions(false);
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+        QTRY_VERIFY(c.selectedRegionIds().size() == 1 && c.selectedRegionIds().first() != id);
+        const jad::RegionRow* pasted = c.regions()->find(c.selectedRegionIds().first());
+        QVERIFY(pasted);
+        QVERIFY(std::abs(pasted->startBeats - 40.0) < 0.01);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), n);
+    }
+    void duplicateGoesRightAfterTheSelection() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        const QString id = c.regions()->regionIdAt(0);
+        const jad::RegionRow before = *c.regions()->find(id);
+        c.selectRegion(id, "replace");
+        c.duplicateSelectedRegions();
+        QTRY_COMPARE(c.regions()->rowCount(), n + 1);
+        QTRY_VERIFY(c.selectedRegionIds().size() == 1 && c.selectedRegionIds().first() != id);
+        const jad::RegionRow* copy = c.regions()->find(c.selectedRegionIds().first());
+        QVERIFY(copy);
+        QVERIFY(std::abs(copy->startBeats - (before.startBeats + before.lengthBeats)) < 0.01);
+    }
+    void muteRegionIsVisualAndToggles() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int muted = c.regions()->roleNames().key("muted");
+        c.selectRegion(c.regions()->regionIdAt(0), "replace");
+        c.toggleMuteSelectedRegions();
+        QVERIFY(c.regions()->data(c.regions()->index(0), muted).toBool());
+        c.toggleMuteSelectedRegions();
+        QVERIFY(!c.regions()->data(c.regions()->index(0), muted).toBool());
+    }
+    void nudgeMovesSelectedRegionsByTheNudgeValue() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString id = c.regions()->regionIdAt(0);
+        const double start = c.regions()->find(id)->startBeats;
+        c.selectRegion(id, "replace");
+        c.setNudgeBeats(2.0);
+        c.nudgeSelectedRegions(1);
+        QTRY_VERIFY(std::abs(c.regions()->find(id)->startBeats - (start + 2.0)) < 0.01);
+    }
+    void muteAllSwitchesEveryStripInTheSameState() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.mixer()->rowCount() > 1);
+        c.muteAll(true);
+        const int mute = c.mixer()->roleNames().key("mute");
+        QTRY_VERIFY([&] {
+            for (int i = 0; i < c.mixer()->rowCount(); ++i)
+                if (!c.mixer()->data(c.mixer()->index(i), mute).toBool()) return false;
+            return true;
+        }());
+    }
     void toolNoticesGoToTheToastNotTheErrorBar() {
         TempDir dir;
         jad::ProjectController c(false);

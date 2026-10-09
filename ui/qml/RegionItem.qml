@@ -21,6 +21,8 @@ Item {
     property string trackName
     property string tool: "pointer"
     property bool selected: false
+    property bool muted: false
+    property string regionName
     property real dragDeltaPx: 0
     property real leftEdgePx: 0   // live feedback while an edge is dragged
     property real rightEdgePx: 0
@@ -32,6 +34,7 @@ Item {
     signal eraseRequested(string id)
     signal splitRequested(string id, real atBeats)
     signal glueRequested(string id)
+    signal muteRequested(string id)
 
     // "bar beat" of a position in beats, or the length as "bars beats"
     function barBeat(b, length) {
@@ -87,8 +90,8 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: Theme.radiusRegion
-            color: root.missing ? Theme.surfaceRaised : root.fill
-            border.color: root.selected ? Theme.textPrimary : (root.missing ? Theme.stateMute : root.solid)
+            color: (root.missing || root.muted) ? Theme.surfaceRaised : root.fill  // a muted region is grey
+            border.color: root.selected ? Theme.textPrimary : ((root.missing || root.muted) ? Theme.stateMute : root.solid)
             border.width: root.selected ? 2 : 1
         }
 
@@ -147,7 +150,7 @@ Track: %3")
             x: 4; y: 1
             width: parent.width - 8
             elide: Text.ElideRight
-            text: root.missing ? qsTr("missing media") : ""
+            text: root.missing ? qsTr("missing media") : (root.muted ? "\u2022 " : "")  // a dot before the name of a muted region
             color: Theme.textSecondary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontTypeCaptionSize
@@ -169,6 +172,7 @@ Track: %3")
             if (root.tool === "eraser") { root.eraseRequested(root.regionId); return }
             if (root.tool === "scissors") { root.splitRequested(root.regionId, root.startBeats + m.x / root.pixelsPerBeat); return }
             if (root.tool === "glue") { root.glueRequested(root.regionId); return }
+            if (root.tool === "mute") { root.muteRequested(root.regionId); return }
             if (root.tool === "zoom") return  // the Zoom tool acts on the lane (Timeline), not on a region
             toolAction = false
             pressSceneX = sceneX(m)

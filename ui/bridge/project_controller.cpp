@@ -289,6 +289,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     for (TrackRow& t : s.tracks) {
         t.recordArm = trackToggles_.value(QStringLiteral("track.recordArm")).contains(t.id);
         t.inputMonitor = trackToggles_.value(QStringLiteral("track.inputMonitor")).contains(t.id);
+        t.soloSafe = trackToggles_.value(QStringLiteral("track.soloSafe")).contains(t.id);
     }
     std::vector<TrackRow> withoutMaster;
     for (const TrackRow& t : s.tracks)
@@ -301,7 +302,12 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         emit selectionChanged();
     }
     mixer_.reset(s.tracks);
+    for (RegionRow& r : s.regions) r.muted = mutedRegions_.contains(r.id);
     regions_.reset(s.regions);
+    if (!pendingRegionSelection_.isEmpty() && regions_.find(pendingRegionSelection_.first())) {
+        selectRegions(pendingRegionSelection_, "replace");
+        pendingRegionSelection_.clear();
+    }
     allRows_ = s.tracks;
     regionRows_ = s.regions;
     tempoMap_ = s.tempoMap;
@@ -527,14 +533,15 @@ void ProjectController::simulatePlaybackForTest(bool playing, double positionBea
 }
 
 void ProjectController::setTrackToggle(const QString& actionId, const QString& trackId, bool on) {
-    if (actionId != QStringLiteral("track.recordArm") && actionId != QStringLiteral("track.inputMonitor")) return;
+    const bool safe = actionId == QStringLiteral("track.soloSafe");
+    if (actionId != QStringLiteral("track.recordArm") && actionId != QStringLiteral("track.inputMonitor") && !safe) return;
     if (!tracks_.find(trackId)) return;
     QSet<QString>& ids = trackToggles_[actionId];
     if (on) ids.insert(trackId);
     else ids.remove(trackId);
     const bool arm = actionId == QStringLiteral("track.recordArm");
-    tracks_.setToggle(trackId, arm ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
-    mixer_.setToggle(trackId, arm, on);
+    if (!safe) tracks_.setToggle(trackId, arm ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
+    mixer_.setToggle(trackId, safe ? MixerModel::SoloSafe : (arm ? MixerModel::RecordArm : MixerModel::InputMonitor), on);
     emit trackTogglesChanged();
 }
 
@@ -544,7 +551,7 @@ bool ProjectController::selectedToggle(const QString& actionId) const {
 }
 
 void ProjectController::setTool(const QString& tool) {
-    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom"};
+    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom", "mute"};
     if (!known.contains(tool) || tool == tool_) return;
     tool_ = tool;
     emit toolChanged();
@@ -743,6 +750,20 @@ void ProjectController::barForward() { locateBeats((std::floor(positionBeats_ / 
 void ProjectController::setMute(const QString& trackId, bool on) { setStripField(trackId, "mute", on); }
 
 void ProjectController::setSolo(const QString& trackId, bool on) { setStripField(trackId, "solo", on); }
+
+// Command-click on M or S: every strip that is in the same state as the clicked one switches to its new state, the master
+// included for mute (one undo step).
+void ProjectController::setAllStrips(const char* field, bool on) {
+    nlohmann::json commands = nlohmann::json::array();
+    const bool solo = std::string(field) == "solo";
+    for (const TrackRow& t : allRows_) {
+        if (solo && (t.master || trackToggles_.value(QStringLiteral("track.soloSafe")).contains(t.id))) continue;
+        if ((solo ? t.solo : t.mute) == !on) commands.push_back({{"type", "set_strip"}, {"trackId", t.id.toStdString()}, {field, on}});
+    }
+    if (!commands.empty()) sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+void ProjectController::muteAll(bool on) { setAllStrips("mute", on); }
+void ProjectController::soloAll(bool on) { setAllStrips("solo", on); }
 
 // Option-click on S: only this track is soloed (one undo step).
 void ProjectController::soloExclusive(const QString& trackId) {

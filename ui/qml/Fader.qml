@@ -61,9 +61,12 @@ Item {
         width: parent.width
         height: 14
         radius: Theme.radiusControl
-        color: Theme.textPrimary
+        color: "#b9b9be"
         y: root.valueToPos(root.dragging ? root.dragValue : root.value) - height / 2
-        Rectangle { anchors.centerIn: parent; width: parent.width - 6; height: 1; color: "#80000000" }
+        Repeater {  // the ridges of the cap
+            model: [-3, 0, 3]
+            delegate: Rectangle { required property int modelData; x: 3; y: handle.height / 2 + modelData - 0.5; width: handle.width - 6; height: 1; color: modelData === 0 ? "#20000000" : "#50ffffff" }
+        }
     }
     MouseArea {
         anchors.fill: parent

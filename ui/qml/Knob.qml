@@ -7,6 +7,9 @@ Item {
     property real from: -1
     property real to: 1
     property real resetValue: 0
+    property bool doubleClickEdits: false  // a double click types a value (value * entryScale) instead of resetting
+    property real entryScale: 1
+    property bool centerMark: false         // a small green tick at the top: the centre position
     signal moved(real value)
     signal released(real value)
 
@@ -20,19 +23,34 @@ Item {
     function cancel() { dragging = false; changed = false; dragValue = value }
     readonly property real shown: dragging ? dragValue : value
 
-    Rectangle {
+    Rectangle {  // the dark ring and the light face
         anchors.fill: parent
         radius: width / 2
-        color: Theme.surfaceRaised
+        color: Theme.surfaceCanvas
         border.color: Theme.borderStrong
         border.width: 1
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width - 6
+            height: width
+            radius: width / 2
+            color: "#7d7d82"
+        }
+    }
+    Rectangle {  // the centre mark
+        visible: root.centerMark
+        x: root.width / 2 - 1
+        y: -2
+        width: 2
+        height: 4
+        color: Theme.statePlay
     }
     Rectangle {
         // pointer sweeps -135..135 degrees across the range
         width: 2
         height: root.height / 2 - 4
         radius: 1
-        color: Theme.accentPrimary
+        color: Theme.textPrimary
         x: root.width / 2 - 1
         y: 4
         transform: Rotation {
@@ -63,6 +81,34 @@ Item {
         }
         onReleased: { const send = root.dragging && root.changed; const v = root.dragValue; root.cancel(); if (send) root.released(v) }
         onCanceled: root.cancel()
-        onDoubleClicked: { root.cancel(); root.dragValue = root.resetValue; root.released(root.resetValue) }
+        onDoubleClicked: {
+            root.cancel()
+            if (root.doubleClickEdits) { entry.text = Math.round(root.value * root.entryScale).toString(); entry.visible = true; entry.forceActiveFocus(); entry.selectAll(); return }
+            root.dragValue = root.resetValue
+            root.released(root.resetValue)
+        }
+    }
+    TextInput {  // the typed value of a double click
+        id: entry
+        visible: false
+        anchors.centerIn: parent
+        width: Math.max(root.width, 28)
+        horizontalAlignment: TextInput.AlignHCenter
+        color: Theme.textValue
+        selectByMouse: true
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontTypeLabelSize
+        Rectangle { anchors.fill: parent; anchors.margins: -2; z: -1; radius: 3; color: Theme.surfaceLcd; border.color: Theme.accentPrimary }
+        Keys.onShortcutOverride: (event) => { if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Escape) event.accepted = true }
+        Keys.onEscapePressed: visible = false
+        onAccepted: {
+            const v = parseFloat(text.replace(",", "."))
+            visible = false
+            if (isFinite(v)) {
+                const next = Math.max(root.from, Math.min(root.to, v / root.entryScale))
+                if (Math.abs(next - root.value) > 1e-6) root.released(next)
+            }
+        }
+        onActiveFocusChanged: if (!activeFocus) visible = false
     }
 }

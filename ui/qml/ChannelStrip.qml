@@ -77,6 +77,8 @@ Panel {
     signal trackToggled(string id, string actionId, bool on)   // the R and I buttons
     signal soloExclusiveRequested(string id)                    // Option-click on S: this strip alone
     signal soloClearRequested()                                 // Option-click on a lit S: every solo off
+    signal muteAllRequested(bool on)                            // Command-click on M
+    signal soloAllRequested(bool on)                            // Command-click on S
     signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
@@ -442,6 +444,9 @@ Panel {
                 id: panKnob
                 visible: !root.master
                 anchors.centerIn: parent
+                doubleClickEdits: true  // a double click types a position from -64 to +63
+                entryScale: 64
+                centerMark: true
                 value: root.pan
                 onReleased: (v) => root.panReleased(root.trackId, v)
             }
@@ -540,6 +545,14 @@ Panel {
                 fillActive: true
                 fillText: Theme.textPrimary
                 onClicked: root.muteToggled(root.trackId, !root.mute)
+                MouseArea {  // Command-click (Ctrl): every strip in this state switches
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    onPressed: (m) => {
+                        if (!(m.modifiers & Qt.ControlModifier)) { m.accepted = false; return }
+                        root.muteAllRequested(!root.mute)
+                    }
+                }
             }
             IconButton {
                 id: soloButton
@@ -555,9 +568,22 @@ Panel {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
                     onPressed: (m) => {
+                        if (m.modifiers & Qt.ControlModifier) {  // Control-click on the Mac: solo-safe; Ctrl+Shift here, Ctrl alone is Command
+                            if (m.modifiers & Qt.ShiftModifier) root.trackToggled(root.trackId, "track.soloSafe", root.info.soloSafe !== true)
+                            else root.soloAllRequested(!root.solo)
+                            return
+                        }
                         if (!(m.modifiers & Qt.AltModifier)) { m.accepted = false; return }
                         if (root.solo) root.soloClearRequested(); else root.soloExclusiveRequested(root.trackId)
                     }
+                }
+                Rectangle {  // a red slash on the S: solo-safe
+                    visible: root.info.soloSafe === true
+                    anchors.centerIn: parent
+                    width: 2
+                    height: parent.height + 2
+                    rotation: 45
+                    color: Theme.stateRecord
                 }
             }
             IconButton {  // dim, on the master strip

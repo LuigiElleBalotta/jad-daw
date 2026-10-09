@@ -227,6 +227,27 @@ public:
     Q_INVOKABLE void resizeRegion(const QString& regionId, double startBeats, double lengthBeats);  // snapping is done by the caller
     Q_INVOKABLE void resizeSelectedRegions(const QString& regionId, double startBeats, double lengthBeats);
     Q_INVOKABLE void moveSelectedRegions(const QString& regionId, double startBeats);
+    // Edit menu (project_controller_edit.cpp)
+    Q_INVOKABLE void copySelectedRegions();
+    Q_INVOKABLE void cutSelectedRegions();
+    Q_INVOKABLE void pasteRegions(bool atOriginalPosition = false);
+    Q_INVOKABLE void duplicateSelectedRegions();
+    Q_INVOKABLE void toggleMuteSelectedRegions();
+    Q_INVOKABLE void selectFollowingRegions(bool sameTrackOnly);
+    Q_INVOKABLE void selectOverlappedRegions();
+    Q_INVOKABLE void selectSameColoredRegions();
+    Q_INVOKABLE void selectMutedRegions();
+    Q_INVOKABLE void selectEmptyRegions();
+    Q_INVOKABLE void invertRegionSelection();
+    Q_INVOKABLE void selectNeighbourRegion(int direction);  // -1 previous, +1 next, on the track of the first selected region
+    Q_INVOKABLE void removeOverlaps();
+    Q_INVOKABLE void regionEndToNextRegion();
+    Q_INVOKABLE void halveSelectedRegions();
+    Q_INVOKABLE void doubleSelectedRegions();
+    Q_INVOKABLE void nudgeSelectedRegions(int direction);  // by the nudge value
+    Q_INVOKABLE void setNudgeBeats(double beats);
+    Q_PROPERTY(double nudgeBeats READ nudgeBeats NOTIFY nudgeChanged)
+    double nudgeBeats() const { return nudgeBeats_; }
     Q_INVOKABLE void splitSelectedAtPlayhead();  // every selected region that strictly contains the playhead, one undo step
     Q_INVOKABLE void joinSelected();             // the selected regions, which must touch one another
     // Selects the regions that overlap the rectangle (beats and timeline rows, both inclusive).
@@ -279,6 +300,8 @@ public:
     Q_INVOKABLE void setRegionGain(const QString& regionId, double db);
     Q_INVOKABLE void setSmartControl(const QString& trackId, const QString& controlId, double value);
     Q_INVOKABLE void soloExclusive(const QString& trackId);
+    Q_INVOKABLE void muteAll(bool on);
+    Q_INVOKABLE void soloAll(bool on);
     Q_INVOKABLE void clearSolo();
     Q_INVOKABLE void announceStub(const QString& label);  // a visual-only control was used: the usual notice
     Q_INVOKABLE void moveRegion(const QString& regionId, double startBeats);
@@ -317,6 +340,7 @@ signals:
     void trackFlagsChanged();
     void routingRevisionChanged();  // the first selected track, or one of its flags, changed
     void trackTogglesChanged();
+    void nudgeChanged();
     void toolChanged();
     void snapChanged();
     void followPlayheadChanged();
@@ -370,6 +394,17 @@ private:
     std::shared_ptr<const lpc::PatchLibrary> patches_;  // the built-in catalogue; also read on the project thread
     std::vector<TrackRow> allRows_;                     // every track of the last snapshot, the master included
     std::vector<RegionRow> regionRows_;
+    struct ClipRegion {
+        RegionRow row;  // where it came from (track, position, unit)
+        std::string json;
+    };
+    std::vector<ClipRegion> clipboard_;   // the copied regions
+    QStringList pendingRegionSelection_;  // ids of regions just pasted: selected when the next snapshot has them
+    QSet<QString> mutedRegions_;          // region ids muted with Ctrl+M
+    double nudgeBeats_ = 0.25;
+    std::vector<const RegionRow*> selectedRegionRows() const;
+    void setAllStrips(const char* field, bool on);
+    void pasteClipboard(double offsetBeats, bool keepTrack);
     bool inspectorVisible_ = true, libraryVisible_ = false, smartControlsVisible_ = false;
     double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0;
 

@@ -19,11 +19,11 @@ void MixerModel::reset(const std::vector<TrackRow>& rows) {
     endResetModel();
 }
 
-void MixerModel::setToggle(const QString& trackId, bool recordArm, bool on) {
+void MixerModel::setToggle(const QString& trackId, Toggle which, bool on) {
     for (std::size_t i = 0; i < rows_.size(); ++i) {
         TrackRow& t = rows_[i];
         if (t.id != trackId) continue;
-        bool& field = recordArm ? t.recordArm : t.inputMonitor;
+        bool& field = which == RecordArm ? t.recordArm : (which == InputMonitor ? t.inputMonitor : t.soloSafe);
         if (field == on) return;
         field = on;
         emit dataChanged(index(static_cast<int>(i)), index(static_cast<int>(i)), {Info});

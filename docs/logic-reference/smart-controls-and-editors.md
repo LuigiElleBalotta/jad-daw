@@ -78,3 +78,16 @@ colour) says "Create a MIDI region." and shows only the ruler.
 - The Editors area is a **tab strip with four editors**, not only the Piano Roll; the first implementation can show Piano Roll and
   grey out the others.
 - The Piano Roll left pane doubles as the place for quantize and velocity defaults; the "Q" buttons apply to the selected notes.
+
+## List Editors (control bar button, shortcut D; opens as a column at the right of the window)
+
+Tab strip **Event | Marker | Tempo | Signature**; the Tracks area and the editors narrow to make room.
+
+- **Event list:** local bar Edit ▾ · Functions ▾ · View ▾ and two toggle icons (green); filter buttons (blue when on): **Notes · Progr. Change · Pitch
+  Bend · Controller** / **Aftertouch · Poly Aftertouch · Syst. Exclusive · Additional Info**; a row with **+** (create event), a popup of the event kind to
+  create (`Notes`), **Quantize:** popup (Off) and **Q**; then the table with columns **L, M** (lock, mute), **Position, Status, Ch, Num, Val, Length/Info**.
+  Empty when no region has events.
+- **Tempo list:** Edit ▾ · Options ▾ · a toggle icon · **Additional Info** button; **+**, **Tempo Set:** popup (Untitled); table columns **Position**
+  (bar, beat, division, ticks: `1 1 1 1`, `34 4 3 1`, `140 4 4 227`) · **Tempo** (4 decimals, `137,9040`) · **SMPTE Position** (`01:00:58:22.72`). The
+  project here has 8 tempo changes.
+- **Marker** and **Signature** tabs not captured.

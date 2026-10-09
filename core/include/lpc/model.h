@@ -60,6 +60,7 @@ struct Strip {
     std::vector<ProcessorRef> inserts;
     std::vector<Send> sends;
     Uuid output;  // null = master
+    int input = 0;  // the audio input the track records: 0 = inputs 1 and 2 as stereo, n >= 1 = input n as mono
     bool operator==(const Strip&) const = default;
 };
 

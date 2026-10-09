@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <cmath>
+#include <limits>
 #include <nlohmann/json.hpp>
 
 #include "bridge/project_controller.h"
@@ -838,8 +839,62 @@ void ProjectController::setCountInChoice(int choice) {
 }
 
 void ProjectController::toggleRecording() {
-    if (recording_) stop();
+    if (recording_) sendRecordingStop();  // the transport keeps playing: Record/Record Toggle
     else startRecording();
+}
+
+void ProjectController::sendRecordingStop() {
+    recFinishing_ = true;
+    if (host_) host_->stopRecording();
+}
+
+void ProjectController::setPunchEnabled(bool on) {
+    if (on == punchEnabled_) return;
+    punchEnabled_ = on;
+    emit punchChanged();
+}
+
+void ProjectController::setPunchRange(double startBeats, double endBeats) {
+    if (!std::isfinite(startBeats) || !std::isfinite(endBeats) || endBeats <= startBeats) return;
+    punchStartBeats_ = std::clamp(startBeats, 0.0, kMaxBeatsEdit);
+    punchEndBeats_ = std::clamp(endBeats, 0.0, kMaxBeatsEdit);
+    emit punchChanged();
+}
+
+void ProjectController::setRecordingDelay(int samples) {
+    samples = std::clamp(samples, -4800, 48000);
+    if (samples == recordingDelay_) return;
+    recordingDelay_ = samples;
+    emit audioSettingsChanged();
+}
+
+int ProjectController::trackInput(const QString& trackId) const {
+    for (const TrackRow& t : allRows_)
+        if (t.id == trackId) return t.input;
+    return 0;
+}
+
+void ProjectController::setTrackInput(const QString& trackId, int input) {
+    if (!host_ || input < 0 || input > 64) return;
+    sendCommand({{"type", "set_strip"}, {"trackId", trackId.toStdString()}, {"input", input}});
+}
+
+QStringList ProjectController::inputChoices() const {
+    QStringList out{QStringLiteral("Input 1 + 2 (stereo)")};
+    const int n = std::max(inputChannels(), 2);
+    for (int i = 1; i <= n; ++i) out << QStringLiteral("Input %1").arg(i);
+    return out;
+}
+
+// The tracks that play their input through the strip: the ones with the I button on.
+void ProjectController::applyMonitoring() {
+    if (!host_) return;
+    const QSet<QString> on = trackToggles_.value(QStringLiteral("track.inputMonitor"));
+    for (const TrackRow& t : allRows_) {
+        if (t.master || t.kind != "audio") continue;
+        const bool monitored = on.contains(t.id);
+        host_->setMonitor(lpc::Uuid::parse(t.id.toStdString()).value_or(lpc::Uuid{}), monitored ? (t.input == 0 ? 1 : t.input) : 0, monitored && t.input == 0 ? 2 : 0);
+    }
 }
 
 void ProjectController::startRecording() {
@@ -852,18 +907,24 @@ void ProjectController::startRecording() {
         setError(QString("No audio device: ") + (deviceError_.isEmpty() ? QString("no device") : deviceError_));
         return;
     }
-    QString track;
+    recTracks_.clear();
+    recInputs_.clear();
+    const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
     for (const TrackRow& t : allRows_)
-        if (t.kind == "audio" && !t.master && trackToggles_.value(QStringLiteral("track.recordArm")).contains(t.id)) { track = t.id; break; }
-    if (track.isEmpty()) {
+        if (t.kind == "audio" && !t.master && armed.contains(t.id)) {
+            recTracks_ << t.id;
+            recInputs_.insert(t.id, t.input);
+        }
+    if (recTracks_.isEmpty()) {
         emit notice("Arm an audio track (R) to record");
         return;
     }
+    const bool quickPunch = playing_;  // pressing Record while the project plays: record from here, no count-in
     const lpc::Ticks tick = static_cast<lpc::Ticks>(std::llround(std::clamp(positionBeats_, 0.0, kMaxBeatsEdit) * lpc::kPPQ));
     const auto startFrame = static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(tick, sampleRate_)));
     lpc::audio::ClickTrack count;
     std::int64_t countFrames = 0;
-    if (countIn_) {  // the bars before the take, at the tempo of the start, counted 1 2 3 4 with an accent on the first
+    if (countIn_ && !quickPunch) {  // the bars before the take, at the tempo of the start, counted 1 2 3 4 with an accent on the first
         const double framesPerBeat = sampleRate_ * 60.0 / tempoMap_.bpmAt(tick) * 4.0 / beatUnit_;
         const int beats = countInChoice_ > 0 ? countInChoice_ * beatsPerBar_ : -countInChoice_;  // bars, or x/4: x beats
         for (int k = 0; k < beats; ++k) {
@@ -873,30 +934,31 @@ void ProjectController::startRecording() {
         }
         countFrames = static_cast<std::int64_t>(std::llround(beats * framesPerBeat));
     }
-    recBuf_.clear();
-    recTrack_ = track;
-    recStartBeats_ = positionBeats_;
+    recChannels_.clear();
+    recChunks_.clear();
+    punchStopSent_ = false;
     recording_ = true;
     recFinishing_ = false;
-    host_->startRecording(startFrame, countFrames, std::move(count));
+    host_->startRecording(startFrame, countFrames, std::move(count), !quickPunch);
     emit recordingChanged();
 }
 
 void ProjectController::drainRecording() {
-    constexpr std::size_t kMaxFloats = 48000u * 2u * 60u * 30u;  // half an hour at 48 kHz
+    constexpr std::size_t kMaxFrames = 48000u * 60u * 30u;  // half an hour at 48 kHz
     lpc::audio::AudioEngine::RecChunk c;
     while (engine_ && engine_->takeRecorded(c)) {
-        if (recBuf_.size() + static_cast<std::size_t>(c.frames) * 2 > kMaxFloats) {
+        if (recChannels_.empty()) recChannels_.assign(static_cast<std::size_t>(std::max(c.channels, 1)), {});
+        if (!recChannels_.empty() && recChannels_[0].size() + static_cast<std::size_t>(c.frames) > kMaxFrames) {
             if (!recFinishing_) {
-                recFinishing_ = true;
                 emit notice("The take reached 30 minutes: recording stopped");
-                if (host_) host_->stop();
+                sendRecordingStop();
             }
             continue;
         }
-        for (int i = 0; i < c.frames; ++i) {
-            recBuf_.push_back(c.l[i]);
-            recBuf_.push_back(c.r[i]);
+        recChunks_.push_back({c.position, c.frames, recChannels_[0].size()});
+        for (std::size_t ch = 0; ch < recChannels_.size(); ++ch) {
+            const int src = static_cast<int>(std::min<std::size_t>(ch, static_cast<std::size_t>(std::max(c.channels, 1)) - 1));
+            recChannels_[ch].insert(recChannels_[ch].end(), c.ch[src], c.ch[src] + c.frames);
         }
     }
 }
@@ -906,27 +968,78 @@ void ProjectController::finishRecording() {
     recording_ = false;
     recFinishing_ = false;
     emit recordingChanged();
-    if (recBuf_.empty()) {
+    if (recChunks_.empty() || recChannels_.empty()) {
+        emit notice("Nothing was recorded");
+        recChannels_.clear();
+        recChunks_.clear();
+        return;
+    }
+    // the takes: runs of blocks that follow each other on the timeline (a cycle wrap starts a new one)
+    struct Run { std::int64_t position; std::size_t from, to; };
+    std::vector<Run> runs;
+    for (const RecChunkInfo& ch : recChunks_) {
+        if (!runs.empty() && runs.back().position + static_cast<std::int64_t>(runs.back().to - runs.back().from) == ch.position) runs.back().to = ch.offset + static_cast<std::size_t>(ch.frames);
+        else runs.push_back({ch.position, ch.offset, ch.offset + static_cast<std::size_t>(ch.frames)});
+    }
+    const int latency = (device_ ? device_->roundTripLatency() : 0) + recordingDelay_;
+    const std::int64_t punchIn = punchEnabled_ ? static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(punchStartBeats_ * lpc::kPPQ)), sampleRate_))) : 0;
+    const std::int64_t punchOut = punchEnabled_ ? static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(punchEndBeats_ * lpc::kPPQ)), sampleRate_))) : std::numeric_limits<std::int64_t>::max();
+    int made = 0;
+    double seconds = 0;
+    const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh.mm.ss");
+    for (const QString& trackId : std::as_const(recTracks_)) {
+        const int input = recInputs_.value(trackId);
+        QString trackName;
+        for (const TrackRow& t : allRows_) if (t.id == trackId) trackName = t.name;
+        int take = 0;
+        for (const Run& run : runs) {
+            std::int64_t from = static_cast<std::int64_t>(run.from) + latency;  // the take moves earlier by the latency
+            std::int64_t start = run.position + latency - latency;              // where the first kept frame lies on the timeline
+            std::int64_t to = static_cast<std::int64_t>(run.to);
+            if (punchEnabled_) {  // only what lies inside the punch range
+                const std::int64_t first = std::max(start, punchIn), last = std::min(run.position + (to - static_cast<std::int64_t>(run.from)), punchOut);
+                from = static_cast<std::int64_t>(run.from) + (first - run.position) + latency;
+                to = static_cast<std::int64_t>(run.from) + (last - run.position);
+                start = first;
+            }
+            from = std::max<std::int64_t>(from, 0);
+            if (to <= from) continue;
+            const bool stereo = input == 0 && recChannels_.size() >= 2;
+            const std::size_t left = input == 0 ? 0 : std::min<std::size_t>(static_cast<std::size_t>(input - 1), recChannels_.size() - 1);
+            const std::size_t right = stereo ? 1 : left;
+            std::vector<float> data;
+            data.reserve(static_cast<std::size_t>(to - from) * (stereo ? 2 : 1));
+            for (std::int64_t i = from; i < to; ++i) {
+                data.push_back(recChannels_[left][static_cast<std::size_t>(i)]);
+                if (stereo) data.push_back(recChannels_[right][static_cast<std::size_t>(i)]);
+            }
+            const QString name = QStringLiteral("Recording %1 %2%3.wav").arg(stamp, trackName.left(30), take == 0 && runs.size() == 1 ? QString() : QStringLiteral(" take %1").arg(take + 1));
+            QString safe;
+            for (const QChar ch : name) safe.append(QStringLiteral("\\/:*?\"<>|").contains(ch) ? QLatin1Char('_') : ch);
+            const std::filesystem::path tmp = std::filesystem::temp_directory_path() / safe.toStdU16String();
+            try {
+                lpc::writeWav(tmp, sampleRate_, stereo ? 2 : 1, data, lpc::WavFormat::Pcm24);
+            } catch (const std::exception& e) {
+                setError(QString("Cannot save the recording: ") + QString::fromUtf8(e.what()));
+                continue;
+            }
+            const double startBeats = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(start), sampleRate_)) / lpc::kPPQ;
+            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), trackId, startBeats, true});
+            seconds = std::max(seconds, static_cast<double>(data.size() / (stereo ? 2 : 1)) / sampleRate_);
+            ++take;
+            ++made;
+        }
+    }
+    recChannels_.clear();
+    recChunks_.clear();
+    if (made == 0) {
         emit notice("Nothing was recorded");
         return;
     }
-    const QString name = QStringLiteral("Recording %1.wav").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh.mm.ss"));
-    const std::filesystem::path tmp = std::filesystem::temp_directory_path() / name.toStdU16String();
-    try {
-        lpc::writeWav(tmp, sampleRate_, 2, recBuf_, lpc::WavFormat::Pcm24);
-    } catch (const std::exception& e) {
-        setError(QString("Cannot save the recording: ") + QString::fromUtf8(e.what()));
-        recBuf_.clear();
-        return;
-    }
-    const double seconds = static_cast<double>(recBuf_.size() / 2) / sampleRate_;
-    recBuf_.clear();
-    runImport(QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), recTrack_, recStartBeats_, [this, tmp, seconds](bool ok, double) {
-        std::error_code ignore;
-        std::filesystem::remove(tmp, ignore);
-        if (ok) emit notice(QString("Recorded %1 s").arg(seconds, 0, 'f', 1));
-    });
+    emit notice(QString("Recorded %1 take%2, %3 s").arg(made).arg(made == 1 ? "" : "s").arg(seconds, 0, 'f', 1));
+    if (!importRunning_) startNextImport();
 }
+
 
 void ProjectController::addTracks(const QString& kind, int count, const QString& name) {
     if (!host_ || (kind != "audio" && kind != "instrument" && kind != "bus")) return;
@@ -989,6 +1102,7 @@ void ProjectController::loadAudioSettings(QSettings& s) {
     audioOutput_ = s.value("audio/output").toString();
     audioInput_ = s.value("audio/input").toString();
     audioBuffer_ = std::clamp(s.value("audio/buffer", 256).toInt(), 32, 4096);
+    recordingDelay_ = std::clamp(s.value("audio/recordingDelay", 0).toInt(), -4800, 48000);
     emit audioSettingsChanged();
 }
 
@@ -996,6 +1110,7 @@ void ProjectController::saveAudioSettings(QSettings& s) const {
     s.setValue("audio/output", audioOutput_);
     s.setValue("audio/input", audioInput_);
     s.setValue("audio/buffer", audioBuffer_);
+    s.setValue("audio/recordingDelay", recordingDelay_);
 }
 
 }  // namespace jad

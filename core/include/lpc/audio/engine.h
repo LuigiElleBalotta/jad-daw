@@ -38,17 +38,22 @@ public:
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }
 
     // ---- recording: the input of the playing blocks is captured in chunks, in order; read them from one thread
+    static constexpr int kMaxInputs = 8;
     struct RecChunk {
-        float l[kMaxBlock];
-        float r[kMaxBlock];
+        float ch[kMaxInputs][kMaxBlock];
+        int channels = 0;
         int frames = 0;
+        std::int64_t position = 0;  // the project position (in frames) of the first frame
     };
     bool recording() const { return recordingPub_.load(std::memory_order_relaxed); }
     bool takeRecorded(RecChunk& out) { return rec_.pop(out); }
+    // the input level of a channel since the last call (linear peak); any thread, reading resets it
+    float takeInputPeak(int channel) { return channel >= 0 && channel < kMaxInputs ? inPeak_[channel].exchange(0.0f, std::memory_order_relaxed) : 0.0f; }
+    int inputChannelCount() const { return inChannelsPub_.load(std::memory_order_relaxed); }
     std::uint64_t recordedDropped() const { return recDropped_.load(std::memory_order_relaxed); }  // chunks lost because nobody read them
 
     // ---- audio thread
-    void input(const float* l, const float* r, int frames) noexcept;  // the input for the next processBlock
+    void input(const float* const* channels, int numChannels, int frames) noexcept;  // the input for the next processBlock
     void processBlock(float* outL, float* outR, int frames) noexcept;
 
     // ---- tests: only while the audio thread is stopped
@@ -66,13 +71,16 @@ private:
     // owned by the audio thread
     bool playing_ = false;
     ClickTrack* click_ = nullptr;  // the metronome's beats; replaced through SetClick, the old one goes back as garbage
-    SpscQueue<RecChunk, 1024> rec_;
-    std::vector<float> inL_, inR_;
-    int inFrames_ = 0;
+    SpscQueue<RecChunk, 512> rec_;
+    std::vector<float> inBuf_[kMaxInputs];
+    const float* inPtr_[kMaxInputs] = {};
+    int inFrames_ = 0, inChannels_ = 0;
+    std::atomic<float> inPeak_[kMaxInputs];
     bool recording_ = false;
     std::int64_t countLeft_ = 0, countPos_ = 0;  // the count-in before a recording: frames left, frames played
     ClickTrack* countClick_ = nullptr;
     std::atomic<bool> recordingPub_{false};
+    std::atomic<int> inChannelsPub_{0};
     std::atomic<std::uint64_t> recDropped_{0};
     void mixClickTrack(const ClickTrack* track, float* outL, float* outR, std::int64_t from, int n) noexcept;
     void capture(int offset, int n) noexcept;

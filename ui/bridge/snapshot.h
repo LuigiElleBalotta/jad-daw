@@ -40,6 +40,7 @@ struct TrackRow {
     bool master = false, mute = false, solo = false;
     bool recordArm = false, inputMonitor = false, soloSafe = false;  // the R and I stubs: their state is kept by the controller
     double gainDb = 0.0, pan = 0.0;
+    int input = 0;  // the recording input: 0 stereo 1+2, n mono input n
     int regionCount = 0;
     bool showInTracks = true;  // false: a bus or aux that is listed in the Mixer only
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)

@@ -213,32 +213,79 @@ TEST_CASE("engine: a click slot with a sample plays the sample, the others the b
     REQUIRE(blip > 0.05f);                                                                            // slot 2: the built-in click
 }
 
-TEST_CASE("engine: a recording counts in with the click, then captures the input of the playing blocks", "[engine][record]") {
+TEST_CASE("engine: a recording counts in with the click, then captures every input channel of the playing blocks", "[engine][record]") {
     AudioEngine e(kSr);
     AudioMsg rec = msg(MsgKind::StartRecord, 1, 300);  // 300 frames of count-in
     rec.obj = makeOwned(new ClickTrack{{0, 150}, {1, 0}, {1, 2}});
     e.applyDirect(rec);
     REQUIRE(e.recording());
-    std::vector<float> l(512), r(512), inL(512), inR(512);
-    for (std::size_t i = 0; i < 512; ++i) { inL[i] = 0.25f; inR[i] = -0.25f; }
-    e.input(inL.data(), inR.data(), 512);
+    std::vector<float> l(512), r(512), a(512, 0.25f), b(512, -0.25f), c3(512, 0.5f);
+    const float* in[3] = {a.data(), b.data(), c3.data()};
+    e.input(in, 3, 512);
     e.processBlock(l.data(), r.data(), 512);
     float blip = 0;
     for (int i = 0; i < 300; ++i) blip = std::max(blip, std::abs(l[static_cast<std::size_t>(i)]));
     REQUIRE(blip > 0.05f);                      // the count-in is audible
-    ClickTrack none;
-    ClickTrack* unused = &none;
-    (void)unused;
     AudioEngine::RecChunk c;
     std::size_t frames = 0;
     while (e.takeRecorded(c)) {
-        for (int i = 0; i < c.frames; ++i) { REQUIRE(c.l[i] == 0.25f); REQUIRE(c.r[i] == -0.25f); }
+        REQUIRE(c.channels == 3);
+        for (int i = 0; i < c.frames; ++i) { REQUIRE(c.ch[0][i] == 0.25f); REQUIRE(c.ch[1][i] == -0.25f); REQUIRE(c.ch[2][i] == 0.5f); }
         frames += static_cast<std::size_t>(c.frames);
     }
     REQUIRE(frames == 212);                     // only the part after the count-in (512 - 300)
     e.applyDirect(msg(MsgKind::Stop, 2));
     REQUIRE_FALSE(e.recording());
-    e.input(inL.data(), inR.data(), 512);
+    e.input(in, 3, 512);
     e.processBlock(l.data(), r.data(), 512);
     REQUIRE_FALSE(e.takeRecorded(c));           // stopped: nothing more is captured
+}
+
+TEST_CASE("engine: the capture reports where each block lies, StopRecord leaves the transport running, input levels are measured", "[engine][record]") {
+    AudioEngine e(kSr);
+    e.applyDirect(msg(MsgKind::Locate, 1, 1000));
+    e.applyDirect(msg(MsgKind::Play, 2));
+    AudioMsg rec = msg(MsgKind::StartRecord, 3, 0);   // a punch-in: no count-in, the transport is already running
+    rec.obj = makeOwned(new ClickTrack);
+    e.applyDirect(rec);
+    std::vector<float> l(256), r(256), a(256, 0.4f);
+    const float* in[1] = {a.data()};
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    AudioEngine::RecChunk c;
+    REQUIRE(e.takeRecorded(c));
+    REQUIRE(c.position == 1000);
+    REQUIRE(e.takeInputPeak(0) == Catch::Approx(0.4f));
+    REQUIRE(e.takeInputPeak(0) == 0.0f);                // reading clears it
+    e.applyDirect(msg(MsgKind::StopRecord, 4));
+    REQUIRE_FALSE(e.recording());
+    REQUIRE(e.playing());                               // still playing
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    REQUIRE_FALSE(e.takeRecorded(c));
+}
+
+TEST_CASE("engine: a monitored track plays the chosen input channels through its strip", "[engine][monitor]") {
+    Setup s;
+    AudioEngine e(kSr);
+    for (const AudioMsg& m : initialMessages(s.p, s.media, nullptr, nullptr)) e.applyDirect(m);
+    Uuid track;
+    for (const Track& t : s.p.tracks) if (t.kind == TrackKind::Audio) track = t.id;
+    AudioMsg mon = msg(MsgKind::SetMonitor, 100, 1, 2);   // inputs 1 and 2
+    mon.track = track;
+    e.applyDirect(mon);
+    std::vector<float> l(256), r(256), a(256, 0.3f), b(256, -0.1f);
+    const float* in[2] = {a.data(), b.data()};
+    e.applyDirect(msg(MsgKind::Locate, 101, 200000));      // far past the track's region: only the input is heard
+    e.applyDirect(msg(MsgKind::Play, 102));
+    e.input(in, 2, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    REQUIRE(l[100] == Catch::Approx(0.3f).margin(0.02f));
+    REQUIRE(r[100] == Catch::Approx(-0.1f).margin(0.02f));
+    AudioMsg off = msg(MsgKind::SetMonitor, 103, 0, 0);
+    off.track = track;
+    e.applyDirect(off);
+    e.input(in, 2, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    REQUIRE(std::abs(l[100]) < 0.01f);
 }

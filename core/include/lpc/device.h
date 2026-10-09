@@ -9,9 +9,9 @@ class IAudioCallback {
 public:
     virtual ~IAudioCallback() = default;
     virtual void process(float* outL, float* outR, int frames) noexcept = 0;
-    // The device's input for the block that process() is called for next (the first two input channels; the right one repeats the
-    // left on a mono input). Not called when the device has no input.
-    virtual void input(const float* /*inL*/, const float* /*inR*/, int /*frames*/) noexcept {}
+    // The device's input for the block that process() is called for next: one pointer per input channel (as many as the device has
+    // open). Not called when the device has no input.
+    virtual void input(const float* const* /*channels*/, int /*numChannels*/, int /*frames*/) noexcept {}
 };
 
 // What the user can choose in Preferences > Audio. Empty names stand for the system's default device.
@@ -38,6 +38,7 @@ public:
         return open(request.sampleRate, request.bufferSize, callback, error);
     }
     virtual int inputChannels() const { return 0; }
+    virtual int roundTripLatency() const { return 0; }  // input + output latency in samples, as the device reports it
     // Opens the default output at exactly `sampleRate` (no resampling in Core). On failure returns false and
     // fills `error` with a message a user can act on.
     virtual bool open(double sampleRate, int bufferSize, IAudioCallback& callback, std::string& error) = 0;

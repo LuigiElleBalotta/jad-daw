@@ -60,7 +60,7 @@ namespace {
 struct EngineCallback final : lpc::IAudioCallback {
     explicit EngineCallback(lpc::audio::AudioEngine& e) : engine(e) {}
     void process(float* l, float* r, int n) noexcept override { engine.processBlock(l, r, n); }
-    void input(const float* l, const float* r, int n) noexcept override { engine.input(l, r, n); }
+    void input(const float* const* channels, int numChannels, int n) noexcept override { engine.input(channels, numChannels, n); }
     lpc::audio::AudioEngine& engine;
 };
 
@@ -347,6 +347,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         }
     emit routingRevisionChanged();
     emit projectChanged();
+    applyMonitoring();
     pruneSelection();
     refreshPanels();
 }
@@ -563,6 +564,7 @@ void ProjectController::setTrackToggle(const QString& actionId, const QString& t
     const bool arm = actionId == QStringLiteral("track.recordArm");
     if (!safe) tracks_.setToggle(trackId, arm ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
     mixer_.setToggle(trackId, safe ? MixerModel::SoloSafe : (arm ? MixerModel::RecordArm : MixerModel::InputMonitor), on);
+    if (actionId == QStringLiteral("track.inputMonitor")) applyMonitoring();
     emit trackTogglesChanged();
 }
 
@@ -885,7 +887,11 @@ void ProjectController::startNextImport() {
     importQueue_.pop_front();
     const double start = std::isnan(next.startBeats) ? lastImportEnd_ : next.startBeats;
     QPointer<ProjectController> self(this);
-    runImport(next.file, next.trackId, start, [self, start](bool ok, double endBeats) {
+    runImport(next.file, next.trackId, start, [self, start, next](bool ok, double endBeats) {
+        if (next.temporary) {
+            std::error_code ignore;
+            std::filesystem::remove(toPath(next.file), ignore);  // a take: the copy in the project is the one that stays
+        }
         if (!self) return;
         self->lastImportEnd_ = ok ? endBeats : start;  // a failed file leaves the spot free for the next one
         self->startNextImport();
@@ -1091,7 +1097,7 @@ void ProjectController::play() {
 }
 
 void ProjectController::stop() {
-    if (recording_) recFinishing_ = true;  // tick() collects what the engine still holds and makes the region
+    if (recording_) recFinishing_ = true;  // tick() collects what the engine still holds and makes the takes
     if (host_) host_->stop();
 }
 
@@ -1184,7 +1190,27 @@ void ProjectController::tick() {
     }
     if (recording_) {
         drainRecording();
+        if (punchEnabled_ && !recFinishing_ && !punchStopSent_ && playing_ && positionBeats_ > punchEndBeats_) {  // Autopunch: out
+            punchStopSent_ = true;
+            sendRecordingStop();
+        }
         if (recFinishing_ && !engine_->recording()) finishRecording();
+    }
+    {   // an armed track shows the level of its input on its meter
+        const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
+        std::vector<float> in(8);
+        for (int c = 0; c < 8; ++c) in[static_cast<std::size_t>(c)] = engine_->takeInputPeak(c);
+        bool moved = false;
+        for (const TrackRow& t : allRows_) {
+            if (t.master || t.kind != "audio" || !armed.contains(t.id)) continue;
+            const float level = t.input == 0 ? std::max(in[0], in[1]) : in[static_cast<std::size_t>(std::min(t.input - 1, 7))];
+            double& m = meter_[t.id];
+            const double shown = std::max<double>(level, m * 0.8);
+            if (shown != m && (shown > 1e-4 || m > 0)) { m = shown < 1e-4 ? 0.0 : shown; moved = true; }
+            double& h = hold_[t.id];
+            if (level > h) { h = level; moved = true; }
+        }
+        if (moved) { ++peaksRevision_; emit peaksChanged(); }
     }
     const double peak = engine_->masterPeak();
     if (peak != peak_) {

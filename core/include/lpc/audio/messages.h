@@ -30,10 +30,12 @@ Owned makeOwned(T* object) {
     return Owned{object, [](void* p) { delete static_cast<T*>(p); }};
 }
 
-enum class MsgKind : std::uint8_t { AddTrack, RemoveTrack, SetStrip, SetConfig, Reorder, Play, Stop, Locate, SetLoop, SetClick, SetClickKit, StartRecord };
+enum class MsgKind : std::uint8_t { AddTrack, RemoveTrack, SetStrip, SetConfig, Reorder, Play, Stop, Locate, SetLoop, SetClick, SetClickKit, StartRecord, StopRecord, SetMonitor };
 
 // Project thread -> audio thread. obj meaning per kind:
 //   AddTrack: TrackNode*, SetConfig: TrackConfig*, Reorder: std::vector<Uuid>* (processing order),
+//   StopRecord: stops capturing but not the transport (frame unused), SetMonitor: track = the track, frame = first input channel + 1 (0 = off),
+//   frame2 = second input channel + 1 (0 = the first one on both sides),
 //   StartRecord: ClickTrack* (the count-in clicks from 0), frame = count-in length in frames; the transport starts after it
 //   and the input is captured from then until Stop,
 //   SetClickKit: ClickKit* (the samples of the click sounds),

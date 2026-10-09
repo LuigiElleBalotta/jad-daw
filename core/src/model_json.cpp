@@ -61,6 +61,22 @@ void from_json(const nlohmann::json& j, TrackKind& k) { enumFromJson(j, k, kKind
 void to_json(nlohmann::json& j, TimeBase b) { enumToJson(j, b, kBases, std::size(kBases)); }
 void from_json(const nlohmann::json& j, TimeBase& b) { enumFromJson(j, b, kBases, std::size(kBases)); }
 
+void to_json(nlohmann::json& j, const Strip& s) {
+    j = {{"gainDb", s.gainDb}, {"pan", s.pan}, {"mute", s.mute}, {"solo", s.solo}, {"inserts", s.inserts}, {"sends", s.sends}, {"output", s.output}};
+    if (s.input != 0) j["input"] = s.input;  // written only when set: older projects and files stay as they were
+}
+
+void from_json(const nlohmann::json& j, Strip& s) {
+    j.at("gainDb").get_to(s.gainDb);
+    j.at("pan").get_to(s.pan);
+    j.at("mute").get_to(s.mute);
+    j.at("solo").get_to(s.solo);
+    j.at("inserts").get_to(s.inserts);
+    j.at("sends").get_to(s.sends);
+    j.at("output").get_to(s.output);
+    s.input = j.value("input", 0);
+}
+
 void to_json(nlohmann::json& j, const MidiNote& n) {
     j = {{"start", n.start}, {"length", n.length}, {"note", n.note}, {"velocity", n.velocity}};
     if (n.muted) j["muted"] = true;  // written only when set, so older projects and files stay as they were

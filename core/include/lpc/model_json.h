@@ -30,7 +30,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Region, id, timeBase, start, length, mediaId,
 void to_json(nlohmann::json& j, const ProcessorRef& r);
 void from_json(const nlohmann::json& j, ProcessorRef& r);  // `label` is optional
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Send, id, targetTrackId, levelDb, preFader)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Strip, gainDb, pan, mute, solo, inserts, sends, output)
+void to_json(nlohmann::json& j, const Strip& s);
+void from_json(const nlohmann::json& j, Strip& s);
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationPoint, tick, value)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationLane, id, target, points)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Marker, id, tick, name)

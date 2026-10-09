@@ -65,3 +65,31 @@ TEST_CASE("automation: set_automation creates, replaces and removes a lane with 
     REQUIRE(s.execute(p, makeSetAutomation(t.id, "pan", {{0, 2.0}})).has_value());      // out of range
     REQUIRE(s.execute(p, makeSetAutomation(Uuid::random(rng), "pan", {{0, 0.0}})).has_value());  // no such track
 }
+
+TEST_CASE("strip input: set_strip carries the recording input, with undo and JSON", "[strip][input]") {
+    std::mt19937_64 rng(8);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Audio;
+    t.name = "A";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    StripPatch patch;
+    patch.input = 3;
+    REQUIRE_FALSE(s.execute(p, makeSetStrip(t.id, patch)).has_value());
+    REQUIRE(p.findTrack(t.id)->strip.input == 3);
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.findTrack(t.id)->strip.input == 0);
+    patch.input = 65;
+    REQUIRE(s.execute(p, makeSetStrip(t.id, patch)).has_value());   // out of range
+    nlohmann::json plain = p.findTrack(t.id)->strip;
+    REQUIRE_FALSE(plain.contains("input"));                          // 0 is not written
+    Strip with;
+    with.input = 2;
+    nlohmann::json j = with;
+    REQUIRE(j.at("input") == 2);
+    REQUIRE(j.get<Strip>().input == 2);
+    const CommandPtr again = commandFromJson(makeSetStrip(t.id, StripPatch{.input = 4})->toJson());
+    REQUIRE(again);
+}

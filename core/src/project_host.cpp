@@ -256,14 +256,30 @@ void ProjectHost::postKit() {
     post(m);
 }
 
-std::future<void> ProjectHost::startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn) {
-    return call([this, startFrame, countInFrames, c = std::move(countIn)]() mutable {
+std::future<void> ProjectHost::startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn, bool relocate) {
+    return call([this, startFrame, countInFrames, relocate, c = std::move(countIn)]() mutable {
         if (degraded_) return;
-        postTransport(audio::MsgKind::Locate, startFrame);
+        if (relocate) postTransport(audio::MsgKind::Locate, startFrame);
         audio::AudioMsg m;
         m.kind = audio::MsgKind::StartRecord;
         m.frame = countInFrames;
         m.obj = audio::makeOwned(new audio::ClickTrack(std::move(c)));
+        post(m);
+    });
+}
+
+std::future<void> ProjectHost::stopRecording() {
+    return call([this] { postTransport(audio::MsgKind::StopRecord); });
+}
+
+std::future<void> ProjectHost::setMonitor(Uuid track, int first, int second) {
+    return call([this, track, first, second] {
+        if (degraded_) return;
+        audio::AudioMsg m;
+        m.kind = audio::MsgKind::SetMonitor;
+        m.track = track;
+        m.frame = first;
+        m.frame2 = second;
         post(m);
     });
 }

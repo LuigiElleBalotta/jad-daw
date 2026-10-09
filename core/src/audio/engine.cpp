@@ -5,7 +5,10 @@
 
 namespace lpc::audio {
 
-AudioEngine::AudioEngine(double sampleRate) : sampleRate_(sampleRate), graph_(sampleRate), inL_(8192, 0.0f), inR_(8192, 0.0f) {}
+AudioEngine::AudioEngine(double sampleRate) : sampleRate_(sampleRate), graph_(sampleRate) {
+    for (auto& b : inBuf_) b.assign(8192, 0.0f);
+    for (auto& p : inPeak_) p.store(0.0f, std::memory_order_relaxed);
+}
 
 AudioEngine::~AudioEngine() {
     delete click_;
@@ -53,6 +56,14 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             loopStart_ = std::max<std::int64_t>(m.frame, 0);
             loopEnd_ = m.frame2;
             break;
+        case MsgKind::StopRecord:
+            recording_ = false;
+            countLeft_ = 0;
+            recordingPub_.store(false, std::memory_order_relaxed);
+            break;
+        case MsgKind::SetMonitor:
+            graph_.apply(m);
+            break;
         case MsgKind::StartRecord: {
             Owned old = makeOwned(countClick_);
             countClick_ = static_cast<ClickTrack*>(m.obj.ptr);
@@ -60,7 +71,8 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             recording_ = true;
             countLeft_ = std::max<std::int64_t>(m.frame, 0);
             countPos_ = 0;
-            playing_ = countLeft_ == 0;
+            playing_ = playing_ || countLeft_ == 0;  // while the transport already runs (a punch-in) there is no count-in
+            if (playing_) countLeft_ = 0;
             recordingPub_.store(true, std::memory_order_relaxed);
             playingPub_.store(true, std::memory_order_relaxed);
             break;
@@ -138,22 +150,30 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
     }
 }
 
-// The input that arrived with this block, stored for the frames processBlock is about to play.
-void AudioEngine::input(const float* l, const float* r, int frames) noexcept {
-    inFrames_ = std::min(frames, static_cast<int>(inL_.size()));
-    if (l) std::copy_n(l, inFrames_, inL_.data()); else std::fill_n(inL_.data(), inFrames_, 0.0f);
-    if (r) std::copy_n(r, inFrames_, inR_.data()); else std::fill_n(inR_.data(), inFrames_, 0.0f);
+// The input that arrived with this block, kept for the frames processBlock is about to play; the levels are measured here.
+void AudioEngine::input(const float* const* channels, int numChannels, int frames) noexcept {
+    inChannels_ = std::min(numChannels, kMaxInputs);
+    inFrames_ = std::min(frames, static_cast<int>(inBuf_[0].size()));
+    for (int c = 0; c < inChannels_; ++c) {
+        float peak = 0.0f;
+        for (int i = 0; i < inFrames_; ++i) {
+            const float v = channels[c] ? channels[c][i] : 0.0f;
+            inBuf_[c][static_cast<std::size_t>(i)] = v;
+            peak = std::max(peak, std::abs(v));
+        }
+        if (peak > inPeak_[c].load(std::memory_order_relaxed)) inPeak_[c].store(peak, std::memory_order_relaxed);
+    }
+    inChannelsPub_.store(inChannels_, std::memory_order_relaxed);
 }
 
 // Puts the input of frames [offset, offset + n) of this block into the recording queue (silence when the device gave none).
 void AudioEngine::capture(int offset, int n) noexcept {
     RecChunk c;
+    c.channels = std::max(inChannels_, 1);
     c.frames = n;
-    for (int i = 0; i < n; ++i) {
-        const bool have = offset + i < inFrames_;
-        c.l[i] = have ? inL_[static_cast<std::size_t>(offset + i)] : 0.0f;
-        c.r[i] = have ? inR_[static_cast<std::size_t>(offset + i)] : 0.0f;
-    }
+    c.position = position_;
+    for (int ch = 0; ch < c.channels; ++ch)
+        for (int i = 0; i < n; ++i) c.ch[ch][i] = ch < inChannels_ && offset + i < inFrames_ ? inBuf_[ch][static_cast<std::size_t>(offset + i)] : 0.0f;
     if (!rec_.push(c)) recDropped_.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -188,6 +208,8 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
                 }
                 n = static_cast<int>(std::min<std::int64_t>(n, loopEnd_ - position_));
             }
+            for (int c = 0; c < inChannels_; ++c) inPtr_[c] = inBuf_[c].data() + std::min(done, static_cast<int>(inBuf_[c].size()));
+            graph_.setInput(inPtr_, inChannels_);
             graph_.render(position_, n, outL + done, outR + done);
             if (clickOn_ && click_) mixClick(outL + done, outR + done, position_, n);
             if (recording_) capture(done, n);
@@ -199,6 +221,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
         done += n;
     }
     inFrames_ = 0;
+    inChannels_ = 0;
     positionPub_.store(position_, std::memory_order_relaxed);
     masterPeakPub_.store(graph_.masterPeak(), std::memory_order_relaxed);
 }

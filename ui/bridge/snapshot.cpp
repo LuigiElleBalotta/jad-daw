@@ -69,6 +69,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.solo = t.strip.solo;
         tr.gainDb = t.strip.gainDb;
         tr.pan = t.strip.pan;
+        tr.input = t.strip.input;
         tr.regionCount = static_cast<int>(t.regions.size());
         tr.showInTracks = t.showInTracks;
         tr.patchId = QString::fromStdString(t.patchId);

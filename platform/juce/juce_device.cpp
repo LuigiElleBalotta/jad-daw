@@ -48,6 +48,7 @@ public:
             return false;
         }
         inputs_ = device->getActiveInputChannels().countNumberOfSetBits();
+        latency_ = device->getInputLatencyInSamples() + device->getOutputLatencyInSamples();
         rate_ = device->getCurrentSampleRate();
         block_ = device->getCurrentBufferSizeSamples();
         if (std::abs(rate_ - sampleRate) > 0.5) {
@@ -68,6 +69,7 @@ public:
     }
 
     int inputChannels() const override { return inputs_; }
+    int roundTripLatency() const override { return latency_; }
     double sampleRate() const override { return rate_; }
     int bufferSize() const override { return block_; }
 
@@ -80,7 +82,7 @@ private:
     void audioDeviceIOCallbackWithContext(const float* const* inputs, int numInputs, float* const* outputs, int numOutputs, int numSamples,
                                           const juce::AudioIODeviceCallbackContext&) override {
         if (numOutputs <= 0) return;
-        if (numInputs > 0 && inputs[0] != nullptr) callback_->input(inputs[0], numInputs > 1 && inputs[1] != nullptr ? inputs[1] : inputs[0], numSamples);
+        if (numInputs > 0 && inputs[0] != nullptr) callback_->input(inputs, numInputs, numSamples);
         if (numOutputs >= 2) {
             callback_->process(outputs[0], outputs[1], numSamples);
             for (int c = 2; c < numOutputs; ++c) juce::FloatVectorOperations::clear(outputs[c], numSamples);
@@ -99,6 +101,7 @@ private:
     double rate_ = 0.0;
     int block_ = 0;
     int inputs_ = 0;
+    int latency_ = 0;
     std::vector<float> scratchL_, scratchR_;
 };
 

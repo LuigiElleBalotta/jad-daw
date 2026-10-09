@@ -106,6 +106,10 @@ class ProjectController : public QObject {
     Q_PROPERTY(int audioBufferSize READ audioBufferSize NOTIFY audioSettingsChanged)
     Q_PROPERTY(int inputChannels READ inputChannels NOTIFY audioSettingsChanged)    // of the open device
     Q_PROPERTY(double deviceRate READ deviceRate NOTIFY audioSettingsChanged)       // 0 when no device is open
+    Q_PROPERTY(bool punchEnabled READ punchEnabled WRITE setPunchEnabled NOTIFY punchChanged)  // Autopunch: only the range is kept
+    Q_PROPERTY(double punchStartBeats READ punchStartBeats NOTIFY punchChanged)
+    Q_PROPERTY(double punchEndBeats READ punchEndBeats NOTIFY punchChanged)
+    Q_PROPERTY(int recordingDelay READ recordingDelay WRITE setRecordingDelay NOTIFY audioSettingsChanged)  // samples
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -198,6 +202,17 @@ public:
     // tests: replaces the list of devices (the real one asks the system)
     void setDeviceListerForTest(std::function<lpc::AudioDeviceChoices(const std::string&, const std::string&)> lister) { deviceLister_ = std::move(lister); }
     bool recording() const { return recording_; }
+    bool punchEnabled() const { return punchEnabled_; }
+    void setPunchEnabled(bool on);
+    double punchStartBeats() const { return punchStartBeats_; }
+    double punchEndBeats() const { return punchEndBeats_; }
+    Q_INVOKABLE void setPunchRange(double startBeats, double endBeats);
+    int recordingDelay() const { return recordingDelay_; }
+    void setRecordingDelay(int samples);
+    // The input a track records: 0 = inputs 1 and 2 as a stereo take, n = input n as a mono take (a command, with undo)
+    Q_INVOKABLE int trackInput(const QString& trackId) const;
+    Q_INVOKABLE void setTrackInput(const QString& trackId, int input);
+    Q_INVOKABLE QStringList inputChoices() const;  // "Input 1", ... for the open device
     bool countInEnabled() const { return countIn_; }
     void setCountInEnabled(bool on);
     int countInChoice() const { return countInChoice_; }
@@ -471,6 +486,7 @@ signals:
     void metronomeChanged();
     void audioSettingsChanged();
     void recordingChanged();
+    void punchChanged();
     void clickSettingsChanged();
     void commandSent(const QString& type);
     // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
@@ -498,6 +514,7 @@ private:
         QUrl file;
         QString trackId;
         double startBeats;  // NaN: right after the previous clip
+        bool temporary = false;  // a file made for the import (a take): removed when it has been taken in
     };
     void startNextImport();
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
@@ -615,9 +632,20 @@ private:
     QString addAudioTrackNamed(const QString& name);
     bool recording_ = false, recFinishing_ = false, countIn_ = false;
     int countInChoice_ = 1;
-    QString recTrack_;
-    double recStartBeats_ = 0.0;
-    std::vector<float> recBuf_;  // the take so far, interleaved stereo
+    // A recording in progress: the raw input channels of the playing blocks, with where each block lay on the timeline. When it
+    // ends every armed track gets its channels (its Input setting), cut at the cycle wraps (one take per pass), shifted by the
+    // latency and cropped to the punch range.
+    struct RecChunkInfo { std::int64_t position; int frames; std::size_t offset; };
+    std::vector<std::vector<float>> recChannels_;
+    std::vector<RecChunkInfo> recChunks_;
+    QStringList recTracks_;
+    QHash<QString, int> recInputs_;       // each armed track's input at the start
+    bool punchStopSent_ = false;
+    bool punchEnabled_ = false;
+    double punchStartBeats_ = 0.0, punchEndBeats_ = 0.0;
+    int recordingDelay_ = 0;              // samples: added to the device's own latency when a take is placed
+    void applyMonitoring();
+    void sendRecordingStop();
     void drainRecording();
     void finishRecording();
     lpc::audio::ClickSettings clickSettings_;

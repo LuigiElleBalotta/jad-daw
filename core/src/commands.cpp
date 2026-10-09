@@ -134,6 +134,7 @@ public:
         if (patch_.pan) j["pan"] = *patch_.pan;
         if (patch_.mute) j["mute"] = *patch_.mute;
         if (patch_.solo) j["solo"] = *patch_.solo;
+        if (patch_.input) j["input"] = *patch_.input;
         return j;
     }
 
@@ -147,6 +148,11 @@ public:
         if (patch_.pan) { prev.pan = t->strip.pan; t->strip.pan = *patch_.pan; }
         if (patch_.mute) { prev.mute = t->strip.mute; t->strip.mute = *patch_.mute; }
         if (patch_.solo) { prev.solo = t->strip.solo; t->strip.solo = *patch_.solo; }
+        if (patch_.input) {
+            if (*patch_.input < 0 || *patch_.input > 64) return fail("bad_value", "the input must be 0 (stereo 1+2) or a channel from 1 to 64");
+            prev.input = t->strip.input;
+            t->strip.input = *patch_.input;
+        }
         return success(makeSetStrip(id_, prev));
     }
 
@@ -793,6 +799,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("pan")) patch.pan = j["pan"].get<float>();
             if (j.contains("mute")) patch.mute = j["mute"].get<bool>();
             if (j.contains("solo")) patch.solo = j["solo"].get<bool>();
+            if (j.contains("input")) patch.input = j["input"].get<int>();
             return makeSetStrip(j.at("trackId").get<Uuid>(), patch);
         }
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());

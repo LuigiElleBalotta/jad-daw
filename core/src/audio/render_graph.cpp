@@ -47,6 +47,13 @@ Owned RenderGraph::apply(const AudioMsg& m) noexcept {
             }
             return {};
         }
+        case MsgKind::SetMonitor: {
+            if (TrackNode* n = find(m.track)) {
+                n->monitorL = m.frame > 0 ? static_cast<int>(m.frame) - 1 : -1;
+                n->monitorR = m.frame2 > 0 ? static_cast<int>(m.frame2) - 1 : n->monitorL;
+            }
+            return {};
+        }
         case MsgKind::SetStrip: {
             if (TrackNode* n = find(m.track)) n->strip = m.strip;
             return {};
@@ -169,6 +176,14 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     if (cfg) {
         if (t.kind == TrackKind::Audio) renderAudio(t, *cfg, blockStart, n);
         else if (t.kind == TrackKind::Instrument) renderInstrument(t, *cfg, blockStart, n);
+        if (t.monitorL >= 0 && input_ && t.monitorL < inputChannels_) {  // the input is part of the signal that the inserts process
+            const float* inL = input_[t.monitorL];
+            const float* inR = t.monitorR >= 0 && t.monitorR < inputChannels_ ? input_[t.monitorR] : inL;
+            for (int i = 0; i < n; ++i) {
+                l[i] += inL[i];
+                r[i] += inR[i];
+            }
+        }
         for (const auto& insert : cfg->inserts) insert->process(l, r, n);
     }
 

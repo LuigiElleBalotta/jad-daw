@@ -950,6 +950,30 @@ private slots:
         QCOMPARE(d.audioOutput(), QString("Interface"));
         QCOMPARE(d.audioBufferSize(), 128);
     }
+    void trackInputIsACommandAndPunchAndDelayAreKept() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        const QString audio = firstAudioTrackId(c);
+        QCOMPARE(c.trackInput(audio), 0);
+        c.setTrackInput(audio, 2);
+        QTRY_COMPARE(c.trackInput(audio), 2);
+        c.undo();
+        QTRY_COMPARE(c.trackInput(audio), 0);
+        c.setTrackInput(audio, 99);                  // refused: out of range
+        QCOMPARE(c.inputChoices().first(), QString("Input 1 + 2 (stereo)"));
+        QSignalSpy punch(&c, &jad::ProjectController::punchChanged);
+        c.setPunchRange(8, 4);                       // backwards: ignored
+        QCOMPARE(punch.count(), 0);
+        c.setPunchRange(4, 8);
+        c.setPunchEnabled(true);
+        QCOMPARE(c.punchStartBeats(), 4.0);
+        QCOMPARE(c.punchEndBeats(), 8.0);
+        QVERIFY(c.punchEnabled());
+        c.setRecordingDelay(100000);
+        QCOMPARE(c.recordingDelay(), 48000);         // kept in range
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

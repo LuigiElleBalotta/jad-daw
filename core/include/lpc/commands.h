@@ -11,6 +11,7 @@ struct StripPatch {
     std::optional<float> pan;
     std::optional<bool> mute;
     std::optional<bool> solo;
+    std::optional<int> input;  // the recording input: 0 stereo 1+2, n mono input n (0..64)
 };
 
 struct TrackPatch {

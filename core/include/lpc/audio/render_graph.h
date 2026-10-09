@@ -108,6 +108,7 @@ struct TrackNode {
     TrackConfig* config;  // owned; replaced through SetConfig messages
     std::vector<float> l, r;
     SineSynth synth;
+    int monitorL = -1, monitorR = -1;  // the input channels heard on this track (-1: none)
     float smoothL = 1.0f;
     float blockPeak = 0.0f;  // after the fader, this block
     float smoothR = 1.0f;
@@ -128,6 +129,9 @@ public:
     void render(std::int64_t blockStart, int frames, float* outL, float* outR) noexcept;
     void allNotesOff() noexcept;
     float masterPeak() const noexcept { return masterPeak_; }
+    // The input of the block (one pointer per channel, already moved to the first frame that render() will play); tracks that are
+    // monitored add it to their signal.
+    void setInput(const float* const* channels, int numChannels) noexcept { input_ = channels; inputChannels_ = numChannels; }
     // The post-fader peak of every track since the last call (linear), for the meters; any thread. Reading resets them.
     void takeTrackPeaks(std::vector<std::pair<Uuid, float>>& out) noexcept;
     int trackCount() const noexcept { return count_; }
@@ -148,6 +152,8 @@ private:
     TrackNode* master_ = nullptr;
     std::vector<float> scratchL_, scratchR_, preL_, preR_, dlyL_, dlyR_;
     float masterPeak_ = 0.0f;
+    const float* const* input_ = nullptr;
+    int inputChannels_ = 0;
     // written by the audio thread, read and cleared by the UI thread; a torn read only shifts a meter for one frame
     std::array<std::atomic<std::uint64_t>, kMaxTracks> peakHi_{}, peakLo_{};
     std::array<std::atomic<float>, kMaxTracks> peakVal_{};

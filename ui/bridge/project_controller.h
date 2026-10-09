@@ -253,6 +253,9 @@ public:
     Q_INVOKABLE void setSendPreFader(const QString& sendId, bool on);
     Q_INVOKABLE void setOutput(const QString& trackId, const QString& outputId);  // "" = master
     // One undo step: a new bus that is hidden from the Tracks area, and a send (role "send") or the output (role "output") to it.
+    // Starts plug-in hosting and the first scan when audio output is on (once). The application calls it at start-up; opening a
+    // project calls it too, so a controller made without it still hosts plug-ins.
+    Q_INVOKABLE void startPlugins();
     Q_INVOKABLE void newBusFor(const QString& trackId, const QString& role);
     Q_INVOKABLE void setShowInTracks(const QString& trackId, bool on);  // buses and auxes only
     Q_INVOKABLE void setRegionGain(const QString& regionId, double db);

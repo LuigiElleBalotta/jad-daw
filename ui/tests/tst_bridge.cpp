@@ -987,6 +987,13 @@ private slots:
         c.newBusFor(audio, "nonsense");                                                    // unknown role: nothing happens
         QCOMPARE(c.mixer()->rowCount(), all + 1);
     }
+    void startPluginsDoesNothingWithoutAudio() {
+        jad::ProjectController c(false);
+        c.startPlugins();                       // audio output is off: no plug-in hosting, no scanner
+        QVERIFY(!c.plugins()->supported());
+        c.startPlugins();                       // and asking again is harmless
+        QVERIFY(!c.plugins()->supported());
+    }
     void theInspectorGoesNeutralWhenItsTrackIsDeleted() {
         TempDir dir;
         jad::ProjectController c(false);

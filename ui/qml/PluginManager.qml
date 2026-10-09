@@ -12,7 +12,6 @@ Dialog {
     anchors.centerIn: parent
     width: Math.min(760, parent ? parent.width - 48 : 760)
     height: Math.min(520, parent ? parent.height - 48 : 520)
-    standardButtons: Dialog.Close
 
     background: Rectangle {
         color: Theme.surfacePanel
@@ -34,7 +33,8 @@ Dialog {
             visible: !root.project.plugins.supported
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: qsTr("Plug-in hosting is not active (no audio device, or this build has no plug-in support).")
+            text: root.project.audioEnabled ? qsTr("Plug-in hosting is not available in this build.")
+                                            : qsTr("Plug-in hosting is off because audio output is disabled (--no-audio).")
             color: Theme.textSecondary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontTypeLabelSize
@@ -100,14 +100,18 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spacing[2]
-            Button { text: qsTr("Rescan"); enabled: root.project.plugins.supported && !root.project.plugins.scanning
-                     onClicked: root.project.plugins.rescanNew() }
-            Button { text: qsTr("Rescan failed"); enabled: root.project.plugins.supported && !root.project.plugins.scanning
-                     onClicked: root.project.plugins.rescanFailed() }
-            Button { text: qsTr("Rescan all"); enabled: root.project.plugins.supported && !root.project.plugins.scanning
-                     onClicked: root.project.plugins.rescanAll() }
+            IconButton { implicitWidth: 72; implicitHeight: 24; label: qsTr("Rescan")
+                         enabled: root.project.plugins.supported && !root.project.plugins.scanning
+                         onClicked: root.project.plugins.rescanNew() }
+            IconButton { implicitWidth: 96; implicitHeight: 24; label: qsTr("Rescan failed")
+                         enabled: root.project.plugins.supported && !root.project.plugins.scanning
+                         onClicked: root.project.plugins.rescanFailed() }
+            IconButton { implicitWidth: 84; implicitHeight: 24; label: qsTr("Rescan all")
+                         enabled: root.project.plugins.supported && !root.project.plugins.scanning
+                         onClicked: root.project.plugins.rescanAll() }
             Text { Layout.fillWidth: true; text: root.project.plugins.scanText; color: Theme.textSecondary
                    font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
+            IconButton { implicitWidth: 72; implicitHeight: 24; label: qsTr("Close"); onClicked: root.close() }
         }
     }
 }

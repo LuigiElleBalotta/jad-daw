@@ -35,6 +35,14 @@ MenuItem {
             font.pixelSize: Theme.fontTypeLabelSize
         }
     }
+    arrow: Text {  // the arrow of an entry that opens a submenu
+        visible: root.subMenu !== null
+        x: root.width - width - 8
+        anchors.verticalCenter: parent.verticalCenter
+        text: "\u203A"
+        color: Theme.textSecondary
+        font.pixelSize: Theme.fontTypeBodySize
+    }
     background: Rectangle {
         color: root.highlighted && root.enabled ? Theme.surfaceRaisedHover : "transparent"
         radius: Theme.radiusControl

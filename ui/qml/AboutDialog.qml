@@ -8,7 +8,6 @@ Dialog {
     modal: true
     title: qsTr("About JAD Daw")
     anchors.centerIn: parent
-    standardButtons: Dialog.Close
     width: 360
 
     background: Rectangle {
@@ -58,6 +57,13 @@ Dialog {
             color: Theme.textSecondary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontTypeLabelSize
+        }
+        IconButton {
+            Layout.alignment: Qt.AlignHCenter
+            implicitWidth: 72
+            implicitHeight: 24
+            label: qsTr("Close")
+            onClicked: root.close()
         }
     }
 }

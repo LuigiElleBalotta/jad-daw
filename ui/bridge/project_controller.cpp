@@ -187,8 +187,7 @@ bool ProjectController::openProject(const QUrl& folder) {
     bool haveDevice = false;
 #ifdef JAD_HAVE_JUCE
     if (openAudioDevice_) {
-        if (!juce_) juce_ = std::make_unique<JuceInit>();
-        setUpPlugins();
+        startPlugins();
         device_ = lpc::makeJuceAudioDevice();
         callback_ = std::make_unique<EngineCallback>(*engine_);
         std::string error;
@@ -1096,6 +1095,14 @@ void ProjectController::setSmartControl(const QString& trackId, const QString& c
 void ProjectController::addInsert(const QString& trackId, const QString& processorId) {
     sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
                  {"insert", {{"processorId", processorId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}}}});
+}
+
+void ProjectController::startPlugins() {
+#ifdef JAD_HAVE_JUCE
+    if (!openAudioDevice_) return;
+    if (!juce_) juce_ = std::make_unique<JuceInit>();
+    setUpPlugins();
+#endif
 }
 
 void ProjectController::setUpPlugins() {

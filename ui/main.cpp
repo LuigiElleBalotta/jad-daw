@@ -69,6 +69,7 @@ int main(int argc, char** argv) {
     auto* controller = engine.rootObjects().first()->property("project").value<jad::ProjectController*>();
     if (controller) {
         if (parser.isSet(noAudioOption)) controller->setAudioEnabled(false);
+        if (!parser.isSet(screenshotOption)) controller->startPlugins();  // hosting and the first scan do not wait for a project
         if (!parser.isSet(screenshotOption)) {  // pictures start from the defaults, not from the last session
             QSettings settings;
             controller->loadPanelState(settings);

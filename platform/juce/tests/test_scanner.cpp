@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <cstdlib>
 #include <fstream>
 #include <random>
 
@@ -126,4 +127,21 @@ TEST_CASE("scanner: destroying the scanner does not wait for a hung plug-in scan
     // a cancelled scan must not blocklist the file
     const PluginCatalogue saved = PluginCatalogue::load(cache.path / "plugins.json");
     REQUIRE(saved.find((plugins.path / "hang.vst3").string()) == nullptr);
+}
+
+TEST_CASE("scanner: a plug-in that aborts is reported as crashed, not as a hang behind a dialog", "[scan]") {
+    TempFolder plugins, cache;
+    copyTestPlugin(plugins.path);
+    _putenv_s("LPC_SCANNER_TEST_CRASH", "1");  // the child process calls abort() before it looks at the file
+    PluginScanner::Options o = options(plugins.path, cache.path / "plugins.json");
+    o.timeoutMs = 8000;
+    PluginScanner scanner(o);
+    scanner.start(ScanMode::NewAndChanged);
+    scanner.wait();
+    _putenv_s("LPC_SCANNER_TEST_CRASH", "");
+    const PluginCatalogue c = scanner.snapshot();
+    REQUIRE(c.entries().size() == 1);
+    const ScanEntry& e = c.entries().front();
+    REQUIRE(e.status == ScanStatus::Failed);
+    REQUIRE(e.reason.rfind("crashed", 0) == 0);  // a Debug CRT dialog would have held the child until the timeout
 }

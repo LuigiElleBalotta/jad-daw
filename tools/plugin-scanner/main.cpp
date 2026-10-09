@@ -1,7 +1,13 @@
 // lpc-plugin-scanner <file.vst3>: loads one plug-in file in its own process, prints one JSON line and exits.
 // A plug-in that crashes or hangs takes only this process with it; the parent sees a non-zero exit code or a timeout.
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
+
+#ifdef _WIN32
+#include <crtdbg.h>
+#include <windows.h>
+#endif
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <nlohmann/json.hpp>
@@ -26,6 +32,16 @@ int fail(const std::string& reason) {
 
 int main(int argc, char** argv) {
     if (argc != 2) return 2;
+#ifdef _WIN32
+    // A crashing plug-in must end this process quietly: no Windows error box and no CRT assertion or abort dialog, which would
+    // hold the child until the parent's timeout.
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#ifdef _DEBUG
+    for (const int type : {_CRT_WARN, _CRT_ERROR, _CRT_ASSERT}) _CrtSetReportMode(type, 0);
+#endif
+#endif
+    if (const char* crash = std::getenv("LPC_SCANNER_TEST_CRASH"); crash && *crash == '1') std::abort();  // for the scanner tests
     juce::ScopedJuceInitialiser_GUI juceInit;
     juce::AudioPluginFormatManager formats;
     formats.addFormat(new juce::VST3PluginFormat());

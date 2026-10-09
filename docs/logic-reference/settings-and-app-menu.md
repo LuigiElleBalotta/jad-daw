@@ -68,6 +68,27 @@ Recordings* (two columns, MIDI and Audio): Cycle Off ▾ (Merge / Create Take Fo
 "Set" column header): MIDI Remote ▾ (Off | Global) · MIDI Channel ▾ (All | Global) · Octave Offset (stepper, 0, dim | Per Channel Strip ▾).
 Other sub-tabs not captured.
 
+### Automation
+
+Move Track Automation with Regions ▾ (Ask) with ☑ Include trails, if possible · Region Automation: ☑ Create Node when cutting at constant
+values · Pencil Tool ▾ (Hold Option for Stepped Editing) · Snap Offset (stepper, -5 Ticks) · Ramp Time (stepper, 200 ms) · Write Mode Changes To ▾
+(Touch) · Write Automation For: ☑ Volume ☑ Send ☑ Pan ☑ Plug-in ☑ Mute ☐ Solo · Automation Quick Access: ◉ Off ○ On · button **Learn Message**
+("Click the Learn Message button to assign a new control") · **Edit…** (dim).
+
+### Score
+
+*Display:* ☑ Show region selection in color · ☐ Display distance values in inches · Double-Click to Open ▾ (Note Attributes) · Selection Color
+(swatch) + Reset. *Camera Tool:* Write To ◉ Clipboard ○ PDF file. *Split:* ☐ Auto split notes in polyphonic staff styles · Split Notes At
+(slider + stepper, C3, dim). Button **Score Project Settings…**.
+
+### Control Surfaces (sub-tabs: General, Help Tags, MIDI Controllers)
+
+**General:** ☐ Bypass all while in background · Resolution of Relative Controls (slider + stepper, 128) · Maximum MIDI Bandwidth (slider + stepper,
+50 %) · ☐ Touching fader selects track · ☑ Control surface follows track selection · ☑ Open plug-in window on track selection · ☐ Jog
+resolution depends on horizontal zoom · ☑ Pickup mode · ☑ Flash Mute and Solo buttons · Multiple Controls per Parameter ▾ (2) · "For Longer
+Labels and Value Displays": ☑ Only when all parameters fit on one page · Show Value Units For: ☑ Instrument/plug-in parameters ☑ Volume and
+other parameters. Buttons **Controller Assignments…** and **Setup…**.
+
 ### Advanced
 
 A single option, **☑ Enable Complete Features** ("Expands simplified features to include all available features"), with a read-only list of

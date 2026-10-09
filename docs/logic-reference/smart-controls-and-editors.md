@@ -124,3 +124,15 @@ the top (`MadreDolcissimaTMF_1#02` with a loop/lock icon at both ends), a large 
 
 **Region Inspector of an audio region** (differs from a MIDI region): Mute · Loop · Quantize *(dim)* · Q-Swing · Transpose · **Fine Tune** · Pitch Source ·
 **Flex & Follow ▾ (Bars)** · **Gain** · More ▸. (A MIDI region shows Quantize ▾, Q-Swing, Transpose, Pitch Source, Velocity Offset.)
+
+### Audio Track Editor tabs: File and Smart Tempo
+
+- **Smart Tempo tab:** local bar **Edit ▾ · View ▾**, an orange toggle (Smart Tempo analysis on) and a second icon, the file name, **Apply Changes** (dim),
+  a small tempo display (`1. 1.` bar/beat · `137,9` tempo with `x2 /2` buttons · `4/4` signature) and **Tempo:** popup (`Variable`; the others are Constant and
+  Off). Above the editor an overview strip shows the whole file with a window box; below it the ruler in bars (`1 2 3 …`, with the signature `4/4`) and the
+  waveform with the detected beat lines.
+- **File tab = Audio File Editor** (the sample editor): bar **Audio File ▾ · Edit ▾ · Functions ▾ · View ▾**, a toggle (orange: edit region/anchor), `−` `+`
+  (zoom), a **link** icon, the file name (`MadreDolcissimaTMF_1#02.aif`), a tool popup (pointer, pencil), play/loop buttons, a speaker icon, a volume slider and
+  two **selection fields** (start `2609467`, end `9350047`, in samples). Body: overview strip, a sample-based ruler (`2.650.000 2.700.000 2.750.000`), the
+  waveform in white on a dark grey grid with a dB scale (`100 80 60 40 20 0 -20 … -100`), orange dashed lines at the transient markers, and at the bottom the rows
+  **Anchor / Region / S. Loop** (the region bar spans the file).

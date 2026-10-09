@@ -171,3 +171,22 @@ TEST_CASE("engine: playing, message handling and garbage hand-back never allocat
     REQUIRE(test::rt::violations() == 0);
     REQUIRE(e.collectGarbage() == 1);
 }
+
+TEST_CASE("engine: the metronome clicks on the beats while playing and stays silent when off", "[engine][click]") {
+    AudioEngine e(kSr);
+    AudioMsg click = msg(MsgKind::SetClick, 1, 1);
+    click.obj = makeOwned(new ClickTrack{{100, 24000}, {1, 0}});
+    e.applyDirect(click);
+    e.applyDirect(msg(MsgKind::Play, 2));
+    std::vector<float> l(512), r(512);
+    e.processBlock(l.data(), r.data(), 512);
+    for (int i = 0; i < 100; ++i) REQUIRE(l[static_cast<std::size_t>(i)] == 0.0f);   // before the first beat
+    float peak = 0;
+    for (int i = 100; i < 512; ++i) peak = std::max(peak, std::abs(l[static_cast<std::size_t>(i)]));
+    REQUIRE(peak > 0.1f);                                                              // the click sounds
+    REQUIRE(l[100] == r[100]);
+    e.applyDirect(msg(MsgKind::SetClick, 3, 0));                                       // off: keeps the beats, mutes the click
+    e.applyDirect(msg(MsgKind::Locate, 4, 0));
+    e.processBlock(l.data(), r.data(), 512);
+    for (int i = 0; i < 512; ++i) REQUIRE(l[static_cast<std::size_t>(i)] == 0.0f);
+}

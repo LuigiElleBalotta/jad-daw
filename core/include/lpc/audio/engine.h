@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "lpc/audio/click.h"
 #include "lpc/audio/messages.h"
 #include "lpc/audio/render_graph.h"
 #include "lpc/audio/spsc_queue.h"
@@ -52,6 +53,12 @@ private:
 
     // owned by the audio thread
     bool playing_ = false;
+    ClickTrack* click_ = nullptr;  // the metronome's beats; replaced through SetClick, the old one goes back as garbage
+    bool clickOn_ = false;
+    int clickLeft_ = 0;            // samples of the click still to sound
+    int clickLength_ = 0;
+    float clickFreq_ = 1000.0f;
+    void mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept;
     std::int64_t position_ = 0;
     std::int64_t loopStart_ = 0;
     std::int64_t loopEnd_ = 0;  // loop is on when loopEnd_ > loopStart_

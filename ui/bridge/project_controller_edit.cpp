@@ -705,4 +705,11 @@ void ProjectController::setAutomationPoints(const QString& trackId, const QStrin
     sendCommand({{"type", "set_automation"}, {"trackId", trackId.toStdString()}, {"target", target.toStdString()}, {"points", list}});
 }
 
+void ProjectController::setMetronome(bool on) {
+    if (on == metronome_) return;
+    metronome_ = on;
+    if (host_) host_->setMetronome(on);
+    emit metronomeChanged();
+}
+
 }  // namespace jad

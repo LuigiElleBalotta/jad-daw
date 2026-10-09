@@ -774,6 +774,23 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(out) && std::filesystem::file_size(out) > 1000 && notices.count() >= 2, 20000);
         QVERIFY(notices.last().at(0).toString().startsWith("Bounced"));
     }
+    void metronomeToggleSurvivesATempoChange() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QSignalSpy spy(&c, &jad::ProjectController::metronomeChanged);
+        c.setMetronome(true);
+        QVERIFY(c.metronomeOn());
+        QCOMPARE(spy.count(), 1);
+        c.setMetronome(true);
+        QCOMPARE(spy.count(), 1);  // no change, no signal
+        c.setTempo(90);
+        QTRY_COMPARE(c.property("bpm").toDouble(), 90.0);
+        c.setSignature(3, 4);
+        QTRY_COMPARE(c.property("barBeats").toDouble(), 3.0);
+        c.setMetronome(false);
+        QVERIFY(!c.metronomeOn());
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

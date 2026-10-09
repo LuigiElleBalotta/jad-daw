@@ -217,6 +217,7 @@ bool ProjectController::openProject(const QUrl& folder) {
     lpc::IPluginHost* pluginHost = nullptr;
 #endif
     host_ = std::make_unique<lpc::ProjectHost>(std::move(project), *engine_, *media_, pluginHost);
+    if (metronome_) host_->setMetronome(true);  // the click stays on across projects
     const std::uint64_t generation = generation_;
     host_->setChangeListener([this, generation](std::uint64_t rev) {
         QMetaObject::invokeMethod(this, [this, rev, generation] { if (generation == generation_) refresh(rev); }, Qt::QueuedConnection);

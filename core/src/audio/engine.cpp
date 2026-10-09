@@ -1,6 +1,7 @@
 #include "lpc/audio/engine.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace lpc::audio {
 
@@ -43,6 +44,15 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             loopStart_ = std::max<std::int64_t>(m.frame, 0);
             loopEnd_ = m.frame2;
             break;
+        case MsgKind::SetClick: {
+            clickOn_ = m.frame != 0;
+            if (m.obj.ptr) {
+                Owned old = makeOwned(click_);
+                click_ = static_cast<ClickTrack*>(m.obj.ptr);
+                if (old.ptr && !feedback_.push(Feedback{old})) garbageOverflow_.fetch_add(1, std::memory_order_relaxed);
+            }
+            break;
+        }
         default: {
             Owned garbage = graph_.apply(m);
             if (garbage.ptr && !feedback_.push(Feedback{garbage})) garbageOverflow_.fetch_add(1, std::memory_order_relaxed);  // leaked, counted
@@ -50,6 +60,27 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
         }
     }
     appliedSeq_.store(m.seq, std::memory_order_release);
+}
+
+// A short sine blip on every beat (higher on the first beat of a bar), added to the master output.
+void AudioEngine::mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept {
+    const auto& frames = click_->frames;
+    std::size_t next = static_cast<std::size_t>(std::lower_bound(frames.begin(), frames.end(), from) - frames.begin());
+    constexpr float kTwoPi = 6.2831853f;
+    for (int i = 0; i < n; ++i) {
+        while (next < frames.size() && frames[next] == from + i) {  // a beat starts here
+            clickFreq_ = click_->accent[next] ? 1600.0f : 1000.0f;
+            clickLength_ = clickLeft_ = static_cast<int>(sampleRate_ * 0.03);
+            ++next;
+        }
+        if (clickLeft_ <= 0) continue;
+        const float t = static_cast<float>(clickLength_ - clickLeft_);
+        const float env = static_cast<float>(clickLeft_) / static_cast<float>(clickLength_);
+        const float v = 0.35f * env * std::sin(kTwoPi * clickFreq_ * t / static_cast<float>(sampleRate_));
+        outL[i] += v;
+        outR[i] += v;
+        --clickLeft_;
+    }
 }
 
 void AudioEngine::drain() noexcept {
@@ -73,6 +104,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
                 n = static_cast<int>(std::min<std::int64_t>(n, loopEnd_ - position_));
             }
             graph_.render(position_, n, outL + done, outR + done);
+            if (clickOn_ && click_) mixClick(outL + done, outR + done, position_, n);
             position_ += n;
         } else {
             std::fill_n(outL + done, n, 0.0f);

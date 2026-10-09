@@ -1,6 +1,7 @@
 #include "lpc/project_host.h"
 
 #include <chrono>
+#include <cmath>
 
 #include "lpc/graph_builder.h"
 #include "lpc/processor_ids.h"
@@ -111,6 +112,7 @@ void ProjectHost::publish(const Project& before) {
     auto messages = diffToMessages(before, project_, media_, plugins_, &plan_);
     postAll(messages);
     pruneInstances();
+    if (metronome_ && before.tempoMap != project_.tempoMap) postClick();  // the beats moved with the tempo
 }
 
 void ProjectHost::rebuildAllConfigs() {
@@ -204,6 +206,39 @@ std::future<void> ProjectHost::stop() {
 std::future<void> ProjectHost::locate(std::int64_t frame) {
     return call([this, frame] { postTransport(audio::MsgKind::Locate, frame); });
 }
+void ProjectHost::postClick() {
+    if (degraded_) return;
+    audio::AudioMsg m;
+    m.kind = audio::MsgKind::SetClick;
+    m.frame = metronome_ ? 1 : 0;
+    if (metronome_) {
+        auto* click = new audio::ClickTrack;
+        const auto& sigs = project_.tempoMap.signatures();
+        Ticks tick = 0;
+        while (click->frames.size() < 20000) {
+            const TempoMap::SigEvent* sig = nullptr;
+            for (const auto& s : sigs)
+                if (s.tick <= tick) sig = &s;
+            const int numerator = sig ? sig->numerator : 4, denominator = sig ? sig->denominator : 4;
+            const Ticks beatTicks = kPPQ * 4 / denominator;
+            for (int beat = 0; beat < numerator; ++beat) {
+                click->frames.push_back(static_cast<std::int64_t>(std::llround(project_.tempoMap.ticksToSamples(tick + beat * beatTicks, project_.sampleRate))));
+                click->accent.push_back(beat == 0 ? 1 : 0);
+            }
+            tick += beatTicks * numerator;
+        }
+        m.obj = audio::makeOwned(click);
+    }
+    post(m);
+}
+
+std::future<void> ProjectHost::setMetronome(bool on) {
+    return call([this, on] {
+        metronome_ = on;
+        postClick();
+    });
+}
+
 std::future<void> ProjectHost::setLoop(std::int64_t startFrame, std::int64_t endFrame) {
     return call([this, startFrame, endFrame] { postTransport(audio::MsgKind::SetLoop, startFrame, endFrame); });
 }

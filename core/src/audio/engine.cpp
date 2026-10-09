@@ -44,6 +44,15 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             loopStart_ = std::max<std::int64_t>(m.frame, 0);
             loopEnd_ = m.frame2;
             break;
+        case MsgKind::SetClickKit: {
+            if (m.obj.ptr) {
+                for (ClickVoice& c : voices_) c = ClickVoice{};  // no sound may point into the old kit
+                Owned old = makeOwned(kit_);
+                kit_ = static_cast<ClickKit*>(m.obj.ptr);
+                if (old.ptr && !feedback_.push(Feedback{old})) garbageOverflow_.fetch_add(1, std::memory_order_relaxed);
+            }
+            break;
+        }
         case MsgKind::SetClick: {
             clickOn_ = m.frame != 0;
             if (m.obj.ptr) {
@@ -62,24 +71,47 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
     appliedSeq_.store(m.seq, std::memory_order_release);
 }
 
-// A short sine blip on every beat (higher on the first beat of a bar), added to the master output.
+// Every beat starts a sound: the sample of its slot, or a short sine blip (higher on the first beat of a bar, quieter on
+// subdivisions) when the slot has none. Sounds overlap, up to a few at once, and are added to the master output.
 void AudioEngine::mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept {
     const auto& frames = click_->frames;
     std::size_t next = static_cast<std::size_t>(std::lower_bound(frames.begin(), frames.end(), from) - frames.begin());
     constexpr float kTwoPi = 6.2831853f;
+    const int blipLength = static_cast<int>(sampleRate_ * 0.03);
     for (int i = 0; i < n; ++i) {
         while (next < frames.size() && frames[next] == from + i) {  // a beat starts here
-            clickFreq_ = click_->accent[next] ? 1600.0f : 1000.0f;
-            clickLength_ = clickLeft_ = static_cast<int>(sampleRate_ * 0.03);
+            const int slot = next < click_->slot.size() ? click_->slot[next] : 0;
+            ClickVoice* v = nullptr;
+            for (ClickVoice& c : voices_)
+                if (c.pos >= c.length) { v = &c; break; }
+            if (!v) v = &voices_[0];  // all busy: the oldest sound is cut
+            const bool sub = slot >= kSlotE && slot <= kSlotLi;
+            if (kit_ && slot > 0 && slot < kClickSlots && !kit_->sample[static_cast<std::size_t>(slot)].empty()) {
+                v->sample = &kit_->sample[static_cast<std::size_t>(slot)];
+                v->length = static_cast<int>(v->sample->size());
+                v->gain = kit_->gain[static_cast<std::size_t>(slot)];
+            } else {
+                v->sample = nullptr;
+                v->length = blipLength;
+                v->freq = click_->accent[next] ? 1600.0f : (sub ? 1300.0f : 1000.0f);
+                v->gain = sub ? 0.15f : 0.35f;
+            }
+            v->pos = 0;
             ++next;
         }
-        if (clickLeft_ <= 0) continue;
-        const float t = static_cast<float>(clickLength_ - clickLeft_);
-        const float env = static_cast<float>(clickLeft_) / static_cast<float>(clickLength_);
-        const float v = 0.35f * env * std::sin(kTwoPi * clickFreq_ * t / static_cast<float>(sampleRate_));
-        outL[i] += v;
-        outR[i] += v;
-        --clickLeft_;
+        float sum = 0.0f;
+        for (ClickVoice& c : voices_) {
+            if (c.pos >= c.length) continue;
+            if (c.sample) {
+                sum += c.gain * (*c.sample)[static_cast<std::size_t>(c.pos)];
+            } else {
+                const float env = static_cast<float>(c.length - c.pos) / static_cast<float>(c.length);
+                sum += c.gain * env * std::sin(kTwoPi * c.freq * static_cast<float>(c.pos) / static_cast<float>(sampleRate_));
+            }
+            ++c.pos;
+        }
+        outL[i] += sum;
+        outR[i] += sum;
     }
 }
 

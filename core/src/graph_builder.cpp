@@ -270,4 +270,67 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
     return out;
 }
 
+namespace {
+// "3+2+2" -> {3, 2, 2}; empty when it does not add up to the bar
+std::vector<int> parseGrouping(const std::string& text, int numerator) {
+    std::vector<int> groups;
+    int sum = 0, value = 0;
+    bool have = false;
+    for (const char c : text + "+") {
+        if (c >= '0' && c <= '9') { value = value * 10 + (c - '0'); have = true; }
+        else if (c == '+' || c == ',' || c == ' ') {
+            if (have && value > 0) { groups.push_back(value); sum += value; }
+            value = 0;
+            have = false;
+        }
+    }
+    if (sum != numerator) groups.clear();
+    return groups;
+}
+}  // namespace
+
+audio::ClickTrack buildClickTrack(const Project& p, const audio::ClickSettings& settings, std::size_t maxClicks) {
+    audio::ClickTrack click;
+    const auto& sigs = p.tempoMap.signatures();
+    const std::string& mode = settings.mode;
+    Ticks tick = 0;
+    auto add = [&](Ticks at, int slot, bool accent) {
+        click.frames.push_back(static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(at, p.sampleRate))));
+        click.accent.push_back(accent ? 1 : 0);
+        click.slot.push_back(static_cast<std::uint8_t>(slot));
+    };
+    while (click.frames.size() < maxClicks) {
+        const TempoMap::SigEvent* sig = nullptr;
+        for (const auto& s : sigs)
+            if (s.tick <= tick) sig = &s;
+        const int numerator = sig ? sig->numerator : 4, denominator = sig ? sig->denominator : 4;
+        const Ticks beatTicks = kPPQ * 4 / denominator;
+        std::vector<int> groups;
+        if (mode == "grouped") {
+            groups = parseGrouping(settings.grouping, numerator);
+            if (groups.empty() && denominator >= 8 && numerator >= 6 && numerator % 3 == 0) groups.assign(static_cast<std::size_t>(numerator / 3), 3);
+        }
+        if (!groups.empty()) {  // 1 la li 2 la li (a group of two: 1 &)
+            int beat = 0, number = 1;
+            for (const int size : groups) {
+                for (int k = 0; k < size; ++k, ++beat) {
+                    const int slot = k == 0 ? std::min(number, 32) : (size == 2 ? audio::kSlotAnd : (k == 1 ? audio::kSlotLa : audio::kSlotLi));
+                    add(tick + beat * beatTicks, slot, beat == 0);
+                }
+                ++number;
+            }
+        } else {
+            const int parts = mode == "sixteenths" ? 4 : (mode == "eighths" ? 2 : 1);
+            for (int beat = 0; beat < numerator; ++beat)
+                for (int part = 0; part < parts; ++part) {
+                    int slot = std::min(beat + 1, 32);
+                    if (part > 0) slot = parts == 2 ? audio::kSlotAnd : (part == 1 ? audio::kSlotE : (part == 2 ? audio::kSlotAnd : audio::kSlotA));
+                    add(tick + beat * beatTicks + part * (beatTicks / parts), slot, beat == 0 && part == 0);
+                }
+        }
+        tick += beatTicks * numerator;
+    }
+    return click;
+}
+
 }  // namespace lpc

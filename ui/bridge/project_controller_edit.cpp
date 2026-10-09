@@ -1,5 +1,6 @@
 // The Edit menu of the Tracks area on regions: copy, cut, paste, duplicate, mute, the Select, Trim, Length and Move commands.
 // Each change is one command (or one transaction) and so one undo step, like the Core's own commands.
+#include <QSettings>
 #include <QTimer>
 #include <QtConcurrent>
 #include <QPointer>
@@ -710,6 +711,84 @@ void ProjectController::setMetronome(bool on) {
     metronome_ = on;
     if (host_) host_->setMetronome(on);
     emit metronomeChanged();
+}
+
+void ProjectController::clickSettingsEdited() {
+    ++clickRevision_;
+    if (host_) host_->setClickSettings(clickSettings_);
+    emit clickSettingsChanged();
+}
+
+void ProjectController::setClickMode(const QString& mode) {
+    if ((mode != "beats" && mode != "eighths" && mode != "sixteenths" && mode != "grouped") || mode.toStdString() == clickSettings_.mode) return;
+    clickSettings_.mode = mode.toStdString();
+    clickSettingsEdited();
+}
+
+void ProjectController::setClickGrouping(const QString& grouping) {
+    const std::string text = grouping.left(40).toStdString();
+    if (text == clickSettings_.grouping) return;
+    clickSettings_.grouping = text;
+    clickSettingsEdited();
+}
+
+QString ProjectController::clickSlotFile(int slot) const {
+    if (slot < 1 || slot >= lpc::audio::kClickSlots) return {};
+    return QString::fromStdString(clickSettings_.files[static_cast<std::size_t>(slot)]);
+}
+
+void ProjectController::setClickSlotFile(int slot, const QUrl& file) {
+    if (slot < 1 || slot >= lpc::audio::kClickSlots || !file.isLocalFile()) return;
+    clickSettings_.files[static_cast<std::size_t>(slot)] = file.toLocalFile().toStdString();
+    clickSettingsEdited();
+}
+
+void ProjectController::clearClickSlot(int slot) {
+    if (slot < 1 || slot >= lpc::audio::kClickSlots || clickSettings_.files[static_cast<std::size_t>(slot)].empty()) return;
+    clickSettings_.files[static_cast<std::size_t>(slot)].clear();
+    clickSettingsEdited();
+}
+
+void ProjectController::setClickSlotGain(int slot, double gain) {
+    if (slot < 1 || slot >= lpc::audio::kClickSlots || !std::isfinite(gain)) return;
+    clickSettings_.gain[static_cast<std::size_t>(slot)] = static_cast<float>(std::clamp(gain, 0.0, 2.0));
+    clickSettingsEdited();
+}
+
+double ProjectController::clickSlotGain(int slot) const {
+    return slot < 1 || slot >= lpc::audio::kClickSlots ? 1.0 : static_cast<double>(clickSettings_.gain[static_cast<std::size_t>(slot)]);
+}
+
+QString ProjectController::clickSlotName(int slot) {
+    switch (slot) {
+    case lpc::audio::kSlotE: return QStringLiteral("e");
+    case lpc::audio::kSlotAnd: return QStringLiteral("&");
+    case lpc::audio::kSlotA: return QStringLiteral("a");
+    case lpc::audio::kSlotLa: return QStringLiteral("la");
+    case lpc::audio::kSlotLi: return QStringLiteral("li");
+    default: return slot >= 1 && slot <= 32 ? QString::number(slot) : QString();
+    }
+}
+
+void ProjectController::loadClickSettings(QSettings& s) {
+    clickSettings_.mode = s.value("click/mode", "beats").toString().toStdString();
+    clickSettings_.grouping = s.value("click/grouping").toString().toStdString();
+    for (int slot = 1; slot < lpc::audio::kClickSlots; ++slot) {
+        clickSettings_.files[static_cast<std::size_t>(slot)] = s.value(QStringLiteral("click/file%1").arg(slot)).toString().toStdString();
+        clickSettings_.gain[static_cast<std::size_t>(slot)] = s.value(QStringLiteral("click/gain%1").arg(slot), 1.0).toFloat();
+    }
+    ++clickRevision_;
+    if (host_) host_->setClickSettings(clickSettings_);
+    emit clickSettingsChanged();
+}
+
+void ProjectController::saveClickSettings(QSettings& s) const {
+    s.setValue("click/mode", QString::fromStdString(clickSettings_.mode));
+    s.setValue("click/grouping", QString::fromStdString(clickSettings_.grouping));
+    for (int slot = 1; slot < lpc::audio::kClickSlots; ++slot) {
+        s.setValue(QStringLiteral("click/file%1").arg(slot), QString::fromStdString(clickSettings_.files[static_cast<std::size_t>(slot)]));
+        s.setValue(QStringLiteral("click/gain%1").arg(slot), clickSettings_.gain[static_cast<std::size_t>(slot)]);
+    }
 }
 
 }  // namespace jad

@@ -153,7 +153,7 @@
  {"id":"navigate.autoSetLocators","label":"Auto Set Locators","menu":"Navigate","shortcut":"","kind":"command","status":"stub","sep":true},
  {"id":"nav.followPlayhead","label":"Catch Playhead","menu":"Navigate","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"record.countIn","label":"Count-in","menu":"Record","shortcut":"","kind":"command","status":"stub"},
- {"id":"record.metronomeSettings","label":"Metronome Settings…","menu":"Record","shortcut":"","kind":"command","status":"stub"},
+ {"id":"record.metronomeSettings","label":"Metronome Settings…","menu":"Record","shortcut":"","kind":"command","status":"ready"},
  {"id":"record.useMusicalGrid","label":"Use Musical Grid","menu":"Record","shortcut":"","kind":"toggle","status":"stub","sep":true},
  {"id":"record.allowQuickPunchIn","label":"Allow Quick Punch-In","menu":"Record","shortcut":"","kind":"toggle","status":"stub"},
  {"id":"record.autoInputMonitoring","label":"Auto Input Monitoring","menu":"Record","shortcut":"","kind":"command","status":"stub"},

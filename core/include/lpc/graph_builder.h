@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "lpc/audio/messages.h"
+#include "lpc/audio/click.h"
 #include "lpc/audio/render_graph.h"
 #include "lpc/media_store.h"
 #include "lpc/plugin_host.h"
@@ -40,5 +41,9 @@ std::vector<audio::AudioMsg> refreshMessages(const Project& project, MediaStore&
 // plug-in host about `before`, because that would make the host reload instances for the old state.
 std::vector<audio::AudioMsg> initialMessages(const Project& project, MediaStore& media, IPluginHost* plugins = nullptr, PdcPlan* planOut = nullptr);
 std::vector<audio::AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins = nullptr, PdcPlan* plan = nullptr);
+
+
+// The metronome's beats for the whole project from the tempo map and the counting mode of the settings (at most maxClicks beats).
+audio::ClickTrack buildClickTrack(const Project& p, const audio::ClickSettings& settings, std::size_t maxClicks = 20000);
 
 }  // namespace lpc

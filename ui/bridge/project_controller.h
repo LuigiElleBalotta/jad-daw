@@ -21,6 +21,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include "lpc/audio/click.h"
 #include "bridge/inspector_model.h"
 #include "bridge/library_model.h"
 #include "bridge/mixer_model.h"
@@ -92,6 +93,9 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool automationVisible READ automationVisible WRITE setAutomationVisible NOTIFY automationViewChanged)  // Mix > Show Automation
     Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume" or "pan"
     Q_PROPERTY(bool metronomeOn READ metronomeOn NOTIFY metronomeChanged)  // the click while playing
+    Q_PROPERTY(QString clickMode READ clickMode WRITE setClickMode NOTIFY clickSettingsChanged)          // "beats", "eighths", "sixteenths" or "grouped"
+    Q_PROPERTY(QString clickGrouping READ clickGrouping WRITE setClickGrouping NOTIFY clickSettingsChanged)  // "3+2+2"
+    Q_PROPERTY(int clickRevision READ clickRevision NOTIFY clickSettingsChanged)
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -169,6 +173,20 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    QString clickMode() const { return QString::fromStdString(clickSettings_.mode); }
+    void setClickMode(const QString& mode);
+    QString clickGrouping() const { return QString::fromStdString(clickSettings_.grouping); }
+    void setClickGrouping(const QString& grouping);
+    int clickRevision() const { return clickRevision_; }
+    // The sound of one slot (1..32: the beat numbers, 33 e, 34 &, 35 a, 36 la, 37 li): a WAV file of the user's, or none (built-in click)
+    Q_INVOKABLE QString clickSlotFile(int slot) const;
+    Q_INVOKABLE void setClickSlotFile(int slot, const QUrl& file);
+    Q_INVOKABLE void clearClickSlot(int slot);
+    Q_INVOKABLE void setClickSlotGain(int slot, double gain);
+    Q_INVOKABLE double clickSlotGain(int slot) const;
+    Q_INVOKABLE static QString clickSlotName(int slot);
+    void loadClickSettings(QSettings& s);
+    void saveClickSettings(QSettings& s) const;
     Q_INVOKABLE void setMetronome(bool on);
     bool automationVisible() const { return automationVisible_; }
     void setAutomationVisible(bool on);
@@ -413,6 +431,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void clickSettingsChanged();
     void commandSent(const QString& type);
     // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
     void notice(const QString& message);
@@ -548,6 +567,9 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    lpc::audio::ClickSettings clickSettings_;
+    int clickRevision_ = 0;
+    void clickSettingsEdited();
     std::uint64_t snapshots_ = 0;
     QString automationParam_ = QStringLiteral("volume");
     std::vector<MarkerRow> markerRows_;

@@ -1,3 +1,5 @@
+#include <QSettings>
+#include <QDir>
 #include <QSignalSpy>
 #include <QtTest>
 #include <cmath>
@@ -790,6 +792,32 @@ private slots:
         QTRY_COMPARE(c.property("barBeats").toDouble(), 3.0);
         c.setMetronome(false);
         QVERIFY(!c.metronomeOn());
+    }
+    void clickSettingsKeepTheModeGroupingAndSampleFiles() {
+        jad::ProjectController c(false);
+        QSignalSpy spy(&c, &jad::ProjectController::clickSettingsChanged);
+        QCOMPARE(c.clickMode(), QString("beats"));
+        c.setClickMode("nonsense");
+        QCOMPARE(c.clickMode(), QString("beats"));
+        QCOMPARE(spy.count(), 0);
+        c.setClickMode("grouped");
+        c.setClickGrouping("3+2+2");
+        QCOMPARE(c.clickMode(), QString("grouped"));
+        QCOMPARE(c.clickGrouping(), QString("3+2+2"));
+        c.setClickSlotFile(1, QUrl::fromLocalFile("C:/x/one.wav"));
+        QVERIFY(c.clickSlotFile(1).endsWith("one.wav"));
+        c.setClickSlotGain(1, 5.0);
+        QCOMPARE(c.clickSlotGain(1), 2.0);  // clamped
+        c.clearClickSlot(1);
+        QVERIFY(c.clickSlotFile(1).isEmpty());
+        QCOMPARE(jad::ProjectController::clickSlotName(1), QString("1"));
+        QCOMPARE(jad::ProjectController::clickSlotName(36), QString("la"));
+        QSettings s(QDir(QDir::tempPath()).filePath("jad-click-test.ini"), QSettings::IniFormat);
+        c.saveClickSettings(s);
+        jad::ProjectController d(false);
+        d.loadClickSettings(s);
+        QCOMPARE(d.clickMode(), QString("grouped"));
+        QCOMPARE(d.clickGrouping(), QString("3+2+2"));
     }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;

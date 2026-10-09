@@ -51,6 +51,7 @@ public:
     std::future<void> stop();
     std::future<void> locate(std::int64_t frame);
     std::future<void> setLoop(std::int64_t startFrame, std::int64_t endFrame);
+    std::future<void> setClickSettings(audio::ClickSettings settings);  // how the bar is counted and the click sounds (sample files)
     std::future<void> setMetronome(bool on);  // a click on every beat of the tempo map while playing, accent on the first beat of a bar
 
     // Called on the project thread after every accepted submit/undo/redo and after a rebuild of the audio
@@ -80,7 +81,9 @@ private:
     void resync();
     void notifyChanged();
     void publish(const Project& before);
-    void postClick();                 // the beats for the current tempo map and signature
+    void postClick();
+    void postKit();                   // loads the sample files of the click settings
+    audio::ClickSettings clickSettings_;                 // the beats for the current tempo map and signature
     bool metronome_ = false;          // project thread only
     std::vector<std::pair<InsertSlot, ProcessorRef>> liveInserts() const;
     void wantInstances();  // tells the plug-in host which slots the project holds, before instances are asked for

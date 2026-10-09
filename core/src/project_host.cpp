@@ -2,8 +2,10 @@
 
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 
 #include "lpc/graph_builder.h"
+#include "lpc/wav.h"
 #include "lpc/processor_ids.h"
 
 namespace lpc {
@@ -211,25 +213,55 @@ void ProjectHost::postClick() {
     audio::AudioMsg m;
     m.kind = audio::MsgKind::SetClick;
     m.frame = metronome_ ? 1 : 0;
-    if (metronome_) {
-        auto* click = new audio::ClickTrack;
-        const auto& sigs = project_.tempoMap.signatures();
-        Ticks tick = 0;
-        while (click->frames.size() < 20000) {
-            const TempoMap::SigEvent* sig = nullptr;
-            for (const auto& s : sigs)
-                if (s.tick <= tick) sig = &s;
-            const int numerator = sig ? sig->numerator : 4, denominator = sig ? sig->denominator : 4;
-            const Ticks beatTicks = kPPQ * 4 / denominator;
-            for (int beat = 0; beat < numerator; ++beat) {
-                click->frames.push_back(static_cast<std::int64_t>(std::llround(project_.tempoMap.ticksToSamples(tick + beat * beatTicks, project_.sampleRate))));
-                click->accent.push_back(beat == 0 ? 1 : 0);
-            }
-            tick += beatTicks * numerator;
-        }
-        m.obj = audio::makeOwned(click);
-    }
+    if (metronome_) m.obj = audio::makeOwned(new audio::ClickTrack(buildClickTrack(project_, clickSettings_)));
     post(m);
+}
+
+// Reads the sample file of every slot (WAV: any rate and channel count, mixed down to mono and resampled to the engine's rate).
+void ProjectHost::postKit() {
+    if (degraded_) return;
+    auto* kit = new audio::ClickKit;
+    for (int slot = 1; slot < audio::kClickSlots; ++slot) {
+        const std::string& file = clickSettings_.files[static_cast<std::size_t>(slot)];
+        kit->gain[static_cast<std::size_t>(slot)] = clickSettings_.gain[static_cast<std::size_t>(slot)];
+        if (file.empty()) continue;
+        try {
+            const WavData wav = readWav(std::filesystem::u8path(file));
+            if (wav.frames() == 0 || wav.sampleRate <= 0 || wav.channels <= 0) continue;
+            const std::int64_t frames = wav.frames();
+            std::vector<float> mono(static_cast<std::size_t>(frames));
+            for (std::int64_t i = 0; i < frames; ++i) {
+                float sum = 0.0f;
+                for (int c = 0; c < wav.channels; ++c) sum += wav.samples[static_cast<std::size_t>(i * wav.channels + c)];
+                mono[static_cast<std::size_t>(i)] = sum / static_cast<float>(wav.channels);
+            }
+            const double ratio = static_cast<double>(wav.sampleRate) / project_.sampleRate;
+            const std::int64_t out = std::min<std::int64_t>(static_cast<std::int64_t>(frames / ratio), static_cast<std::int64_t>(project_.sampleRate) * 5);  // at most 5 s
+            std::vector<float>& dst = kit->sample[static_cast<std::size_t>(slot)];
+            dst.resize(static_cast<std::size_t>(out));
+            for (std::int64_t i = 0; i < out; ++i) {
+                const double pos = static_cast<double>(i) * ratio;
+                const auto a = static_cast<std::size_t>(pos);
+                const std::size_t b = std::min(a + 1, mono.size() - 1);
+                const float f = static_cast<float>(pos - static_cast<double>(a));
+                dst[static_cast<std::size_t>(i)] = mono[a] + (mono[b] - mono[a]) * f;
+            }
+        } catch (const std::exception&) {
+            // an unreadable file leaves its slot on the built-in blip
+        }
+    }
+    audio::AudioMsg m;
+    m.kind = audio::MsgKind::SetClickKit;
+    m.obj = audio::makeOwned(kit);
+    post(m);
+}
+
+std::future<void> ProjectHost::setClickSettings(audio::ClickSettings settings) {
+    return call([this, s = std::move(settings)]() mutable {
+        clickSettings_ = std::move(s);
+        postKit();
+        if (metronome_) postClick();
+    });
 }
 
 std::future<void> ProjectHost::setMetronome(bool on) {

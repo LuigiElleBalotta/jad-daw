@@ -54,10 +54,15 @@ private:
     // owned by the audio thread
     bool playing_ = false;
     ClickTrack* click_ = nullptr;  // the metronome's beats; replaced through SetClick, the old one goes back as garbage
+    ClickKit* kit_ = nullptr;      // the samples of the click sounds (SetClickKit)
     bool clickOn_ = false;
-    int clickLeft_ = 0;            // samples of the click still to sound
-    int clickLength_ = 0;
-    float clickFreq_ = 1000.0f;
+    struct ClickVoice {            // a sound being played: a sample, or the built-in blip when sample is null
+        const std::vector<float>* sample = nullptr;
+        int pos = 0, length = 0;
+        float freq = 1000.0f, gain = 0.0f;
+    };
+    static constexpr int kClickVoices = 6;
+    ClickVoice voices_[kClickVoices];
     void mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept;
     std::int64_t position_ = 0;
     std::int64_t loopStart_ = 0;

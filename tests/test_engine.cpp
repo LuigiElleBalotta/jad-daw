@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include "lpc/audio/engine.h"
 #include "lpc/commands.h"
@@ -189,4 +190,25 @@ TEST_CASE("engine: the metronome clicks on the beats while playing and stays sil
     e.applyDirect(msg(MsgKind::Locate, 4, 0));
     e.processBlock(l.data(), r.data(), 512);
     for (int i = 0; i < 512; ++i) REQUIRE(l[static_cast<std::size_t>(i)] == 0.0f);
+}
+
+TEST_CASE("engine: a click slot with a sample plays the sample, the others the built-in blip", "[engine][click]") {
+    AudioEngine e(kSr);
+    auto* kit = new ClickKit;
+    kit->sample[1] = std::vector<float>(10, 0.5f);
+    kit->gain[1] = 0.5f;
+    AudioMsg k = msg(MsgKind::SetClickKit, 1);
+    k.obj = makeOwned(kit);
+    e.applyDirect(k);
+    AudioMsg c = msg(MsgKind::SetClick, 2, 1);
+    c.obj = makeOwned(new ClickTrack{{100, 300}, {1, 0}, {1, 2}});  // slot 1 has a sample, slot 2 does not
+    e.applyDirect(c);
+    e.applyDirect(msg(MsgKind::Play, 3));
+    std::vector<float> l(512), r(512);
+    e.processBlock(l.data(), r.data(), 512);
+    for (int i = 100; i < 110; ++i) REQUIRE(l[static_cast<std::size_t>(i)] == Catch::Approx(0.25f));  // 0.5 * gain 0.5
+    REQUIRE(l[110] == 0.0f);                                                                          // the sample ended
+    float blip = 0;
+    for (int i = 300; i < 512; ++i) blip = std::max(blip, std::abs(l[static_cast<std::size_t>(i)]));
+    REQUIRE(blip > 0.05f);                                                                            // slot 2: the built-in click
 }

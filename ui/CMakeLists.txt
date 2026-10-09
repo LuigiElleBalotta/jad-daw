@@ -50,6 +50,7 @@ qt_add_qml_module(jad_ui_lib
         qml/EditorArea.qml
         qml/GlobalTracks.qml
         qml/AutomationLane.qml
+        qml/MetronomeSettings.qml
         qml/ThemedMenu.qml
         qml/ThemedMenuItem.qml
         qml/ActionTreeMenu.qml

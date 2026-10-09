@@ -217,6 +217,7 @@ bool ProjectController::openProject(const QUrl& folder) {
     lpc::IPluginHost* pluginHost = nullptr;
 #endif
     host_ = std::make_unique<lpc::ProjectHost>(std::move(project), *engine_, *media_, pluginHost);
+    host_->setClickSettings(clickSettings_);
     if (metronome_) host_->setMetronome(true);  // the click stays on across projects
     const std::uint64_t generation = generation_;
     host_->setChangeListener([this, generation](std::uint64_t rev) {
@@ -1164,6 +1165,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     setSmartControlsHeight(s.value("panels/smartControlsHeight", smartControlsHeight_).toDouble());
     setMixerHeight(s.value("panels/mixerHeight", mixerHeight_).toDouble());
     mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
+    loadClickSettings(s);
 }
 
 void ProjectController::savePanelState(QSettings& s) const {
@@ -1174,6 +1176,7 @@ void ProjectController::savePanelState(QSettings& s) const {
     s.setValue("panels/smartControlsHeight", smartControlsHeight_);
     s.setValue("panels/mixerHeight", mixerHeight_);
     s.setValue("panels/mixerDetached", mixerDetached_);
+    saveClickSettings(s);
 }
 
 void ProjectController::setLeftColumnWidth(double width) {

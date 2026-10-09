@@ -303,3 +303,32 @@ TEST_CASE("builder: messages keep the live graph identical to a graph built from
         REQUIRE(steps > 30);
     }
 }
+
+TEST_CASE("click: the counting mode and the signature decide the beats and their sounds", "[click]") {
+    Project p(Uuid::random(gRng));
+    audio::ClickSettings s;
+    auto slots = [&](std::size_t n) {
+        const audio::ClickTrack c = buildClickTrack(p, s, n);
+        std::vector<int> out;
+        for (std::size_t i = 0; i < std::min(n, c.slot.size()); ++i) out.push_back(c.slot[i]);
+        return out;
+    };
+    using V = std::vector<int>;
+    REQUIRE(slots(4) == V{1, 2, 3, 4});                                          // 4/4 beats
+    s.mode = "eighths";
+    REQUIRE(slots(4) == V{1, audio::kSlotAnd, 2, audio::kSlotAnd});
+    s.mode = "sixteenths";
+    REQUIRE(slots(4) == V{1, audio::kSlotE, audio::kSlotAnd, audio::kSlotA});
+    REQUIRE(p.tempoMap.setSignature(0, 6, 8));
+    s.mode = "grouped";
+    REQUIRE(slots(6) == V{1, audio::kSlotLa, audio::kSlotLi, 2, audio::kSlotLa, audio::kSlotLi});  // 6/8 counted in two
+    s.grouping = "2+2+3";                                                        // a wrong total (7 in 6/8): the default groups
+    REQUIRE(slots(3) == V{1, audio::kSlotLa, audio::kSlotLi});
+    REQUIRE(p.tempoMap.setSignature(0, 7, 8));
+    REQUIRE(slots(7) == V{1, audio::kSlotAnd, 2, audio::kSlotAnd, 3, audio::kSlotLa, audio::kSlotLi});  // 7/8 as 2+2+3
+    s.mode = "beats";
+    const audio::ClickTrack plain = buildClickTrack(p, s, 7);
+    REQUIRE(plain.accent[0] == 1);
+    REQUIRE(plain.accent[1] == 0);
+    REQUIRE(plain.frames[1] - plain.frames[0] == 12000);                         // an eighth at 120 bpm: 0.25 s at 48 kHz
+}

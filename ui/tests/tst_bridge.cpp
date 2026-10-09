@@ -746,6 +746,33 @@ private slots:
             return true;
         }());
     }
+    void settingTheNotesOfAMidiRegionIsOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString midi;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const QString id = c.regions()->regionIdAt(i);
+            if (!c.regions()->find(id)->audio) midi = id;
+        }
+        QVERIFY(!midi.isEmpty());
+        const QVariantList before = c.regionNotes(midi);
+        QVariantList next;
+        next.append(QVariantMap{{"start", 0.5}, {"length", 1.5}, {"note", 64}, {"velocity", 90}});
+        c.setRegionNotes(midi, next);
+        QTRY_COMPARE(c.regionNotes(midi).size(), 1);
+        const QVariantMap n = c.regionNotes(midi).first().toMap();
+        QCOMPARE(n.value("note").toInt(), 64);
+        QCOMPARE(n.value("velocity").toInt(), 90);
+        QVERIFY(std::abs(n.value("start").toDouble() - 0.5) < 1e-6);
+        QVERIFY(std::abs(n.value("length").toDouble() - 1.5) < 1e-6);
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(midi).size(), before.size());
+        const QVariantMap info = c.regionInfo(midi);
+        QVERIFY(info.value("found").toBool());
+        QVERIFY(!info.value("audio").toBool());
+    }
     void toolNoticesGoToTheToastNotTheErrorBar() {
         TempDir dir;
         jad::ProjectController c(false);

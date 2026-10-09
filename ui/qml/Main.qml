@@ -12,7 +12,7 @@ ApplicationWindow {
     height: 860
     minimumWidth: 900
     // the docked Mixer is never shorter than its strips with their legend: the window leaves room for it and for the rest
-    minimumHeight: 200 + (controller.mixerVisible && !controller.mixerDetached ? 530 : 0)
+    minimumHeight: 200 + (controller.mixerVisible && !controller.mixerDetached ? 584 : 0)
     visible: true
     title: "JAD Daw"
     color: Theme.surfaceApp
@@ -27,6 +27,17 @@ ApplicationWindow {
     function setSelectedToggle(actionId, on) { controller.setTrackToggle(actionId, controller.selectedTrackIds[0], on) }
     // for screenshots: opens the menu at `index` of the menu bar
     function showMenu(index) { const m = menuBar.menuAt(index); if (m) m.open() }
+    // Smart Controls, the Mixer and the Editors share the lower area of the window, as in Logic: showing one hides the others
+    // (a Mixer in its own window is not part of it). Choosing the one that is shown hides it.
+    function showLowerPane(which) {
+        const mixerDocked = !controller.mixerDetached
+        const shown = which === "mixer" ? (controller.mixerVisible && mixerDocked) : (which === "editors" ? root.editorsVisible : controller.smartControlsVisible)
+        const on = which === "mixer" && !mixerDocked ? !controller.mixerVisible : !shown
+        if (which === "mixer" && !mixerDocked) { controller.mixerVisible = on; return }
+        controller.smartControlsVisible = which === "smart" && on
+        root.editorsVisible = which === "editors" && on
+        if (mixerDocked) controller.mixerVisible = which === "mixer" && on
+    }
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
     function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.barBeats * 4) }
 
@@ -50,7 +61,7 @@ ApplicationWindow {
         width: 960
         height: 620
         minimumWidth: 360
-        minimumHeight: 24 + 482  // the bar and the shortest strip with its legend
+        minimumHeight: 24 + 536  // the bar and the shortest strip with its legend
         color: Theme.surfaceCanvas
         visible: controller.mixerVisible && controller.mixerDetached
         onClosing: controller.mixerVisible = false
@@ -91,13 +102,13 @@ ApplicationWindow {
         "file.quit": () => Qt.quit(),
         "edit.undo": () => controller.undo(),
         "edit.redo": () => controller.redo(),
-        "edit.delete": () => timeline.deleteSelected(),
-        "edit.cut": () => controller.cutSelectedRegions(),
-        "edit.copy": () => controller.copySelectedRegions(),
-        "edit.paste": () => controller.pasteRegions(false),
+        "edit.delete": () => editorArea.pianoFocused ? editorArea.piano.deleteSelected() : timeline.deleteSelected(),
+        "edit.cut": () => editorArea.pianoFocused ? editorArea.piano.cut() : controller.cutSelectedRegions(),
+        "edit.copy": () => editorArea.pianoFocused ? editorArea.piano.copy() : controller.copySelectedRegions(),
+        "edit.paste": () => editorArea.pianoFocused ? editorArea.piano.paste() : controller.pasteRegions(false),
         "edit.pasteAtOriginalPosition": () => controller.pasteRegions(true),
-        "edit.duplicate": () => controller.duplicateSelectedRegions(),
-        "edit.selectAllFollowing": () => controller.selectFollowingRegions(false),
+        "edit.duplicate": () => editorArea.pianoFocused ? editorArea.piano.duplicate() : controller.duplicateSelectedRegions(),
+        "edit.selectAllFollowing": () => editorArea.pianoFocused ? editorArea.piano.selectFollowing() : controller.selectFollowingRegions(false),
         "edit.selectAllFollowingOfSameTrack": () => controller.selectFollowingRegions(true),
         "edit.selectMutedRegions": () => controller.selectMutedRegions(),
         "edit.selectOverlappedRegions": () => controller.selectOverlappedRegions(),
@@ -105,11 +116,11 @@ ApplicationWindow {
         "edit.selectSelectEmptyRegions": () => controller.selectEmptyRegions(),
         "edit.selectNextRegion": () => controller.selectNeighbourRegion(1),
         "edit.selectPreviousRegion": () => controller.selectNeighbourRegion(-1),
-        "edit.selectInvertSelection": () => controller.invertRegionSelection(),
+        "edit.selectInvertSelection": () => editorArea.pianoFocused ? editorArea.piano.invertSelection() : controller.invertRegionSelection(),
         "edit.lengthHalve": () => controller.halveSelectedRegions(),
         "edit.lengthDouble": () => controller.doubleSelectedRegions(),
-        "edit.moveNudgeLeft": () => controller.nudgeSelectedRegions(-1),
-        "edit.moveNudgeRight": () => controller.nudgeSelectedRegions(1),
+        "edit.moveNudgeLeft": () => editorArea.pianoFocused ? editorArea.piano.nudge(-editorArea.piano.gridUnit) : controller.nudgeSelectedRegions(-1),
+        "edit.moveNudgeRight": () => editorArea.pianoFocused ? editorArea.piano.nudge(editorArea.piano.gridUnit) : controller.nudgeSelectedRegions(1),
         "edit.trimRemoveOverlaps": () => controller.removeOverlaps(),
         "edit.trimRegionEndToNextRegion": () => controller.regionEndToNextRegion(),
         "region.mute": () => controller.toggleMuteSelectedRegions(),
@@ -140,21 +151,21 @@ ApplicationWindow {
         "track.height.normal": () => { controller.trackHeightIndex = 1 },
         "track.height.large": () => { controller.trackHeightIndex = 2 },
         "track.height.xlarge": () => { controller.trackHeightIndex = 3 },
-        "edit.selectAll": () => controller.selectAll(),
+        "edit.selectAll": () => editorArea.pianoFocused ? editorArea.piano.selectAll() : controller.selectAll(),
         "edit.splitAtPlayhead": () => controller.splitSelectedAtPlayhead(),
         "edit.joinRegions": () => controller.joinSelected(),
-        "edit.deselectAll": () => controller.clearSelection(),
+        "edit.deselectAll": () => editorArea.pianoFocused ? editorArea.piano.deselectAll() : controller.clearSelection(),
         "transport.stop": () => controller.stop(),
         "transport.barBack": () => controller.barBack(),
         "transport.barForward": () => controller.barForward(),
         "transport.goToPosition": () => controlBar.lcd.editPosition(),
-        "view.mixer": () => { controller.mixerVisible = !controller.mixerVisible },
+        "view.mixer": () => root.showLowerPane("mixer"),
         "window.openMixer": () => { controller.mixerDetached = true },
-        "view.editors": () => { root.editorsVisible = !root.editorsVisible },
+        "view.editors": () => root.showLowerPane("editors"),
         "window.pluginManager": () => { controller.pluginManagerOpen = !controller.pluginManagerOpen },
         "view.library": () => { controller.libraryVisible = !controller.libraryVisible },
         "view.inspector": () => { controller.inspectorVisible = !controller.inspectorVisible },
-        "view.smartControls": () => { controller.smartControlsVisible = !controller.smartControlsVisible },
+        "view.smartControls": () => root.showLowerPane("smart"),
         "tool.pointer": () => { controller.tool = "pointer" },
         "tool.pencil": () => { controller.tool = "pencil" },
         "tool.eraser": () => { controller.tool = "eraser" },
@@ -288,7 +299,7 @@ ApplicationWindow {
             }
             Timeline {
                 id: timeline
-                onEditRequested: root.editorsVisible = true
+                onEditRequested: { if (!root.editorsVisible) root.showLowerPane("editors") }
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 project: controller
@@ -308,6 +319,7 @@ ApplicationWindow {
             }
         }
         EditorArea {
+            id: editorArea
             Layout.fillWidth: true
             Layout.preferredHeight: implicitHeight
             visible: root.editorsVisible

@@ -136,7 +136,7 @@ Panel {
     radius: Theme.radiusRegion
     color: selected ? Theme.surfaceRaised : Theme.surfacePanel  // the selected strip is lighter
     // a strip that is not tall enough (the Inspector with other panes open) drops the gain reduction and EQ rows and shortens the rest
-    readonly property bool tight: height < 470
+    readonly property bool tight: height < 520  // the rows, a 110 px fader, R I, M S and the name need 513 px
     readonly property bool hasInput: !master && kind === "audio"  // R and I are on audio strips
     readonly property color typeColor: master ? "#8e5bd6" : (kind === "instrument" ? Theme.trackGreenSolid : (kind === "audio" ? Theme.trackBlueSolid : Theme.trackPinkSolid))
 
@@ -385,6 +385,8 @@ Panel {
                             id: sendKnob
                             width: 20
                             height: 20
+                            Layout.preferredWidth: 20
+                            Layout.preferredHeight: 20  // the layout reads the implicit size (28) otherwise, and the row grows
                             from: -96
                             to: 12
                             resetValue: 0

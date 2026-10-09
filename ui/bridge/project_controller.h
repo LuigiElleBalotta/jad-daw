@@ -191,7 +191,7 @@ public:
     void savePanelState(QSettings& settings) const;
     void setLeftColumnWidth(double width);       // clamped to 200..320, NaN ignored
     void setSmartControlsHeight(double height);  // clamped to 120..320, NaN ignored
-    void setMixerHeight(double height);          // clamped to 530..1400 (the strips with their legend), NaN ignored
+    void setMixerHeight(double height);          // clamped to 584..1400 (the strips with their legend), NaN ignored
     void setMixerDetached(bool detached);        // detaching also shows the Mixer
 
     Q_INVOKABLE bool openProject(const QUrl& folder);
@@ -429,7 +429,7 @@ private:
     QHash<QString, double> liveGain_, livePan_;  // the latest value of each strip, waiting for the next tick
     void pasteClipboard(double offsetBeats, bool keepTrack);
     bool inspectorVisible_ = true, libraryVisible_ = false, smartControlsVisible_ = false;
-    double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0, mixerHeight_ = 560.0;
+    double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0, mixerHeight_ = 600.0;
     bool mixerDetached_ = false;
 
     std::unique_ptr<JuceInit> juce_;

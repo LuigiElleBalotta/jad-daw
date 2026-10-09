@@ -8,7 +8,7 @@ import Jad
 Rectangle {
     id: root
     required property ProjectController project
-    property real wantedHeight: 300
+    property real wantedHeight: 380
     property int tab: 0
 
     readonly property string regionId: project.selectedRegionIds.length > 0 ? project.selectedRegionIds[0] : ""
@@ -49,7 +49,11 @@ Rectangle {
         }
     }
 
+    readonly property alias piano: piano
+    readonly property bool pianoFocused: piano.visible && piano.activeFocus
+
     PianoRoll {
+        id: piano
         y: strip.height
         width: parent.width
         height: parent.height - strip.height

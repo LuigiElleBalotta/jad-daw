@@ -15,9 +15,9 @@ Item {
     readonly property real barHeight: 24
     // the shortest strip that shows every row and the legend (View > Long Faders asks for longer faders); the view takes all the
     // height it is given: the fader of every strip grows with it, however tall the window or the screen is
-    readonly property real minStripHeight: bar.longFaders ? 640 : 482
+    readonly property real minStripHeight: bar.longFaders ? 694 : 536
     readonly property real stripHeight: Math.max(minStripHeight, height - barHeight)
-    readonly property bool compact: stripHeight - Theme.spacing[3] * 2 < 470
+    readonly property bool compact: stripHeight - Theme.spacing[3] * 2 < 520
     // the type filter id of a strip: Logic's aux is our bus kind
     function typeOf(info) { return info.master ? "master" : (info.kind === "bus" ? "aux" : info.kind) }
     // does the strip pass the Single | Tracks | All choice and the type filters

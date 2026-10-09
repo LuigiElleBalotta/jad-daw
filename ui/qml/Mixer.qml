@@ -13,7 +13,7 @@ Rectangle {
     readonly property alias view: view
 
     color: Theme.surfaceCanvas
-    implicitHeight: expanded ? Math.min(Math.max(project.mixerHeight, 530), Math.max(530, maxHeight)) : headerHeight
+    implicitHeight: expanded ? Math.min(Math.max(project.mixerHeight, 584), Math.max(584, maxHeight)) : headerHeight
     clip: true
 
     Rectangle {
@@ -59,6 +59,6 @@ Rectangle {
         anchors.top: parent.top
         width: parent.width
         z: 10
-        onDragged: (dy) => root.project.mixerHeight = Math.min(root.project.mixerHeight - dy, Math.max(530, root.maxHeight))
+        onDragged: (dy) => root.project.mixerHeight = Math.min(root.project.mixerHeight - dy, Math.max(584, root.maxHeight))
     }
 }

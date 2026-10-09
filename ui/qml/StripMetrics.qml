@@ -11,7 +11,7 @@ QtObject {
     readonly property real eq: 26
     readonly property real input: 18
     readonly property real fx: 66
-    readonly property real sends: 26
+    readonly property real sends: 42
     readonly property real output: 18
     readonly property real group: 18
     readonly property real automation: 18

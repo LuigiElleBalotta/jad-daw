@@ -1143,7 +1143,7 @@ void ProjectController::setSmartControlsHeight(double height) {
 
 void ProjectController::setMixerHeight(double height) {
     if (!std::isfinite(height)) return;
-    const double clamped = std::clamp(height, 530.0, 1400.0);  // never shorter than the strips with their legend
+    const double clamped = std::clamp(height, 584.0, 1400.0);  // never shorter than the strips with their legend
     if (clamped == mixerHeight_) return;
     mixerHeight_ = clamped;
     emit panelsChanged();

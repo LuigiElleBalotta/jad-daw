@@ -31,3 +31,17 @@ Nudge Automation Up/Down and Move Marquee) . (sep) **Region Colors · ✓ Veloci
 
 The context menu is built from key commands: each item is one global command with a key; the same command nudges notes, regions, markers, automation, or the marquee
 depending on what is selected. A reasonable port is a key-command registry (`ui/actions/actions.json` already holds commands) and menus built from it.
+
+## Automation/MIDI area (bottom of the Piano Roll)
+
+The icon in the Piano Roll bar (first of the three blue toggles) shows an **Automation/MIDI** area under the note grid. Its left pane has: a **power** button, a
+**Region** button (blue; toggles region automation vs the track's), a **share/move** icon button, and a parameter popup (here `Any Ch.: Note Velocity`, green).
+The popup: **Display off · Cycle Through** · (sep) "Automation": Smart Controls ▸, Volume, Main ▸, `1 AmpliTube 5` ▸ · (sep) "MIDI": **MIDI Channel ▸**, MIDI Volume, MIDI Pan,
+Modulation, Expression, Sustain, MIDI Control 0-63 ▸, MIDI Control 64-127 ▸, **Note Velocity** (✓ default), **Pitch Bend**, **Aftertouch**, **Program Change**, and more below
+(scrolls). Each choice changes the lane: **Note Velocity** shows one vertical bar per note aligned under the note (and a dot); **Pitch Bend / controllers** show a
+polyline of points.
+
+- **Drawing a controller curve** with the Pencil: a drag on the lane created a smooth line of points from the start to the end of the drag and a flat continuation
+  to the region end; the final value is labelled in the lane (`-2165` for Pitch Bend, whose range is −8192…+8191).
+- The notes in the grid turn a **darker green** while the controller lane is the active one.
+- Everything is stored per **region**, so a region carries notes plus controller/pitch-bend/aftertouch events; this is what sub-project 2 of the roadmap models.

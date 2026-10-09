@@ -20,9 +20,10 @@ instrument's state is saved with the project and restored when it opens. A missi
 loss. The slot and its menu behave like Logic Pro's, and the insert slots get the same gestures because they share the component.
 
 In scope: Windows; VST3 instruments with a stereo output as the first output bus (no audio input needed); MIDI notes from regions
-(note on, note off, and CC 123 all-notes-off); instrument latency in plug-in delay compensation; the instrument slot with a menu
-that has a search field, "No Plug-in", the built-in Sine and the VST3 instruments grouped by manufacturer; the same menu for insert
-slots (effects only, including the built-in effect); slot gestures (below); the plug-in window opening on insertion.
+(note on, note off, and CC 123 all-notes-off); instrument latency in plug-in delay compensation; the instrument slot with the
+Logic menu (section 8: search field, current plug-in, "No Plug-in", Recent, the built-in Sine, VST3 instruments by manufacturer);
+bypass of the instrument; the same menu shape for insert slots (effects only, including the built-in effect); slot gestures
+(below); the plug-in window opening on insertion.
 
 Out of scope (later specs or never): multi-output instruments, sidechain and audio input of instruments, instruments that are not
 VST3, CC / pitch bend / aftertouch and live MIDI input (sub-projects 2 and 3), the MIDI Effect slot, the EQ display, the "Legacy"
@@ -31,8 +32,9 @@ window on insertion" behaviour is always on), automation and Smart Controls of p
 
 ## 2. Logic Pro reference
 
-Verified against Apple's Logic Pro User Guide for Mac (pages "Add, remove, move, and copy plug-ins", "Channel strip controls",
-"Overview of plug-ins", "Work in the plug-in window", "Search for plug-ins in the Mixer"):
+Two sources. **(A)** Apple's Logic Pro User Guide for Mac (pages "Add, remove, move, and copy plug-ins", "Channel strip controls",
+"Overview of plug-ins", "Work in the plug-in window", "Search for plug-ins in the Mixer"). **(B)** Logic Pro 11.2 on a Mac, driven
+by hand on 2026-10-09 in a throw-away project (items marked *seen*). Menu and slot facts below come from both.
 
 - Channel strip order, top to bottom: Setting, Gain Reduction meter, EQ display, MIDI Effect slot, Input/Instrument slot, Audio
   Effect slots, Send slots, Output, Group, Automation Mode. The Instrument slot is green and shows the plug-in name, effect slots
@@ -44,12 +46,33 @@ Verified against Apple's Logic Pro User Guide for Mac (pages "Add, remove, move,
 - Command-click on a slot: removes the plug-in (eraser pointer). Option-drag copies a plug-in to an unused slot. Plain drag moves it
   within the strip or to another strip.
 - The plug-in window opens automatically when a plug-in is inserted (preference "Open plug-in window on insertion", on by default).
-- Logic hosts Audio Units only. For an AU instrument the menu path is Instrument slot > AU Instruments > manufacturer > plug-in.
-  VST3 is our adaptation: the same shape with VST3 instruments grouped by manufacturer.
+- Logic hosts Audio Units only. VST3 is our adaptation: wherever Logic says "AU" we say "VST3".
 
-To verify against the real Logic Pro before the implementation (the guide has no figure of the menu): exact size and position of the
-hover arrows, order and separators of the menu entries, how search results are grouped, the delay before the arrows appear, whether
-the manufacturer level is skipped when there is a single manufacturer, and whether All Notes Off on stop also resets tails.
+Seen on Logic Pro 11.2 (instrument slot):
+
+- **Occupied slot, hover:** the slot shows three small controls: a **power (bypass) icon on the left**, a second icon in the middle
+  (purpose not identified), **up/down arrows on the right**, and a tooltip with the plug-in's full name below the slot. So the
+  instrument slot has a bypass button (an earlier version of this spec said it had none).
+- **Empty slot:** a dark grey placeholder with the word "Instrument". Hover shows the right-hand arrows only. Click opens the menu.
+  An empty effect slot shows the tooltip "Click to insert Audio effect plug-in".
+- **Menu of an occupied slot (top to bottom):** a Search field; the current plug-in with a submenu; a separator; **No Plug-in**; a
+  separator; a grey "Recent" header and the last 5 plug-ins used (each with a submenu arrow); a separator; Logic's own instrument
+  categories (Drums, Sampler, Studio Instruments, Synthesizer, Utility, Vintage Keys) each with a submenu; a separator; the leaf
+  entry "Drum Machine Designer"; a separator; **AU Generators**, **AU Instruments**, **AU MIDI-controlled Effects**, each with a
+  submenu.
+- **Menu of an empty slot:** the same without the current plug-in and without No Plug-in (Search, Recent, categories, leaf, AU groups).
+- **AU Instruments path:** AU Instruments > manufacturer (Apple, Mixed In Key, Steven Slate, Waves seen; every manufacturer has a
+  submenu even with several plug-ins) > plug-in (each has a submenu) > channel format ("Stereo", "Multi-Output (16xStereo)", ...).
+- **Search:** typing filters to a flat list of matching plug-ins (no manufacturer grouping, no headers), each still with the format
+  submenu; the field shows a clear (x) button. The menu opens just under the slot, left edge about at the slot's left edge.
+- **No Plug-in:** the track stays an instrument track; the slot becomes the empty placeholder; the Library switches to its category
+  browser. So an instrument track without an instrument is a valid state.
+- The menu closes without a choice when the pointer clicks outside it.
+
+Not verified (to check against the real Logic Pro before the UI is built): the Audio Effect slot menu (assumed the same shape with
+effect categories and an "AU Effects" group), the middle hover icon, the exact pixel size of the hover controls, the delay before
+they appear, whether the format submenu is shown for a plug-in that has only Stereo, whether All Notes Off on stop also resets
+tails, and what Option-click shows beyond "Legacy".
 
 On Windows, Command maps to Ctrl and Option to Alt. Icons are our own SVGs.
 
@@ -131,7 +154,10 @@ insert latencies. The same-track rebuild test (`a.instrument != b.instrument`) s
   base64 state of at most 16 MiB, label length). `isKnownInstrument` stays for built-ins; `isVst3Id` is accepted additionally.
 - New command `set_instrument_state(trackId, state)`, mirroring `set_insert_state`: only instrument tracks with a `vst3:` instrument,
   state validated like an insert's, undo restores the previous state. Its JSON round-trips like the others.
-- Bypass of the instrument slot is not offered (Logic's instrument slot has no bypass button); `ProcessorRef::bypass` stays false.
+- The instrument slot has a bypass (power icon on hover, seen in Logic): `ProcessorRef::bypass` is used for the instrument too.
+  A bypassed instrument renders silence and ignores events (the instance stays loaded and keeps its latency, as a bypassed insert
+  does); turning bypass on sends All Notes Off first. A command `set_instrument_bypass(trackId, on)` mirrors the insert's bypass
+  command, with undo.
 
 ## 6. Platform: `platform/juce`
 
@@ -157,17 +183,22 @@ the state is kept in the project.
 
 ## 8. UI
 
-- **Instrument slot** (green, plug-in name; "Sine" for the built-in; empty placeholder for No Plug-in). Empty: click opens the menu.
-  Occupied: click on the centre opens the plug-in window (VST3 only; the Sine has none), the hover arrows on the right open the
-  menu. The Library keeps opening from the header double click.
-- **Menu** (`PluginMenu`, one component for the instrument slot and the insert slots): a search field at the top that filters by name
-  within the slot's type, **No Plug-in** (occupied slots only), then the built-in entries (Sine for instruments, Gain for effects),
-  then a submenu per manufacturer with its plug-ins of that type. Plug-ins the scanner rejected are not listed (they stay visible in
-  the Plug-in Manager). Selecting an entry runs `set_instrument` or an insert replacement/addition and opens the plug-in window
-  when the new plug-in has one and is loaded (on load, via the ready listener, if it is not yet).
+- **Instrument slot** (green, plug-in name; "Sine" for the built-in; the grey "Instrument" placeholder for No Plug-in). Empty:
+  click opens the menu. Occupied: click on the centre opens the plug-in window (VST3 only; the Sine has none); the hover controls are
+  the bypass on the left, a spacer for the unidentified middle icon (not drawn), and the arrows on the right, which open the menu. A
+  tooltip with the full plug-in name follows the pointer. The Library keeps opening from the header double click.
+- **Menu** (`PluginMenu`, one component for the instrument slot and the insert slots), top to bottom: Search field; the current
+  plug-in (occupied slots only) with its format submenu; **No Plug-in** (occupied slots only); **Recent** (grey header, the last 5
+  plug-ins used for this slot type, kept in the application settings, each with the format submenu); the built-in leaf entry (Sine for
+  instruments, Gain for effects); a group **VST3 Instruments** (effects: **VST3 Effects**) > manufacturer > plug-in > format. Our only
+  format is "Stereo". Logic's own category groups and its "AU Generators" / "AU MIDI-controlled Effects" groups have no counterpart and
+  are not drawn. Search filters to a flat list of plug-ins of the slot's type with the format submenu and a clear button. Plug-ins the
+  scanner rejected are not listed (they stay visible in the Plug-in Manager). Choosing an entry runs `set_instrument` or the insert
+  replacement/addition, adds it to Recent, and opens the plug-in window when the new plug-in has one and is loaded (on load, via the
+  ready listener, if it is not yet).
 - **Slot gestures** in `StripSlot`, for the instrument slot and the insert slots: hover arrows on the right, Ctrl-click removes
-  (instrument slot: sets No Plug-in), Alt-drag copies an insert to an unused slot (not offered on the instrument slot), the existing
-  bypass button on the left (inserts only). The insert slots open their editor with a **single click on the centre**; the double
+  (instrument slot: sets No Plug-in), Alt-drag copies an insert to an unused slot (not offered on the instrument slot), the bypass
+  button on the left (instrument and inserts). The insert slots open their editor with a **single click on the centre**; the double
   click handler goes. The "+" add-insert slot is replaced by Logic's empty slot behaviour: an empty slot at the end of the inserts that
   opens the menu on click (shown at half height).
 - The menu popup and the arrows use our own SVG icons and the existing theme tokens; their size and placement follow section 2.
@@ -190,13 +221,15 @@ the state is kept in the project.
   reach a recording fake instrument with the right offsets, across block boundaries; All Notes Off on stop; PDC with an instrument
   latency; offline render equals live render for the sine (regression of the old path).
 - Commands: `set_instrument` with none, with a vst3 id, undo and JSON round trip, rejection of effect ids; `set_instrument_state`;
+  `set_instrument_bypass` (silence, All Notes Off on bypass, undo);
   `add_track` of an instrument track with no instrument; random command generator extended; old projects load.
 - Fake host (`tests/fake_plugin_host.h`) gains `acquireInstrument` and an event-recording instrument; integration test in
   `test_plugin_host_integration.cpp` (instrument state commit does not reload, undo reloads).
 - JUCE: a VST3 instrument in `tools/test-plugin` (one sine voice per note, amplitude from velocity, pitch from the note) to prove
   offsets and note-off through a real plug-in; scanner tests (instrument accepted, layout rules, cache version).
-- UI: QML tests for the slot (click on empty opens the menu, click on the centre opens the window, arrows, Ctrl-click, search filters,
-  No Plug-in) and for the shared menu; bridge tests for `set_instrument` and the window opening on insertion.
+- UI: QML tests for the slot (click on empty opens the menu, click on the centre opens the window, arrows, Ctrl-click, bypass, search
+  filters, No Plug-in, the "Instrument" placeholder) and for the shared menu (order of entries, Recent keeps 5 and moves a re-used
+  plug-in to the top, format submenu); bridge tests for `set_instrument` and the window opening on insertion.
 - By hand (not automated): a real third-party VST3 instrument, audio continuity when the instrument is moved or replaced during
   playback, the feel of the hover arrows.
 
@@ -211,7 +244,7 @@ the state is kept in the project.
 ## 12. Order of work (for the plan)
 
 1. Core: `MidiEvent`, `IInstrument`, `SineInstrument`, `SilentInstrument`, renderer, All Notes Off.
-2. Model: optional instrument, validation, `set_instrument` with none, `set_instrument_state`, tests.
+2. Model: optional instrument, validation, `set_instrument` with none, `set_instrument_state`, `set_instrument_bypass`, tests.
 3. Host interface, fake host, graph builder, PDC.
 4. JUCE: `PluginProcessor` MIDI, `acquireInstrument`, scanner and cache, test instrument plug-in, tests.
 5. Controller: instrument slot commands, editor on insertion, state commit for slot `-1`.

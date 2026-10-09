@@ -43,6 +43,7 @@ qt_add_qml_module(jad_ui_lib
         qml/Mixer.qml
         qml/ThemedMenu.qml
         qml/ThemedMenuItem.qml
+        qml/ActionTreeMenu.qml
         qml/JadAction.qml
         qml/Toast.qml
         qml/ActionMenuBar.qml

@@ -17,6 +17,8 @@ namespace jad {
 struct ActionDef {
     QString id, label, menu, shortcut, kind, status, group;
     bool verified = false;
+    bool sep = false;     // a separator is drawn before this entry
+    bool subsep = false;  // the entry opens a submenu (its path): the separator goes before the submenu in the parent menu
     bool isToggle() const { return kind == "toggle"; }
     bool isStub() const { return status == "stub"; }
 };

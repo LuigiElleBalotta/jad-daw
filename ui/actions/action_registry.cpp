@@ -54,6 +54,8 @@ QList<ActionDef> ActionRegistry::parseTable(const QString& json, QStringList* pr
         d.status = o.value("status").toString();
         d.group = o.value("group").toString();
         d.verified = o.value("verified").toBool(false);
+        d.sep = o.value("sep").toBool(false);
+        d.subsep = o.value("subsep").toBool(false);
         if (d.id.isEmpty()) {
             report(at + "missing id");
             continue;
@@ -140,6 +142,8 @@ QVariantList ActionRegistry::entries(const QString& topMenu) const {
         m["id"] = d.id;
         m["label"] = d.label;
         m["path"] = d.menu.section('/', 1);
+        m["sep"] = d.sep;
+        m["subsep"] = d.subsep;
         out.append(m);
     }
     return out;

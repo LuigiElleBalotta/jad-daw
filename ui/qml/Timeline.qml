@@ -31,6 +31,11 @@ Item {
         pixelsPerBeat = Math.max(minPixelsPerBeat, Math.min(maxPixelsPerBeat, pixelsPerBeat * f))
         scrollBeats = Math.max(0, beat - ax / pixelsPerBeat)
     }
+    // Navigate > Scroll to Selection: the first selected region comes to the left edge
+    function scrollToSelection() {
+        const info = project.selectedRegionIds.length > 0 ? project.regionInfo(project.selectedRegionIds[0]) : null
+        if (info && info.found) scrollBeats = Math.max(0, info.startBeats - 1)
+    }
     function scrollByBeats(d) { scrollBeats = Math.max(0, scrollBeats + d) }
     function scrollByPixelsY(d) {
         const maxY = Math.max(0, contentHeight - (height - rulerHeight))
@@ -73,6 +78,10 @@ Item {
         barBeats: root.project.barBeats
         playheadBeats: root.project.positionBeats
         soloActive: root.project.anySolo
+        loopStart: root.project.loopStartBeats
+        loopEnd: root.project.loopEndBeats
+        loopOn: root.project.loopEnabled
+        onCycleRequested: (start, end) => root.project.setLoopRange(root.snapBeat(start), root.snapBeat(end))
         onLocateRequested: (beats) => { root.forceActiveFocus(); root.project.locateBeats(Math.max(0, root.snapBeat(beats))) }
     }
 

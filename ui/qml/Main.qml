@@ -39,7 +39,7 @@ ApplicationWindow {
         if (mixerDocked) controller.mixerVisible = which === "mixer" && on
     }
     function togglePlay() { controller.playing ? controller.stop() : controller.play() }
-    function toggleLoop() { controller.setLoopBeats(0, controller.loopEnabled ? 0 : controller.barBeats * 4) }
+    function toggleLoop() { controller.toggleLoop() }
 
     FolderDialog {
         id: openDialog
@@ -166,6 +166,12 @@ ApplicationWindow {
         "view.library": () => { controller.libraryVisible = !controller.libraryVisible },
         "track.globalTracks": () => { controller.globalTracksVisible = !controller.globalTracksVisible },
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
+        "navigate.deleteMarkerAtPlayheadPosition": () => controller.deleteMarkerAtPlayhead(),
+        "navigate.setLocatorsBySelectionAndEnableCycle": () => controller.setLocatorsBySelection(false),
+        "navigate.setRoundedLocatorsBySelectionAndEnableCycle": () => controller.setLocatorsBySelection(true),
+        "navigate.moveLocatorsForwardByCycleLength": () => controller.moveLocators(1),
+        "navigate.moveLocatorsBackwardsByCycleLength": () => controller.moveLocators(-1),
+        "navigate.scrollToSelection": () => timeline.scrollToSelection(),
         "view.inspector": () => { controller.inspectorVisible = !controller.inspectorVisible },
         "view.smartControls": () => root.showLowerPane("smart"),
         "tool.pointer": () => { controller.tool = "pointer" },

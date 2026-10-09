@@ -1077,7 +1077,34 @@ void ProjectController::setLoopBeats(double startBeats, double endBeats) {
     const std::int64_t a = toFrames(startBeats), b = toFrames(endBeats);
     host_->setLoop(a, b);
     loop_ = b > a;
+    if (loop_) {
+        loopStartBeats_ = std::clamp(startBeats, 0.0, kMaxBeats);
+        loopEndBeats_ = std::clamp(endBeats, 0.0, kMaxBeats);
+    }
     emit loopChanged();
+}
+
+void ProjectController::setLoopRange(double startBeats, double endBeats) {
+    if (!std::isfinite(startBeats) || !std::isfinite(endBeats) || endBeats <= startBeats) return;
+    if (loop_) {
+        setLoopBeats(startBeats, endBeats);
+        return;
+    }
+    loopStartBeats_ = std::clamp(startBeats, 0.0, kMaxBeats);
+    loopEndBeats_ = std::clamp(endBeats, 0.0, kMaxBeats);
+    emit loopChanged();
+}
+
+void ProjectController::toggleLoop() {
+    if (loop_) {
+        setLoopBeats(0, 0);
+        return;
+    }
+    if (loopEndBeats_ <= loopStartBeats_) {
+        loopStartBeats_ = 0.0;
+        loopEndBeats_ = barBeats() * 4;
+    }
+    setLoopBeats(loopStartBeats_, loopEndBeats_);
 }
 
 void ProjectController::resetPeaks() {

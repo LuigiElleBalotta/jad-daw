@@ -445,4 +445,36 @@ void ProjectController::removeSignatureAt(double beats) {
     sendCommand({{"type", "remove_signature"}, {"tick", static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))}});
 }
 
+void ProjectController::setLocatorsBySelection(bool rounded) {
+    double from = -1, to = 0;
+    for (const QString& id : selectedRegions_) {
+        const RegionRow* r = regions_.find(id);
+        if (!r) continue;
+        from = from < 0 ? r->startBeats : std::min(from, r->startBeats);
+        to = std::max(to, r->startBeats + r->lengthBeats);
+    }
+    if (from < 0 || to <= from) return;
+    if (rounded) {
+        const double bar = barBeats();
+        from = std::floor(from / bar + 1e-9) * bar;
+        to = std::ceil(to / bar - 1e-9) * bar;
+    }
+    setLoopBeats(from, to);
+}
+
+void ProjectController::moveLocators(int direction) {
+    const double length = loopEndBeats_ - loopStartBeats_;
+    if (length <= 0) return;
+    const double start = std::max(0.0, loopStartBeats_ + direction * length);
+    setLoopRange(start, start + length);
+}
+
+void ProjectController::deleteMarkerAtPlayhead() {
+    for (const MarkerRow& m : markerRows_)
+        if (std::abs(m.beats - positionBeats_) < 1.0 / 32) {
+            removeMarker(m.id);
+            return;
+        }
+}
+
 }  // namespace jad

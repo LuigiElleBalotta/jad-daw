@@ -67,4 +67,34 @@ TestCase {
         mouseDoubleClickSequence(t, 100, 24 + 9)   // the Marker lane
         tryVerify(function () { return c.markers().length === 1 })
     }
+
+    function test_cycle_area_is_kept_while_the_cycle_is_off_and_moves_by_its_length() {
+        const c = setup()
+        c.setLoopBeats(4, 12)
+        tryVerify(function () { return c.loopEnabled })
+        compare(c.loopStartBeats, 4)
+        compare(c.loopEndBeats, 12)
+        c.toggleLoop()
+        tryVerify(function () { return !c.loopEnabled })
+        compare(c.loopEndBeats, 12)          // the area stays
+        c.toggleLoop()
+        tryVerify(function () { return c.loopEnabled })
+        c.moveLocators(1)
+        tryVerify(function () { return c.loopStartBeats === 12 })
+        compare(c.loopEndBeats, 20)
+        c.moveLocators(-1)
+        tryVerify(function () { return c.loopStartBeats === 4 })
+    }
+
+    function test_dragging_the_ruler_strip_draws_a_cycle_area() {
+        const c = setup()
+        const t = createTemporaryObject(tlC, this, { project: c })
+        c.snap = "quarter"
+        mousePress(t, 80, 3)
+        mouseMove(t, 200, 3)
+        mouseMove(t, 330, 3)
+        mouseRelease(t, 330, 3)
+        tryVerify(function () { return c.loopEndBeats > c.loopStartBeats })
+        verify(c.loopEndBeats - c.loopStartBeats >= 4)
+    }
 }

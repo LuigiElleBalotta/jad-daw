@@ -81,6 +81,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(double positionSeconds READ positionSeconds NOTIFY positionChanged)
     Q_PROPERTY(double positionBeats READ positionBeats NOTIFY positionChanged)
     Q_PROPERTY(bool loopEnabled READ loopEnabled NOTIFY loopChanged)
+    Q_PROPERTY(double loopStartBeats READ loopStartBeats NOTIFY loopChanged)  // the cycle area, also while the cycle is off
+    Q_PROPERTY(double loopEndBeats READ loopEndBeats NOTIFY loopChanged)
     Q_PROPERTY(bool degraded READ degraded NOTIFY degradedChanged)
     Q_PROPERTY(QString deviceError READ deviceError NOTIFY deviceErrorChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -156,6 +158,8 @@ public:
     double positionSeconds() const { return positionSeconds_; }
     double positionBeats() const { return positionBeats_; }
     bool loopEnabled() const { return loop_; }
+    double loopStartBeats() const { return loopStartBeats_; }
+    double loopEndBeats() const { return loopEndBeats_; }
     bool degraded() const;
     QString deviceError() const { return deviceError_; }
     QString lastError() const { return lastError_; }
@@ -227,6 +231,13 @@ public:
     Q_INVOKABLE void locateBeats(double beats);
     Q_INVOKABLE void locateSeconds(double seconds);
     Q_INVOKABLE void setLoopBeats(double startBeats, double endBeats);
+    // The cycle area: the range moves or resizes and the cycle keeps its on/off state; toggleLoop() flips it.
+    Q_INVOKABLE void setLoopRange(double startBeats, double endBeats);
+    Q_INVOKABLE void toggleLoop();
+    // Navigate: the cycle from the selected regions (rounded: out to whole bars) with the cycle switched on; move it by its own length
+    Q_INVOKABLE void setLocatorsBySelection(bool rounded);
+    Q_INVOKABLE void moveLocators(int direction);
+    Q_INVOKABLE void deleteMarkerAtPlayhead();
     Q_INVOKABLE void clearError();
     // The LCD: tempo (clamped to 20..999, NaN ignored) and time signature at tick 0, master volume, bar steps.
     Q_INVOKABLE void setTempo(double bpm);
@@ -499,6 +510,7 @@ private:
     int trackHeightIndex_ = 1;
     bool playing_ = false;
     bool loop_ = false;
+    double loopStartBeats_ = 0.0, loopEndBeats_ = 0.0;
     bool degraded_ = false;
     double positionSeconds_ = 0.0;
     double positionBeats_ = 0.0;

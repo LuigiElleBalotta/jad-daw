@@ -40,6 +40,21 @@ local menu bar, then the editor.
   Tracks… ⌥G · Global Track Protect Buttons *(dim)*.
 - Not captured: the automation/MIDI area below the grid, the velocity lane, note colouring, Score and Session Player tabs.
 
+### Piano Roll with a MIDI region selected
+
+- The segmented tab strip depends on the selection: with a MIDI region of an instrument track it reads **Piano Roll | Score | Smart Tempo**
+  (the earlier capture without a region showed Piano Roll | Score | Step Sequencer | Session Player).
+- The local bar has a **position/pitch readout** at the right (e.g. `D#3  3 1 4 161`, `A7  126 2 4 201`): note name under the pointer, then bar, beat,
+  division and ticks; it follows the mouse.
+- The region appears at the top of the grid as a thin pale-green bar with the region name ("Inst 1") at both ends; the grid ruler shows
+  bar numbers with beat subdivisions (e.g. `64`, `64 2`, `64 3`, `64 4`).
+- Left pane header: track icon tile (green), region name, "on Track Inst 1", and a button at the right to list the regions. Time Quantize (classic)
+  with a `1/16 Note` popup and **Q** button, Strength slider (100), Swing slider (50); Scale Quantize with two popups (Off, Major (lo…)) and **Q**;
+  Velocity slider (80).
+- Creating a region: with the **Pencil tool** (tool popup in the Tracks area, shown with a pencil icon) a click on an empty part of an instrument track
+  makes a very short MIDI region; the Inspector switches to "Region: Inst 1" and the Piano Roll opens on it with the Editors button. A double click with
+  the pointer on empty space did nothing.
+
 ### Step Sequencer (tab)
 
 Same local bar (Edit ▾ · Functions ▾ · View ▾, icon toggles, a segmented **On/Off | Velocity / Value ▾** that chooses what the cells show,

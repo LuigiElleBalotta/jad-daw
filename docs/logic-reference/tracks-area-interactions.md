@@ -14,3 +14,18 @@ Seen on 2026-10-09 with the Pointer tool. The remote view does not show the mous
 - **Track selection / Inspector:** selecting a region switches the Inspector to "Region: <name>" and the Library to the track's kind; selecting several shows "Region: 3 selected".
 - **Undo hygiene:** all steps appear in Edit > Undo History; every item is a command ("Create New Tracks", "Drag", "Insert events", "Change Note Length", "Automation Edit",
   "Length Change", "Flex Mode", "Move to Playhead", "Create Initial Automation Node").
+
+## Snap and Drag popups (seen 2026-10-09, nothing was changed)
+
+The first click after the focus was in another area (here the Mixer) only moves the focus: it shows a help tag ("Drag Mode") or the little **power switch** that appears at the
+left of "Snap:" on hover. The popup opens on the next click.
+
+- **Snap:** popup (current value "Smart"), top to bottom:
+  - ✓ **Snap to Grid** ⌘G (the same switch as the power icon beside the label)
+  - values (one is checked): **Smart**, Bar, Beat, Division, Ticks, Frames, Quarter Frames, Samples
+  - ✓ **Snap Regions to Relative Value** (default) / Snap Regions to Absolute Value (a radio pair)
+  - **Snap Flexed Audio Regions by First Downbeat** (dim, checked) · Snap Quick Swipe Comping · **Snap Edits to Zero Crossings** ⌃0
+  - **Snap Automation ▸** (dim) · Automation Snap Offset…
+  - **Alignment Guides** ⌥⌘G
+- **Drag:** popup (current value "No Overlap"): Overlap · ✓ **No Overlap** · X-Fade · Shuffle R · Shuffle L.
+- Both popups also exist in the Piano Roll and Audio editor toolbars (the lower editor in the screenshot shows "Snap: Smart" too).

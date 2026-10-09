@@ -131,6 +131,10 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
             rr.startBeats = toBeats(p, r, r.start);
             rr.lengthBeats = toBeats(p, r, r.start + r.length) - rr.startBeats;
+            rr.sourceOffsetFrames = r.sourceOffsetFrames;
+            rr.lengthFrames = r.timeBase == lpc::TimeBase::Absolute
+                                  ? static_cast<std::int64_t>(std::llround(static_cast<double>(r.length) * p.sampleRate / 1e6))
+                                  : static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(r.start + r.length, p.sampleRate) - p.tempoMap.ticksToSamples(r.start, p.sampleRate)));
             rr.fadeInBeats = r.fadeIn > 0 ? toBeats(p, r, r.start + r.fadeIn) - rr.startBeats : 0.0;
             rr.fadeOutBeats = r.fadeOut > 0 ? toBeats(p, r, r.start + r.length) - toBeats(p, r, r.start + r.length - r.fadeOut) : 0.0;
             rr.audio = t.kind == lpc::TrackKind::Audio;

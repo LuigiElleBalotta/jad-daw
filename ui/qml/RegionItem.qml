@@ -73,15 +73,18 @@ Item {
 
     function requestPeaks() {
         if (!project || !isAudio || missing || width <= 20 || !visible) return
-        peaks = project.waveformPeaks(mediaId, buckets)
+        const fresh = project.regionPeaks(regionId, buckets)
+        if (fresh.length > 0) peaks = fresh   // until the new stretch is read the old picture stays
     }
     Timer { id: debounce; interval: 120; onTriggered: root.requestPeaks() }
     onWidthChanged: debounce.restart()
     onVisibleChanged: debounce.restart()
     onMediaIdChanged: debounce.restart()
+    onLengthBeatsChanged: debounce.restart()   // trimmed: another stretch of the media
     Component.onCompleted: requestPeaks()
     Connections {
         target: root.project ? root.project : null
+        function onRegionPeaksReady(id) { if (id === root.regionId) root.requestPeaks() }
         function onWaveformReady(id) { if (id === root.mediaId) root.requestPeaks() }
     }
 

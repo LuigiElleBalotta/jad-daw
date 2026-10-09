@@ -104,4 +104,30 @@ std::vector<float> WaveformCache::compute(const std::filesystem::path& wav, int 
     }
 }
 
+std::vector<float> rangePeaks(const std::filesystem::path& wav, std::int64_t offset, std::int64_t frames, int buckets) {
+    if (buckets <= 0 || frames <= 0) return {};
+    try {
+        lpc::WavFile file(wav);
+        const int ch = std::max(1, file.channels());
+        std::vector<float> out(static_cast<std::size_t>(buckets), 0.0f);
+        constexpr std::int64_t kChunk = 16384;
+        std::vector<float> buf(static_cast<std::size_t>(kChunk * ch));
+        for (std::int64_t at = 0; at < frames; at += kChunk) {
+            const std::int64_t n = std::min(kChunk, frames - at);
+            file.readFrames(offset + at, n, buf.data());
+            for (std::int64_t i = 0; i < n; ++i) {
+                float mono = 0.0f;
+                for (int c = 0; c < ch; ++c) mono += buf[static_cast<std::size_t>(i * ch + c)];
+                mono = std::abs(mono / static_cast<float>(ch));
+                const auto b = static_cast<std::size_t>(std::min<std::int64_t>((at + i) * buckets / frames, buckets - 1));
+                out[b] = std::max(out[b], mono);
+            }
+        }
+        for (float& v : out) v = std::min(1.0f, v);
+        return out;
+    } catch (const std::exception&) {
+        return {};
+    }
+}
+
 }  // namespace jad

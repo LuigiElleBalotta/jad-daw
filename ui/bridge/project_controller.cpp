@@ -226,6 +226,8 @@ bool ProjectController::openProject(const QUrl& folder) {
     shownRevision_ = 0;
     peaksCache_.clear();
     peaksPending_.clear();
+    regionPeaksCache_.clear();
+    regionPeaksPending_.clear();
     sampleRate_ = project.sampleRate;
     engine_ = std::make_unique<lpc::audio::AudioEngine>(static_cast<double>(project.sampleRate));
     media_ = std::make_unique<lpc::MediaStore>(path, /*streaming=*/true);
@@ -1061,6 +1063,35 @@ void ProjectController::redo() {
         const QString message = QString::fromStdString(error->code + ": " + error->message);
         QMetaObject::invokeMethod(self.data(), [self, message] { if (self) self->setError(message); }, Qt::QueuedConnection);
     });
+}
+
+QVariantList ProjectController::regionPeaks(const QString& regionId, int buckets) {
+    const RegionRow* r = regions_.find(regionId);
+    if (!r || !r->audio || r->missing || buckets <= 0 || buckets > 4096 || r->lengthFrames <= 0) return {};
+    const QString key = regionId + '#' + QString::number(r->sourceOffsetFrames) + '#' + QString::number(r->lengthFrames) + '#' + QString::number(buckets);
+    if (const auto it = regionPeaksCache_.constFind(key); it != regionPeaksCache_.constEnd()) return it.value();
+    const auto path = mediaPaths_.constFind(r->mediaId);
+    if (path == mediaPaths_.constEnd() || regionPeaksPending_.contains(key)) return {};
+    regionPeaksPending_.insert(key);
+    const QByteArray rel = path->toUtf8();
+    const std::filesystem::path file = dir_ / std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(rel.constData()), static_cast<std::size_t>(rel.size())));
+    const std::int64_t offset = r->sourceOffsetFrames, frames = r->lengthFrames;
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    (void)QtConcurrent::run([self, key, regionId, buckets, file, offset, frames, generation] {
+        const std::vector<float> peaks = rangePeaks(file, offset, frames, buckets);
+        if (!self) return;
+        QVariantList list;
+        list.reserve(static_cast<qsizetype>(peaks.size()));
+        for (float v : peaks) list.push_back(static_cast<double>(v));
+        QMetaObject::invokeMethod(self.data(), [self, key, regionId, list, generation] {
+            if (!self || generation != self->generation_ || !self->regionPeaksPending_.remove(key)) return;
+            if (self->regionPeaksCache_.size() > 400) self->regionPeaksCache_.clear();  // old stretches of edited regions
+            self->regionPeaksCache_.insert(key, list);
+            emit self->regionPeaksReady(regionId);
+        }, Qt::QueuedConnection);
+    });
+    return {};
 }
 
 QVariantList ProjectController::waveformPeaks(const QString& mediaId, int buckets) {

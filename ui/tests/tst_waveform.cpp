@@ -17,6 +17,22 @@ private slots:
         QCOMPARE(p[0], 0.0f);
         QVERIFY(qFuzzyCompare(p[9], 0.5f));
     }
+    void aRegionsPeaksCoverOnlyItsOwnPartOfTheFile() {
+        TempDir dir;
+        std::vector<float> s(2 * 48000, 0.0f);       // first half silent, second half 0.5
+        for (int i = 48000 / 2; i < 48000; ++i) { s[size_t(i) * 2] = 0.5f; s[size_t(i) * 2 + 1] = 0.5f; }
+        lpc::writeWav(dir.path() / "a.wav", 48000, 2, s, lpc::WavFormat::Float32);
+        const auto quiet = jad::rangePeaks(dir.path() / "a.wav", 0, 24000, 8);          // only the silent half
+        QCOMPARE(int(quiet.size()), 8);
+        for (float v : quiet) QCOMPARE(v, 0.0f);
+        const auto loud = jad::rangePeaks(dir.path() / "a.wav", 24000, 24000, 8);       // only the loud half
+        for (float v : loud) QVERIFY(qFuzzyCompare(v, 0.5f));
+        const auto edge = jad::rangePeaks(dir.path() / "a.wav", 12000, 24000, 4);       // silent, then loud
+        QCOMPARE(edge[0], 0.0f);
+        QVERIFY(qFuzzyCompare(edge[3], 0.5f));
+        QVERIFY(jad::rangePeaks(dir.path() / "nope.wav", 0, 100, 4).empty());
+        QVERIFY(jad::rangePeaks(dir.path() / "a.wav", 0, 0, 4).empty());
+    }
     void missingOrCorruptFileGivesEmpty() {
         TempDir dir;
         jad::WaveformCache cache;

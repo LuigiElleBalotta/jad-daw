@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <filesystem>
 #include <utility>
 #include <vector>
@@ -24,5 +25,9 @@ private:
 
     std::filesystem::path cacheDir_;
 };
+
+// The peaks of one stretch of a WAV file (a region's own part of it): `buckets` values in [0,1] over `frames` frames from `offset`.
+// Empty when the file cannot be read. Safe to call from any thread; nothing is cached.
+std::vector<float> rangePeaks(const std::filesystem::path& wav, std::int64_t offset, std::int64_t frames, int buckets);
 
 }  // namespace jad

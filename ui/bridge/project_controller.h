@@ -497,6 +497,9 @@ public:
     Q_INVOKABLE void importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats);
     // Peaks of an audio file of the project, `buckets` values in [0,1]. Empty until computed (on a worker);
     // waveformReady(mediaId) fires when the call can be repeated to get them.
+    // The waveform of one region: only its own part of the media, `buckets` peaks over its length (empty while it is being read:
+    // regionPeaksReady follows)
+    Q_INVOKABLE QVariantList regionPeaks(const QString& regionId, int buckets);
     Q_INVOKABLE QVariantList waveformPeaks(const QString& mediaId, int buckets);
 
     // Same code path the change listener uses; lets tests feed snapshots in any order.
@@ -541,6 +544,7 @@ signals:
     void trackHeightChanged();
     // The loader refused a folder; the message is the loader's. The previous project stays open.
     void projectOpenFailed(const QString& message);
+    void regionPeaksReady(const QString& regionId);
     void waveformReady(const QString& mediaId);
 
 private:
@@ -628,6 +632,8 @@ private:
     QHash<QString, QString> mediaPaths_;
     QHash<QString, QVariantList> peaksCache_;  // key: mediaId + "#" + buckets
     QSet<QString> peaksPending_;
+    QHash<QString, QVariantList> regionPeaksCache_;  // regionId # offset # frames # buckets
+    QSet<QString> regionPeaksPending_;
 
     // Bumped on every open: reads and notifications started for a previous project must not touch the new one.
     std::uint64_t generation_ = 0;

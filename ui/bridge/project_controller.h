@@ -22,6 +22,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "lpc/audio/click.h"
+#include "lpc/device.h"
 #include "bridge/inspector_model.h"
 #include "bridge/library_model.h"
 #include "bridge/mixer_model.h"
@@ -99,6 +100,12 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(bool countInEnabled READ countInEnabled WRITE setCountInEnabled NOTIFY recordingChanged)
     Q_PROPERTY(int countInChoice READ countInChoice WRITE setCountInChoice NOTIFY recordingChanged)  // the count-in before a recording: 1..6 bars, or -1..-3 for 1/4..3/4 of a bar in beats
+    Q_PROPERTY(int sampleRateHz READ sampleRateHz NOTIFY projectChanged)  // the project's sample rate
+    Q_PROPERTY(QString audioOutput READ audioOutput NOTIFY audioSettingsChanged)    // the chosen devices ("" = the system's default)
+    Q_PROPERTY(QString audioInput READ audioInput NOTIFY audioSettingsChanged)
+    Q_PROPERTY(int audioBufferSize READ audioBufferSize NOTIFY audioSettingsChanged)
+    Q_PROPERTY(int inputChannels READ inputChannels NOTIFY audioSettingsChanged)    // of the open device
+    Q_PROPERTY(double deviceRate READ deviceRate NOTIFY audioSettingsChanged)       // 0 when no device is open
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -176,6 +183,20 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    int sampleRateHz() const { return sampleRate_; }
+    QString audioOutput() const { return audioOutput_; }
+    QString audioInput() const { return audioInput_; }
+    int audioBufferSize() const { return audioBuffer_; }
+    int inputChannels() const;
+    double deviceRate() const;
+    // Preferences > Audio: the devices of the system and what the output offers: {outputs, inputs, rates, buffers, currentOutput, currentInput, ...}
+    Q_INVOKABLE QVariantMap audioDevices(const QString& output, const QString& input) const;
+    // Chooses the devices and the buffer size: remembered, and the open project's audio device is reopened with them.
+    Q_INVOKABLE void applyAudioSettings(const QString& output, const QString& input, int bufferSize);
+    void loadAudioSettings(QSettings& s);
+    void saveAudioSettings(QSettings& s) const;
+    // tests: replaces the list of devices (the real one asks the system)
+    void setDeviceListerForTest(std::function<lpc::AudioDeviceChoices(const std::string&, const std::string&)> lister) { deviceLister_ = std::move(lister); }
     bool recording() const { return recording_; }
     bool countInEnabled() const { return countIn_; }
     void setCountInEnabled(bool on);
@@ -448,6 +469,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void audioSettingsChanged();
     void recordingChanged();
     void clickSettingsChanged();
     void commandSent(const QString& type);
@@ -585,6 +607,10 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    QString audioOutput_, audioInput_;
+    int audioBuffer_ = 256;
+    std::function<lpc::AudioDeviceChoices(const std::string&, const std::string&)> deviceLister_;
+    void openDevice();  // opens the audio device (or the driver without one) for the current engine with the chosen settings
     QSet<QString> pendingAudioTracks_;  // tracks just created for an import: the models do not list them yet
     QString addAudioTrackNamed(const QString& name);
     bool recording_ = false, recFinishing_ = false, countIn_ = false;

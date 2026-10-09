@@ -167,6 +167,42 @@ void ProjectController::teardown() {
 #endif
 }
 
+void ProjectController::openDevice() {
+    deviceError_.clear();
+    bool haveDevice = false;
+    driver_.reset();
+    if (device_) device_->close();
+    device_.reset();
+    callback_.reset();
+#ifdef JAD_HAVE_JUCE
+    if (openAudioDevice_) {
+        startPlugins();
+        device_ = lpc::makeJuceAudioDevice();
+        callback_ = std::make_unique<EngineCallback>(*engine_);
+        std::string error;
+        lpc::AudioDeviceRequest request;
+        request.output = audioOutput_.toStdString();
+        request.input = audioInput_.toStdString();
+        request.sampleRate = static_cast<double>(sampleRate_);
+        request.bufferSize = audioBuffer_;
+        if (device_->openWith(request, *callback_, error)) {
+            haveDevice = true;
+        } else {
+            deviceError_ = QString::fromStdString(error);
+            device_.reset();
+            callback_.reset();
+        }
+    } else {
+        deviceError_ = "audio output disabled";
+    }
+#else
+    deviceError_ = "built without an audio backend";
+#endif
+    if (!haveDevice && engine_) driver_ = std::make_unique<EngineDriver>(*engine_, sampleRate_);
+    emit deviceErrorChanged();
+    emit audioSettingsChanged();
+}
+
 bool ProjectController::openProject(const QUrl& folder) {
     const std::filesystem::path path = toPath(folder);
     lpc::Project project;
@@ -190,28 +226,7 @@ bool ProjectController::openProject(const QUrl& folder) {
     engine_ = std::make_unique<lpc::audio::AudioEngine>(static_cast<double>(project.sampleRate));
     media_ = std::make_unique<lpc::MediaStore>(path, /*streaming=*/true);
 
-    deviceError_.clear();
-    bool haveDevice = false;
-#ifdef JAD_HAVE_JUCE
-    if (openAudioDevice_) {
-        startPlugins();
-        device_ = lpc::makeJuceAudioDevice();
-        callback_ = std::make_unique<EngineCallback>(*engine_);
-        std::string error;
-        if (device_->open(static_cast<double>(project.sampleRate), 256, *callback_, error)) {
-            haveDevice = true;
-        } else {
-            deviceError_ = QString::fromStdString(error);
-            device_.reset();
-        }
-    } else {
-        deviceError_ = "audio output disabled";
-    }
-#else
-    deviceError_ = "built without an audio backend";
-#endif
-    if (!haveDevice) driver_ = std::make_unique<EngineDriver>(*engine_, project.sampleRate);
-    emit deviceErrorChanged();
+    openDevice();
 
 #ifdef JAD_HAVE_JUCE
     lpc::IPluginHost* pluginHost = pluginHost_.get();
@@ -1192,6 +1207,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     setMixerHeight(s.value("panels/mixerHeight", mixerHeight_).toDouble());
     mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
     loadClickSettings(s);
+    loadAudioSettings(s);
 }
 
 void ProjectController::savePanelState(QSettings& s) const {
@@ -1203,6 +1219,7 @@ void ProjectController::savePanelState(QSettings& s) const {
     s.setValue("panels/mixerHeight", mixerHeight_);
     s.setValue("panels/mixerDetached", mixerDetached_);
     saveClickSettings(s);
+    saveAudioSettings(s);
 }
 
 void ProjectController::setLeftColumnWidth(double width) {

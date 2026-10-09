@@ -14,6 +14,9 @@
 #include <nlohmann/json.hpp>
 
 #include "bridge/project_controller.h"
+#ifdef JAD_HAVE_JUCE
+#include "juce_device.h"
+#endif
 #include "lpc/model_json.h"
 #include "lpc/media_store.h"
 #include "lpc/wav.h"
@@ -949,6 +952,50 @@ void ProjectController::addTracks(const QString& kind, int count, const QString&
                                        {"instrument", instrument}}}});
     }
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+int ProjectController::inputChannels() const { return device_ ? device_->inputChannels() : 0; }
+double ProjectController::deviceRate() const { return device_ ? device_->sampleRate() : 0.0; }
+
+QVariantMap ProjectController::audioDevices(const QString& output, const QString& input) const {
+    lpc::AudioDeviceChoices c;
+    if (deviceLister_) {
+        c = deviceLister_(output.toStdString(), input.toStdString());
+    } else {
+#ifdef JAD_HAVE_JUCE
+        c = lpc::listJuceAudioDevices(output.toStdString(), input.toStdString());
+#endif
+    }
+    QStringList outputs, inputs;
+    for (const std::string& n : c.outputs) outputs << QString::fromStdString(n);
+    for (const std::string& n : c.inputs) inputs << QString::fromStdString(n);
+    QVariantList rates, buffers;
+    for (const double r : c.rates) rates << r;
+    for (const int b : c.buffers) buffers << b;
+    return {{"outputs", outputs}, {"inputs", inputs}, {"currentOutput", QString::fromStdString(c.currentOutput)},
+            {"currentInput", QString::fromStdString(c.currentInput)}, {"rates", rates}, {"buffers", buffers},
+            {"inputChannels", c.inputChannels}, {"outputChannels", c.outputChannels}};
+}
+
+void ProjectController::applyAudioSettings(const QString& output, const QString& input, int bufferSize) {
+    audioOutput_ = output;
+    audioInput_ = input;
+    audioBuffer_ = std::clamp(bufferSize, 32, 4096);
+    if (engine_) openDevice();  // the project keeps playing state: it is stopped by the device change
+    emit audioSettingsChanged();
+}
+
+void ProjectController::loadAudioSettings(QSettings& s) {
+    audioOutput_ = s.value("audio/output").toString();
+    audioInput_ = s.value("audio/input").toString();
+    audioBuffer_ = std::clamp(s.value("audio/buffer", 256).toInt(), 32, 4096);
+    emit audioSettingsChanged();
+}
+
+void ProjectController::saveAudioSettings(QSettings& s) const {
+    s.setValue("audio/output", audioOutput_);
+    s.setValue("audio/input", audioInput_);
+    s.setValue("audio/buffer", audioBuffer_);
 }
 
 }  // namespace jad

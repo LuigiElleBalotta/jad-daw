@@ -76,6 +76,7 @@ ApplicationWindow {
 
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
+    PreferencesDialog { id: preferencesDialog; project: controller }
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
     // the Mixer in a window of its own (View > Mixer when it is detached, Window > Open Mixer)
     Window {
@@ -196,6 +197,7 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "file.preferences": () => preferencesDialog.open(),
         "transport.record": () => controller.toggleRecording(),
         "transport.countIn": () => { controller.countInEnabled = !controller.countInEnabled },
         "record.countInNone": () => { controller.countInEnabled = false },

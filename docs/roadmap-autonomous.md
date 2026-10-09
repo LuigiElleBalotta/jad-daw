@@ -9,10 +9,10 @@ Working rules: the UI should look and behave like Logic Pro (guide pages in the 
 commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix waits until the owner asks.
 
 ## 1. Audio settings (device, rate, buffer)  — first
-- [ ] Preferences window (File menu / Cmd-comma style entry) with an Audio tab: output device, input device, sample rate, buffer size,
-      input channel count shown; Apply reopens the device; remembered in QSettings.
-- [ ] A project whose rate differs from the device is told so with the fix (choose a device rate), not silently refused.
-- [ ] Device list from JUCE (`AudioDeviceManager` types, devices, rates, buffers); a fake list for tests.
+- [x] Preferences window (File > Preferences, Ctrl+,) with an Audio tab: output device, input device, buffer size, latency, open-device
+      status; Apply reopens the device; remembered in QSettings. (The sample rate follows the project; other tabs say not implemented.)
+- [x] A project whose rate differs from the device is told so with the fix: the device error is shown in the Audio tab.
+- [x] Device list from JUCE (`listJuceAudioDevices`); a fake lister for tests.
 
 ## 2. Inputs, monitoring, recording quality
 - [ ] Input channel per track (the track's Input slot: Input 1, Input 2, 1+2 stereo), mono or stereo take.

@@ -914,6 +914,42 @@ private slots:
         QVERIFY(made);
         QVERIFY(std::abs(made->lengthBeats - 0.2) < 0.01);   // 0.1 s at 120 bpm
     }
+    void audioSettingsListDevicesAndAreRemembered() {
+        jad::ProjectController c(false);
+        c.setDeviceListerForTest([](const std::string& out, const std::string&) {
+            lpc::AudioDeviceChoices d;
+            d.outputs = {"Speakers", "Interface"};
+            d.inputs = {"Mic", "Line"};
+            d.currentOutput = out.empty() ? "Speakers" : out;
+            d.currentInput = "Mic";
+            d.rates = out == "Interface" ? std::vector<double>{44100, 48000, 96000} : std::vector<double>{48000};
+            d.buffers = {64, 128, 256, 512};
+            d.inputChannels = 2;
+            d.outputChannels = 2;
+            return d;
+        });
+        QVariantMap m = c.audioDevices("", "");
+        QCOMPARE(m.value("outputs").toStringList(), QStringList({"Speakers", "Interface"}));
+        QCOMPARE(m.value("currentOutput").toString(), QString("Speakers"));
+        QCOMPARE(m.value("rates").toList().size(), 1);
+        m = c.audioDevices("Interface", "");
+        QCOMPARE(m.value("rates").toList().size(), 3);
+        QSignalSpy spy(&c, &jad::ProjectController::audioSettingsChanged);
+        c.applyAudioSettings("Interface", "Line", 128);
+        QCOMPARE(c.audioOutput(), QString("Interface"));
+        QCOMPARE(c.audioInput(), QString("Line"));
+        QCOMPARE(c.audioBufferSize(), 128);
+        QVERIFY(spy.count() >= 1);
+        c.applyAudioSettings("", "", 99999);
+        QCOMPARE(c.audioBufferSize(), 4096);   // kept in range
+        QSettings s(QDir(QDir::tempPath()).filePath("jad-audio-test.ini"), QSettings::IniFormat);
+        c.applyAudioSettings("Interface", "Line", 128);
+        c.saveAudioSettings(s);
+        jad::ProjectController d(false);
+        d.loadAudioSettings(s);
+        QCOMPARE(d.audioOutput(), QString("Interface"));
+        QCOMPARE(d.audioBufferSize(), 128);
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -3,18 +3,22 @@
 #include <chrono>
 
 #include "lpc/graph_builder.h"
+#include "lpc/processor_ids.h"
 
 namespace lpc {
 
-ProjectHost::ProjectHost(Project initial, audio::AudioEngine& engine, MediaStore& media)
-    : project_(std::move(initial)), engine_(engine), media_(media), thread_([this] { run(); }) {
+ProjectHost::ProjectHost(Project initial, audio::AudioEngine& engine, MediaStore& media, IPluginHost* plugins)
+    : project_(std::move(initial)), engine_(engine), media_(media), plugins_(plugins), thread_([this] { run(); }) {
+    if (plugins_) plugins_->setReadyListener([this](const InsertSlot&) { enqueue([this] { rebuildAllConfigs(); }); });
     enqueue([this] {
-        auto messages = initialMessages(project_, media_);
+        auto messages = initialMessages(project_, media_, plugins_, &plan_);
         postAll(messages);
+        pruneInstances();
     });
 }
 
 ProjectHost::~ProjectHost() {
+    if (plugins_) plugins_->setReadyListener({});  // nothing may enqueue into a host that is going away
     stopping_.store(true, std::memory_order_release);
     {
         std::lock_guard lock(mutex_);
@@ -87,9 +91,10 @@ void ProjectHost::resync() {
         m.track = id;
         messages.push_back(m);
     }
-    for (audio::AudioMsg& m : initialMessages(project_, media_)) messages.push_back(m);
+    for (audio::AudioMsg& m : initialMessages(project_, media_, plugins_, &plan_)) messages.push_back(m);
     degraded_.store(false, std::memory_order_release);
     postAll(messages);
+    pruneInstances();
     notifyChanged();  // the audio side was rebuilt: observers may want to refresh
 }
 
@@ -100,8 +105,24 @@ void ProjectHost::notifyChanged() {
 
 void ProjectHost::publish(const Project& before) {
     if (degraded_) return;  // run() rebuilds the graph once the engine drains its queue again
-    auto messages = diffToMessages(before, project_, media_);
+    auto messages = diffToMessages(before, project_, media_, plugins_, &plan_);
     postAll(messages);
+    pruneInstances();
+}
+
+void ProjectHost::rebuildAllConfigs() {
+    if (degraded_) return;  // the rebuild that follows will pick the live instances up
+    auto messages = refreshMessages(project_, media_, plugins_, &plan_);
+    postAll(messages);
+}
+
+void ProjectHost::pruneInstances() {
+    if (!plugins_) return;
+    std::vector<std::pair<InsertSlot, ProcessorRef>> live;
+    for (const Track& t : project_.tracks)
+        for (std::size_t i = 0; i < t.strip.inserts.size(); ++i)
+            if (isVst3Id(t.strip.inserts[i].processorId)) live.push_back({InsertSlot{t.id, static_cast<int>(i)}, t.strip.inserts[i]});
+    plugins_->prune(live);
 }
 
 void ProjectHost::postTransport(audio::MsgKind kind, std::int64_t frame, std::int64_t frame2) {

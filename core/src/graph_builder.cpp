@@ -211,24 +211,26 @@ std::unique_ptr<TrackNode> buildNode(const Project& p, const Track& t, MediaStor
                                        static_cast<double>(p.sampleRate));
 }
 
-std::vector<AudioMsg> initialMessages(const Project& p, MediaStore& media, IPluginHost* plugins) {
+std::vector<AudioMsg> initialMessages(const Project& p, MediaStore& media, IPluginHost* plugins, PdcPlan* planOut) {
     const PdcPlan pdc = computePdc(p, plugins);
+    if (planOut) *planOut = pdc;
     std::vector<AudioMsg> out;
     for (const Track& t : p.tracks) out.push_back(addMsg(buildNode(p, t, media, plugins, &pdc)));
     out.push_back(reorderMsg(p));
     return out;
 }
 
-std::vector<AudioMsg> refreshMessages(const Project& p, MediaStore& media, IPluginHost* plugins) {
+std::vector<AudioMsg> refreshMessages(const Project& p, MediaStore& media, IPluginHost* plugins, PdcPlan* planOut) {
     const PdcPlan pdc = computePdc(p, plugins);
+    if (planOut) *planOut = pdc;
     std::vector<AudioMsg> out;
     for (const Track& t : p.tracks) out.push_back(configMsg(p, t, media, plugins, &pdc));
     return out;
 }
 
-std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins) {
+std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins, PdcPlan* plan) {
     std::vector<AudioMsg> out;
-    const PdcPlan planBefore = computePdc(before, plugins);
+    const PdcPlan planBefore = plan ? *plan : computePdc(before, nullptr);
     const PdcPlan planAfter = computePdc(after, plugins);
     bool structural = false;
     const bool timingChanged = before.tempoMap != after.tempoMap || before.sampleRate != after.sampleRate;
@@ -256,6 +258,7 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
         }
     }
     if (structural || processingOrder(before) != processingOrder(after)) out.push_back(reorderMsg(after));
+    if (plan) *plan = planAfter;
     return out;
 }
 

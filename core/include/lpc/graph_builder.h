@@ -33,9 +33,12 @@ std::unique_ptr<audio::TrackConfig> buildConfig(const Project& project, const Tr
 std::unique_ptr<audio::TrackNode> buildNode(const Project& project, const Track& track, MediaStore& media,
                                             IPluginHost* plugins = nullptr, const PdcPlan* pdc = nullptr);
 // A SetConfig for every track (used when a plug-in finishes loading).
-std::vector<audio::AudioMsg> refreshMessages(const Project& project, MediaStore& media, IPluginHost* plugins);
+std::vector<audio::AudioMsg> refreshMessages(const Project& project, MediaStore& media, IPluginHost* plugins, PdcPlan* planOut = nullptr);
 
-std::vector<audio::AudioMsg> initialMessages(const Project& project, MediaStore& media, IPluginHost* plugins = nullptr);
-std::vector<audio::AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins = nullptr);
+// `planOut`, when given, receives the delay plan the messages were built with. `diffToMessages` takes in `plan` the plan of
+// `before` (null: no plug-in latency, which only makes it rebuild more) and leaves there the plan of `after`; it never asks the
+// plug-in host about `before`, because that would make the host reload instances for the old state.
+std::vector<audio::AudioMsg> initialMessages(const Project& project, MediaStore& media, IPluginHost* plugins = nullptr, PdcPlan* planOut = nullptr);
+std::vector<audio::AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins = nullptr, PdcPlan* plan = nullptr);
 
 }  // namespace lpc

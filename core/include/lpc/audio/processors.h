@@ -35,7 +35,11 @@ private:
 class MissingPluginProcessor final : public IProcessor {
 public:
     void process(float*, float*, int) noexcept override {}
-    nlohmann::json describe() const override { return {{"missing", true}}; }
+    nlohmann::json describe() const override {
+        nlohmann::json j = nlohmann::json::object();
+        j["missing"] = true;
+        return j;
+    }
 };
 
 // An insert backed by a processor that outlives the config that uses it (a live plug-in instance).

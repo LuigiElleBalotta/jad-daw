@@ -14,6 +14,8 @@
 #include "lpc/audio/engine.h"
 #include "lpc/command.h"
 #include "lpc/media_store.h"
+#include "lpc/graph_builder.h"
+#include "lpc/plugin_host.h"
 #include "lpc/undo_stack.h"
 
 namespace lpc {
@@ -25,7 +27,7 @@ namespace lpc {
 // saves keep working; as soon as the queue has room again the audio graph is rebuilt from the model.
 class ProjectHost {
 public:
-    ProjectHost(Project initial, audio::AudioEngine& engine, MediaStore& media);
+    ProjectHost(Project initial, audio::AudioEngine& engine, MediaStore& media, IPluginHost* plugins = nullptr);
     ~ProjectHost();
     ProjectHost(const ProjectHost&) = delete;
     ProjectHost& operator=(const ProjectHost&) = delete;
@@ -73,12 +75,16 @@ private:
     void resync();
     void notifyChanged();
     void publish(const Project& before);
+    void pruneInstances();
+    void rebuildAllConfigs();
     void postTransport(audio::MsgKind kind, std::int64_t frame = 0, std::int64_t frame2 = 0);
 
     Project project_;
     UndoStack undo_;
     audio::AudioEngine& engine_;
     MediaStore& media_;
+    IPluginHost* plugins_;
+    PdcPlan plan_;  // project thread only: the delay plan of the graph the engine has
     std::atomic<std::uint64_t> seq_{0};
     std::atomic<bool> stopping_{false};
     std::function<void(std::uint64_t)> listener_;  // project thread only

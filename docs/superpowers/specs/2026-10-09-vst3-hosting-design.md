@@ -207,9 +207,9 @@ All changes are in the existing insert slot and menus; no new panel layout.
 | Situation | Behaviour |
 |---|---|
 | Plug-in file missing at load | `MissingPluginProcessor`, slot marked, project unchanged |
-| Plug-in fails to instantiate | same as missing; the log has the reason |
+| Plug-in fails to instantiate | pass-through; not retried for the same id and state; in v1 the slot is marked only when the id is missing from the catalogue |
 | Scan child crashes or times out | blocklist entry with reason; visible in the Manager; not retried until "Rescan failed" |
-| Plug-in does not accept stereo/stereo | blocklist entry, reason "unsupported layout" |
+| Plug-in does not accept stereo/stereo, or is an instrument | blocklist entry with the reason ("unsupported layout", "instruments are not supported yet") |
 | Corrupt or incompatible state blob | plug-in loads with defaults; log entry; the stored blob is kept until the next commit |
 | Plug-in crashes while playing | the app crashes (in-process hosting, out of scope; README says so) |
 | `captureState` empty on close | no command, model unchanged |

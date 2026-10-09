@@ -288,6 +288,11 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         t.inputMonitor = trackToggles_.value(QStringLiteral("track.inputMonitor")).contains(t.id);
     }
     tracks_.reset(withoutMaster);
+    if (!selectWhenListed_.isEmpty() && tracks_.find(selectWhenListed_)) {
+        selectedTracks_ = {selectWhenListed_};
+        selectWhenListed_.clear();
+        emit selectionChanged();
+    }
     mixer_.reset(s.tracks);
     regions_.reset(s.regions);
     allRows_ = s.tracks;
@@ -438,7 +443,7 @@ void ProjectController::pruneSelection() {
 void ProjectController::addTrack(const QString& kind) {
     if (kind != "audio" && kind != "instrument" && kind != "bus") return;
     const QString label = kind == "audio" ? "Audio" : (kind == "instrument" ? "Instrument" : "Bus");
-    const std::string name = (label + " " + QString::number(tracks_.rowCount() + 1)).toStdString();
+    const std::string name = (label + " " + QString::number(tracks_.totalCount() + 1)).toStdString();
     const std::string nullId = "00000000-0000-0000-0000-000000000000";
     nlohmann::json instrument = nullptr;
     if (kind == "instrument") instrument = {{"processorId", "builtin.sine"}, {"params", nlohmann::json::object()}, {"state", ""}};
@@ -1217,6 +1222,44 @@ void ProjectController::setSendPreFader(const QString& sendId, bool on) {
 
 void ProjectController::setOutput(const QString& trackId, const QString& outputId) {
     sendCommand({{"type", "set_output"}, {"trackId", trackId.toStdString()}, {"output", outputId.isEmpty() ? lpc::Uuid{}.toString() : outputId.toStdString()}});
+}
+
+void ProjectController::newBusFor(const QString& trackId, const QString& role) {
+    if (role != "send" && role != "output") return;
+    if (!tracks_.find(trackId)) return;
+    int n = 1;
+    const auto used = [this](const QString& name) {
+        for (const TrackRow& t : allRows_)
+            if (t.name == name) return true;
+        return false;
+    };
+    while (used(QStringLiteral("Bus %1").arg(n))) ++n;
+    const std::string busId = lpc::Uuid::random().toString();
+    const std::string nullId = lpc::Uuid{}.toString();
+    nlohmann::json bus = {{"id", busId},
+                          {"kind", "bus"},
+                          {"name", QStringLiteral("Bus %1").arg(n).toStdString()},
+                          {"color", ""},
+                          {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()},
+                                     {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                          {"regions", nlohmann::json::array()},
+                          {"automation", nlohmann::json::array()},
+                          {"instrument", nullptr},
+                          {"showInTracks", false}};
+    nlohmann::json route;
+    if (role == "send")
+        route = {{"type", "add_send"}, {"trackId", trackId.toStdString()}, {"index", -1},
+                 {"send", {{"id", lpc::Uuid::random().toString()}, {"targetTrackId", busId}, {"levelDb", -12.0}, {"preFader", false}}}};
+    else
+        route = {{"type", "set_output"}, {"trackId", trackId.toStdString()}, {"output", busId}};
+    sendCommand({{"type", "transaction"}, {"commands", nlohmann::json::array({{{"type", "add_track"}, {"index", -1}, {"track", bus}}, route})}},
+                [this, busId](bool accepted) {
+                    if (accepted) selectWhenListed_ = QString::fromStdString(busId);
+                });
+}
+
+void ProjectController::setShowInTracks(const QString& trackId, bool on) {
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"showInTracks", on}});
 }
 
 void ProjectController::setRegionGain(const QString& regionId, double db) {

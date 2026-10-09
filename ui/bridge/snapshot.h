@@ -35,6 +35,7 @@ struct TrackRow {
     bool recordArm = false, inputMonitor = false;  // the R and I stubs: their state is kept by the controller
     double gainDb = 0.0, pan = 0.0;
     int regionCount = 0;
+    bool showInTracks = true;  // false: a bus or aux that is listed in the Mixer only
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
     std::vector<InsertRow> inserts;
     std::vector<SendRow> sends;
@@ -43,7 +44,7 @@ struct TrackRow {
 
 struct RegionRow {
     QString id, trackId;
-    int trackIndex = 0;  // among the tracks without the master: the timeline row
+    int trackIndex = 0;  // among the shown tracks without the master: the timeline row
     double startBeats = 0.0, lengthBeats = 0.0;
     bool audio = false, missing = false, absolute = false;  // absolute: positions are in real time, not musical time
     QString mediaId;

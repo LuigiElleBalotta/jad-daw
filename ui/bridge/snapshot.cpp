@@ -50,7 +50,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
     s.tempoMap = p.tempoMap;
     for (const lpc::MediaItem& m : p.mediaPool) s.mediaPaths.insert(QString::fromStdString(m.id.toString()), QString::fromStdString(m.path));
 
-    int row = 0;
+    int row = 0;       // colour rotation: counts every non-master track
+    int shownRow = 0;  // the timeline row: counts the tracks shown in the Tracks area
     for (const lpc::Track& t : p.tracks) {
         const bool master = t.kind == lpc::TrackKind::Master;
         TrackRow tr;
@@ -64,6 +65,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.gainDb = t.strip.gainDb;
         tr.pan = t.strip.pan;
         tr.regionCount = static_cast<int>(t.regions.size());
+        tr.showInTracks = t.showInTracks;
         tr.patchId = QString::fromStdString(t.patchId);
         tr.instrument = t.instrument ? QString::fromStdString(t.instrument->processorId) : QString();
         if (!master) {
@@ -107,7 +109,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             RegionRow rr;
             rr.id = QString::fromStdString(r.id.toString());
             rr.trackId = tr.id;
-            rr.trackIndex = row;
+            rr.trackIndex = shownRow;
             rr.color = tr.color;
             rr.gainDb = r.gainDb;
             rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
@@ -122,6 +124,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             s.regions.push_back(rr);
         }
         ++row;
+        if (t.showInTracks) ++shownRow;
     }
     return s;
 }

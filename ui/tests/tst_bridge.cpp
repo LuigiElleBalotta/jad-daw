@@ -894,6 +894,84 @@ private slots:
         c.setRegionGain(region, -6.0);
         QTRY_COMPARE(c.inspector()->region().value("gainDb").toDouble(), -6.0);
     }
+    void aHiddenBusLeavesTheTracksAreaButNotTheMixer() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const int shown = c.tracks()->rowCount(), all = c.mixer()->rowCount();
+        const QString bus = trackIdOfKind(c, "bus");
+        c.setShowInTracks(bus, false);
+        QTRY_COMPARE(c.tracks()->rowCount(), shown - 1);
+        QCOMPARE(c.mixer()->rowCount(), all);
+        QCOMPARE(c.tracks()->totalCount(), shown);
+        QVERIFY(!trackField(c, bus, "trackId").isValid());  // not a row of the Tracks area
+        c.selectTrack(bus, "replace");                        // but still selectable: the controller finds it
+        QCOMPARE(c.selectedTrackIds(), QStringList{bus});
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), shown);
+    }
+    void regionRowsFollowTheShownTracksOnly() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        c.setShowInTracks(trackIdOfKind(c, "bus"), false);
+        QTRY_VERIFY(c.tracks()->totalCount() > c.tracks()->rowCount());
+        const auto roles = c.regions()->roleNames();
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const QString track = c.regions()->data(c.regions()->index(i), roles.key("trackId")).toString();
+            const int row = c.regions()->data(c.regions()->index(i), roles.key("trackIndex")).toInt();
+            QCOMPARE(c.tracks()->trackIdAt(row), track);  // the timeline row and the header row are the same track
+        }
+    }
+    void newBusForASendIsOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        const int shown = c.tracks()->rowCount(), all = c.mixer()->rowCount();
+        c.selectTrack(audio, "replace");
+        QTRY_VERIFY(c.inspector()->track().value("sends").toList().isEmpty());
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.newBusFor(audio, "send");
+        QTRY_COMPARE(c.mixer()->rowCount(), all + 1);
+        QCOMPARE(sent.count(), 1);
+        QCOMPARE(c.tracks()->rowCount(), shown);                                           // hidden from the Tracks area
+        QTRY_VERIFY(c.selectedTrackIds() != QStringList{audio});                           // the new bus is selected
+        c.selectTrack(audio, "replace");
+        QTRY_COMPARE(c.inspector()->track().value("sends").toList().size(), 1);             // and the track is routed to it
+        c.undo();
+        QTRY_COMPARE(c.mixer()->rowCount(), all);
+        QTRY_COMPARE(c.inspector()->track().value("sends").toList().size(), 0);             // one undo removes both
+    }
+    void newBusForTheOutputKeepsOneUndoStepAndPicksAFreeName() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        const int all = c.mixer()->rowCount();
+        c.selectTrack(audio, "replace");
+        c.newBusFor(audio, "output");
+        QTRY_COMPARE(c.mixer()->rowCount(), all + 1);
+        c.selectTrack(audio, "replace");
+        QTRY_VERIFY(!c.inspector()->output().value("master").toBool());
+        c.newBusFor(audio, "output");
+        QTRY_COMPARE(c.mixer()->rowCount(), all + 2);
+        QStringList names;
+        const auto roles = c.mixer()->roleNames();
+        for (int i = 0; i < c.mixer()->rowCount(); ++i) names << c.mixer()->data(c.mixer()->index(i), roles.key("name")).toString();
+        QVERIFY(names.contains("Bus 1"));
+        QVERIFY(names.contains("Bus 2"));
+        c.undo();
+        QTRY_COMPARE(c.mixer()->rowCount(), all + 1);
+        c.selectTrack(audio, "replace");
+        QTRY_VERIFY(!c.inspector()->output().value("master").toBool());                    // the first bus is still the output
+        c.newBusFor(audio, "nonsense");                                                    // unknown role: nothing happens
+        QCOMPARE(c.mixer()->rowCount(), all + 1);
+    }
     void theInspectorGoesNeutralWhenItsTrackIsDeleted() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -3,24 +3,32 @@
 namespace jad {
 
 void TrackListModel::reset(const std::vector<TrackRow>& rows) {
-    if (sameIds(rows_, rows)) {
+    std::vector<std::size_t> visible;
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        if (rows[i].showInTracks) visible.push_back(i);
+    bool same = visible.size() == visible_.size();
+    for (std::size_t i = 0; same && i < visible.size(); ++i) same = rows[visible[i]].id == rows_[visible_[i]].id;
+    if (same) {
         rows_ = rows;
-        if (!rows_.empty()) emit dataChanged(index(0), index(static_cast<int>(rows_.size()) - 1));
+        visible_ = visible;
+        if (!visible_.empty()) emit dataChanged(index(0), index(static_cast<int>(visible_.size()) - 1));
         return;
     }
     beginResetModel();
     rows_ = rows;
+    visible_ = visible;
     endResetModel();
 }
 
 void TrackListModel::setToggle(const QString& trackId, Role role, bool on) {
-    for (int i = 0; i < static_cast<int>(rows_.size()); ++i) {
-        TrackRow& t = rows_[static_cast<std::size_t>(i)];
+    for (std::size_t i = 0; i < rows_.size(); ++i) {
+        TrackRow& t = rows_[i];
         if (t.id != trackId) continue;
         bool& field = role == RecordArm ? t.recordArm : t.inputMonitor;
         if (field == on) return;
         field = on;
-        emit dataChanged(index(i), index(i), {role});
+        for (std::size_t v = 0; v < visible_.size(); ++v)
+            if (visible_[v] == i) emit dataChanged(index(static_cast<int>(v)), index(static_cast<int>(v)), {role});
         return;
     }
 }
@@ -32,8 +40,8 @@ const TrackRow* TrackListModel::find(const QString& trackId) const {
 }
 
 QVariant TrackListModel::data(const QModelIndex& index, int role) const {
-    if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(rows_.size())) return {};
-    const TrackRow& r = rows_[static_cast<std::size_t>(index.row())];
+    if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(visible_.size())) return {};
+    const TrackRow& r = rows_[visible_[static_cast<std::size_t>(index.row())]];
     switch (role) {
         case TrackId: return r.id;
         case Name: return r.name;

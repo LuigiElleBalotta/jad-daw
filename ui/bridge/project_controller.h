@@ -242,6 +242,9 @@ public:
     Q_INVOKABLE void setSendLevel(const QString& sendId, double db);
     Q_INVOKABLE void setSendPreFader(const QString& sendId, bool on);
     Q_INVOKABLE void setOutput(const QString& trackId, const QString& outputId);  // "" = master
+    // One undo step: a new bus that is hidden from the Tracks area, and a send (role "send") or the output (role "output") to it.
+    Q_INVOKABLE void newBusFor(const QString& trackId, const QString& role);
+    Q_INVOKABLE void setShowInTracks(const QString& trackId, bool on);  // buses and auxes only
     Q_INVOKABLE void setRegionGain(const QString& regionId, double db);
     Q_INVOKABLE void setSmartControl(const QString& trackId, const QString& controlId, double value);
     Q_INVOKABLE void announceStub(const QString& label);  // a visual-only control was used: the usual notice
@@ -299,6 +302,7 @@ private:
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
     void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done);
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
+    QString selectWhenListed_;  // a track made by a command: selected as soon as a snapshot lists it
     void refresh(std::uint64_t revision);
     void applySnapshot(Snapshot snapshot, std::uint64_t generation);
     void tick();

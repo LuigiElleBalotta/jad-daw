@@ -80,3 +80,19 @@ handle sits at the bottom-right. The header is the part the clone must draw itse
 ## Not captured yet
 
 Smart Controls and Editors areas, Loop Browser, Note Pad, Browsers, List Editors, Piano Roll, plug-in windows, Settings dialogs.
+
+## Create New Track result and the audio track inspector
+
+- Creating a software instrument track puts it at the **bottom** and selects it; the Library shows the instrument categories, the Inspector the track
+  section for a software instrument (see above).
+- **Audio track Inspector** (seen on "Audio 1"): header "Track: Audio 1" with the blue waveform icon tile, then **Icon · Channel (Audio 1) · Freeze Mode
+  (Source Only) · Q-Reference ☑ · Flex Mode (Automatic) · Complex ☑**. Region section "Region: 3 selected" when three regions are selected.
+- **Library for an audio track:** header "Library" (no "All Sounds" popup), blue waveform tile, search field, and a list of categories: User Channel Strip
+  Settings, Drums and Percussion, Voice, Performance Patches, Studio Instruments, Acoustic Guitar, Effects, Electric Guitar and Bass, Experimental, Legacy.
+- **Audio channel strip** (Mixer bottom of the Inspector): EQ display · input slot (`Input 1` with a small circle icon) · Audio FX slots (blue `Pro-Q 4 /
+  Compressor`) · Sends · output (`Stereo Out`) · Group · `Read` · pan knob · dB field (`-2,7`) · fader · **R** and **I** buttons (red/orange when active) · M S · name.
+- **Playhead and Move to Playhead:** a click in the ruler area sets the playhead (undo history lists "Move to Playhead"); a region dragged shows a help tag
+  **"Move Region: Position 171 1 1 1  +42 0 0 0 · Length 1 0 0 0 · Track: 3 Inst 1"**; with automation shown, moving a region asks **"Do you want to move the Track
+  Automation data?"** (Move / Don't Move / "Don't ask again").
+- **Undo History** (Edit > Undo History…, ⌥⌘Z): a window listing Number, Action, Date, Time of every step; "Include Parameter Changes From: Mixer, Plug-In" toggles;
+  clicking a row undoes back to that step; buttons Undo and Redo. Undone steps show greyed.

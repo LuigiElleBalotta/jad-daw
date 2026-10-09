@@ -68,11 +68,26 @@ Seen on Logic Pro 11.2 (instrument slot):
 - **No Plug-in:** the track stays an instrument track; the slot becomes the empty placeholder; the Library switches to its category
   browser. So an instrument track without an instrument is a valid state.
 - The menu closes without a choice when the pointer clicks outside it.
+- **Format submenu:** it is shown for every plug-in, also for single-format ones (Recent and the manufacturer lists both show an arrow
+  on every row). Seen contents: instruments "Stereo" / "Multi-Output (16xStereo)"; an effect "Mono" / "Mono->Stereo" (and Stereo for
+  stereo effects). Our hosted plug-ins are stereo only, so the submenu has one entry, "Stereo".
 
-Not verified (to check against the real Logic Pro before the UI is built): the Audio Effect slot menu (assumed the same shape with
-effect categories and an "AU Effects" group), the middle hover icon, the exact pixel size of the hover controls, the delay before
-they appear, whether the format submenu is shown for a plug-in that has only Stereo, whether All Notes Off on stop also resets
-tails, and what Option-click shows beyond "Legacy".
+Seen on Logic Pro 11.2 (Audio Effect slot, empty, clicked):
+
+- **Menu (top to bottom):** Search field; a grey "Recent" header with 5 plug-ins (AmpliTube 5, Tuner, Gain, Pitch Shifter, AmpliTube
+  4), each with a format submenu; a separator; Logic's effect categories (Amps and Pedals, Delay, Distortion, Dynamics, EQ, Filter,
+  Imaging, Metering, Modulation, Multi Effects, Pitch, Reverb, Specialized, Utility), each with a submenu; a separator; **Audio Units**
+  with a submenu. The group is called "Audio Units" here (instrument menu: "AU Instruments").
+- **Audio Units path:** Audio Units > manufacturer (Apple, Dear Reality, FabFilter, IK Multimedia, iZotope, Mixed In Key, PositiveGrid,
+  Sonosaurus, Soundtoys, Waves seen) > plug-in (AUBandpass, AUDelay, ... each with the format submenu) > format.
+- **Empty effect slot:** a dark grey placeholder labelled "Audio FX"; on the output strip it is labelled "Audio FX" and a second
+  slot offers "Click to add Mastering Assistant" (not for us).
+- Adding a track: the "+" button above the track list opens a "Create New Track" sheet (MIDI > Software Instrument preselected, with
+  an Instrument popup, Audio Output popup, "Open Library", and "Number of tracks to create"). Not part of this feature.
+
+Not verified (to check against the real Logic Pro before the UI is built): the middle hover icon, the exact pixel size of the hover
+controls, the delay before they appear, and what Option-click shows beyond "Legacy". Not verifiable from a remote desktop (no audio):
+whether All Notes Off on stop also resets tails; the spec keeps CC 123 with no hard reset.
 
 On Windows, Command maps to Ctrl and Option to Alt. Icons are our own SVGs.
 
@@ -190,8 +205,9 @@ the state is kept in the project.
 - **Menu** (`PluginMenu`, one component for the instrument slot and the insert slots), top to bottom: Search field; the current
   plug-in (occupied slots only) with its format submenu; **No Plug-in** (occupied slots only); **Recent** (grey header, the last 5
   plug-ins used for this slot type, kept in the application settings, each with the format submenu); the built-in leaf entry (Sine for
-  instruments, Gain for effects); a group **VST3 Instruments** (effects: **VST3 Effects**) > manufacturer > plug-in > format. Our only
-  format is "Stereo". Logic's own category groups and its "AU Generators" / "AU MIDI-controlled Effects" groups have no counterpart and
+  instruments, Gain for effects); a group **VST3 Instruments** (effects: **VST3 Effects**, replacing Logic's "Audio Units") >
+  manufacturer > plug-in > format. Our only format is "Stereo". The effect menu has no category groups of ours either (Logic draws 14
+  of its own between Recent and the plug-in group); we draw none. Logic's own category groups and its "AU Generators" / "AU MIDI-controlled Effects" groups have no counterpart and
   are not drawn. Search filters to a flat list of plug-ins of the slot's type with the format submenu and a clear button. Plug-ins the
   scanner rejected are not listed (they stay visible in the Plug-in Manager). Choosing an entry runs `set_instrument` or the insert
   replacement/addition, adds it to Recent, and opens the plug-in window when the new plug-in has one and is loaded (on load, via the

@@ -6,6 +6,8 @@ ChannelStrip {
     id: root
     required property ProjectController project
     targets: project.inspector.busTargets.filter((t) => t.id !== root.trackId)
+    pluginGroups: project.plugins.menu
+    knownPluginIds: project.plugins.knownIds
 
     onGainReleased: (id, db) => project.setGain(id, db)
     onPanReleased: (id, pan) => project.setPan(id, pan)
@@ -19,4 +21,7 @@ ChannelStrip {
     onSendLevelReleased: (sendId, db) => project.setSendLevel(sendId, db)
     onOutputRequested: (id, outputId) => project.setOutput(id, outputId)
     onStubUsed: (label) => project.announceStub(label)
+    onPluginInsertRequested: (id, pluginId, name) => project.addPlugin(id, pluginId, name)
+    onInsertEditorRequested: (id, index) => project.openPluginEditor(id, index)
+    onPluginManagerRequested: project.pluginManagerOpen = true
 }

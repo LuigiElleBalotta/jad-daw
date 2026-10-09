@@ -37,6 +37,13 @@ ApplicationWindow {
     }
 
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
+    PluginManager {
+        id: pluginManager
+        objectName: "pluginManager"
+        project: controller
+        visible: controller.pluginManagerOpen
+        onVisibleChanged: if (!visible) controller.pluginManagerOpen = false
+    }
 
     MessageDialog {
         id: openErrorDialog
@@ -96,6 +103,7 @@ ApplicationWindow {
         "transport.barForward": () => controller.barForward(),
         "transport.goToPosition": () => controlBar.lcd.editPosition(),
         "view.mixer": () => { controller.mixerVisible = !controller.mixerVisible },
+        "window.pluginManager": () => { controller.pluginManagerOpen = !controller.pluginManagerOpen },
         "view.library": () => { controller.libraryVisible = !controller.libraryVisible },
         "view.inspector": () => { controller.inspectorVisible = !controller.inspectorVisible },
         "view.smartControls": () => { controller.smartControlsVisible = !controller.smartControlsVisible },

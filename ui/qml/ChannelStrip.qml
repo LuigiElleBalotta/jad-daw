@@ -12,6 +12,8 @@ Panel {
     property var targets: []     // the buses and auxes a send or the output can go to: [{id, name}]
     property real peak: 0        // shown on the master strip only
     property bool showSlots: true
+    property var pluginGroups: []      // [{vendor, plugins: [{id, name}]}], from the plug-in catalogue
+    property var knownPluginIds: []    // ids of the plug-ins that are installed
 
     readonly property string trackId: info.trackId ?? ""
     // a gesture in flight belongs to the track it started on: showing another track drops it, no command
@@ -39,6 +41,7 @@ Panel {
     readonly property alias automationSlot: automationSlot
     readonly property alias insertList: insertRepeater
     readonly property alias sendList: sendRepeater
+    readonly property alias insertMenu: insertMenu
 
     signal gainReleased(string id, real db)
     signal panReleased(string id, real pan)
@@ -52,10 +55,19 @@ Panel {
     signal sendLevelReleased(string sendId, real db)
     signal outputRequested(string id, string outputId)
     signal stubUsed(string label)
+    signal pluginInsertRequested(string id, string pluginId, string name)
+    signal insertEditorRequested(string id, int index)
+    signal pluginManagerRequested()
 
     function requestOutput(outputId) { outputRequested(trackId, outputId) }
     function requestSend(targetId) { sendAddRequested(trackId, targetId) }
-    function insertLabel(processorId) { return processorId === "builtin.gain" ? qsTr("Gain") : processorId }
+    function requestGainInsert() { insertAddRequested(trackId) }
+    function requestPluginInsert(pluginId, name) { pluginInsertRequested(trackId, pluginId, name) }
+    function isMissing(ins) { return ins.plugin === true && knownPluginIds.indexOf(ins.processorId) < 0 }
+    function insertLabel(ins) {
+        if (ins.plugin) return ins.label && ins.label !== "" ? ins.label : qsTr("Plug-in")
+        return ins.processorId === "builtin.gain" ? qsTr("Gain") : ins.processorId
+    }
 
     property int dragIndex: -1
     property real dragGain: 0
@@ -81,6 +93,34 @@ Panel {
     }
     TargetMenu { id: outputMenu; withMaster: true; targets: root.targets; onChosen: (id) => root.requestOutput(id) }
     TargetMenu { id: sendMenu; targets: root.targets; onChosen: (id) => root.requestSend(id) }
+    ThemedMenu {
+        id: insertMenu
+        signal managerChosen()
+        ThemedMenuItem { text: qsTr("Gain"); onTriggered: root.requestGainInsert() }
+        Instantiator {
+            model: root.pluginGroups
+            delegate: ThemedMenu {
+                id: vendorMenu
+                required property var modelData
+                title: modelData.vendor
+                Instantiator {
+                    model: vendorMenu.modelData.plugins
+                    delegate: ThemedMenuItem {
+                        required property var modelData
+                        text: modelData.name
+                        onTriggered: root.requestPluginInsert(modelData.id, modelData.name)
+                    }
+                    onObjectAdded: (index, object) => vendorMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => vendorMenu.removeItem(object)
+                }
+            }
+            onObjectAdded: (index, object) => insertMenu.insertMenu(index + 1, object)
+            onObjectRemoved: (index, object) => insertMenu.removeMenu(object)
+        }
+        MenuSeparator {}
+        ThemedMenuItem { text: qsTr("Plug-in Manager…"); onTriggered: insertMenu.managerChosen() }
+    }
+    Connections { target: insertMenu; function onManagerChosen() { root.pluginManagerRequested() } }
 
     ColumnLayout {
         anchors.fill: parent
@@ -108,12 +148,15 @@ Panel {
                 required property var modelData
                 required property int index
                 Layout.fillWidth: true
-                text: root.insertLabel(modelData.processorId)
-                value: (root.dragIndex === index ? root.dragGain : modelData.gainDb).toFixed(1)
+                text: root.insertLabel(modelData)
+                value: modelData.plugin ? "" : (root.dragIndex === index ? root.dragGain : modelData.gainDb).toFixed(1)
+                missing: root.isMissing(modelData)
                 filled: true
                 removable: true
                 onRemoveRequested: root.insertRemoveRequested(root.trackId, index)
+                onDoubleClicked: { if (modelData.plugin) root.insertEditorRequested(root.trackId, index) }
                 onDragged: (dx) => {
+                    if (modelData.plugin) return
                     root.dragIndex = index
                     root.dragGain = Math.max(-96, Math.min(24, modelData.gainDb + dx * 0.1))
                 }
@@ -130,7 +173,7 @@ Panel {
             Layout.fillWidth: true
             visible: root.slotsVisible
             text: "+"
-            onClicked: root.insertAddRequested(root.trackId)
+            onClicked: insertMenu.popup(addInsertSlot, 0, addInsertSlot.height)
         }
         Repeater {
             id: sendRepeater

@@ -11,11 +11,13 @@ Rectangle {
     property color fillColor: Theme.accentPrimary
     property bool dim: false
     property bool removable: false
+    property bool missing: false  // a plug-in that is not installed
     readonly property bool hovered: area.containsMouse
     signal clicked()
     signal removeRequested()
     signal dragged(real dx)
     signal dragReleased()
+    signal doubleClicked()
 
     implicitHeight: 18
     implicitWidth: 84
@@ -32,7 +34,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         text: root.text
         elide: Text.ElideRight
-        color: root.filled ? Theme.textPrimary : Theme.textSecondary
+        color: root.missing ? Theme.stateClip : (root.filled ? Theme.textPrimary : Theme.textSecondary)
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontTypeLabelSize
         font.weight: Theme.fontTypeLabelWeight
@@ -70,6 +72,7 @@ Rectangle {
             if (moved) root.dragged(m.x - pressX)
         }
         onReleased: { if (moved) root.dragReleased() }
+        onDoubleClicked: root.doubleClicked()
         onClicked: (m) => {
             if (moved) return
             if (root.removable && m.x > root.width - 16) root.removeRequested()

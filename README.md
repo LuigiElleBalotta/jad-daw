@@ -69,6 +69,14 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 
 ![Smart Controls](docs/images/smart-controls.png)
 
+- **Plug-ins (VST3 effects)**: click the `+` slot of an insert area: Gain or any scanned VST3 plug-in, grouped by vendor.
+  Double click a plug-in slot to open its own window. The scan runs in the background at start (in a child process: a plug-in
+  that crashes or hangs is listed as failed and skipped) and its result is cached in `plugins.json` in the application config
+  folder; Window > Plug-in Manager shows the result and rescans. A plug-in that is not installed shows in red and passes the
+  sound through; the project keeps its id and state. Plug-in state is saved with the project, one undo step per editor session
+  (committed when the editor closes and before Save). Delay compensation aligns tracks and buses. `lpc-cli render` hosts
+  plug-ins too (a plug-in that is not installed is reported and skipped).
+
 - **Mixer** (`X`): one strip per track, built from the same channel-strip component as the Inspector (instrument,
   inserts, sends, output, pan, fader, mute, solo), the master strip last.
 
@@ -86,7 +94,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 Known limits: a fader or knob only changes the sound after it is released, the macOS bundle has no icon yet, several
 buttons use text labels because there are no icons for them yet, and the panels behind Quick Help, Editors and Loops do
 not exist yet. The engine has one effect (gain) and one synth (sine), so the built-in patches and Smart Controls are
-small; plug-in hosting is not there yet. A project with a track name that is empty, longer than 64 characters or has
+small; plug-ins are VST3 effects only (no instruments, MIDI, sidechain or automation of plug-in parameters), stereo in and out, Windows only, and a plug-in that crashes while playing takes the app down; changes made inside a plug-in window become one undo step when it closes. A project with a track name that is empty, longer than 64 characters or has
 control characters, or with an unknown track colour is rejected on load.
 
 Design: `docs/superpowers/specs/2026-10-07-core-engine-design.md`, UI: `docs/superpowers/specs/2026-10-07-ui-shell-design.md` `docs/superpowers/specs/2026-10-08-ui-a-frame-design.md` and `docs/superpowers/specs/2026-10-08-ui-b-panels-design.md`. Third-party licences: `THIRD_PARTY.md`.

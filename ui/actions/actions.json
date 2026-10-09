@@ -94,6 +94,7 @@
  {"id":"drag.noOverlap","label":"No Overlap","menu":"View/Drag Mode","shortcut":"","kind":"command","status":"stub","group":"drag"},
  {"id":"drag.xfade","label":"X-Fade","menu":"View/Drag Mode","shortcut":"","kind":"command","status":"stub","group":"drag"},
 
+ {"id":"window.pluginManager","label":"Plug-in Manager…","menu":"Window","shortcut":"","kind":"command","status":"ready"},
  {"id":"window.minimize","label":"Minimize","menu":"Window","shortcut":"Ctrl+M","kind":"command","status":"stub"},
  {"id":"window.zoom","label":"Zoom","menu":"Window","shortcut":"","kind":"command","status":"stub"},
 

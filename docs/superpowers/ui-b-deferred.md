@@ -26,9 +26,10 @@
 ## Not verified
 - By-hand Windows pass (menus, drag feel, resizing)
 - CI for the UI-B commits (not passing at merge time, ignored on purpose)
+- By-hand pass of the plug-in window with third-party plug-ins (drag the slider, resize, DPI, close while playing) and of the Qt and JUCE shared message loop beyond the spike
 
 ## Next
-- VST3 hosting as effects: spec `specs/2026-10-09-vst3-hosting-design.md`, then plan
+- VST3 hosting as effects: done (spec `specs/2026-10-09-vst3-hosting-design.md`, plan `plans/2026-10-09-vst3-hosting.md`)
 - TODO after VST3: buses made from a send show only in the Mixer, not in the Tracks area (see "Tracks area vs Mixer"); small
   spec for a `showInTracks` flag and a show/hide menu entry
 - Then the deferred interactions and minor findings above

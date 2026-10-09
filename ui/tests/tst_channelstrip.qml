@@ -33,12 +33,56 @@ TestCase {
         mouseClick(s.muteButton); mouseClick(s.soloButton)
         compare(got, [["m", "t", true], ["s", "t", true]])
     }
-    function test_the_plus_slot_requests_an_insert() {
+    function test_the_plus_slot_opens_the_insert_menu_and_gain_requests_an_insert() {
         var s = createTemporaryObject(stripC, this)
         var got = []
         s.insertAddRequested.connect(function (id) { got.push(id) })
         mouseClick(s.addInsertSlot)
+        verify(s.insertMenu.visible)
+        s.insertMenu.close()
+        s.requestGainInsert()
         compare(got, ["t"])
+    }
+    function test_a_plugin_is_requested_with_its_id_and_name() {
+        var s = createTemporaryObject(stripC, this)
+        var got = []
+        s.pluginInsertRequested.connect(function (id, pluginId, name) { got.push([id, pluginId, name]) })
+        s.requestPluginInsert("vst3:aa", "Verb")
+        compare(got, [["t", "vst3:aa", "Verb"]])
+    }
+    function test_a_plugin_slot_shows_its_label_and_marks_a_missing_plugin() {
+        var info = JSON.parse(JSON.stringify(keys))
+        info.inserts = [{ processorId: "vst3:aa", gainDb: 0, label: "Verb", plugin: true },
+                        { processorId: "vst3:bb", gainDb: 0, label: "Gone", plugin: true }]
+        var s = createTemporaryObject(stripC, this, { info: info, knownPluginIds: ["vst3:aa"] })
+        var ok = s.insertList.itemAt(0), gone = s.insertList.itemAt(1)
+        compare(ok.text, "Verb")
+        compare(gone.text, "Gone")
+        verify(!ok.missing)
+        verify(gone.missing)
+        compare(ok.value, "")  // a plug-in has no gain value on the strip
+    }
+    function test_double_click_on_a_plugin_slot_asks_for_its_editor_and_a_plugin_does_not_drag() {
+        var info = JSON.parse(JSON.stringify(keys))
+        info.inserts = [{ processorId: "vst3:aa", gainDb: 0, label: "Verb", plugin: true }]
+        var s = createTemporaryObject(stripC, this, { info: info, knownPluginIds: ["vst3:aa"] })
+        var opened = [], gains = []
+        s.insertEditorRequested.connect(function (id, index) { opened.push([id, index]) })
+        s.insertGainReleased.connect(function (id, index, db) { gains.push(db) })
+        var slot = s.insertList.itemAt(0)
+        mouseDoubleClickSequence(slot, 10, 10)
+        compare(opened, [["t", 0]])
+        mousePress(slot, 10, 10)
+        mouseMove(slot, 40, 10, 0, Qt.LeftButton)
+        mouseRelease(slot, 40, 10)
+        compare(gains.length, 0)
+    }
+    function test_the_manager_entry_of_the_menu_is_requested() {
+        var s = createTemporaryObject(stripC, this)
+        var n = 0
+        s.pluginManagerRequested.connect(function () { ++n })
+        s.insertMenu.managerChosen()
+        compare(n, 1)
     }
     function test_dragging_an_insert_changes_its_gain_once_on_release() {
         var s = createTemporaryObject(stripC, this)

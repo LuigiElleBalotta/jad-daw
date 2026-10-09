@@ -68,6 +68,7 @@ qt_add_qml_module(jad_ui_lib
         qml/Inspector.qml
         qml/RegionInspector.qml
         qml/TrackInspector.qml
+        qml/PluginManager.qml
     RESOURCES
         qml/icons/play.svg
         qml/icons/stop.svg

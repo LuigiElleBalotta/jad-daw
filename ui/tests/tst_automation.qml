@@ -66,6 +66,17 @@ TestCase {
         compare(c.automationParam, "volume")
         c.automationParam = "pan"
         compare(c.automationParam, "pan")
+        const lanes = []
+        const find = function (item) {
+            if (item.pointAt !== undefined && item.valueToY !== undefined) lanes.push(item)
+            for (let i = 0; i < item.children.length; ++i) find(item.children[i])
+        }
+        find(t)
+        compare(lanes.length, 1)   // one track, one lane
+        c.automationVisible = false
+        lanes.length = 0
+        tryVerify(function () { lanes.length = 0; find(t); return lanes.length === 0 })
+        c.automationVisible = true
         c.automationParam = "cutoff"
         compare(c.automationParam, "pan")   // only volume and pan
         c.automationVisible = false

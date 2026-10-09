@@ -276,7 +276,6 @@ Item {
             model: root.project.automationVisible ? root.project.tracks : null
             delegate: AutomationLane {
                 required property int index
-                required property string trackId
                 project: root.project
                 param: root.project.automationParam
                 pixelsPerBeat: root.pixelsPerBeat

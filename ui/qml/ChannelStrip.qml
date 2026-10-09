@@ -77,6 +77,7 @@ Panel {
     signal trackToggled(string id, string actionId, bool on)   // the R and I buttons
     signal soloExclusiveRequested(string id)                    // Option-click on S: this strip alone
     signal soloClearRequested()                                 // Option-click on a lit S: every solo off
+    signal swipeBegan(string kind, bool on)                     // a plain press on M or S: dragging over the other strips sets them to `on`
     signal muteAllRequested(bool on)                            // Command-click on M
     signal soloAllRequested(bool on)                            // Command-click on S
     signal gestureStarted()                                     // a fader or knob drag begins: the moves below follow
@@ -564,7 +565,7 @@ Panel {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
                     onPressed: (m) => {
-                        if (!(m.modifiers & Qt.ControlModifier)) { m.accepted = false; return }
+                        if (!(m.modifiers & Qt.ControlModifier)) { root.swipeBegan("mute", !root.mute); m.accepted = false; return }
                         root.muteAllRequested(!root.mute)
                     }
                 }
@@ -588,7 +589,7 @@ Panel {
                             else root.soloAllRequested(!root.solo)
                             return
                         }
-                        if (!(m.modifiers & Qt.AltModifier)) { m.accepted = false; return }
+                        if (!(m.modifiers & Qt.AltModifier)) { root.swipeBegan("solo", !root.solo); m.accepted = false; return }
                         if (root.solo) root.soloClearRequested(); else root.soloExclusiveRequested(root.trackId)
                     }
                 }

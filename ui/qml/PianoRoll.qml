@@ -5,7 +5,7 @@ import Jad
 
 // The Piano Roll of the Editors area: a keyboard, a ruler and a grid with the notes of the selected MIDI region, a velocity lane
 // below it, a left pane with the editor's settings (quantize, default velocity) and a local bar with its menus.
-// Pointer: select (drag on empty space for a rectangle), move (drag), resize (right edge). Pencil: draw a note. Eraser: delete.
+// Pointer: select (drag on empty space for a rectangle), move (drag), resize (either end of a note); Option-click draws a note. Pencil: draw a note. Eraser: delete.
 // Every change is one replace_region command (one undo step).
 Item {
     id: root
@@ -31,6 +31,8 @@ Item {
     property real quantizeBeats: 0.25               // Time Quantize: the note value
     property real strength: 100
     property int defaultVelocity: 80
+    property real swing: 50                         // 50 = straight; 75 puts the off-beats on the triplet
+    property var preQuantize: ({})                  // region id -> the starts before the last Quantize, for Dequantize
     property var noteClip: []                       // copied notes: start relative to the first, length, note, velocity
     property string readout: ""
 
@@ -156,10 +158,29 @@ Item {
     function quantize() {
         if (!hasMidi || notes.length === 0) return
         const list = copyNotes(notes)
+        const saved = {}
         for (const i of targets()) {
-            const target = Math.round(list[i].start / quantizeBeats) * quantizeBeats
+            saved[i] = list[i].start
+            // Swing delays every second step of the grid: 50 % is straight, 75 % lands on the triplet (the pair is two steps long)
+            const step = Math.round(list[i].start / quantizeBeats)
+            let target = step * quantizeBeats
+            if (step % 2 !== 0) target += quantizeBeats * (swing - 50) / 50
             list[i].start = Math.max(0, list[i].start + (target - list[i].start) * strength / 100)
         }
+        const all = Object.assign({}, preQuantize)
+        all[regionId] = saved
+        preQuantize = all
+        commit(list)
+    }
+    // Dequantize: put the notes back where they were before the last Quantize of this region
+    function dequantize() {
+        const saved = preQuantize[regionId]
+        if (!hasMidi || !saved) return
+        const list = copyNotes(notes)
+        for (const k in saved) if (list[k]) list[k].start = saved[k]
+        const all = Object.assign({}, preQuantize)
+        delete all[regionId]
+        preQuantize = all
         commit(list)
     }
     function setLength(beats) {
@@ -252,7 +273,7 @@ Item {
             }
             InspectorRow {
                 label: qsTr("Swing")
-                SliderField { value: 50; from: 0; to: 100; onMoved: root.project.announceStub(qsTr("Swing")) }
+                SliderField { value: root.swing; from: 0; to: 100; onMoved: (v) => root.swing = Math.round(v) }
             }
             Text { x: Theme.spacing[3]; text: qsTr("Scale Quantize"); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
             InspectorRow { label: qsTr("Scale"); StubValue { project: root.project; label: qsTr("Scale Quantize"); text: qsTr("Off"); width: parent.width } }
@@ -375,7 +396,7 @@ Item {
     ThemedMenu {
         id: functionsMenu
         ThemedMenuItem { text: qsTr("Quantize Notes"); onTriggered: root.quantize() }
-        ThemedMenuItem { text: qsTr("Dequantize"); onTriggered: root.project.announceStub(qsTr("Dequantize")) }
+        ThemedMenuItem { text: qsTr("Dequantize"); enabled: root.preQuantize[root.regionId] !== undefined; onTriggered: root.dequantize() }
         MenuSeparator {}
         ThemedMenu {
             id: velocityMenu
@@ -592,6 +613,21 @@ Item {
                 property real by0: 0
                 property real bx1: 0
                 property real by1: 0
+                property string hoverZone: ""   // "left" or "right" while the pointer is over a note end
+                cursorShape: mode === "resize" || mode === "resizeLeft" || hoverZone !== "" ? Qt.SizeHorCursor : (mode === "move" ? Qt.ClosedHandCursor : Qt.ArrowCursor)
+
+                // which end of the note under the pointer can be dragged: a zone of 6 px, at most a third of a short note
+                function zoneAt(x, y) {
+                    const i = noteIndexAt(x, y)
+                    if (i < 0) return ""
+                    const n = root.shown[i]
+                    const left = root.beatsToX(root.regionStart + n.start)
+                    const w = Math.max(3, n.length * root.pixelsPerBeat)
+                    const z = Math.min(6, w / 3)
+                    if (x - left <= z) return "left"
+                    if (left + w - x <= z) return "right"
+                    return ""
+                }
 
                 function noteIndexAt(x, y) {
                     for (let i = root.shown.length - 1; i >= 0; --i) {
@@ -607,6 +643,7 @@ Item {
                 onPositionChanged: (m) => {
                     const b = beatAt(m.x)
                     root.readout = root.noteName(root.noteAt(m.y)) + "  " + root.barBeatText(Math.max(0, b + root.regionStart))
+                    if (!pressed) hoverZone = (root.tool === "pointer") ? zoneAt(m.x, m.y) : ""
                     if (!pressed || mode === "") return
                     if (mode === "band") { bx1 = m.x; by1 = m.y; return }
                     const list = root.copyNotes(origin)
@@ -619,6 +656,13 @@ Item {
                     } else if (mode === "resize") {
                         const d = root.snap(b - pressBeat)
                         for (const i of root.selected) list[i].length = Math.max(root.gridUnit, origin[i].length + d)
+                    } else if (mode === "resizeLeft") {  // the start moves, the end stays
+                        for (const i of root.selected) {
+                            const end = origin[i].start + origin[i].length
+                            const start = Math.max(0, Math.min(end - root.gridUnit, origin[i].start + root.snap(b - pressBeat)))
+                            list[i].start = start
+                            list[i].length = end - start
+                        }
                     } else if (mode === "draw") {
                         const last = list.length - 1
                         list[last].length = Math.max(root.gridUnit, root.snap(b) - list[last].start)
@@ -638,7 +682,8 @@ Item {
                         if (hit >= 0) { root.selected = [hit]; root.deleteSelected() }
                         return
                     }
-                    if (root.tool === "pencil") {
+                    // Option (Alt) turns the pointer into the pencil for this click
+                    if (root.tool === "pencil" || (root.tool === "pointer" && (m.modifiers & Qt.AltModifier))) {
                         if (hit >= 0) { root.selected = [hit]; return }
                         const start = Math.max(0, root.snap(b))
                         const list = root.copyNotes(root.notes)
@@ -657,9 +702,8 @@ Item {
                         return
                     }
                     if (root.selected.indexOf(hit) < 0) root.selected = (m.modifiers & Qt.ShiftModifier) ? root.selected.concat([hit]) : [hit]
-                    const n = root.shown[hit]
-                    const right = root.beatsToX(root.regionStart + n.start + n.length)
-                    mode = (right - m.x) <= 6 ? "resize" : "move"
+                    const zone = zoneAt(m.x, m.y)
+                    mode = zone === "right" ? "resize" : (zone === "left" ? "resizeLeft" : "move")
                 }
                 onReleased: (m) => {
                     if (mode === "band") {

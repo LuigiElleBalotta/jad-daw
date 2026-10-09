@@ -160,6 +160,31 @@ Item {
                 root.project.createRegion(trackId, Math.min(startBeats, endBeats), length)
             }
             onCanceled: { pencil = false; band = false; zooming = false }
+            // Control-click (right click) on an empty part of a track: the regions that track can hold (Logic's shortcut menu)
+            TapHandler {
+                acceptedButtons: Qt.RightButton
+                onTapped: (point) => {
+                    const row = Math.floor((point.position.y + root.scrollY) / root.rowHeight)
+                    const id = root.project.tracks.trackIdAt(row)
+                    if (id === "") return
+                    root.forceActiveFocus()
+                    regionMenu.trackId = id
+                    regionMenu.kind = root.project.tracks.kindAt(row)
+                    regionMenu.beats = Math.max(0, root.snapBeat(root.xToBeats(point.position.x)))
+                    regionMenu.popup()
+                }
+            }
+        }
+        ThemedMenu {
+            id: regionMenu
+            property string trackId
+            property string kind
+            property real beats: 0
+            readonly property bool midi: kind === "instrument" || kind === "midi"
+            ThemedMenuItem { visible: regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Create MIDI Region"); onTriggered: root.project.createRegion(regionMenu.trackId, regionMenu.beats, root.project.barBeats) }
+            ThemedMenuItem { visible: regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Create Session Player Region"); onTriggered: root.project.announceStub(text) }
+            ThemedMenuItem { visible: regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Create Pattern Region"); onTriggered: root.project.announceStub(text) }
+            ThemedMenuItem { visible: !regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Add Audio File…"); onTriggered: root.project.announceStub(text) }
         }
         Rectangle {  // the rectangle selection being dragged
             visible: emptyArea.band

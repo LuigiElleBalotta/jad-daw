@@ -5,6 +5,7 @@ import Jad
 ChannelStrip {
     id: root
     required property ProjectController project
+    signal swipeStarted(string kind, bool on)
     // what the Core accepts: no loop through outputs and sends (routingRevision makes the list follow every change)
     targets: { project.routingRevision; return project.targetsFor(root.trackId) }
     pluginGroups: project.plugins.menu
@@ -36,6 +37,7 @@ ChannelStrip {
     onLibraryRequested: project.libraryVisible = true
     onNewBusRequested: (id, role) => project.newBusFor(id, role)
     onTrackToggled: (id, actionId, on) => project.setTrackToggle(actionId, id, on)
+    onSwipeBegan: (kind, on) => swipeStarted(kind, on)
     onMuteAllRequested: (on) => project.muteAll(on)
     onSoloAllRequested: (on) => project.soloAll(on)
     onSoloExclusiveRequested: (id) => project.soloExclusive(id)

@@ -54,6 +54,7 @@ Item {
     }
 
     Flickable {
+        id: flick
         y: root.barHeight
         width: parent.width
         height: parent.height - root.barHeight
@@ -64,6 +65,29 @@ Item {
         flickableDirection: Flickable.AutoFlickIfNeeded
         // a click on the empty mixer takes the focus away from a name being edited, which confirms it
         TapHandler { onPressedChanged: if (pressed) root.forceActiveFocus() }
+
+        // Swipe over M or S: a press on one button and a drag across the others sets them all to the state the first one took
+        property string swipeKind: ""
+        property bool swipeOn: false
+        property var swiped: ({})
+        PointHandler {
+            acceptedButtons: Qt.LeftButton
+            grabPermissions: PointerHandler.ApprovesTakeOverByAnything
+            onActiveChanged: if (!active) flick.swipeKind = ""
+            onPointChanged: {
+                const f = parent
+                if (!active || f.swipeKind === "") return
+                const hit = strips.childAt(strips.mapFromItem(null, point.scenePosition).x, 4)
+                if (!hit || !hit.visible || !hit.muteButton) return
+                const button = f.swipeKind === "mute" ? hit.muteButton : hit.soloButton
+                const local = button.mapFromItem(null, point.scenePosition)
+                if (local.x < 0 || local.y < 0 || local.x > button.width || local.y > button.height) return
+                if (f.swiped[hit.trackId]) return
+                f.swiped[hit.trackId] = true
+                if (f.swipeKind === "mute") { if (hit.mute !== f.swipeOn) root.project.setMute(hit.trackId, f.swipeOn) }
+                else if (hit.solo !== f.swipeOn) root.project.setSolo(hit.trackId, f.swipeOn)
+            }
+        }
 
         MixerLegend { id: legend; y: Theme.spacing[3]; height: root.stripHeight; visible: !bar.legendHidden && !root.compact }
         Row {
@@ -84,6 +108,7 @@ Item {
                     project: root.project
                     info: model.info
                     longFader: bar.longFaders
+                    onSwipeStarted: (kind, on) => { flick.swipeKind = kind; flick.swipeOn = on; flick.swiped = ({}); flick.swiped[trackId] = true }
                 }
             }
             Repeater {

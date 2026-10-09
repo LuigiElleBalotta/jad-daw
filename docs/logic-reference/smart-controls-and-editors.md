@@ -32,8 +32,22 @@ local menu bar, then the editor.
 - **Functions menu:** Time Handles ⌃T · (sep) Quantize Notes Q · Dequantize ⌥⌘Q · Include Non-Note MIDI Events · (sep) ✓ Mute Notes On/Off
   ⌃M *(dim)* · Convert Sustain Pedal to Note Length · Set MIDI Channel to Voice Number · Insert Instrument MIDI settings as Events *(dim)* ·
   (sep) MIDI Transform ▸ *(dim)* · (sep) Lock SMPTE Position ⌘↓ *(dim)* · Unlock SMPTE Position ⌘↑ *(dim)*.
-- Not captured: Edit and View menus of the Piano Roll, the automation/MIDI area below the grid, the velocity lane, note colouring,
-  Score / Step Sequencer / Session Player tabs.
+- **Edit menu (Piano Roll):** Undo <last action> ⌘Z · Redo ⇧⌘Z · Undo History… ⌥⌘Z · Delete Undo History · (sep) Cut ⌘X · Copy ⌘C · Paste
+  ⌘V · Paste Replace ⇧⌘V · Paste at Original Position · Delete · (sep) Select ▸ · Repeat ▸ *(dim)* · Length ▸ *(dim)* · Split ▸ · Join Notes
+  ⌘J *(dim)* · Move ▸ · Trim ▸ · Transpose ▸ · (sep) Copy MIDI Events… *(dim)* · Delete MIDI Events ▸ *(dim)*.
+- **View menu (Piano Roll):** ✓ Link · (sep) One Track · ✓ Selected Regions · (sep) Hide Local Inspector ⌥⇧I · Drum Names *(dim)* · Note Labels ·
+  (sep) ✓ Region Transpose · Set Note Color ▸ · Scroll in Play ⌃< · (sep) Secondary Ruler ⌃⌥⌘R · Show Global Tracks G · Configure Global
+  Tracks… ⌥G · Global Track Protect Buttons *(dim)*.
+- Not captured: the automation/MIDI area below the grid, the velocity lane, note colouring, Score and Session Player tabs.
+
+### Step Sequencer (tab)
+
+Same local bar (Edit ▾ · Functions ▾ · View ▾, icon toggles, a segmented **On/Off | Velocity / Value ▾** that chooses what the cells show,
+zoom sliders). A second row: a **+** popup, a step-size popup (`/16`), direction and offset steppers, and at the right a root note popup
+(C), a scale/mode popup (Off), a search, and **16 Steps ▾**. The body is a grid: each row is one note (C3, B2, A2, G2, F2, E2, D2, C2…
+top to bottom) with, at the left, an expander arrow, a purple round icon, the note name with a stepper, **M** / **S** buttons, the step
+size (`/16`), small steppers (direction, offset, gate), and the row's mode label ("On/Off"). Sixteen dark cells per row (groups of four
+separated by a slightly wider gap), the first cell outlined as the cursor.
 
 ## Notes for the clone
 

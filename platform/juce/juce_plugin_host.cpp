@@ -120,47 +120,83 @@ std::shared_ptr<audio::IProcessor> JucePluginHost::acquire(const InsertSlot& slo
     if (!desc) return nullptr;
     const std::string key = keyOf(slot);
     std::uint64_t generation = 0;
-    bool closeOldEditor = false;
+    std::shared_ptr<PluginProcessor> adopted;
+    // Instances this call drops must outlive their editor windows: they are kept here until the editors are closed.
+    std::vector<std::shared_ptr<PluginProcessor>> keepAlive;
+    std::vector<std::string> editorsToClose;
+    bool load = false;
     {
         std::lock_guard lock(impl_->mutex);
         if (!impl_->alive) return nullptr;
-        Impl::Entry& e = impl_->entries[key];
-        const bool same = e.id == ref.processorId && e.state == ref.state;
-        if (same && e.proc) return e.proc;
-        if (same && (e.pending || e.failed)) return nullptr;
-        closeOldEditor = e.proc != nullptr;
-        e.id = ref.processorId;
-        e.state = ref.state;
-        e.slot = slot;
-        e.label = ref.label;
-        e.proc.reset();
-        e.pending = true;
-        e.failed = false;
-        generation = e.generation = ++impl_->nextGeneration;
+        Impl::Entry& target = impl_->entries[key];
+        const bool same = target.id == ref.processorId && target.state == ref.state;
+        if (same && target.proc) return target.proc;
+        if (same && (target.pending || target.failed)) return nullptr;
+
+        // An insert that moved (one was added or removed in front of it): take over the live instance of the same plug-in and
+        // state from another index of the same track. The entries swap, so a plug-in that takes the other's place can do the same.
+        std::string otherKey;
+        for (auto& [k, o] : impl_->entries) {
+            if (k == key || !(o.slot.track == slot.track) || o.id != ref.processorId || o.state != ref.state || !o.proc) continue;
+            const InsertSlot otherSlot = o.slot;
+            std::swap(target, o);
+            target.slot = slot;
+            o.slot = otherSlot;
+            otherKey = k;
+            break;
+        }
+        if (!otherKey.empty()) {
+            target.label = ref.label;
+            adopted = target.proc;
+            editorsToClose = {key, otherKey};
+            Impl::Entry& o = impl_->entries[otherKey];
+            if (o.id.empty() && !o.proc && !o.pending) impl_->entries.erase(otherKey);  // nothing took its place
+        } else {
+            if (target.proc) {
+                keepAlive.push_back(std::move(target.proc));
+                editorsToClose = {key};
+            }
+            target.id = ref.processorId;
+            target.state = ref.state;
+            target.slot = slot;
+            target.label = ref.label;
+            target.proc.reset();
+            target.pending = true;
+            target.failed = false;
+            generation = target.generation = ++impl_->nextGeneration;
+            load = true;
+        }
     }
 
     auto impl = impl_;
     auto* manager = juce::MessageManager::getInstance();
     if (manager->isThisTheMessageThread()) {
-        if (closeOldEditor) impl->closeEditor(key);
+        for (const std::string& k : editorsToClose) impl->closeEditor(k);
+        keepAlive.clear();  // only now may the dropped instances go
+        if (!load) return adopted;
         impl->load(slot, ref, *desc, sampleRate, maxBlock, generation);
         std::lock_guard lock(impl->mutex);
         const auto it = impl->entries.find(key);
         return it != impl->entries.end() && it->second.generation == generation ? it->second.proc : nullptr;
     }
-    juce::MessageManager::callAsync([impl, slot, ref, d = *desc, sampleRate, maxBlock, generation, key, closeOldEditor] {
-        {
-            std::lock_guard lock(impl->mutex);
-            if (!impl->alive) return;
-        }
-        if (closeOldEditor) impl->closeEditor(key);
-        impl->load(slot, ref, d, sampleRate, maxBlock, generation);
-    });
-    return nullptr;
+    if (!editorsToClose.empty() || load) {
+        juce::MessageManager::callAsync([impl, slot, ref, d = *desc, sampleRate, maxBlock, generation, load, editorsToClose,
+                                         keepAlive = std::move(keepAlive)]() mutable {
+            {
+                std::lock_guard lock(impl->mutex);
+                if (!impl->alive) return;
+            }
+            for (const std::string& k : editorsToClose) impl->closeEditor(k);
+            keepAlive.clear();
+            if (load) impl->load(slot, ref, d, sampleRate, maxBlock, generation);
+        });
+    }
+    return adopted;
 }
 
 void JucePluginHost::prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) {
     std::vector<std::string> dropped;
+    std::vector<std::shared_ptr<PluginProcessor>> procs;  // kept alive until the editors have been closed
     {
         std::lock_guard lock(impl_->mutex);
         for (auto it = impl_->entries.begin(); it != impl_->entries.end();) {
@@ -171,14 +207,16 @@ void JucePluginHost::prune(const std::vector<std::pair<InsertSlot, ProcessorRef>
                 ++it;
             } else {
                 dropped.push_back(it->first);
+                if (it->second.proc) procs.push_back(std::move(it->second.proc));
                 it = impl_->entries.erase(it);
             }
         }
     }
     if (dropped.empty()) return;
     auto impl = impl_;
-    juce::MessageManager::callAsync([impl, dropped] {
+    juce::MessageManager::callAsync([impl, dropped, procs = std::move(procs)]() mutable {
         for (const std::string& key : dropped) impl->closeEditor(key);
+        procs.clear();  // the processors go after their editors
     });
 }
 

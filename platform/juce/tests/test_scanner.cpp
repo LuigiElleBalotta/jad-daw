@@ -106,3 +106,24 @@ TEST_CASE("scanner: a scanned plug-in loads through the host", "[scan][plugin]")
     ref.processorId = host.catalogue().at(0).id;
     REQUIRE(host.acquire(InsertSlot{Uuid{9, 9}, 0}, ref, 48000.0, 512) != nullptr);
 }
+
+TEST_CASE("scanner: destroying the scanner does not wait for a hung plug-in scan", "[scan]") {
+    TempFolder plugins, cache;
+    std::ofstream(plugins.path / "hang.vst3", std::ios::binary) << "x";
+    PluginScanner::Options o = options(plugins.path, cache.path / "plugins.json");
+    o.scannerExe = "powershell.exe";
+    o.scannerArgs = {"-NoProfile", "-Command", "Start-Sleep -Seconds 30 #"};  // the file path lands in the comment
+    o.timeoutMs = 60000;
+    const auto begin = std::chrono::steady_clock::now();
+    {
+        PluginScanner scanner(o);
+        scanner.start(ScanMode::NewAndChanged);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));  // the child is running now
+        REQUIRE(scanner.running());
+    }  // destructor: must cancel the child, not wait 30 s
+    const auto took = std::chrono::steady_clock::now() - begin;
+    REQUIRE(took < std::chrono::seconds(10));
+    // a cancelled scan must not blocklist the file
+    const PluginCatalogue saved = PluginCatalogue::load(cache.path / "plugins.json");
+    REQUIRE(saved.find((plugins.path / "hang.vst3").string()) == nullptr);
+}

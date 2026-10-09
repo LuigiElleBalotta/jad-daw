@@ -16,6 +16,7 @@ class PluginScanner {
 public:
     struct Options {
         std::filesystem::path scannerExe, cacheFile;
+        std::vector<std::string> scannerArgs;  // placed between the program and the file path (tests use it to fake a hung scanner)
         std::vector<std::filesystem::path> folders;
         int timeoutMs = 30000;
     };

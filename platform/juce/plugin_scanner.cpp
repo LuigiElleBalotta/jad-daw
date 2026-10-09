@@ -109,16 +109,28 @@ ScanEntry PluginScanner::scanFile(const FileInfo& file) {
     entry.size = file.size;
     entry.status = ScanStatus::Failed;
 
+    juce::StringArray command;
+    command.add(juce::String(options_.scannerExe.string()));
+    for (const std::string& arg : options_.scannerArgs) command.add(juce::String::fromUTF8(arg.c_str()));
+    command.add(juce::String::fromUTF8(file.path.c_str()));
     juce::ChildProcess child;
-    if (!child.start(juce::StringArray{juce::String(options_.scannerExe.string()), juce::String::fromUTF8(file.path.c_str())},
-                     juce::ChildProcess::wantStdOut)) {
+    if (!child.start(command, juce::ChildProcess::wantStdOut)) {
         entry.reason = "cannot start the scanner";
         return entry;
     }
-    if (!child.waitForProcessToFinish(options_.timeoutMs)) {
-        child.kill();
-        entry.reason = "timed out";
-        return entry;
+    // Wait in short steps so that a cancel (the scanner is being destroyed) does not wait for a hung plug-in.
+    const auto startedAt = std::chrono::steady_clock::now();
+    while (!child.waitForProcessToFinish(100)) {
+        if (cancel_) {
+            child.kill();
+            entry.reason = "cancelled";
+            return entry;
+        }
+        if (std::chrono::steady_clock::now() - startedAt >= std::chrono::milliseconds(options_.timeoutMs)) {
+            child.kill();
+            entry.reason = "timed out";
+            return entry;
+        }
     }
     const std::string output = child.readAllProcessOutput().toStdString();
     const std::uint32_t exitCode = child.getExitCode();
@@ -158,6 +170,7 @@ void PluginScanner::run(ScanMode mode) {
     for (const FileInfo& file : todo) {
         if (cancel_) break;
         ScanEntry entry = scanFile(file);
+        if (cancel_) break;  // a cancelled file is not a failed file: it is simply scanned next time
         {
             std::lock_guard lock(mutex_);
             catalogue_.set(std::move(entry));

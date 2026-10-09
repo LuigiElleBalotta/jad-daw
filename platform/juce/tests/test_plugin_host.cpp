@@ -204,3 +204,58 @@ TEST_CASE("juce host: the editor opens and closes", "[juce][plugin]") {
     host.closeAllEditors();
     REQUIRE_FALSE(host.editorOpen(slot));
 }
+
+TEST_CASE("juce host: an insert that moves to another index keeps its live instance", "[juce][plugin]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const Uuid track{2, 1};
+    auto a = host.acquire(InsertSlot{track, 0}, refOf(d), 48000.0, 512);
+    REQUIRE(a);
+    // an insert was added in front of it: the same plug-in is now at index 1
+    auto b = host.acquire(InsertSlot{track, 1}, refOf(d), 48000.0, 512);
+    REQUIRE(b == a);
+    host.prune({{InsertSlot{track, 1}, refOf(d)}});
+    REQUIRE(host.acquire(InsertSlot{track, 1}, refOf(d), 48000.0, 512) == a);
+}
+
+TEST_CASE("juce host: two plug-ins that swap places keep their instances", "[juce][plugin]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const Uuid track{2, 2};
+    const std::string s1 = stateWithGain(d, 0.5f), s2 = stateWithGain(d, 0.25f);
+    auto a0 = host.acquire(InsertSlot{track, 0}, refOf(d, s1), 48000.0, 512);
+    auto a1 = host.acquire(InsertSlot{track, 1}, refOf(d, s2), 48000.0, 512);
+    REQUIRE(a0);
+    REQUIRE(a1);
+    REQUIRE(a0 != a1);
+    auto b0 = host.acquire(InsertSlot{track, 0}, refOf(d, s2), 48000.0, 512);
+    auto b1 = host.acquire(InsertSlot{track, 1}, refOf(d, s1), 48000.0, 512);
+    REQUIRE(b0 == a1);
+    REQUIRE(b1 == a0);
+}
+
+TEST_CASE("juce host: dropping the last reference of a plug-in with an open editor is safe", "[juce][plugin]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const InsertSlot slot{Uuid{2, 3}, 0};
+    host.acquire(slot, refOf(d), 48000.0, 512);  // the host's entry is the only reference
+    REQUIRE(host.openEditor(slot));
+    host.prune({});  // the editor must close before the processor it shows is destroyed
+    pump(200);
+    REQUIRE_FALSE(host.editorOpen(slot));
+}
+
+TEST_CASE("juce host: replacing the state closes the old editor before the old instance goes", "[juce][plugin]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const InsertSlot slot{Uuid{2, 4}, 0};
+    host.acquire(slot, refOf(d), 48000.0, 512);
+    REQUIRE(host.openEditor(slot));
+    auto next = host.acquire(slot, refOf(d, stateWithGain(d, 0.5f)), 48000.0, 512);  // an undo changed the state
+    REQUIRE(next);
+    REQUIRE_FALSE(host.editorOpen(slot));
+}

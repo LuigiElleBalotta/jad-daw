@@ -15,13 +15,14 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - [x] Device list from JUCE (`listJuceAudioDevices`); a fake lister for tests.
 
 ## 2. Inputs, monitoring, recording quality
-- [ ] Input channel per track (the track's Input slot: Input 1, Input 2, 1+2 stereo), mono or stereo take.
-- [ ] Input monitoring (the I button): the input is heard through the track's strip while armed; Auto Input Monitoring.
-- [ ] Latency compensation: recorded takes are shifted by the device's input latency so they line up.
-- [ ] Several armed tracks record at once (one take per track).
-- [ ] Punch in/out (Quick Punch-In, punch locators), recording only inside the range.
-- [ ] Takes: recording over a region while cycling makes takes in a folder; comping is a later step.
-- [ ] Input level meter on the armed track.
+- [x] Input channel per track (the strip's Input slot: 1+2 stereo, or one input as mono), stored in the project (`set_strip` input).
+- [x] Input monitoring (the I button): the chosen input channels play through the track's strip and inserts. (No Auto Input Monitoring.)
+- [x] Latency compensation: takes move earlier by the device's reported round trip plus the recording delay of Preferences > Audio.
+- [x] Several armed tracks record at once (one take per track).
+- [x] Punch: Record while playing is a quick punch-in (Record > Allow Quick Punch-In), Record again stops recording and keeps playing; the autopunch
+      range (red strip under the cycle area, Pnc button) crops takes and stops recording at its end.
+- [x] Cycle recording makes one region per pass (overlapping). Not covered: take folders, comping, muting the earlier takes.
+- [x] Input level meter on the armed track's strip (its meter shows the input).
 
 ## 3. Built-in effects for mixing
 - [ ] Channel EQ (low/high shelf + 3 parametric bands), with a curve display in the strip's EQ box.

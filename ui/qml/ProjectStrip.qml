@@ -11,6 +11,8 @@ ChannelStrip {
     pluginGroups: project.plugins.menu
     knownPluginIds: project.plugins.knownIds
 
+    inputChoices: { project.inputChannels; return project.inputChoices() }
+    onInputChosen: (id, input) => project.setTrackInput(id, input)
     onGestureStarted: project.beginGesture()
     onGainMoved: (id, db) => project.setGainLive(id, db)
     onPanMoved: (id, pan) => project.setPanLive(id, pan)

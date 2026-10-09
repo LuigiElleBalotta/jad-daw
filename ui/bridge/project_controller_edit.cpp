@@ -920,6 +920,10 @@ void ProjectController::startRecording() {
         return;
     }
     const bool quickPunch = playing_;  // pressing Record while the project plays: record from here, no count-in
+    if (quickPunch && !allowQuickPunch_) {
+        emit notice("Quick punch-in is off (Record > Allow Quick Punch-In)");
+        return;
+    }
     const lpc::Ticks tick = static_cast<lpc::Ticks>(std::llround(std::clamp(positionBeats_, 0.0, kMaxBeatsEdit) * lpc::kPPQ));
     const auto startFrame = static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(tick, sampleRate_)));
     lpc::audio::ClickTrack count;

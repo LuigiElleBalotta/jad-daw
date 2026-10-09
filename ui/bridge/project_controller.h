@@ -106,6 +106,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(int audioBufferSize READ audioBufferSize NOTIFY audioSettingsChanged)
     Q_PROPERTY(int inputChannels READ inputChannels NOTIFY audioSettingsChanged)    // of the open device
     Q_PROPERTY(double deviceRate READ deviceRate NOTIFY audioSettingsChanged)       // 0 when no device is open
+    Q_PROPERTY(bool allowQuickPunch READ allowQuickPunch WRITE setAllowQuickPunch NOTIFY punchChanged)  // Record while playing starts a take
     Q_PROPERTY(bool punchEnabled READ punchEnabled WRITE setPunchEnabled NOTIFY punchChanged)  // Autopunch: only the range is kept
     Q_PROPERTY(double punchStartBeats READ punchStartBeats NOTIFY punchChanged)
     Q_PROPERTY(double punchEndBeats READ punchEndBeats NOTIFY punchChanged)
@@ -203,6 +204,8 @@ public:
     void setDeviceListerForTest(std::function<lpc::AudioDeviceChoices(const std::string&, const std::string&)> lister) { deviceLister_ = std::move(lister); }
     bool recording() const { return recording_; }
     bool punchEnabled() const { return punchEnabled_; }
+    bool allowQuickPunch() const { return allowQuickPunch_; }
+    void setAllowQuickPunch(bool on) { if (on != allowQuickPunch_) { allowQuickPunch_ = on; emit punchChanged(); } }
     void setPunchEnabled(bool on);
     double punchStartBeats() const { return punchStartBeats_; }
     double punchEndBeats() const { return punchEndBeats_; }
@@ -642,6 +645,7 @@ private:
     QHash<QString, int> recInputs_;       // each armed track's input at the start
     bool punchStopSent_ = false;
     bool punchEnabled_ = false;
+    bool allowQuickPunch_ = true;
     double punchStartBeats_ = 0.0, punchEndBeats_ = 0.0;
     int recordingDelay_ = 0;              // samples: added to the device's own latency when a take is placed
     void applyMonitoring();

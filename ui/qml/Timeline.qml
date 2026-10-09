@@ -87,6 +87,10 @@ Item {
         loopStart: root.project.loopStartBeats
         loopEnd: root.project.loopEndBeats
         loopOn: root.project.loopEnabled
+        punchStart: root.project.punchStartBeats
+        punchEnd: root.project.punchEndBeats
+        punchOn: root.project.punchEnabled
+        onPunchRequested: (start, end) => root.project.setPunchRange(root.snapBeat(start), root.snapBeat(end))
         onCycleRequested: (start, end) => root.project.setLoopRange(root.snapBeat(start), root.snapBeat(end))
         onLocateRequested: (beats) => { root.forceActiveFocus(); root.project.locateBeats(Math.max(0, root.snapBeat(beats))) }
     }

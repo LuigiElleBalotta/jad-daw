@@ -129,6 +129,28 @@ Dialog {
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontTypeBodySize
                     }
+                    Text { text: qsTr("Recording delay"); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
+                    RowLayout {
+                        spacing: Theme.spacing[2]
+                        Rectangle {
+                            Layout.preferredWidth: 70; Layout.preferredHeight: 24
+                            color: Theme.surfaceRaised; radius: Theme.radiusControl - 2
+                            border.color: delayField.activeFocus ? Theme.accentPrimary : Theme.borderSubtle
+                            TextInput {
+                                id: delayField
+                                objectName: "delayField"
+                                anchors.fill: parent; anchors.margins: 5
+                                verticalAlignment: TextInput.AlignVCenter
+                                validator: IntValidator { bottom: -4800; top: 48000 }
+                                text: String(root.project.recordingDelay)
+                                color: Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontTypeBodySize
+                                onEditingFinished: root.project.recordingDelay = parseInt(text)
+                            }
+                        }
+                        Text { text: qsTr("samples (added to the interface's own latency)"); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize }
+                    }
                     Text { text: qsTr("Latency"); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
                     Text {
                         objectName: "latencyText"

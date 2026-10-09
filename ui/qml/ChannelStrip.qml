@@ -11,6 +11,7 @@ Panel {
     property var info: ({})
     property var targets: []     // the buses and auxes a send or the output can go to: [{id, name}]
     property real peak: 0        // the master strip's meter
+    property var inputChoices: [] // the entries of the Input menu: stereo first, then each input of the device
     property real level: 0       // the meter of a track strip (linear)
     property real peakHold: 0    // the highest level since the last reset: the peak field
     property bool showSlots: true
@@ -39,6 +40,7 @@ Panel {
     readonly property alias panKnob: panKnob
     readonly property alias muteButton: muteButton
     readonly property alias soloButton: soloButton
+    readonly property alias inputSlot: inputSlot
     readonly property alias addInsertSlot: addInsertSlot
     readonly property alias outputSlot: outputSlot
     readonly property alias groupSlot: groupSlot
@@ -85,6 +87,7 @@ Panel {
     signal gestureStarted()                                     // a fader or knob drag begins: the moves below follow
     signal gainMoved(string id, real db)
     signal panMoved(string id, real pan)
+    signal inputChosen(string id, int input)                    // the Input slot: 0 = 1+2 stereo, n = input n
     signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
@@ -171,6 +174,22 @@ Panel {
             }
             onObjectAdded: (index, object) => menu.insertItem(index + (menu.withNewBus ? 2 : 0), object)  // after New Bus and its separator
             onObjectRemoved: (index, object) => menu.removeItem(object)
+        }
+    }
+    ThemedMenu {  // the recording input of an audio track
+        id: inputMenu
+        Instantiator {
+            model: root.inputChoices
+            delegate: ThemedMenuItem {
+                required property string modelData
+                required property int index
+                text: modelData
+                checkable: true
+                checked: (root.info.input ?? 0) === index
+                onTriggered: root.inputChosen(root.trackId, index)
+            }
+            onObjectAdded: (index, object) => inputMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => inputMenu.removeItem(object)
         }
     }
     TargetMenu {
@@ -273,9 +292,9 @@ Panel {
                 id: inputSlot
                 anchors.fill: parent
                 visible: root.slotsVisible && root.kind === "audio"
-                text: qsTr("In 1")
+                text: (root.info.input ?? 0) === 0 ? qsTr("In 1-2") : qsTr("In %1").arg(root.info.input)
                 dim: true
-                onClicked: root.stubUsed(qsTr("Input"))
+                onClicked: inputMenu.popup(inputSlot, 0, inputSlot.height)
             }
             StripSlot {
                 id: instrumentSlot

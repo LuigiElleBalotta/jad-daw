@@ -11,6 +11,10 @@ Rectangle {
     property real loopStart: 0                  // the cycle area (a strip along the top edge): yellow while the cycle is on, grey when off
     property real loopEnd: 0
     property bool loopOn: false
+    property real punchStart: 0                 // the autopunch range (a red strip under the cycle area)
+    property real punchEnd: 0
+    property bool punchOn: false
+    signal punchRequested(real start, real end)
     signal cycleRequested(real start, real end)   // the strip was dragged: a new area
     signal locateRequested(real beats)  // a click or a drag in the ruler, or on the playhead handle
 
@@ -64,6 +68,48 @@ Rectangle {
         radius: 2
         z: 2
     }
+    Rectangle {  // the punch area
+        visible: root.punchEnd > root.punchStart
+        x: (root.punchStart - root.scrollBeats) * root.pixelsPerBeat
+        y: 8
+        width: (root.punchEnd - root.punchStart) * root.pixelsPerBeat
+        height: 7
+        color: root.punchOn ? Theme.stateRecord : Theme.surfaceRaisedHover
+        opacity: root.punchOn ? 0.9 : 0.8
+        border.color: Theme.borderStrong
+        radius: 2
+        z: 2
+    }
+    MouseArea {  // the punch area: drag its edges, its body, or draw one in the strip under the cycle area
+        id: punchArea
+        y: 8
+        width: parent.width
+        height: 8
+        z: 3
+        property string mode: ""
+        property real origin: 0
+        property real s0: 0
+        property real e0: 0
+        function at(m) { return Math.max(0, m.x / root.pixelsPerBeat + root.scrollBeats) }
+        onPressed: (m) => {
+            const b = at(m)
+            const edge = 5 / root.pixelsPerBeat
+            s0 = root.punchStart; e0 = root.punchEnd; origin = b
+            if (e0 > s0 && Math.abs(b - s0) <= edge) mode = "start"
+            else if (e0 > s0 && Math.abs(b - e0) <= edge) mode = "end"
+            else if (e0 > s0 && b > s0 && b < e0) mode = "move"
+            else { mode = "draw"; s0 = b; e0 = b }
+        }
+        onPositionChanged: (m) => {
+            if (!pressed || mode === "") return
+            const b = at(m)
+            if (mode === "start") root.punchRequested(Math.min(b, e0 - 1 / 16), e0)
+            else if (mode === "end") root.punchRequested(s0, Math.max(b, s0 + 1 / 16))
+            else if (mode === "move") { const d = Math.max(-s0, b - origin); root.punchRequested(s0 + d, e0 + d) }
+            else if (mode === "draw" && Math.abs(b - s0) > 1 / 16) root.punchRequested(Math.min(s0, b), Math.max(s0, b))
+        }
+        onReleased: mode = ""
+    }
     MouseArea {  // drag the cycle area: its edges resize it, its body moves it, an empty strip draws one
         id: cycleArea
         width: parent.width
@@ -96,7 +142,7 @@ Rectangle {
     }
     MouseArea {  // a press sets the position, dragging follows the pointer
         anchors.fill: parent
-        anchors.topMargin: 8
+        anchors.topMargin: 16
         function at(m) { return m.x / root.pixelsPerBeat + root.scrollBeats }
         onPressed: (m) => root.locateRequested(at(m))
         onPositionChanged: (m) => { if (pressed) root.locateRequested(at(m)) }

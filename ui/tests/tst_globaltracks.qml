@@ -110,4 +110,17 @@ TestCase {
         verify(t.pixelsPerBeat * 64 > t.width * 0.9)
         compare(t.scrollBeats, 0)
     }
+
+    function test_dragging_the_punch_strip_draws_the_punch_range() {
+        const c = setup()
+        const t = createTemporaryObject(tlC, this, { project: c })
+        c.snap = "quarter"
+        mousePress(t, 80, 11)
+        mouseMove(t, 200, 11)
+        mouseMove(t, 330, 11)
+        mouseRelease(t, 330, 11)
+        tryVerify(function () { return c.punchEndBeats > c.punchStartBeats })
+        verify(c.punchEndBeats - c.punchStartBeats >= 4)
+        verify(!c.loopEnabled)    // not the cycle strip
+    }
 }

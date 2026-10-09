@@ -15,6 +15,20 @@ TestCase {
                                    sends: [{ id: "s1", targetId: "b", targetName: "Bus", levelDb: -12, preFader: false }] })
     Component { id: stripC; ChannelStrip { width: 96; height: 640; info: keys; targets: [{ id: "b", name: "Bus" }] } }
 
+    readonly property var audioTrack: ({ trackId: "a", name: "Gtr", color: "green", kind: "audio", master: false, input: 2,
+                                         gainDb: 0, pan: 0, mute: false, solo: false, outputName: "Stereo Out", inserts: [], sends: [] })
+    Component { id: audioStripC; ChannelStrip { width: 96; height: 640; info: audioTrack; inputChoices: ["Input 1 + 2 (stereo)", "Input 1", "Input 2"] } }
+
+    function test_the_input_slot_shows_the_recording_input_and_chooses_another() {
+        var s = createTemporaryObject(audioStripC, this)
+        compare(s.inputSlot.text, "In 2")
+        var chosen = []
+        s.inputChosen.connect(function (id, input) { chosen.push([id, input]) })
+        s.inputChosen("a", 1)
+        compare(chosen, [["a", 1]])
+        s.info = { trackId: "a", name: "Gtr", color: "green", kind: "audio", master: false, input: 0, gainDb: 0, pan: 0, mute: false, solo: false, outputName: "Stereo Out", inserts: [], sends: [] }
+        compare(s.inputSlot.text, "In 1-2")
+    }
     function test_gain_released_once_after_drag() {
         var s = createTemporaryObject(stripC, this)
         var got = []

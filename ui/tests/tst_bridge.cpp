@@ -146,7 +146,7 @@ private slots:
         c.deleteRegions({});
         QCOMPARE(sent.count(), 0);
     }
-    void importAudioRejectsWrongRateAndLeavesNoFile() {
+    void importAudioConvertsAnotherRateToTheProjectRate() {
         TempDir dir; const auto proj = dir.path() / "d.lpc";
         std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
         jad::ProjectController c(false);
@@ -155,9 +155,11 @@ private slots:
         lpc::writeWav(dir.path() / "x44.wav", 44100, 2, std::vector<float>(2 * 4410, 0.1f), lpc::WavFormat::Float32);
         const QString audioTrack = firstAudioTrackId(c);
         const auto before = countFiles(proj / "audio");
+        const int regions = c.regions()->rowCount();
         c.importAudio(url(dir.path() / "x44.wav"), audioTrack, 0.0);
-        QTRY_VERIFY(c.lastError().contains("48000"));
-        QCOMPARE(countFiles(proj / "audio"), before);
+        QTRY_COMPARE(c.regions()->rowCount(), regions + 1);   // converted from 44.1 kHz, no error
+        QVERIFY(c.lastError().isEmpty());
+        QCOMPARE(countFiles(proj / "audio"), before + 1);
     }
     void importAudioOnANonAudioTrackIsRefused() {
         TempDir dir; const auto proj = dir.path() / "d.lpc";
@@ -297,11 +299,11 @@ private slots:
         QVERIFY(c.openProject(url(proj)));
         QTRY_VERIFY(c.regions()->rowCount() > 0);
         const int n = c.regions()->rowCount();
-        lpc::writeWav(dir.path() / "bad44.wav", 44100, 2, std::vector<float>(2 * 441, 0.1f), lpc::WavFormat::Float32);
+        { std::ofstream bad(dir.path() / "bad.wav", std::ios::binary); bad << "this is not audio"; }
         lpc::writeWav(dir.path() / "good.wav", 48000, 2, std::vector<float>(2 * 4800, 0.1f), lpc::WavFormat::Float32);
-        c.importAudioFiles({url(dir.path() / "bad44.wav"), url(dir.path() / "good.wav")}, firstAudioTrackId(c), 0.0);
+        c.importAudioFiles({url(dir.path() / "bad.wav"), url(dir.path() / "good.wav")}, firstAudioTrackId(c), 0.0);
         QTRY_COMPARE(c.regions()->rowCount(), n + 1);
-        QVERIFY(c.lastError().contains("44100"));
+        QVERIFY(c.lastError().contains("bad.wav"));
     }
     void openingAnInvalidProjectEmitsTheLoaderMessage() {
         TempDir dir;
@@ -884,6 +886,33 @@ private slots:
         QTRY_COMPARE(c.tracks()->rowCount(), before + 3);
         c.undo();
         QTRY_COMPARE(c.tracks()->rowCount(), before);
+    }
+    void droppedAudioOutsideAnAudioTrackMakesATrackNamedAfterTheFile() {
+        TempDir dir;
+        TempDir other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        const int tracks = c.tracks()->rowCount();
+        const int regions = c.regions()->rowCount();
+        // a 44.1 kHz stereo WAV: it must be converted to the project's rate
+        std::vector<float> samples(2 * 4410);
+        for (std::size_t i = 0; i < samples.size(); ++i) samples[i] = 0.2f;
+        const auto file = other.path() / "Guitar loop.wav";
+        lpc::writeWav(file, 44100, 2, samples, lpc::WavFormat::Pcm16);
+        c.importAudioFilesAt({url(file)}, QString(), 4.0);   // no track under the drop
+        QTRY_COMPARE_WITH_TIMEOUT(c.tracks()->rowCount(), tracks + 1, 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), regions + 1, 15000);
+        bool named = false;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i) named = named || c.tracks()->nameAt(i) == "Guitar loop";
+        QVERIFY(named);
+        const jad::RegionRow* made = nullptr;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && std::abs(r->startBeats - 4.0) < 0.01 && r->audio) made = r;
+        }
+        QVERIFY(made);
+        QVERIFY(std::abs(made->lengthBeats - 0.2) < 0.01);   // 0.1 s at 120 bpm
     }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;

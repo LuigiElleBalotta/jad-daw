@@ -271,6 +271,9 @@ public:
     // File > Import Audio File: into the selected audio track (else the first one) at the playhead
     // File > Bounce: the whole project is rendered offline, without the audio device, to a 24-bit WAV file (plug-in inserts are skipped)
     Q_INVOKABLE void bounceProject(const QUrl& file);
+    // Audio files dropped (or chosen) at a position: onto an audio track they go on that track, back to back; anywhere else each file
+    // makes a new audio track named after the file. WAV, MP3, FLAC and AIFF; other rates are converted to the project's.
+    Q_INVOKABLE void importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats);
     Q_INVOKABLE void importAudioFilesHere(const QList<QUrl>& files);
     Q_INVOKABLE void submit(const QString& commandJson);
     Q_INVOKABLE void undo();
@@ -582,6 +585,8 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    QSet<QString> pendingAudioTracks_;  // tracks just created for an import: the models do not list them yet
+    QString addAudioTrackNamed(const QString& name);
     bool recording_ = false, recFinishing_ = false, countIn_ = false;
     int countInChoice_ = 1;
     QString recTrack_;

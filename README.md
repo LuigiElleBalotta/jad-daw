@@ -119,6 +119,10 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Recording (audio):** arm an audio track with its R button, press Record (`R`) and the input of the audio device is captured from the
   playhead until Stop; the take becomes a region in that track (one undo step). The Count-in button (`1 2 3`) plays the count-in
   first; Record > Count-in chooses None, 1 to 6 bars or 1/4, 2/4, 3/4 (beats), as in Logic. Not there yet: MIDI recording, input monitoring, latency compensation, punch in/out, several armed tracks, takes and comping.
+- **Importing audio:** drag WAV, MP3, FLAC or AIFF files into the Tracks area (or File > Import Audio File). On an audio track they go there
+  back to back; anywhere else each file makes a new audio track named after it. Files at another sample rate are converted to the
+  project's (cubic interpolation) and stored as 24-bit WAV in the project folder. MP3 and FLAC are decoded with dr_mp3 and dr_flac
+  (`third_party/dr_libs`, public domain / MIT-0).
 - **File:** Save As, Save a Copy As, Import Audio File and Bounce (an offline render to a 24-bit WAV; plug-in inserts are skipped).
 
 ![Piano Roll](docs/images/piano-roll.png)

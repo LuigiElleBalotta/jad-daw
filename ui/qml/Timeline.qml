@@ -300,18 +300,22 @@ Item {
     DropArea {
         anchors.fill: parent
         keys: ["text/uri-list"]
-        function wavs(urls) {
+        readonly property var extensions: [".wav", ".mp3", ".flac", ".aif", ".aiff", ".aifc"]
+        function audioFiles(urls) {
             const out = []
-            for (const u of urls) if (u.toString().toLowerCase().endsWith(".wav")) out.push(u)
+            for (const u of urls) {
+                const name = u.toString().toLowerCase()
+                if (extensions.some(e => name.endsWith(e))) out.push(u)
+            }
             return out
         }
-        onEntered: (drag) => { drag.accepted = drag.hasUrls && wavs(drag.urls).length > 0 }
+        onEntered: (drag) => { drag.accepted = drag.hasUrls && audioFiles(drag.urls).length > 0 }
         onDropped: (drop) => {
-            const files = wavs(drop.urls)
+            const files = audioFiles(drop.urls)
             if (files.length === 0) return
             const beats = Math.max(0, root.snapBeat(root.xToBeats(drop.x)))
-            // several files go on the same track, back to back
-            root.project.importAudioFiles(files, root.trackIdAt(drop.y), beats)
+            // on an audio track the files go there back to back; anywhere else each makes a new track named after the file
+            root.project.importAudioFilesAt(files, root.trackIdAt(drop.y), beats)
         }
     }
 

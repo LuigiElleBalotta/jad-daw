@@ -70,7 +70,7 @@ ApplicationWindow {
         id: importDialog
         title: qsTr("Import audio files")
         fileMode: FileDialog.OpenFiles
-        nameFilters: [qsTr("WAV audio (*.wav)")]
+        nameFilters: [qsTr("Audio files (*.wav *.mp3 *.flac *.aif *.aiff)"), qsTr("All files (*)")]
         onAccepted: controller.importAudioFilesHere(selectedFiles)
     }
 
@@ -394,6 +394,7 @@ ApplicationWindow {
             }
         }
         SmartControls {
+            z: 80
             Layout.fillWidth: true
             Layout.preferredHeight: controller.smartControlsHeight
             visible: controller.smartControlsVisible
@@ -408,12 +409,14 @@ ApplicationWindow {
         }
         EditorArea {
             id: editorArea
+            z: 90
             Layout.fillWidth: true
             Layout.preferredHeight: implicitHeight
             visible: root.editorsVisible
             project: controller
         }
         Mixer {
+            z: 100  // the lower panes sit above everything in the main area, the Mixer above all of them
             Layout.fillWidth: true
             Layout.preferredHeight: implicitHeight
             maxHeight: root.height - 200 - (root.editorsVisible ? 160 : 0)

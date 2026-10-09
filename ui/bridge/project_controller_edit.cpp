@@ -2,6 +2,7 @@
 // Each change is one command (or one transaction) and so one undo step, like the Core's own commands.
 #include <QSettings>
 #include <QDateTime>
+#include <QFileInfo>
 #include <QTimer>
 #include <QtConcurrent>
 #include <QPointer>
@@ -625,19 +626,48 @@ bool ProjectController::saveProjectAs(const QUrl& folder, bool openCopy) {
     return true;
 }
 
+QString ProjectController::addAudioTrackNamed(const QString& name) {
+    QString clean;
+    for (const QChar c : name)
+        if (c.unicode() >= 32 && c.unicode() != 127) clean.append(c);
+    clean = clean.trimmed().left(60);
+    if (clean.isEmpty()) clean = QStringLiteral("Audio");
+    const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    sendCommand({{"type", "add_track"},
+                 {"index", -1},
+                 {"track", {{"id", id.toStdString()},
+                            {"kind", "audio"},
+                            {"name", clean.toStdString()},
+                            {"color", ""},
+                            {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()},
+                                       {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                            {"regions", nlohmann::json::array()},
+                            {"automation", nlohmann::json::array()},
+                            {"instrument", nullptr}}}});
+    pendingAudioTracks_.insert(id);
+    return id;
+}
+
+void ProjectController::importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats) {
+    if (!host_ || files.isEmpty() || !std::isfinite(startBeats)) return;
+    const TrackRow* track = tracks_.find(trackId);
+    if (track && track->kind == "audio") {
+        importAudioFiles(files, trackId, startBeats);
+        return;
+    }
+    for (const QUrl& file : files) {  // not on an audio track: one new track per file, named after it
+        const QString id = addAudioTrackNamed(QFileInfo(file.toLocalFile()).completeBaseName());
+        importAudioFiles({file}, id, startBeats);
+    }
+}
+
 void ProjectController::importAudioFilesHere(const QList<QUrl>& files) {
     if (!host_ || files.isEmpty()) return;
     QString target;
     for (const QString& id : std::as_const(selectedTracks_))
         if (const TrackRow* t = tracks_.find(id); t && t->kind == "audio") { target = id; break; }
-    if (target.isEmpty())
-        for (const TrackRow& t : allRows_)
-            if (t.kind == "audio" && !t.master) { target = t.id; break; }
-    if (target.isEmpty()) {
-        setError("Add an audio track first");
-        return;
-    }
-    importAudioFiles(files, target, positionBeats_);
+    importAudioFilesAt(files, target, positionBeats_);  // no audio track selected: new tracks named after the files
 }
 
 void ProjectController::bounceProject(const QUrl& file) {

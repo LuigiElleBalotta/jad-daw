@@ -27,6 +27,7 @@
 #include "lpc/project_host.h"
 #include "lpc/project_io.h"
 #include "lpc/validation.h"
+#include "lpc/audio_decode.h"
 #include "lpc/wav.h"
 
 #include <QCoreApplication>
@@ -850,7 +851,7 @@ void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId,
 void ProjectController::importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats) {
     if (!host_ || files.isEmpty() || !std::isfinite(startBeats)) return;
     const TrackRow* track = tracks_.find(trackId);
-    if (!track || track->kind != "audio") {
+    if ((!track || track->kind != "audio") && !pendingAudioTracks_.contains(trackId)) {
         setError("Audio can only be dropped on an audio track");
         return;
     }
@@ -902,38 +903,57 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
         const QString sourceName = QString::fromStdU16String(source.filename().u16string());
         std::int64_t frames = 0;
         int channels = 0;
+        std::string ext = source.extension().string();
+        for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (!lpc::isImportableAudioExtension(ext)) {
+            fail(QString("Cannot import %1: only WAV, MP3, FLAC and AIFF files are supported").arg(sourceName));
+            return;
+        }
+        // A WAV file that already fits the project (its rate, one or two channels) is copied as it is; every other file is decoded,
+        // converted to the project's rate and written as a 24-bit WAV.
+        bool copyAsIs = false;
+        lpc::WavData converted;
         try {
-            lpc::WavFile wav(source);
-            if (wav.sampleRate() != projectRate) {
-                fail(QString("Cannot import %1: its sample rate is %2 Hz but the project uses %3 Hz").arg(sourceName).arg(wav.sampleRate()).arg(projectRate));
-                return;
+            if (ext == ".wav") {
+                lpc::WavFile wav(source);
+                if (wav.sampleRate() == projectRate && wav.channels() >= 1 && wav.channels() <= 2) {
+                    copyAsIs = true;
+                    frames = wav.frames();
+                    channels = wav.channels();
+                }
             }
-            if (wav.channels() < 1 || wav.channels() > 2) {
-                fail(QString("Cannot import %1: only mono and stereo files are supported").arg(sourceName));
-                return;
+            if (!copyAsIs) {
+                converted = lpc::convertForProject(lpc::decodeAudioFile(source), projectRate);
+                frames = converted.frames();
+                channels = converted.channels;
+                if (frames == 0) throw std::runtime_error("the file has no audio");
             }
-            frames = wav.frames();
-            channels = wav.channels();
         } catch (const std::exception& e) {
             fail(QString("Cannot import %1: %2").arg(sourceName, QString::fromUtf8(e.what())));
             return;
         }
 
-        // copy into <project>/audio under a name that is not taken yet
+        // put it into <project>/audio under a name that is not taken yet
         std::filesystem::path target;
         bool created = false;
         try {
             const std::filesystem::path audioDir = projectDir / "audio";
             std::filesystem::create_directories(audioDir);
-            const std::filesystem::path stem = source.stem(), ext = source.extension();
+            const std::filesystem::path stem = source.stem();
+            const std::filesystem::path outExt = copyAsIs ? source.extension() : std::filesystem::path(u".wav");
             // copy_file without overwrite fails when the name is taken (also by a concurrent import): try the next name
             for (int n = 1; !created; ++n) {
-                target = n == 1 ? audioDir / source.filename()
-                                : audioDir / (stem.u16string() + u" (" + QString::number(n).toStdU16String() + u")" + ext.u16string());
+                target = audioDir / (n == 1 ? stem.u16string() + outExt.u16string()
+                                            : stem.u16string() + u" (" + QString::number(n).toStdU16String() + u")" + outExt.u16string());
                 if (std::filesystem::exists(target)) continue;
-                std::error_code ec;
-                created = std::filesystem::copy_file(source, target, std::filesystem::copy_options::none, ec);
-                if (ec && ec != std::errc::file_exists) throw std::filesystem::filesystem_error("copy failed", source, target, ec);
+                if (copyAsIs) {
+                    std::error_code ec;
+                    created = std::filesystem::copy_file(source, target, std::filesystem::copy_options::none, ec);
+                    if (ec && ec != std::errc::file_exists) throw std::filesystem::filesystem_error("copy failed", source, target, ec);
+                } else {
+                    lpc::writeWav(target, projectRate, channels, converted.samples, lpc::WavFormat::Pcm24);
+                    created = true;
+                }
             }
         } catch (const std::exception& e) {
             std::error_code ignore;

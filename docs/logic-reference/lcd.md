@@ -24,3 +24,11 @@ Seen on 2026-10-09 (Beats & Project mode). See also `ui-observations-2026-10-09.
 
 Drag on the tempo, double-click to type a value, position field editing, the chevron popup, hover help tags, the Custom mode contents, the Large mode
 sizes.
+
+## Verified negatives
+
+- Dragging the tempo number up by 12 px did **not** change `138` in this project (the project follows Smart Tempo "ADAPT"); the user reports drag changes the BPM in
+  Logic, so it probably needs Smart Tempo set to Keep/Off. To verify.
+- Changing the time signature from the popup raises a modal: **"Do you want to change the project time signature?"** with buttons **Change project
+  signature** (default), **Insert new signature**, **Cancel**, and a "Don't ask again" checkbox (explanation: change the project signature or insert a new
+  signature change at the current position).

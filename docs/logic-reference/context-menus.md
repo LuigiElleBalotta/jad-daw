@@ -63,3 +63,16 @@ Convert** · (sep) Chords *(dim)* · Processing *(dim)* · **Automation · MIDI 
 Differences from an audio region: a MIDI region has **Quantize ▸** (✓ Off, 1/1 Note, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, **Triplets ▸**, **Swing Presets ▸**,
 **n-Tuplets and Mixed ▸**, **Apply Quantization Permanently** ⌃Q) and **MIDI Transform ▸**; the audio region's menu starts with the Flex marker entries and
 has Processing enabled. Chords and Processing stay dim for MIDI.
+
+### MIDI region > Automation ▸
+
+Create 1 Track Automation Point at Region Borders ⌃⇧⌘1 · Create 2 Track Automation Points at Region Borders ⌃⇧⌘2 · (sep) Move Current Region Data to
+Track ⌃⌘▲ · Move Current Track Data to Region ⌃⌘▼ · Move All Region Data to Track ⌃⇧⌘▲ · Move All Track Data to Region ⌃⇧⌘▼ · Delete All Region Automation.
+(So a region can carry its own automation, distinct from the track's.)
+
+## Audio track: the Flex row
+
+An audio track header has a second row, a popup showing the **Flex mode** (here `Polyphonic (Auto)`), not present on instrument tracks. Its menu:
+**Flex Pitch** · (sep) ✓ **Flex Time - Automatic (Polyphonic)** · Flex Time - Monophonic · Flex Time - Slicing · Flex Time - Rhythmic · Flex Time - Polyphonic ·
+Flex Time - Speed (FX) · Flex Time - Tempophone (FX). The toggle that switches Flex on for the track is the button in the track header row of an audio track
+(the third icon after R/I; blue when Flex is on); with Flex on, the Flex Time editing appears in the workspace (flex markers on the waveform).

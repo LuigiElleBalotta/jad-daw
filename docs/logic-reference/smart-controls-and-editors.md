@@ -106,3 +106,10 @@ Top row: two view toggles (loops list, loops grid), at the right **Sound Packs: 
 List columns: type icon (blue waveform = audio loop, green note = software instrument loop) · **Name** · **Be…** (beats) · heart checkbox · **Tem…** (tempo)
 · **Key**. Examples: "12 Bar Blues Bass 16 beats 80 E", "12 String Dream 01 8 140 D", "12-8 Afro Cuban Conga 01 4 107". When open, the Tracks area
 shows a hint "Drag Apple Loops here to create tracks" at the bottom of the track list and workspace.
+
+## Browsers (control bar, F; right column)
+
+Tab strip **Project | All Files**. Project tab = the **Project Audio Browser**: a local bar **Audio File ▾ · Edit ▾ · View ▾**, a thin search/strip field, then a tree
+list with columns **Name** (disclosure arrow, e.g. `Mad…i.wav`), **Info** (`44,1 kHz 24-…`), **bpm** (`137,9`, dim when absent) and **Region Length**; expanding a
+file shows its regions with a thumbnail waveform and the length in SMPTE (`00:03:32:00.37`). When open, the Tracks area shows "Drag audio files here to create
+audio tracks". "All Files" tab (the file system browser) not captured.

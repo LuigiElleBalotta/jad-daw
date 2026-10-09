@@ -5,6 +5,7 @@ namespace lpc {
 
 inline constexpr const char* kProcGain = "builtin.gain";
 inline constexpr const char* kProcSine = "builtin.sine";
+inline constexpr const char* kProcSynth = "builtin.synth";
 inline constexpr const char* kProcEq = "builtin.eq";
 inline constexpr const char* kProcCompressor = "builtin.compressor";
 inline constexpr const char* kProcLimiter = "builtin.limiter";
@@ -22,6 +23,6 @@ inline bool isVst3Id(std::string_view id) {
 }
 
 bool isKnownEffect(std::string_view id);  // a built-in effect (see effect_specs.h)
-inline bool isKnownInstrument(std::string_view id) { return id == kProcSine; }
+bool isKnownInstrument(std::string_view id);  // a built-in instrument (see effect_specs.h)
 
 }  // namespace lpc

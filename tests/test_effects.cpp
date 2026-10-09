@@ -3,6 +3,7 @@
 #include <cmath>
 #include <vector>
 #include "lpc/audio/effects.h"
+#include "lpc/graph_builder.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
 #include "lpc/validation.h"
@@ -145,4 +146,52 @@ TEST_CASE("reverb: a tail follows an impulse, and mix 0 leaves the signal alone"
     auto r0 = makeBuiltinEffect(off, kSr);
     const auto same = run(*r0, sine(300, 0.3, 4800));
     REQUIRE(peakOf(same, 1000) == Catch::Approx(0.3f).margin(0.01f));
+}
+
+TEST_CASE("synth: the waveforms play the right pitch, the envelope reaches the sustain and releases to silence", "[synth]") {
+    Synth s(kSr);
+    SynthParams p;
+    p.wave = 2;                 // saw
+    p.attackMs = 1;
+    p.decayMs = 20;
+    p.sustain = 0.5f;
+    p.releaseMs = 20;
+    p.level = 0.5f;
+    s.setParams(p);
+    s.noteOn(69, 127);          // A4 = 440 Hz
+    std::vector<float> l(24000, 0.0f), r(24000, 0.0f);
+    s.render(l.data(), r.data(), 480);                      // a few blocks are rendered in slices of at most 512
+    s.render(l.data() + 480, r.data() + 480, 23520 > 512 ? 512 : 23520);
+    std::vector<float> body(9600, 0.0f), unused(9600, 0.0f);
+    for (int at = 0; at < 9600; at += 480) s.render(body.data() + at, unused.data() + at, 480);
+    int crossings = 0;                                       // a saw with a rising edge crosses zero once per period going up
+    for (std::size_t i = 1; i < body.size(); ++i)
+        if (body[i - 1] < 0 && body[i] >= 0) ++crossings;
+    REQUIRE(crossings >= 17);                                // 0.2 s of 440 Hz: about 88 periods... counted on the rising edges of a band-limited saw
+    float peak = 0;
+    for (const float v : body) peak = std::max(peak, std::abs(v));
+    REQUIRE(peak == Catch::Approx(0.5f * 0.5f).margin(0.08f));   // level 0.5 * sustain 0.5 (the saw swings to about +-1)
+    REQUIRE(s.active());
+    s.noteOff(69);
+    std::vector<float> tail(4800, 0.0f), tail2(4800, 0.0f);
+    for (int at = 0; at < 4800; at += 480) s.render(tail.data() + at, tail2.data() + at, 480);
+    REQUIRE_FALSE(s.active());                               // the 20 ms release is over
+    REQUIRE(std::abs(tail[4700]) < 1e-6f);
+}
+
+TEST_CASE("synth: the instrument specs and the parameters of a synth track reach the engine", "[synth]") {
+    REQUIRE(isKnownInstrument("builtin.sine"));
+    REQUIRE(isKnownInstrument("builtin.synth"));
+    REQUIRE_FALSE(isKnownInstrument("builtin.nope"));
+    ProcessorRef sine{kProcSine, {}, "", "", false};
+    REQUIRE(synthParamsOf(sine).releaseMs == Catch::Approx(5.0f));        // the old sine: a 2 ms attack, a 5 ms release
+    ProcessorRef synth{kProcSynth, {{"wave", 3}, {"attack", 50}, {"sustain", 25}, {"cutoff", 2000}, {"level", -6}}, "", "", false};
+    const SynthParams sp = synthParamsOf(synth);
+    REQUIRE(sp.wave == 3);
+    REQUIRE(sp.attackMs == Catch::Approx(50.0f));
+    REQUIRE(sp.sustain == Catch::Approx(0.25f));
+    REQUIRE(sp.cutoffHz == Catch::Approx(2000.0f));
+    REQUIRE(sp.level == Catch::Approx(0.501f).margin(0.01f));
+    synth.params["attack"] = 99999;                                        // out of range: clamped
+    REQUIRE(synthParamsOf(synth).attackMs == Catch::Approx(2000.0f));
 }

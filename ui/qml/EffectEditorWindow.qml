@@ -27,10 +27,17 @@ Window {
     onClosing: project.closeEffectEditor()
 
     function refresh() {
-        const list = project.trackInserts(trackId)
-        insert = index >= 0 && index < list.length ? list[index] : null
         let found = null
-        if (insert) for (const s of project.effectSpecs()) if (s.id === insert.processorId) found = s
+        if (index === -2) {  // the track's instrument
+            const ins = project.trackInstrument(trackId)
+            insert = ins.processorId ? ins : null
+            if (insert) for (const s of project.instrumentSpecs()) if (s.id === insert.processorId) found = s
+            if (found && found.params.length === 0) found = null  // the sine has nothing to edit
+        } else {
+            const list = project.trackInserts(trackId)
+            insert = index >= 0 && index < list.length ? list[index] : null
+            if (insert) for (const s of project.effectSpecs()) if (s.id === insert.processorId) found = s
+        }
         spec = found
         if (spec && spec.id === "builtin.eq") curve = project.eqCurve(valuesOf(), 160, 20, 20000)
     }
@@ -56,8 +63,12 @@ Window {
         running: Object.keys(root.pending).length > 0
         onTriggered: root.flush()
     }
+    function setParam(name, value) {
+        if (index === -2) project.setInstrumentParam(trackId, name, value)
+        else project.setInsertParam(trackId, index, name, value)
+    }
     function flush() {
-        for (const name in pending) project.setInsertParam(trackId, index, name, pending[name])
+        for (const name in pending) setParam(name, pending[name])
         pending = ({})
     }
 
@@ -148,7 +159,7 @@ Window {
                             }
                             onReleased: (v) => {
                                 root.flush()
-                                root.project.setInsertParam(root.trackId, root.index, row.modelData.name, v)
+                                root.setParam(row.modelData.name, v)
                                 if (root.gesture) { root.gesture = false; root.project.endGesture() }
                             }
                         }

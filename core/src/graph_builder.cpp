@@ -1,4 +1,6 @@
 #include "lpc/graph_builder.h"
+#include "lpc/effect_specs.h"
+#include "lpc/processor_ids.h"
 
 #include <algorithm>
 #include <cmath>
@@ -84,6 +86,26 @@ bool configChanged(const Track& a, const Track& b) {
 }
 
 }  // namespace
+
+audio::SynthParams synthParamsOf(const ProcessorRef& ref) {
+    audio::SynthParams sp;  // the defaults are the sine instrument: a 2 ms attack, a 5 ms release
+    if (ref.processorId != kProcSynth) return sp;
+    const EffectSpec* spec = findInstrumentSpec(kProcSynth);
+    auto get = [&](const char* name) {
+        const EffectParam* p = spec ? spec->find(name) : nullptr;
+        if (!p) return 0.0;
+        const auto it = ref.params.find(name);
+        return std::clamp(it == ref.params.end() ? p->def : it->second, p->min, p->max);
+    };
+    sp.wave = static_cast<int>(std::lround(get("wave")));
+    sp.attackMs = static_cast<float>(get("attack"));
+    sp.decayMs = static_cast<float>(get("decay"));
+    sp.sustain = static_cast<float>(get("sustain") / 100.0);
+    sp.releaseMs = static_cast<float>(get("release"));
+    sp.cutoffHz = static_cast<float>(get("cutoff"));
+    sp.level = dbToLinear(static_cast<float>(get("level")));
+    return sp;
+}
 
 StripParams stripParamsOf(const Strip& s) { return StripParams{dbToLinear(s.gainDb), s.pan, s.mute, s.solo}; }
 
@@ -189,6 +211,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         }
         cfg->regions.push_back(std::move(rp));
     }
+    if (t.instrument) cfg->synthParams = synthParamsOf(*t.instrument);
     for (const AutomationLane& lane : t.automation) {
         std::vector<AutoPoint>& out = lane.target == "volume" ? cfg->volumeAuto : cfg->panAuto;
         if (lane.target != "volume" && lane.target != "pan") continue;

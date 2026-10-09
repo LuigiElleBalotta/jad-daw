@@ -195,6 +195,11 @@ public:
     Q_INVOKABLE void openEffectEditor(const QString& trackId, int index);
     Q_INVOKABLE void closeEffectEditor();
     Q_INVOKABLE QVariantList effectSpecs() const;                    // the built-in effects and their parameters (effect_specs.h)
+    Q_INVOKABLE QVariantList instrumentSpecs() const;                // the built-in instruments and their parameters
+    // An instrument track's instrument: the choice (params start at their defaults) and one parameter of it (one undo step each)
+    Q_INVOKABLE void setInstrument(const QString& trackId, const QString& processorId);
+    Q_INVOKABLE void setInstrumentParam(const QString& trackId, const QString& param, double value);
+    Q_INVOKABLE QVariantMap trackInstrument(const QString& trackId) const;  // {processorId, params}
     Q_INVOKABLE QVariantList trackInserts(const QString& trackId) const;  // the inserts of a track, with their parameters
     Q_INVOKABLE QString trackName(const QString& trackId) const;
     // the Channel EQ's response in dB at `points` frequencies from minHz to maxHz (log spaced) for the parameters in `values`

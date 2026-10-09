@@ -74,6 +74,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.showInTracks = t.showInTracks;
         tr.patchId = QString::fromStdString(t.patchId);
         tr.instrument = t.instrument ? QString::fromStdString(t.instrument->processorId) : QString();
+        if (t.instrument)
+            for (const auto& [name, value] : t.instrument->params) tr.instrumentParams.insert(QString::fromStdString(name), value);
         if (!master) {
             const lpc::Track* out = t.strip.output.isNull() ? p.master() : p.findTrack(t.strip.output);
             if (out) {

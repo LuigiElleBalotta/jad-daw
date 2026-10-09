@@ -11,6 +11,9 @@ ChannelStrip {
     pluginGroups: project.plugins.menu
     knownPluginIds: project.plugins.knownIds
 
+    instrumentChoices: project.instrumentSpecs().map(s => ({ id: s.id, name: s.name }))
+    onInstrumentChosen: (id, processorId) => project.setInstrument(id, processorId)
+    onInstrumentEditorRequested: (id) => project.openEffectEditor(id, -2)
     effectGroups: {
         const groups = {}, order = []
         for (const s of project.effectSpecs()) {

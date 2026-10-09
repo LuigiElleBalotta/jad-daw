@@ -12,6 +12,7 @@ Panel {
     property var targets: []     // the buses and auxes a send or the output can go to: [{id, name}]
     property real peak: 0        // the master strip's meter
     property real reduction: 0      // dB of gain reduction by the track's compressors, drawn in the gain reduction bar
+    property var instrumentChoices: []  // [{id, name}] for the instrument slot's menu
     property var effectGroups: []   // [{group, effects: [{id, name}]}] for the Audio FX menu
     property var effectNames: ({})  // processor id -> display name
     property var eqCurve: []        // the response (dB) of the track's Channel EQ, drawn in the EQ box; empty when it has none
@@ -95,6 +96,8 @@ Panel {
     signal effectInsertRequested(string id, string processorId)  // a built-in effect from the Audio FX menu
     signal effectEditorRequested(string id, int index)         // a double click on a built-in effect
     signal eqRequested(string id)                               // a click on the EQ box
+    signal instrumentChosen(string id, string processorId)      // the instrument slot's menu
+    signal instrumentEditorRequested(string id)                 // a double click on the instrument slot
     signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
@@ -182,6 +185,23 @@ Panel {
             onObjectAdded: (index, object) => menu.insertItem(index + (menu.withNewBus ? 2 : 0), object)  // after New Bus and its separator
             onObjectRemoved: (index, object) => menu.removeItem(object)
         }
+    }
+    ThemedMenu {  // the instrument of an instrument track
+        id: instrumentMenu
+        Instantiator {
+            model: root.instrumentChoices
+            delegate: ThemedMenuItem {
+                required property var modelData
+                text: modelData.name
+                checkable: true
+                checked: root.info.instrument === modelData.id
+                onTriggered: root.instrumentChosen(root.trackId, modelData.id)
+            }
+            onObjectAdded: (index, object) => instrumentMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => instrumentMenu.removeItem(object)
+        }
+        MenuSeparator {}
+        ThemedMenuItem { text: qsTr("Open the Library"); onTriggered: root.libraryRequested() }
     }
     ThemedMenu {  // the recording input of an audio track
         id: inputMenu
@@ -360,10 +380,11 @@ Panel {
                 id: instrumentSlot
                 anchors.fill: parent
                 visible: root.slotsVisible && root.kind === "instrument"
-                text: root.info.instrument === "builtin.sine" ? qsTr("Sine") : (root.info.instrument ?? "")
+                text: { for (const c of root.instrumentChoices) if (c.id === root.info.instrument) return c.name; return root.info.instrument ?? "" }
                 filled: true
                 fillColor: Theme.statePlay
-                onClicked: root.libraryRequested()
+                onClicked: instrumentMenu.popup(instrumentSlot, 0, instrumentSlot.height)
+                onDoubleClicked: root.instrumentEditorRequested(root.trackId)
             }
         }
         FixedRow {  // the audio effects

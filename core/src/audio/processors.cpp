@@ -24,12 +24,29 @@ void GainProcessor::process(float* l, float* r, int frames) noexcept {
 
 nlohmann::json GainProcessor::describe() const { return {{"id", kProcGain}, {"gain", gain_}}; }
 
-SineSynth::SineSynth(double sampleRate)
-    : sampleRate_(sampleRate),
-      attackStep_(static_cast<float>(1.0 / (0.002 * sampleRate))),
-      releaseStep_(static_cast<float>(1.0 / (0.005 * sampleRate))) {}
+Synth::Synth(double sampleRate) : sampleRate_(sampleRate) { updateRates(); }
 
-void SineSynth::noteOn(std::uint8_t note, std::uint8_t velocity) noexcept {
+void Synth::updateRates() noexcept {
+    attackStep_ = static_cast<float>(1.0 / (std::max(0.05, static_cast<double>(params_.attackMs)) * 0.001 * sampleRate_));
+    decayStep_ = static_cast<float>(1.0 / (std::max(0.05, static_cast<double>(params_.decayMs)) * 0.001 * sampleRate_));
+    releaseStep_ = static_cast<float>(1.0 / (std::max(0.05, static_cast<double>(params_.releaseMs)) * 0.001 * sampleRate_));
+    const double fc = std::clamp(static_cast<double>(params_.cutoffHz), 20.0, 0.45 * sampleRate_);
+    filterCoef_ = params_.cutoffHz >= 19999.0f ? 1.0f : static_cast<float>(1.0 - std::exp(-kTwoPi * fc / sampleRate_));
+}
+
+void Synth::setParams(const SynthParams& p) noexcept {
+    if (p == params_) return;
+    params_ = p;
+    updateRates();
+}
+
+bool Synth::active() const noexcept {
+    for (const Voice& v : voices_)
+        if (v.active) return true;
+    return false;
+}
+
+void Synth::noteOn(std::uint8_t note, std::uint8_t velocity) noexcept {
     Voice* v = nullptr;
     for (Voice& candidate : voices_) {
         if (!candidate.active) {
@@ -42,51 +59,82 @@ void SineSynth::noteOn(std::uint8_t note, std::uint8_t velocity) noexcept {
         stealNext_ = (stealNext_ + 1) % voices_.size();
     }
     v->active = true;
-    v->releasing = false;
+    v->stage = Stage::Attack;
     v->note = note;
     v->env = 0.0f;
-    v->amp = 0.2f * static_cast<float>(velocity) / 127.0f;
+    v->amp = params_.level * static_cast<float>(velocity) / 127.0f;
     v->phase = 0.0;
-    v->inc = kTwoPi * 440.0 * std::pow(2.0, (static_cast<double>(note) - 69.0) / 12.0) / sampleRate_;
+    v->inc = 440.0 * std::pow(2.0, (static_cast<double>(note) - 69.0) / 12.0) / sampleRate_;
 }
 
-void SineSynth::noteOff(std::uint8_t note) noexcept {
+void Synth::noteOff(std::uint8_t note) noexcept {
     for (Voice& v : voices_) {
-        if (v.active && !v.releasing && v.note == note) {
-            v.releasing = true;
+        if (v.active && v.stage != Stage::Release && v.note == note) {
+            v.stage = Stage::Release;
             return;
         }
     }
 }
 
-void SineSynth::releaseAll() noexcept {
+void Synth::releaseAll() noexcept {
     for (Voice& v : voices_)
-        if (v.active) v.releasing = true;
+        if (v.active) v.stage = Stage::Release;
 }
 
-void SineSynth::allNotesOff() noexcept {
+void Synth::allNotesOff() noexcept {
     for (Voice& v : voices_) v = Voice{};
+    filterState_ = 0.0f;
 }
 
-void SineSynth::render(float* l, float* r, int frames) noexcept {
+namespace {
+// the band-limited step (PolyBLEP) that tames the edges of the saw and square
+inline double polyBlep(double t, double dt) {
+    if (t < dt) { t /= dt; return t + t - t * t - 1.0; }
+    if (t > 1.0 - dt) { t = (t - 1.0) / dt; return t * t + t + t + 1.0; }
+    return 0.0;
+}
+}  // namespace
+
+void Synth::render(float* l, float* r, int frames) noexcept {
+    float mix[512];
+    const int n = std::min(frames, 512);
+    std::fill_n(mix, n, 0.0f);
     for (Voice& v : voices_) {
         if (!v.active) continue;
-        for (int i = 0; i < frames; ++i) {
-            if (v.releasing) {
-                v.env -= releaseStep_;
-                if (v.env <= 0.0f) {
-                    v.active = false;
+        for (int i = 0; i < n; ++i) {
+            switch (v.stage) {
+                case Stage::Attack:
+                    v.env += attackStep_;
+                    if (v.env >= 1.0f) { v.env = 1.0f; v.stage = Stage::Decay; }
                     break;
-                }
-            } else if (v.env < 1.0f) {
-                v.env = std::min(1.0f, v.env + attackStep_);
+                case Stage::Decay:
+                    v.env -= decayStep_ * (1.0f - params_.sustain);
+                    if (v.env <= params_.sustain) { v.env = params_.sustain; v.stage = Stage::Sustain; }
+                    break;
+                case Stage::Sustain: v.env = params_.sustain; break;
+                case Stage::Release:
+                    v.env -= releaseStep_;
+                    if (v.env <= 0.0f) { v.active = false; v.env = 0.0f; }
+                    break;
             }
-            const float s = static_cast<float>(std::sin(v.phase)) * v.amp * v.env;
+            if (!v.active) break;
+            double s;
+            switch (params_.wave) {
+                case 1: s = 4.0 * std::abs(v.phase - 0.5) - 1.0; break;                                    // triangle
+                case 2: s = 2.0 * v.phase - 1.0 - polyBlep(v.phase, v.inc); break;                        // saw
+                case 3: s = (v.phase < 0.5 ? 1.0 : -1.0) + polyBlep(v.phase, v.inc) - polyBlep(std::fmod(v.phase + 0.5, 1.0), v.inc); break;  // square
+                default: s = std::sin(kTwoPi * v.phase); break;                                           // sine
+            }
+            mix[i] += static_cast<float>(s) * v.amp * v.env;
             v.phase += v.inc;
-            if (v.phase >= kTwoPi) v.phase -= kTwoPi;
-            l[i] += s;
-            r[i] += s;
+            if (v.phase >= 1.0) v.phase -= 1.0;
         }
+    }
+    for (int i = 0; i < n; ++i) {
+        filterState_ += filterCoef_ * (mix[i] - filterState_);
+        const float out = filterCoef_ >= 1.0f ? mix[i] : filterState_;
+        l[i] += out;
+        r[i] += out;
     }
 }
 

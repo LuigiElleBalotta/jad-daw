@@ -30,4 +30,8 @@ struct EffectSpec {
 const std::vector<EffectSpec>& effectSpecs();
 const EffectSpec* findEffectSpec(std::string_view id);
 
+// The built-in instruments: "builtin.sine" (no parameters) and "builtin.synth". Their parameters are edited like an effect's.
+const std::vector<EffectSpec>& instrumentSpecs();
+const EffectSpec* findInstrumentSpec(std::string_view id);
+
 }  // namespace lpc

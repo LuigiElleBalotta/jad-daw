@@ -117,6 +117,7 @@ void RenderGraph::renderAudio(TrackNode& t, const TrackConfig& cfg, std::int64_t
 }
 
 void RenderGraph::renderInstrument(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n) noexcept {
+    t.synth.setParams(cfg.synthParams);
     struct Event {
         std::int64_t frame;
         bool on;

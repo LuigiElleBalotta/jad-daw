@@ -38,7 +38,30 @@ std::vector<EffectSpec> build() {
     return v;
 }
 
+std::vector<EffectSpec> buildInstruments() {
+    std::vector<EffectSpec> v;
+    v.push_back({kProcSine, "Sine", "Instruments", {}});
+    v.push_back({kProcSynth, "Synth", "Instruments",
+                 {p("wave", "Waveform (0 sine, 1 triangle, 2 saw, 3 square)", "", 0, 3, 2), p("attack", "Attack", "ms", 0.5, 2000, 5, true),
+                  p("decay", "Decay", "ms", 1, 5000, 200, true), p("sustain", "Sustain", "%", 0, 100, 70), p("release", "Release", "ms", 1, 5000, 150, true),
+                  p("cutoff", "Filter Cutoff", "Hz", 100, 20000, 12000, true), p("level", "Level", "dB", -24, 6, -12)}});
+    return v;
+}
+
 }  // namespace
+
+const std::vector<EffectSpec>& instrumentSpecs() {
+    static const std::vector<EffectSpec> specs = buildInstruments();
+    return specs;
+}
+
+const EffectSpec* findInstrumentSpec(std::string_view id) {
+    for (const EffectSpec& s : instrumentSpecs())
+        if (s.id == id) return &s;
+    return nullptr;
+}
+
+bool isKnownInstrument(std::string_view id) { return findInstrumentSpec(id) != nullptr; }
 
 const std::vector<EffectSpec>& effectSpecs() {
     static const std::vector<EffectSpec> specs = build();

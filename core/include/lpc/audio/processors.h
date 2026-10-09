@@ -56,31 +56,45 @@ private:
     std::shared_ptr<IProcessor> inner_;
 };
 
-// 16-voice sine synth with 2 ms attack and 5 ms release. Mono voice, written to both channels.
-class SineSynth {
+// What the synth sounds like (the parameters of the "builtin.synth" instrument; "builtin.sine" is a preset of them).
+struct SynthParams {
+    int wave = 0;               // 0 sine, 1 triangle, 2 saw, 3 square
+    float attackMs = 2.0f, decayMs = 0.0f, sustain = 1.0f, releaseMs = 5.0f;  // sustain 0..1
+    float cutoffHz = 20000.0f;  // one-pole low-pass on the sum of the voices (20 kHz: open)
+    float level = 0.2f;         // linear
+    bool operator==(const SynthParams&) const = default;
+};
+
+// 16-voice polyphonic synth: one oscillator per voice, an ADSR envelope, a low-pass filter. Mono, written to both channels.
+class Synth {
 public:
-    explicit SineSynth(double sampleRate);
+    explicit Synth(double sampleRate);
+    void setParams(const SynthParams& p) noexcept;         // takes effect at once; sounding voices keep their phase
     void noteOn(std::uint8_t note, std::uint8_t velocity) noexcept;
     void noteOff(std::uint8_t note) noexcept;
     void allNotesOff() noexcept;                           // immediate silence
-    void releaseAll() noexcept;                            // every sounding voice fades out (5 ms)
+    void releaseAll() noexcept;                            // every sounding voice fades out (its release time)
+    bool active() const noexcept;                          // a voice is sounding
     void render(float* l, float* r, int frames) noexcept;  // adds into l and r
 
 private:
+    enum class Stage : std::uint8_t { Attack, Decay, Sustain, Release };
     struct Voice {
         bool active = false;
-        bool releasing = false;
+        Stage stage = Stage::Attack;
         std::uint8_t note = 0;
         float amp = 0.0f;
         float env = 0.0f;
-        double phase = 0.0;
-        double inc = 0.0;
+        double phase = 0.0;  // 0..1
+        double inc = 0.0;    // phase per sample
     };
+    void updateRates() noexcept;
     std::array<Voice, 16> voices_{};
     std::size_t stealNext_ = 0;
     double sampleRate_;
-    float attackStep_;
-    float releaseStep_;
+    SynthParams params_;
+    float attackStep_ = 0, decayStep_ = 0, releaseStep_ = 0, filterCoef_ = 1.0f;
+    float filterState_ = 0.0f;
 };
 
 // Creates an insert effect from a model reference; nullptr when the processor id is unknown.

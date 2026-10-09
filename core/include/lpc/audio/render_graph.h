@@ -86,6 +86,7 @@ struct AutoPoint {
 };
 
 struct TrackConfig {
+    SynthParams synthParams;            // an instrument track: how its synth sounds
     std::vector<AutoPoint> volumeAuto;  // linear gain
     std::vector<AutoPoint> panAuto;
     std::vector<RegionPlayback> regions;
@@ -107,7 +108,7 @@ struct TrackNode {
     StripParams strip;
     TrackConfig* config;  // owned; replaced through SetConfig messages
     std::vector<float> l, r;
-    SineSynth synth;
+    Synth synth;
     int monitorL = -1, monitorR = -1;  // the input channels heard on this track (-1: none)
     float smoothL = 1.0f;
     float blockPeak = 0.0f;  // after the fader, this block

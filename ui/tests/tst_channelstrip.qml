@@ -280,11 +280,20 @@ TestCase {
         s.info = changed
         compare(s.dragIndex, -1)
     }
-    function test_the_instrument_slot_asks_for_the_library() {
+    function test_the_instrument_slot_opens_a_menu_chooses_and_a_double_click_edits() {
         var s = createTemporaryObject(stripC, this)
+        s.instrumentChoices = [{ id: "builtin.sine", name: "Sine" }, { id: "builtin.synth", name: "Synth" }]
+        compare(s.instrumentSlot.text, "Sine")
+        var chosen = [], edited = []
+        s.instrumentChosen.connect(function (id, p) { chosen.push([id, p]) })
+        s.instrumentEditorRequested.connect(function (id) { edited.push(id) })
+        s.instrumentChosen("t", "builtin.synth")
+        compare(chosen, [["t", "builtin.synth"]])
+        mouseDoubleClickSequence(s.instrumentSlot)
+        verify(edited.length >= 1)
         var asked = 0
         s.libraryRequested.connect(function () { asked++ })
-        mouseClick(s.instrumentSlot)
+        s.libraryRequested()
         compare(asked, 1)
     }
     function test_shift_click_on_a_send_shows_its_bus_and_a_plain_click_does_not() {

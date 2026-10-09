@@ -43,6 +43,9 @@ std::vector<audio::AudioMsg> initialMessages(const Project& project, MediaStore&
 std::vector<audio::AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins = nullptr, PdcPlan* plan = nullptr);
 
 
+// The synth settings of an instrument (builtin.sine: the fixed sine; builtin.synth: its parameters, clamped to their ranges).
+audio::SynthParams synthParamsOf(const ProcessorRef& ref);
+
 // The metronome's beats for the whole project from the tempo map and the counting mode of the settings (at most maxClicks beats).
 audio::ClickTrack buildClickTrack(const Project& p, const audio::ClickSettings& settings, std::size_t maxClicks = 20000);
 

@@ -45,6 +45,7 @@ struct TrackRow {
     int input = 0;  // the recording input: 0 stereo 1+2, n mono input n
     int regionCount = 0;
     bool showInTracks = true;  // false: a bus or aux that is listed in the Mixer only
+    QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
     std::vector<InsertRow> inserts;
     std::vector<SendRow> sends;

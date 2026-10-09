@@ -1179,4 +1179,48 @@ QVariantList ProjectController::eqCurve(const QVariantMap& values, int points, d
     return out;
 }
 
+QVariantList ProjectController::instrumentSpecs() const {
+    static const QVariantList specs = [] {
+        QVariantList out;
+        for (const lpc::EffectSpec& s : lpc::instrumentSpecs()) {
+            QVariantList params;
+            for (const lpc::EffectParam& p : s.params)
+                params.append(QVariantMap{{"name", QString::fromStdString(p.name)}, {"label", QString::fromStdString(p.label)},
+                                          {"unit", QString::fromStdString(p.unit)}, {"min", p.min}, {"max", p.max}, {"def", p.def},
+                                          {"logarithmic", p.logarithmic}});
+            out.append(QVariantMap{{"id", QString::fromStdString(s.id)}, {"name", QString::fromStdString(s.name)}, {"group", QString::fromStdString(s.group)}, {"params", params}});
+        }
+        return out;
+    }();
+    return specs;
+}
+
+QVariantMap ProjectController::trackInstrument(const QString& trackId) const {
+    for (const TrackRow& t : allRows_)
+        if (t.id == trackId) return {{"processorId", t.instrument}, {"params", t.instrumentParams}};
+    return {};
+}
+
+void ProjectController::setInstrument(const QString& trackId, const QString& processorId) {
+    if (!host_ || !lpc::isKnownInstrument(processorId.toStdString())) return;
+    sendCommand({{"type", "set_instrument"}, {"trackId", trackId.toStdString()},
+                 {"instrument", {{"processorId", processorId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}}}});
+}
+
+void ProjectController::setInstrumentParam(const QString& trackId, const QString& param, double value) {
+    if (!host_ || !std::isfinite(value)) return;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId || t.instrument.isEmpty()) continue;
+        const lpc::EffectSpec* spec = lpc::findInstrumentSpec(t.instrument.toStdString());
+        const lpc::EffectParam* p = spec ? spec->find(param.toStdString()) : nullptr;
+        if (!p) return;
+        nlohmann::json params = nlohmann::json::object();
+        for (auto it = t.instrumentParams.begin(); it != t.instrumentParams.end(); ++it) params[it.key().toStdString()] = it.value().toDouble();
+        params[param.toStdString()] = std::clamp(value, p->min, p->max);
+        sendCommand({{"type", "set_instrument"}, {"trackId", trackId.toStdString()},
+                     {"instrument", {{"processorId", t.instrument.toStdString()}, {"params", params}, {"state", ""}}}});
+        return;
+    }
+}
+
 }  // namespace jad

@@ -13,6 +13,10 @@ namespace lpc::audio {
 class IProcessor {
 public:
     virtual ~IProcessor() = default;
+    // Project thread, before the processor is handed to the audio thread.
+    virtual void prepare(double /*sampleRate*/, int /*maxBlock*/) {}
+    // Latency in frames, read on the project thread when the graph is built.
+    virtual int latencySamples() const { return 0; }
     virtual void process(float* l, float* r, int frames) noexcept = 0;
     virtual nlohmann::json describe() const = 0;  // not real-time; used by tests
 };
@@ -25,6 +29,25 @@ public:
 
 private:
     float gain_;
+};
+
+// Stands in for a plug-in that is not available (missing, still loading, failed): the signal passes unchanged.
+class MissingPluginProcessor final : public IProcessor {
+public:
+    void process(float*, float*, int) noexcept override {}
+    nlohmann::json describe() const override { return {{"missing", true}}; }
+};
+
+// An insert backed by a processor that outlives the config that uses it (a live plug-in instance).
+class SharedProcessor final : public IProcessor {
+public:
+    explicit SharedProcessor(std::shared_ptr<IProcessor> inner) : inner_(std::move(inner)) {}
+    void process(float* l, float* r, int frames) noexcept override { inner_->process(l, r, frames); }
+    int latencySamples() const override { return inner_->latencySamples(); }
+    nlohmann::json describe() const override { return inner_->describe(); }
+
+private:
+    std::shared_ptr<IProcessor> inner_;
 };
 
 // 16-voice sine synth with 2 ms attack and 5 ms release. Mono voice, written to both channels.

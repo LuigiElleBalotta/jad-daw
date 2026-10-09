@@ -44,11 +44,11 @@ AudioMsg stripMsg(const Track& t) {
     return m;
 }
 
-AudioMsg configMsg(const Project& p, const Track& t, MediaStore& media) {
+AudioMsg configMsg(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins) {
     AudioMsg m;
     m.kind = MsgKind::SetConfig;
     m.track = t.id;
-    m.obj = makeOwned(buildConfig(p, t, media).release());
+    m.obj = makeOwned(buildConfig(p, t, media, plugins).release());
     return m;
 }
 
@@ -109,7 +109,7 @@ std::vector<Uuid> processingOrder(const Project& p) {
     return order;
 }
 
-std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media) {
+std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins) {
     auto cfg = std::make_unique<TrackConfig>();
     for (const Region& r : t.regions) {
         RegionPlayback rp;
@@ -133,33 +133,37 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         }
         cfg->regions.push_back(std::move(rp));
     }
-    for (const ProcessorRef& ref : t.strip.inserts)
-        if (auto effect = makeEffect(ref)) cfg->inserts.push_back(std::move(effect));
+    int slotIndex = 0;
+    for (const ProcessorRef& ref : t.strip.inserts) {
+        if (auto effect = makeInsert(ref, plugins, InsertSlot{t.id, slotIndex}, static_cast<double>(p.sampleRate), kMaxBlock))
+            cfg->inserts.push_back(std::move(effect));
+        ++slotIndex;
+    }
     for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader});
     cfg->output = t.strip.output;
     return cfg;
 }
 
-std::unique_ptr<TrackNode> buildNode(const Project& p, const Track& t, MediaStore& media) {
-    return std::make_unique<TrackNode>(t.id, t.kind, stripParamsOf(t.strip), buildConfig(p, t, media).release(),
+std::unique_ptr<TrackNode> buildNode(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins) {
+    return std::make_unique<TrackNode>(t.id, t.kind, stripParamsOf(t.strip), buildConfig(p, t, media, plugins).release(),
                                        static_cast<double>(p.sampleRate));
 }
 
-std::vector<AudioMsg> initialMessages(const Project& p, MediaStore& media) {
+std::vector<AudioMsg> initialMessages(const Project& p, MediaStore& media, IPluginHost* plugins) {
     std::vector<AudioMsg> out;
-    for (const Track& t : p.tracks) out.push_back(addMsg(buildNode(p, t, media)));
+    for (const Track& t : p.tracks) out.push_back(addMsg(buildNode(p, t, media, plugins)));
     out.push_back(reorderMsg(p));
     return out;
 }
 
-std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media) {
+std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins) {
     std::vector<AudioMsg> out;
     bool structural = false;
     const bool timingChanged = before.tempoMap != after.tempoMap || before.sampleRate != after.sampleRate;
 
     for (const Track& a : after.tracks) {
         if (!before.findTrack(a.id)) {
-            out.push_back(addMsg(buildNode(after, a, media)));
+            out.push_back(addMsg(buildNode(after, a, media, plugins)));
             structural = true;
         }
     }
@@ -167,7 +171,7 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
         const Track* b = before.findTrack(a.id);
         if (!b) continue;
         if (stripChanged(*b, a)) out.push_back(stripMsg(a));
-        if (timingChanged || configChanged(*b, a)) out.push_back(configMsg(after, a, media));
+        if (timingChanged || configChanged(*b, a)) out.push_back(configMsg(after, a, media, plugins));
     }
     for (const Track& b : before.tracks) {
         if (!after.findTrack(b.id)) {

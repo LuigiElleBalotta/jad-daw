@@ -232,4 +232,34 @@ TestCase {
         mouseDoubleClickSequence(s.stripName)
         verify(!s.renaming)
     }
+    function test_a_cancelled_knob_gesture_shows_the_model_value_again() {
+        var s = createTemporaryObject(stripC, this)
+        mousePress(s.panKnob, 14, 14)
+        mouseMove(s.panKnob, 14, 2, 0, Qt.LeftButton)
+        verify(s.panKnob.shown !== s.panKnob.value)
+        s.panKnob.cancel()
+        compare(s.panKnob.shown, s.panKnob.value)
+        mouseRelease(s.panKnob, 14, 2)
+    }
+    function test_a_send_knob_spans_what_the_core_accepts() {
+        var s = createTemporaryObject(stripC, this)
+        compare(s.sendList.itemAt(0).knob.from, -96)
+        compare(s.sendList.itemAt(0).knob.to, 12)
+    }
+    function test_a_gain_drag_in_flight_is_dropped_when_the_inserts_change() {
+        var s = createTemporaryObject(stripC, this)
+        s.dragIndex = 0
+        s.dragGain = 9
+        var changed = JSON.parse(JSON.stringify(keys))
+        changed.inserts = []
+        s.info = changed
+        compare(s.dragIndex, -1)
+    }
+    function test_the_instrument_slot_asks_for_the_library() {
+        var s = createTemporaryObject(stripC, this)
+        var asked = 0
+        s.libraryRequested.connect(function () { asked++ })
+        mouseClick(s.instrumentSlot)
+        compare(asked, 1)
+    }
 }

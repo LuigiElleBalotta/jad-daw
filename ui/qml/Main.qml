@@ -246,6 +246,13 @@ ApplicationWindow {
             Layout.preferredHeight: controller.smartControlsHeight
             visible: controller.smartControlsVisible
             project: controller
+            Splitter {  // the top edge: dragging up makes the pane taller (the setter keeps the height in range)
+                orientation: Qt.Vertical
+                anchors.top: parent.top
+                width: parent.width
+                z: 10
+                onDragged: (dy) => controller.smartControlsHeight = controller.smartControlsHeight - dy
+            }
         }
         Mixer {
             Layout.fillWidth: true

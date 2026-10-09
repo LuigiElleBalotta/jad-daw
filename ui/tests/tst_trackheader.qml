@@ -90,4 +90,14 @@ TestCase {
         compare(names, ["Pad"])
         verify(!h.editing)
     }
+    function test_a_double_click_on_the_header_asks_for_the_library() {
+        var h = createTemporaryObject(hdr, this, { height: 72 })
+        var asked = []
+        h.libraryRequested.connect(function (id) { asked.push(id) })
+        mouseDoubleClickSequence(h, 2, 2)
+        compare(asked, ["t1"])
+        mouseDoubleClickSequence(h.nameLabel)   // the name still renames and does not open the Library
+        verify(h.editing)
+        compare(asked, ["t1"])
+    }
 }

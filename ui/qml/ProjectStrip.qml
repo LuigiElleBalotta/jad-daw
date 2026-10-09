@@ -5,7 +5,8 @@ import Jad
 ChannelStrip {
     id: root
     required property ProjectController project
-    targets: project.inspector.busTargets.filter((t) => t.id !== root.trackId)
+    // what the Core accepts: no loop through outputs and sends (routingRevision makes the list follow every change)
+    targets: { project.routingRevision; return project.targetsFor(root.trackId) }
     pluginGroups: project.plugins.menu
     knownPluginIds: project.plugins.knownIds
 
@@ -25,6 +26,7 @@ ChannelStrip {
     onInsertEditorRequested: (id, index) => project.openPluginEditor(id, index)
     onPluginManagerRequested: project.pluginManagerOpen = true
     onRenameRequested: (id, name) => project.renameTrack(id, name)
+    onLibraryRequested: project.libraryVisible = true
     onNewBusRequested: (id, role) => project.newBusFor(id, role)
     onSelectRequested: (id, modifiers) => project.selectTrack(id, modifiers & Qt.ShiftModifier ? "extend" : (modifiers & Qt.ControlModifier ? "toggle" : "replace"))
     selected: project.selectedTrackIds.indexOf(root.trackId) >= 0

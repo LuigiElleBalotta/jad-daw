@@ -31,6 +31,7 @@ Item {
     signal muteToggled(string id, bool on)
     signal soloToggled(string id, bool on)
     signal renamed(string id, string name)
+    signal libraryRequested(string id)  // a double click on the header outside the name and the buttons
     signal selectRequested(string id, string mode)
     signal gainReleased(string id, real db)
     signal panReleased(string id, real pan)
@@ -60,6 +61,7 @@ Item {
     MouseArea {
         anchors.fill: parent
         onClicked: (m) => root.selectRequested(root.trackId, root.modeFor(m.modifiers))
+        onDoubleClicked: root.libraryRequested(root.trackId)
     }
     Rectangle {
         id: chip

@@ -70,6 +70,7 @@ Rectangle {
             onMuteToggled: (id, on) => root.project.setMute(id, on)
             onSoloToggled: (id, on) => root.project.setSolo(id, on)
             onRenamed: (id, newName) => root.project.renameTrack(id, newName)
+            onLibraryRequested: (id) => { root.project.selectTrack(id, "replace"); root.project.libraryVisible = true }
             onGainReleased: (id, db) => root.project.setGain(id, db)
             onPanReleased: (id, p) => root.project.setPan(id, p)
             onTrackToggled: (id, actionId, on) => { root.project.setTrackToggle(actionId, id, on); root.stubTriggered(actionId, on) }

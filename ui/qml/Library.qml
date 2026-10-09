@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls.Basic
 import Jad
 
 // The Library: the patches of the selected track's kind. Categories on the left, patches on the right; clicking a
@@ -16,6 +17,7 @@ Rectangle {
     readonly property alias revertButton: revert
     readonly property alias saveButton: save
     readonly property alias deleteButton: del
+    readonly property alias patchCountLabel: countLabel
     function step(n) {
         const id = lib.neighbour(n)
         if (id !== "") project.applyPatch(id)
@@ -176,12 +178,20 @@ Rectangle {
         }
         Item { Layout.fillHeight: true; visible: !root.project.inspector.hasTrack }
         Text {
+            id: countLabel
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spacing[3]
-            text: qsTr("Built-in patches: %1").arg(root.lib.patchCount)
-            color: Theme.textDisabled
+            text: root.lib.problems.length > 0
+                  ? qsTr("Built-in patches: %1 (%2 problems)").arg(root.lib.patchCount).arg(root.lib.problems.length)
+                  : qsTr("Built-in patches: %1").arg(root.lib.patchCount)
+            color: root.lib.problems.length > 0 ? Theme.stateClip : Theme.textDisabled
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontTypeCaptionSize
+            elide: Text.ElideRight
+            MouseArea { id: countArea; anchors.fill: parent; hoverEnabled: true; enabled: root.lib.problems.length > 0 }
+            ToolTip.visible: countArea.containsMouse && root.lib.problems.length > 0
+            ToolTip.delay: 300
+            ToolTip.text: root.lib.problems.join("\n")
         }
         RowLayout {
             Layout.fillWidth: true
@@ -190,8 +200,8 @@ Rectangle {
             IconButton { implicitWidth: 24; implicitHeight: 22; label: "⋯"; enabled: false }
             IconButton { id: revert; implicitWidth: 50; implicitHeight: 22; label: qsTr("Revert"); onClicked: root.project.revertPatch() }
             Item { Layout.fillWidth: true }
-            IconButton { id: del; implicitWidth: 50; implicitHeight: 22; label: qsTr("Delete"); opacity: 0.5; onClicked: root.project.announceStub(qsTr("Delete Patch")) }
-            IconButton { id: save; implicitWidth: 50; implicitHeight: 22; label: qsTr("Save"); opacity: 0.5; onClicked: root.project.announceStub(qsTr("Save Patch")) }
+            IconButton { id: del; implicitWidth: 50; implicitHeight: 22; label: qsTr("Delete"); enabled: false }
+            IconButton { id: save; implicitWidth: 50; implicitHeight: 22; label: qsTr("Save"); enabled: false }
         }
     }
 }

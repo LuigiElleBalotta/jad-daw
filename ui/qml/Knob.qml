@@ -17,7 +17,7 @@ Item {
     property real dragValue: value
     property bool dragging: false
     property bool changed: false  // a plain click must not send a command
-    function cancel() { dragging = false; changed = false }
+    function cancel() { dragging = false; changed = false; dragValue = value }
     readonly property real shown: dragging ? dragValue : value
 
     Rectangle {
@@ -54,7 +54,7 @@ Item {
             root.changed = true
             root.moved(root.dragValue)
         }
-        onReleased: { const send = root.dragging && root.changed; root.cancel(); if (send) root.released(root.dragValue) }
+        onReleased: { const send = root.dragging && root.changed; const v = root.dragValue; root.cancel(); if (send) root.released(v) }
         onCanceled: root.cancel()
         onDoubleClicked: { root.cancel(); root.dragValue = root.resetValue; root.released(root.resetValue) }
     }

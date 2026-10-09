@@ -64,16 +64,33 @@ TestCase {
         l.revertButton.clicked()
         tryVerify(function () { return p.inspector.track.gainDb === -4 })
     }
-    function test_save_and_delete_are_shown_but_say_they_are_not_there_yet() {
+    function test_save_and_delete_are_disabled_for_now() {
         var l = createTemporaryObject(libC, tc)
         p.selectTrack(p.tracks.trackIdAt(0), "replace")
         tryVerify(function () { return l.saveButton.visible })
+        verify(!l.saveButton.enabled)
+        verify(!l.deleteButton.enabled)
         var got = []
         p.notice.connect(function (m) { got.push(m) })
-        wait(200)  // let the layout settle before clicking
-        verify(l.saveButton.x + l.saveButton.width <= l.width)  // the buttons fit in the column
+        wait(200)
+        verify(l.saveButton.x + l.saveButton.width <= l.width)  // the buttons still fit in the column
         mouseClick(l.saveButton)
         mouseClick(l.deleteButton)
-        compare(got.length, 2)
+        compare(got.length, 0)
+    }
+    SignalSpy { id: patchesSpy; target: p.library; signalName: "patchesChanged" }
+    function test_applying_a_patch_does_not_rebuild_the_patch_list() {
+        var l = createTemporaryObject(libC, tc)
+        p.selectTrack(p.tracks.trackIdAt(0), "replace")
+        tryVerify(function () { return l.patchList.count >= 2 && l.patchList.itemAtIndex(1) !== null })
+        patchesSpy.clear()
+        l.patchList.itemAtIndex(1).clicked()
+        tryVerify(function () { return p.library.currentPatchId !== "" })
+        compare(patchesSpy.count, 0)  // the list only moves its highlight: it keeps its scroll position
+    }
+    function test_the_footer_counts_the_patches_and_mentions_problems_only_when_there_are_some() {
+        var l = createTemporaryObject(libC, tc)
+        verify(l.patchCountLabel.text.indexOf("Built-in patches") === 0)
+        verify(l.patchCountLabel.text.indexOf("problem") < 0)
     }
 }

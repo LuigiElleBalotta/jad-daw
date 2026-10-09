@@ -47,6 +47,7 @@ Panel {
     readonly property alias outputMenu: outputMenu
     readonly property alias stripName: nameLabel
     readonly property alias nameInput: nameInput
+    readonly property alias instrumentSlot: instrumentSlot
     property bool renaming: false
 
     signal gainReleased(string id, real db)
@@ -66,6 +67,7 @@ Panel {
     signal pluginManagerRequested()
     signal newBusRequested(string id, string role)       // role: "send" or "output"
     signal renameRequested(string id, string name)
+    signal libraryRequested()                              // the instrument slot was clicked
     signal selectRequested(string id, int modifiers)
 
     function beginRename() {
@@ -87,6 +89,8 @@ Panel {
 
     property int dragIndex: -1
     property real dragGain: 0
+    // the list changed under a gain drag (an undo, a rebuild): the gesture belongs to a row that may not be there any more
+    onInsertsChanged: dragIndex = -1
 
     implicitWidth: 96
     radius: Theme.radiusRegion
@@ -178,11 +182,13 @@ Panel {
             onClicked: root.stubUsed(qsTr("Setting"))
         }
         StripSlot {
+            id: instrumentSlot
             Layout.fillWidth: true
             visible: root.slotsVisible && root.kind === "instrument"
             text: root.info.instrument === "builtin.sine" ? qsTr("Sine") : (root.info.instrument ?? "")
             filled: true
             fillColor: Theme.statePlay
+            onClicked: root.libraryRequested()
         }
         Repeater {
             id: insertRepeater
@@ -241,7 +247,7 @@ Panel {
                     id: sendKnob
                     width: 20
                     height: 20
-                    from: -60
+                    from: -96
                     to: 12
                     resetValue: 0
                     value: sendRow.modelData.levelDb

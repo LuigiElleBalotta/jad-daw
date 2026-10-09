@@ -798,10 +798,9 @@ void ProjectController::setCountInEnabled(bool on) {
     emit recordingChanged();
 }
 
-void ProjectController::setCountInBars(int bars) {
-    bars = std::clamp(bars, 1, 4);
-    if (bars == countInBars_) return;
-    countInBars_ = bars;
+void ProjectController::setCountInChoice(int choice) {
+    if (choice == 0 || choice < -3 || choice > 6 || choice == countInChoice_) return;
+    countInChoice_ = choice;
     emit recordingChanged();
 }
 
@@ -833,7 +832,7 @@ void ProjectController::startRecording() {
     std::int64_t countFrames = 0;
     if (countIn_) {  // the bars before the take, at the tempo of the start, counted 1 2 3 4 with an accent on the first
         const double framesPerBeat = sampleRate_ * 60.0 / tempoMap_.bpmAt(tick) * 4.0 / beatUnit_;
-        const int beats = countInBars_ * beatsPerBar_;
+        const int beats = countInChoice_ > 0 ? countInChoice_ * beatsPerBar_ : -countInChoice_;  // bars, or x/4: x beats
         for (int k = 0; k < beats; ++k) {
             count.frames.push_back(static_cast<std::int64_t>(std::llround(k * framesPerBeat)));
             count.accent.push_back(k % beatsPerBar_ == 0 ? 1 : 0);

@@ -853,6 +853,20 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.regions()->rowCount(), before);
     }
+    void countInChoiceAcceptsBarsAndBeatsOnly() {
+        jad::ProjectController c(false);
+        QCOMPARE(c.countInChoice(), 1);
+        c.setCountInChoice(6);
+        QCOMPARE(c.countInChoice(), 6);
+        c.setCountInChoice(7);
+        QCOMPARE(c.countInChoice(), 6);   // out of range: kept
+        c.setCountInChoice(0);
+        QCOMPARE(c.countInChoice(), 6);
+        c.setCountInChoice(-3);
+        QCOMPARE(c.countInChoice(), -3);  // 3/4: three beats
+        c.setCountInChoice(-4);
+        QCOMPARE(c.countInChoice(), -3);
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

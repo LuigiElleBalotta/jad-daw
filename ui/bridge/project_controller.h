@@ -98,7 +98,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(int clickRevision READ clickRevision NOTIFY clickSettingsChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(bool countInEnabled READ countInEnabled WRITE setCountInEnabled NOTIFY recordingChanged)
-    Q_PROPERTY(int countInBars READ countInBars WRITE setCountInBars NOTIFY recordingChanged)  // bars of count-in before a recording, 1..4
+    Q_PROPERTY(int countInChoice READ countInChoice WRITE setCountInChoice NOTIFY recordingChanged)  // the count-in before a recording: 1..6 bars, or -1..-3 for 1/4..3/4 of a bar in beats
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -179,8 +179,8 @@ public:
     bool recording() const { return recording_; }
     bool countInEnabled() const { return countIn_; }
     void setCountInEnabled(bool on);
-    int countInBars() const { return countInBars_; }
-    void setCountInBars(int bars);
+    int countInChoice() const { return countInChoice_; }
+    void setCountInChoice(int choice);
     // Records the input of the audio device into the first record-armed audio track from the playhead, after the count-in when it is on;
     // stop() ends it and the take becomes a region (one undo step) in that track.
     Q_INVOKABLE void startRecording();
@@ -582,7 +582,7 @@ private:
     bool automationVisible_ = false;
     bool metronome_ = false;
     bool recording_ = false, recFinishing_ = false, countIn_ = false;
-    int countInBars_ = 1;
+    int countInChoice_ = 1;
     QString recTrack_;
     double recStartBeats_ = 0.0;
     std::vector<float> recBuf_;  // the take so far, interleaved stereo

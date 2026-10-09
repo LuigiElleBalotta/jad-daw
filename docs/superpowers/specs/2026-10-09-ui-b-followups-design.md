@@ -1,8 +1,8 @@
 # UI-B follow-ups: deferred interactions and minor findings
 
 Date: 2026-10-09. Scope: the five interactions that `2026-10-08-ui-b-panels-design.md` section 4 promised and UI-B left out, and
-the eight minor findings of the UI-B final review, as recorded in `docs/superpowers/ui-b-deferred.md`. One Core command is added
-(`move_insert`); everything else is bridge and QML. It is independent of `2026-10-09-tracks-area-visibility-design.md`; both
+the eight minor findings of the UI-B final review, as recorded in `docs/superpowers/ui-b-deferred.md`. Two Core commands are added
+(`move_insert`, `set_insert_bypass`); everything else is bridge and QML. It is independent of `2026-10-09-tracks-area-visibility-design.md`; both
 touch `ChannelStrip` menus, and the order of work in section 6 avoids conflicts.
 
 ## 1. Goal and scope
@@ -10,6 +10,12 @@ touch `ChannelStrip` menus, and the order of work in section 6 avoids conflicts.
 Make the Inspector and the Mixer strips behave the way the UI-B spec describes, and remove the rough edges found in review.
 
 In scope: the five interactions (section 3), the eight fixes (section 4), `move_insert` (section 2).
+Added by the user after the first review: bypass of an insert (section 2.2, 3.6) and dragging an insert onto another track
+(section 2.1, 3.2). Also fixes found in a by-hand run of the VST3 UI: the scanner child must not show a CRT dialog on `abort()`
+(`_set_abort_behavior`, `SetErrorMode`, `_CrtSetReportMode` in `tools/plugin-scanner`); plug-in hosting and the first scan start
+with the application, not with the first open project; the Plug-in Manager message says what is really wrong; vendor submenu
+entries and the Plug-in Manager footer follow the dark theme.
+
 Out of scope: anything not in the deferred list (Parameter Mapping, Compare, the EQ tab, Save and Delete of patches, a real
 insert menu for non-plug-in effects).
 
@@ -18,13 +24,30 @@ Decisions taken here, not in the UI-B spec:
   not the track has an instrument or inserts (the UI-B text limited it to tracks with neither; the simpler rule is predictable).
 - The send knob goes down to -96 dB, the range the Core accepts, instead of the Core being narrowed.
 
-## 2. Core: `move_insert`
+## 2. Core: `move_insert` and insert bypass
 
-`move_insert {trackId, from, to}` moves one insert inside the track's insert chain. `to` is the index the insert has after the
-move (`0 .. n-1`). Errors: `not_found` (no such track), `bad_index` (either index outside `0 .. n-1`). `from == to` is accepted
-and changes nothing. The inverse is `move_insert {trackId, from: to, to: from}`. JSON round trip, exact undo, and an entry in the
-random undo/redo property test. The audio side needs nothing new: the config rebuild already rebuilds the insert chain, and the
-plug-in host keeps a live instance when its insert changes index (JUCE host adoption, VST3 work).
+### 2.1 `move_insert`
+
+`move_insert {trackId, from, to, toTrackId?}` moves one insert. Without `toTrackId` it stays inside the track's chain and `to`
+is the index the insert has after the move (`0 .. n-1`). With `toTrackId` (another track) the insert leaves `trackId` and is
+inserted into `toTrackId` at `to` (`0 .. m`, `m` = the target's insert count). The whole insert travels with its processor id,
+parameters, state, label and bypass flag. Errors: `not_found` (either track), `bad_index` (an index outside its range),
+`bad_target` (`toTrackId` is the master or a track that cannot hold inserts). `from == to` on the same track is accepted and
+changes nothing. The inverse is `move_insert` with the tracks and indexes swapped. JSON round trip, exact undo, and an entry in
+the random undo/redo property test. The audio side needs nothing new: the config rebuild already rebuilds the insert chains.
+A plug-in moved to another track is a new `InsertSlot` for the JUCE host; it keeps its instance through the same adoption
+rule as an index change, extended to look at every track (the old track's entry is looked up by processor id and state).
+
+### 2.2 Bypass
+
+`ProcessorRef.bypass` (bool, default false), written to JSON **only when true** so existing projects stay byte-identical.
+New command `set_insert_bypass {trackId, index, bypass}` (errors `not_found`, `bad_index`; inverse restores the old value).
+A bypassed insert passes the signal unchanged. Its latency still counts in the delay compensation, so toggling bypass never
+shifts the timing of other tracks (a bypassed insert is a delay line of the plug-in's latency, or the plug-in itself kept
+loaded and its output ignored: the engine keeps the plug-in running so that switching back has no click and no reload).
+Applies to built-in Gain and to plug-ins. Core tests: JSON (flag absent when false), validation of an unknown track and index,
+audio (a bypassed Gain is identical to no insert), PDC (a bypassed plug-in insert keeps its `latencySamples`), exact undo, and
+the property test.
 
 ## 3. Interactions
 
@@ -41,16 +64,29 @@ plug-in host keeps a live instance when its insert changes index (JUCE host adop
 - A pinned right strip is drawn with the track colour bar and a small "pinned" accent on its name; Shift-click on the Output slot
   of the left strip while pinned shows the output again.
 
-### 3.2 Reorder inserts by drag
+### 3.2 Move inserts by drag (within a strip and to another track)
 
-- `StripSlot` decides the drag axis after 4 px: horizontal keeps today's meaning (insert gain; plug-in slots ignore it), vertical
-  starts a reorder. New signals `verticalDragged(real dy)` and `verticalReleased()`.
-- During a vertical drag the slot follows the pointer and a 2 px accent line shows the drop position. The target index is
-  `clamp(index + round(dy / slotHeight), 0, count - 1)`.
-- Release with a target different from the start emits `insertMoveRequested(trackId, from, to)`; `ProjectStrip` calls
-  `ProjectController::moveInsert`, one `move_insert` command (one undo step). Release on the same index sends nothing.
-- If the inserts list changes during the drag (undo, plug-in rebuild) the drag is dropped, no command (fix 4.2 covers the
+Decision (user): inserts can be dragged vertically to reorder and in any direction onto another track's strip.
+
+- A plug-in slot has no horizontal meaning, so **any** drag past 4 px starts a move. A built-in Gain slot keeps its gain
+  drag: the axis is decided once after 4 px, horizontal = gain (as today), vertical = move; once a move has started the pointer
+  may go anywhere (including sideways onto other strips) and the gain drag is not available again until the next gesture.
+- Slots grab the drag in `StripSlot` (signals `moveStarted()`, `moved(real x, real y)` in the Mixer's coordinates,
+  `moveReleased()`); `ChannelStrip` stays a view, so the drop target is found by `ProjectStrip` / the Mixer, which know every
+  strip. A strip under the pointer shows a 2 px accent line at the drop position (between two slots, or at the end); the
+  dragged slot follows the pointer at reduced opacity.
+- Drop on the same strip: `insertMoveRequested(trackId, from, to)` with the target index from the line position, clamped to the
+  list. Drop on another strip that holds inserts (audio, instrument, bus, aux; not the master): `insertMoveRequested` with
+  `toTrackId`. Drop anywhere else, or on the start position, sends nothing. One `move_insert` per gesture = one undo step.
+- If the insert lists change during the drag (undo, plug-in rebuild) the drag is dropped, no command (fix 4.2 covers the
   gain drag too).
+
+### 3.6 Bypass button on an insert
+
+- Each insert slot has a small power toggle on its left (accent when on, dim when bypassed); a bypassed insert's name is dimmed
+  and struck out. Click emits `insertBypassToggled(trackId, index, on)`; `ProjectStrip` calls `setInsertBypass`, one
+  `set_insert_bypass` (one undo step). A missing plug-in (pass-through already) still shows the toggle.
+- Shortcut: Alt-click on the name toggles it too (no new menu action in this round).
 
 ### 3.3 Send pre/post toggle
 
@@ -131,7 +167,7 @@ plug-in host keeps a live instance when its insert changes index (JUCE host adop
 
 ## 8. Order of work (for the plan)
 
-1. Core: `move_insert` with tests.
+1. Core: `move_insert` (also across tracks) and `set_insert_bypass`, with tests.
 2. Bridge: `targetsFor` and `routingRevision`, pinned bus, `moveInsert`, `LibraryModel` signals, catalogue problems, revert
    message, `libraryRequested` handling, with tests.
 3. QML: `StripSlot` (modifiers, vertical drag, doubleClicked already exists), `ChannelStrip` (Shift-click, reorder, pre/post

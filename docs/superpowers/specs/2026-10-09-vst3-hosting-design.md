@@ -232,7 +232,7 @@ All changes are in the existing insert slot and menus; no new panel layout.
 
 ## 9. Risks
 
-- Qt and JUCE sharing one Win32 message loop (section 4.3). Prototyped first; fall back is running JUCE on its own message thread
+- Qt and JUCE sharing one Win32 message loop (section 4.3). Spike result (2026-10-09): the JUCE editor window and a Qt window ran together and the Qt timer kept ticking at 10 Hz alongside the JUCE window; dragging the plug-in slider and resizing were not checked in the spike and stay on the by-hand check of the UI task. Prototyped first; fall back is running JUCE on its own message thread
   and marshalling the editor window to it.
 - Third-party plug-ins allocate or lock on the audio thread; the real-time guard cannot catch it outside tests (already noted in
   the Core spec).

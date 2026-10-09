@@ -75,6 +75,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool selectedCanHide READ selectedCanHide NOTIFY trackFlagsChanged)            // the first selected track is a bus or aux
     Q_PROPERTY(int trackHeightIndex READ trackHeightIndex WRITE setTrackHeightIndex NOTIFY trackHeightChanged)
     Q_PROPERTY(double masterGainDb READ masterGainDb NOTIFY projectChanged)
+    Q_PROPERTY(bool anySolo READ anySolo NOTIFY projectChanged)  // a track is soloed: the S indicator and the yellow playhead
     Q_PROPERTY(bool mixerVisible READ mixerVisible WRITE setMixerVisible NOTIFY mixerVisibleChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(double positionSeconds READ positionSeconds NOTIFY positionChanged)
@@ -155,6 +156,11 @@ public:
     QString deviceError() const { return deviceError_; }
     QString lastError() const { return lastError_; }
     double masterPeak() const { return peak_; }
+    bool anySolo() const {
+        for (const TrackRow& t : allRows_)
+            if (t.solo) return true;
+        return false;
+    }
     bool audioEnabled() const { return openAudioDevice_; }
     void setAudioEnabled(bool enabled) {
         if (enabled == openAudioDevice_) return;
@@ -219,6 +225,8 @@ public:
     Q_INVOKABLE void splitRegion(const QString& regionId, double atBeats);
     Q_INVOKABLE void joinRegions(const QStringList& regionIds);
     Q_INVOKABLE void resizeRegion(const QString& regionId, double startBeats, double lengthBeats);  // snapping is done by the caller
+    Q_INVOKABLE void resizeSelectedRegions(const QString& regionId, double startBeats, double lengthBeats);
+    Q_INVOKABLE void moveSelectedRegions(const QString& regionId, double startBeats);
     Q_INVOKABLE void splitSelectedAtPlayhead();  // every selected region that strictly contains the playhead, one undo step
     Q_INVOKABLE void joinSelected();             // the selected regions, which must touch one another
     // Selects the regions that overlap the rectangle (beats and timeline rows, both inclusive).
@@ -270,6 +278,8 @@ public:
     Q_INVOKABLE void setShowInTracks(const QString& trackId, bool on);  // buses and auxes only
     Q_INVOKABLE void setRegionGain(const QString& regionId, double db);
     Q_INVOKABLE void setSmartControl(const QString& trackId, const QString& controlId, double value);
+    Q_INVOKABLE void soloExclusive(const QString& trackId);
+    Q_INVOKABLE void clearSolo();
     Q_INVOKABLE void announceStub(const QString& label);  // a visual-only control was used: the usual notice
     Q_INVOKABLE void moveRegion(const QString& regionId, double startBeats);
     Q_INVOKABLE void deleteRegions(const QStringList& regionIds);
@@ -339,6 +349,8 @@ private:
     bool selectedToggle(const QString& actionId) const;
     void toggleSelectedFlag(const char* field, bool TrackRow::*flag);
     std::int64_t regionPosition(const RegionRow& row, double beats) const;  // beats -> the region's own unit
+    nlohmann::json resizeCommand(const RegionRow& row, double startBeats, double lengthBeats) const;
+    nlohmann::json moveCommand(const RegionRow& row, double startBeats) const;
     void setError(const QString& message);
     void setUpPlugins();       // creates the plug-in host and starts the scan; once per controller
     void refreshPluginRows();  // catalogue to the model and to the host

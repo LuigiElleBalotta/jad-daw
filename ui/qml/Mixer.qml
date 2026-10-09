@@ -7,10 +7,20 @@ Rectangle {
     required property ProjectController project
     property bool expanded: true
     readonly property real headerHeight: 24
-    readonly property real stripHeight: 420
+    readonly property real filterHeight: 24
+    property real stripHeight: header2.longFaders ? 600 : 460
+    // the type filter id of a strip: Logic's aux is our bus kind
+    function typeOf(info) { return info.master ? "master" : (info.kind === "bus" ? "aux" : info.kind) }
+    // does the strip pass the Single | Tracks | All choice and the type filters
+    function shown(info) {
+        if (header2.hiddenTypes[typeOf(info)] === true) return false
+        if (header2.scope === "all") return true
+        if (header2.scope === "single") return project.selectedTrackIds.indexOf(info.trackId) >= 0
+        return !info.master && info.kind !== "bus"
+    }
 
     color: Theme.surfaceCanvas
-    implicitHeight: expanded ? headerHeight + stripHeight : headerHeight
+    implicitHeight: expanded ? headerHeight + filterHeight + stripHeight : headerHeight
     clip: true
 
     Rectangle {
@@ -40,9 +50,32 @@ Rectangle {
         }
     }
 
-    Flickable {
+    MixerHeader {
+        id: header2
         visible: root.expanded
         y: root.headerHeight
+        width: parent.width
+        height: root.filterHeight
+        project: root.project
+        onScopeSelected: (scope) => { header2.scope = scope }
+        onTypeToggled: (typeId, on) => {
+            const h = Object.assign({}, header2.hiddenTypes)
+            if (on) delete h[typeId]; else h[typeId] = true
+            header2.hiddenTypes = h
+        }
+        onOnlyTypeRequested: (typeId) => {
+            // Option-click: only this type; again (when it is the only one) shows all
+            const h = {}
+            let others = 0
+            for (const t of header2.types) if (t.id !== typeId && header2.hiddenTypes[t.id] !== true) ++others
+            if (others > 0 || header2.hiddenTypes[typeId] === true) for (const t of header2.types) if (t.id !== typeId) h[t.id] = true
+            header2.hiddenTypes = h
+        }
+    }
+
+    Flickable {
+        visible: root.expanded
+        y: root.headerHeight + root.filterHeight
         width: parent.width
         height: root.stripHeight
         contentWidth: strips.width + Theme.spacing[4] * 2
@@ -64,22 +97,24 @@ Rectangle {
                 model: root.project.mixer
                 delegate: ProjectStrip {
                     required property var model
-                    visible: !model.isMaster
+                    visible: !model.isMaster && root.shown(model.info)
                     width: visible ? implicitWidth : 0
                     height: strips.height
                     project: root.project
                     info: model.info
+                    longFader: header2.longFaders
                 }
             }
             Repeater {
                 model: root.project.mixer
                 delegate: ProjectStrip {
                     required property var model
-                    visible: model.isMaster
+                    visible: model.isMaster && root.shown(model.info)
                     width: visible ? implicitWidth : 0
                     height: strips.height
                     project: root.project
                     info: model.info
+                    longFader: header2.longFaders
                     peak: root.project.masterPeak
                 }
             }

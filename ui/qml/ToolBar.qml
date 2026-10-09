@@ -12,6 +12,7 @@ Panel {
     readonly property alias eraserButton: eraserButton
     readonly property alias scissorsButton: scissorsButton
     readonly property alias glueButton: glueButton
+    readonly property alias soloIndicator: soloIndicator
     readonly property string snapLabel: ({ "off": "Off", "bar": "Bar", "half": "1/2", "quarter": "1/4", "eighth": "1/8", "sixteenth": "1/16" })[project.snap] ?? project.snap
 
     implicitHeight: 32
@@ -36,6 +37,16 @@ Panel {
         anchors.rightMargin: Theme.spacing[4]
         spacing: Theme.spacing[3]
 
+        Rectangle {  // the solo indicator: lit while any track is soloed; a click turns every solo off
+            id: soloIndicator
+            visible: root.project.anySolo
+            Layout.preferredWidth: 22
+            Layout.preferredHeight: 22
+            radius: Theme.radiusControl
+            color: Theme.stateSolo
+            Text { anchors.centerIn: parent; text: "S"; color: "#111111"; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize; font.weight: Font.Bold }
+            MouseArea { anchors.fill: parent; onClicked: root.project.clearSolo() }
+        }
         MenuButton {
             label: qsTr("Edit ▾")
             ids: ["edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.duplicate", "edit.delete", "edit.selectAll", "edit.deselectAll"]

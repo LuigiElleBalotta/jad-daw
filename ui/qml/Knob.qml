@@ -45,7 +45,14 @@ Item {
         anchors.fill: parent
         property real startY: 0
         property real startValue: 0
-        onPressed: (m) => { root.dragging = true; root.changed = false; startY = m.y; startValue = root.value; root.dragValue = root.value }
+        onPressed: (m) => {
+            if (m.modifiers & Qt.AltModifier) {  // Option-click: back to the neutral position
+                root.cancel()
+                root.dragValue = root.resetValue
+                if (root.value !== root.resetValue) root.released(root.resetValue)
+                return
+            }
+            root.dragging = true; root.changed = false; startY = m.y; startValue = root.value; root.dragValue = root.value }
         onPositionChanged: (m) => {
             if (!pressed) return
             const span = root.to - root.from

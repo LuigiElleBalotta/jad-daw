@@ -18,6 +18,7 @@ public:
     void reset(const std::vector<TrackRow>& rows);
     void setToggle(const QString& trackId, Role role, bool on);  // RecordArm or InputMonitor: one row, one dataChanged
     const TrackRow* find(const QString& trackId) const;
+    Q_INVOKABLE QString nameAt(int row) const { return row >= 0 && row < static_cast<int>(visible_.size()) ? rows_[visible_[static_cast<std::size_t>(row)]].name : QString(); }
     Q_INVOKABLE QString trackIdAt(int row) const { return row >= 0 && row < static_cast<int>(visible_.size()) ? rows_[visible_[static_cast<std::size_t>(row)]].id : QString(); }
     int rowCount(const QModelIndex& parent = {}) const override { return parent.isValid() ? 0 : static_cast<int>(visible_.size()); }
     int totalCount() const { return static_cast<int>(rows_.size()); }  // shown and hidden

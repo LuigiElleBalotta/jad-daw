@@ -17,6 +17,8 @@ Item {
 
     property real pixelsPerBeat: 40
     property real snapBeats: 1
+    property real barBeats: 4
+    property string trackName
     property string tool: "pointer"
     property bool selected: false
     property real dragDeltaPx: 0
@@ -31,6 +33,12 @@ Item {
     signal splitRequested(string id, real atBeats)
     signal glueRequested(string id)
 
+    // "bar beat" of a position in beats, or the length as "bars beats"
+    function barBeat(b, length) {
+        const bars = Math.floor(b / barBeats + 1e-9)
+        const beats = Math.floor(b - bars * barBeats + 1e-9)
+        return length ? bars + " " + beats : (bars + 1) + " " + (beats + 1)
+    }
     function snap(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
 
     // An edge was dragged by deltaPx: the other edge stays, the length never gets below one grid step (or below its own
@@ -112,6 +120,29 @@ Item {
             onHeightChanged: requestPaint()
         }
 
+        Rectangle {  // the help tag while the region is dragged (Logic's "Move Region")
+            visible: area.moving
+            y: -tagText.implicitHeight - 10
+            width: tagText.implicitWidth + 12
+            height: tagText.implicitHeight + 6
+            radius: 3
+            color: Theme.surfaceLcd
+            border.color: Theme.borderStrong
+            z: 20
+            Text {
+                id: tagText
+                anchors.centerIn: parent
+                text: qsTr("Move Region
+Position %1
+Length %2
+Track: %3")
+                          .arg(root.barBeat(Math.max(0, root.snap(root.startBeats + root.dragDeltaPx / root.pixelsPerBeat))))
+                          .arg(root.barBeat(root.lengthBeats, true)).arg(root.trackName)
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontTypeCaptionSize
+            }
+        }
         Text {
             x: 4; y: 1
             width: parent.width - 8
@@ -138,6 +169,7 @@ Item {
             if (root.tool === "eraser") { root.eraseRequested(root.regionId); return }
             if (root.tool === "scissors") { root.splitRequested(root.regionId, root.startBeats + m.x / root.pixelsPerBeat); return }
             if (root.tool === "glue") { root.glueRequested(root.regionId); return }
+            if (root.tool === "zoom") return  // the Zoom tool acts on the lane (Timeline), not on a region
             toolAction = false
             pressSceneX = sceneX(m)
             moving = false

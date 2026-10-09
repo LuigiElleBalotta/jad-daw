@@ -6,6 +6,9 @@ Rectangle {
     required property real pixelsPerBeat
     required property real scrollBeats
     required property real barBeats  // quarter-note beats in a bar
+    property real playheadBeats: 0
+    property bool soloActive: false
+    signal locateRequested(real beats)  // a click or a drag in the ruler, or on the playhead handle
 
     color: Theme.surfacePanel
     clip: true
@@ -35,4 +38,21 @@ Rectangle {
         }
     }
     Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.borderSubtle }
+
+    // the playhead handle: a small flag at the top of the playhead line
+    Rectangle {
+        id: thumb
+        x: (root.playheadBeats - root.scrollBeats) * root.pixelsPerBeat - width / 2
+        width: 9
+        height: 10
+        radius: 2
+        color: root.soloActive ? Theme.stateSolo : Theme.textSecondary
+        visible: x + width >= 0 && x <= root.width
+    }
+    MouseArea {  // a press sets the position, dragging follows the pointer
+        anchors.fill: parent
+        function at(m) { return m.x / root.pixelsPerBeat + root.scrollBeats }
+        onPressed: (m) => root.locateRequested(at(m))
+        onPositionChanged: (m) => { if (pressed) root.locateRequested(at(m)) }
+    }
 }

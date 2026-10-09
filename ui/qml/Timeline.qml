@@ -45,7 +45,7 @@ Item {
     }
     function snapBeat(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
 
-    onRegionMoved: (id, beats) => project.moveRegion(id, beats)
+    onRegionMoved: (id, beats) => project.moveSelectedRegions(id, beats)
 
     // keep the playhead in view while playing: when it leaves the screen the view jumps to put it near the left edge
     Connections {
@@ -69,6 +69,9 @@ Item {
         pixelsPerBeat: root.pixelsPerBeat
         scrollBeats: root.scrollBeats
         barBeats: root.project.barBeats
+        playheadBeats: root.project.positionBeats
+        soloActive: root.project.anySolo
+        onLocateRequested: (beats) => { root.forceActiveFocus(); root.project.locateBeats(Math.max(0, root.snapBeat(beats))) }
     }
 
     Item {
@@ -101,6 +104,7 @@ Item {
             property int row: 0
             property string trackId
             property bool band: false  // a rectangle selection is being dragged
+            property bool zooming: false  // the same rectangle with the Zoom tool
             property real bx0: 0
             property real by0: 0
             property real bx1: 0
@@ -110,7 +114,8 @@ Item {
                 if (!(m.modifiers & Qt.ShiftModifier)) root.project.clearSelection()
                 pencil = root.project.tool === "pencil"
                 if (!pencil) {
-                    band = root.project.tool === "pointer"
+                    zooming = root.project.tool === "zoom"
+                    band = root.project.tool === "pointer" || zooming
                     bx0 = bx1 = m.x
                     by0 = by1 = m.y
                     return
@@ -127,6 +132,17 @@ Item {
             onReleased: (m) => {
                 if (band) {
                     band = false
+                    if (zooming) {  // a drag zooms to the rectangle, a click zooms in (Option-click: out)
+                        zooming = false
+                        if (Math.abs(bx1 - bx0) > 6) {
+                            const b0 = root.xToBeats(Math.min(bx0, bx1)), b1 = root.xToBeats(Math.max(bx0, bx1))
+                            root.pixelsPerBeat = Math.max(root.minPixelsPerBeat, Math.min(root.maxPixelsPerBeat, root.width / (b1 - b0)))
+                            root.scrollBeats = Math.max(0, b0)
+                        } else {
+                            root.zoomBy((m.modifiers & Qt.AltModifier) ? 0.5 : 2, m.x)
+                        }
+                        return
+                    }
                     if (Math.abs(bx1 - bx0) > 3 || Math.abs(by1 - by0) > 3) {
                         const row = (y) => Math.floor((y + root.scrollY) / root.rowHeight)
                         root.project.selectRegionsIn(root.xToBeats(Math.min(bx0, bx1)), root.xToBeats(Math.max(bx0, bx1)),
@@ -142,7 +158,7 @@ Item {
                 if (length < 1 / 16) length = root.project.barBeats  // a click draws one bar
                 root.project.createRegion(trackId, Math.min(startBeats, endBeats), length)
             }
-            onCanceled: { pencil = false; band = false }
+            onCanceled: { pencil = false; band = false; zooming = false }
         }
         Rectangle {  // the rectangle selection being dragged
             visible: emptyArea.band
@@ -181,6 +197,8 @@ Item {
                 trackColor: model.trackColor
                 pixelsPerBeat: root.pixelsPerBeat
                 snapBeats: root.snapBeats
+                barBeats: root.project.barBeats
+                trackName: root.project.tracks.nameAt(trackIndex)
                 tool: root.project.tool
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 x: root.beatsToX(startBeats)
@@ -191,7 +209,7 @@ Item {
                 visible: x + width > 0 && x < body.width
                 onSelectRequested: (id, extend) => { root.forceActiveFocus(); root.project.selectRegion(id, extend ? "extend" : "replace") }
                 onMoved: (id, beats) => root.regionMoved(id, beats)
-                onResized: (id, s, l) => root.project.resizeRegion(id, s, l)
+                onResized: (id, s, l) => root.project.resizeSelectedRegions(id, s, l)
                 onEraseRequested: (id) => root.project.deleteRegions([id])
                 onSplitRequested: (id, atBeats) => root.project.splitRegion(id, atBeats)
                 onGlueRequested: (id) => root.project.joinWithNext(id)
@@ -203,7 +221,7 @@ Item {
             x: root.beatsToX(root.project.positionBeats)
             width: Math.max(1, Theme.sizePlayheadWidth)
             height: parent.height
-            color: Theme.playhead
+            color: root.project.anySolo ? Theme.stateSolo : Theme.playhead  // a yellow playhead while a solo is active
             visible: x >= 0 && x <= body.width
         }
     }

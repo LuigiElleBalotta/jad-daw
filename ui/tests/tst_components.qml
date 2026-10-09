@@ -32,6 +32,26 @@ TestCase {
         mousePress(f, 14, 100); mouseMove(f, 14, 900); mouseRelease(f, 14, 900)
         compare(last, f.from)
     }
+    // Logic's fader: +6 dB at the top, 0 dB at 74% of the travel, a curved taper below 0 (docs/logic-reference/mixer.md)
+    function test_fader_range_tops_at_plus_6() {
+        var f = createTemporaryObject(faderC, this)
+        compare(f.to, 6)
+        compare(f.posToValue(0), 6)
+        compare(f.posToValue(f.height), f.from)
+    }
+    function test_fader_follows_the_logic_scale() {
+        var f = createTemporaryObject(faderC, this)
+        var marks = [[3, 0.13], [0, 0.26], [-3, 0.38], [-6, 0.52], [-10, 0.60], [-15, 0.71], [-20, 0.79], [-30, 0.87], [-40, 0.91]]
+        for (var i = 0; i < marks.length; ++i) {
+            fuzzyCompare(f.valueToPos(marks[i][0]) / f.height, marks[i][1], 0.001)
+            fuzzyCompare(f.posToValue(marks[i][1] * f.height), marks[i][0], 0.01)
+        }
+    }
+    function test_fader_position_round_trips() {
+        var f = createTemporaryObject(faderC, this)
+        for (var v = -60; v <= 6; v += 1.5)
+            fuzzyCompare(f.posToValue(f.valueToPos(v)), v, 0.01)
+    }
     function test_toggle_button_flips_active() {
         var b = createTemporaryObject(buttonC, this)
         compare(b.active, false)

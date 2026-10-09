@@ -12,6 +12,7 @@ Panel {
     property var targets: []     // the buses and auxes a send or the output can go to: [{id, name}]
     property real peak: 0        // shown on the master strip only
     property bool showSlots: true
+    property bool longFader: false    // View > Long Faders
     property var pluginGroups: []      // [{vendor, plugins: [{id, name}]}], from the plug-in catalogue
     property var knownPluginIds: []    // ids of the plug-ins that are installed
     property bool selected: false      // the track is selected in the project (the name is drawn in the accent colour)
@@ -73,6 +74,10 @@ Panel {
     signal sendPreFaderToggled(string sendId, bool on)
     signal libraryRequested()                              // the instrument slot was clicked
     signal selectRequested(string id, int modifiers)
+    signal trackToggled(string id, string actionId, bool on)   // the R and I buttons
+    signal soloExclusiveRequested(string id)                    // Option-click on S: this strip alone
+    signal soloClearRequested()                                 // Option-click on a lit S: every solo off
+    signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
         if (master) return
@@ -122,8 +127,11 @@ Panel {
     // the list changed under a gain drag (an undo, a rebuild): the gesture belongs to a row that may not be there any more
     onInsertsChanged: { dragIndex = -1; InsertDrag.cancelIf(root) }
 
-    implicitWidth: 96
+    implicitWidth: 104
     radius: Theme.radiusRegion
+    color: selected ? Theme.surfaceRaised : Theme.surfacePanel  // the selected strip is lighter
+    readonly property bool hasInput: !master && kind === "audio"  // R and I are on audio strips
+    readonly property color typeColor: master ? "#8e5bd6" : (kind === "instrument" ? Theme.trackGreenSolid : (kind === "audio" ? Theme.trackBlueSolid : Theme.trackPinkSolid))
 
     // a click on the strip outside the name field, or another track becoming the selection, confirms a name being edited
     TapHandler {
@@ -350,37 +358,45 @@ Panel {
         }
         Knob {
             id: panKnob
+            visible: !root.master
             Layout.alignment: Qt.AlignHCenter
             value: root.pan
             onReleased: (v) => root.panReleased(root.trackId, v)
         }
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: Theme.spacing[2]
-            IconButton {
-                id: muteButton
-                implicitWidth: Theme.sizeControlCompact
-                implicitHeight: Theme.sizeControlCompact
-                source: "icons/mute.svg"
-                active: root.mute
-                onClicked: root.muteToggled(root.trackId, !root.mute)
+        RowLayout {  // field and peak
+            Layout.fillWidth: true
+            spacing: Theme.spacing[0]
+            DbField {
+                id: dbField
+                Layout.fillWidth: true
+                value: root.gainDb
+                onCommitted: (db) => root.gainReleased(root.trackId, db)
             }
-            IconButton {
-                id: soloButton
-                implicitWidth: Theme.sizeControlCompact
-                implicitHeight: Theme.sizeControlCompact
-                source: "icons/solo.svg"
-                active: root.solo
-                onClicked: root.soloToggled(root.trackId, !root.solo)
+            Rectangle {  // the peak field: a darker box, a click resets every peak
+                id: peakField
+                visible: !root.master
+                Layout.preferredWidth: 34
+                implicitHeight: 18
+                radius: Theme.radiusControl - 2
+                color: Theme.surfaceCanvas
+                border.color: Theme.borderSubtle
+                Text {
+                    anchors.centerIn: parent
+                    text: root.peak > 0 ? (20 * Math.log(root.peak) / Math.LN10).toFixed(1).replace(".", ",") : ""
+                    color: root.peak > 1 ? Theme.stateClip : Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontTypeCaptionSize
+                }
+                MouseArea { anchors.fill: parent; onClicked: root.peakReset() }
             }
         }
-        RowLayout {
+        RowLayout {  // fader with its scale, and the level meter
             Layout.fillWidth: true
-            Layout.preferredHeight: 150
+            Layout.preferredHeight: root.longFader ? 290 : 150
             Layout.minimumHeight: 56
             Layout.fillHeight: false  // the spacer above absorbs the extra height: every strip lines up at the bottom
-            spacing: Theme.spacing[3]
-            Item { Layout.fillWidth: true }
+            spacing: Theme.spacing[1]
+            FaderScale { fader: fader; Layout.fillHeight: true }
             Fader {
                 id: fader
                 Layout.preferredWidth: 28
@@ -389,29 +405,85 @@ Panel {
                 onReleased: (v) => root.gainReleased(root.trackId, v)
             }
             Meter {
-                visible: root.master
-                Layout.preferredWidth: 8
+                Layout.preferredWidth: 10
                 Layout.fillHeight: true
-                peak: root.peak
+                peak: root.master ? root.peak : 0
             }
             Item { Layout.fillWidth: true }
         }
-        Text {
+        RowLayout {  // R and I (audio), M and S, D (master)
             Layout.alignment: Qt.AlignHCenter
-            text: root.gainDb <= -96 ? "-∞" : root.gainDb.toFixed(1)
-            color: Theme.textValue
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontTypeLabelSize
+            spacing: Theme.spacing[1]
+            IconButton {
+                id: armButton
+                visible: root.hasInput
+                implicitWidth: Theme.sizeControlCompact
+                implicitHeight: Theme.sizeControlCompact
+                label: "R"
+                active: root.info.recordArm === true
+                activeColor: Theme.stateRecord
+                fillActive: true
+                fillText: Theme.textPrimary
+                onClicked: root.trackToggled(root.trackId, "track.recordArm", !active)
+            }
+            IconButton {
+                id: monitorButton
+                visible: root.hasInput
+                implicitWidth: Theme.sizeControlCompact
+                implicitHeight: Theme.sizeControlCompact
+                label: "I"
+                active: root.info.inputMonitor === true
+                activeColor: Theme.trackOrangeSolid
+                fillActive: true
+                onClicked: root.trackToggled(root.trackId, "track.inputMonitor", !active)
+            }
+            IconButton {
+                id: muteButton
+                implicitWidth: Theme.sizeControlCompact
+                implicitHeight: Theme.sizeControlCompact
+                label: "M"
+                active: root.mute
+                activeColor: Theme.accentPrimary
+                fillActive: true
+                fillText: Theme.textPrimary
+                onClicked: root.muteToggled(root.trackId, !root.mute)
+            }
+            IconButton {
+                id: soloButton
+                visible: !root.master
+                implicitWidth: Theme.sizeControlCompact
+                implicitHeight: Theme.sizeControlCompact
+                label: "S"
+                active: root.solo
+                activeColor: Theme.stateSolo
+                fillActive: true
+                onClicked: root.soloToggled(root.trackId, !root.solo)
+                MouseArea {  // Option-click: solo exclusive, or every solo off when this one is lit
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    onPressed: (m) => {
+                        if (!(m.modifiers & Qt.AltModifier)) { m.accepted = false; return }
+                        if (root.solo) root.soloClearRequested(); else root.soloExclusiveRequested(root.trackId)
+                    }
+                }
+            }
+            IconButton {  // dim, on the master strip
+                id: dimButton
+                visible: root.master
+                implicitWidth: Theme.sizeControlCompact
+                implicitHeight: Theme.sizeControlCompact
+                label: "D"
+                toggle: true
+                fillActive: true
+                activeColor: Theme.trackYellowSolid
+                onClicked: root.stubUsed(qsTr("Dim"))
+            }
         }
-        Rectangle {
+        Rectangle {  // the name bar, in the colour of the strip type
             Layout.fillWidth: true
-            Layout.preferredHeight: 3
-            radius: 1
-            color: Theme["track" + root.capitalColor + "Solid"]
-        }
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: nameLabel.implicitHeight
+            Layout.preferredHeight: nameLabel.implicitHeight + 6
+            radius: Theme.radiusControl - 2
+            color: root.typeColor
             Text {
                 id: nameLabel
                 anchors.fill: parent
@@ -419,7 +491,9 @@ Panel {
                 horizontalAlignment: Text.AlignHCenter
                 text: root.trackName
                 elide: Text.ElideRight
-                color: root.selected ? Theme.accentPrimary : Theme.textPrimary
+                color: Theme.textPrimary
+                font.bold: root.selected
+                verticalAlignment: Text.AlignVCenter
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontTypeLabelSize
                 font.weight: Theme.fontTypeLabelWeight

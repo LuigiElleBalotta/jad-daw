@@ -29,6 +29,9 @@ qt_add_qml_module(jad_ui_lib
         qml/IconButton.qml
         qml/Panel.qml
         qml/Fader.qml
+        qml/FaderScale.qml
+        qml/DbField.qml
+        qml/MixerHeader.qml
         qml/Knob.qml
         qml/ErrorBar.qml
         qml/Timeline.qml

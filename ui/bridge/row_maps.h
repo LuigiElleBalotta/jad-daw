@@ -16,7 +16,8 @@ inline QVariantMap trackToMap(const TrackRow& t) {
     return {{"trackId", t.id},         {"name", t.name},           {"color", t.color},         {"kind", t.kind},
             {"master", t.master},      {"patchId", t.patchId},     {"patchName", t.patchName}, {"instrument", t.instrument},
             {"gainDb", t.gainDb},      {"pan", t.pan},             {"mute", t.mute},           {"solo", t.solo},
-            {"outputId", t.outputId},  {"outputName", t.outputName}, {"inserts", inserts},     {"sends", sends}};
+            {"outputId", t.outputId},  {"outputName", t.outputName}, {"inserts", inserts},     {"sends", sends},
+            {"recordArm", t.recordArm}, {"inputMonitor", t.inputMonitor}};
 }
 
 }  // namespace jad

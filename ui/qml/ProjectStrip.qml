@@ -32,6 +32,10 @@ ChannelStrip {
     onSendPreFaderToggled: (sendId, on) => project.setSendPreFader(sendId, on)
     onLibraryRequested: project.libraryVisible = true
     onNewBusRequested: (id, role) => project.newBusFor(id, role)
+    onTrackToggled: (id, actionId, on) => project.setTrackToggle(actionId, id, on)
+    onSoloExclusiveRequested: (id) => project.soloExclusive(id)
+    onSoloClearRequested: project.clearSolo()
+    onPeakReset: project.announceStub(qsTr("Peak reset"))
     onSelectRequested: (id, modifiers) => project.selectTrack(id, modifiers & Qt.ShiftModifier ? "extend" : (modifiers & Qt.ControlModifier ? "toggle" : "replace"))
     selected: project.selectedTrackIds.indexOf(root.trackId) >= 0
 }

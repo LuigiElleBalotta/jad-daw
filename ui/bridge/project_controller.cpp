@@ -286,13 +286,13 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     if (generation != generation_) return;  // read for a project that has been replaced
     if (s.revision < shownRevision_) return;  // an older read finished after a newer one
     shownRevision_ = s.revision;
-    std::vector<TrackRow> withoutMaster;
-    for (const TrackRow& t : s.tracks)
-        if (!t.master) withoutMaster.push_back(t);
-    for (TrackRow& t : withoutMaster) {
+    for (TrackRow& t : s.tracks) {
         t.recordArm = trackToggles_.value(QStringLiteral("track.recordArm")).contains(t.id);
         t.inputMonitor = trackToggles_.value(QStringLiteral("track.inputMonitor")).contains(t.id);
     }
+    std::vector<TrackRow> withoutMaster;
+    for (const TrackRow& t : s.tracks)
+        if (!t.master) withoutMaster.push_back(t);
     tracks_.reset(withoutMaster);
     ++routingRevision_;
     if (!selectWhenListed_.isEmpty() && tracks_.find(selectWhenListed_)) {
@@ -532,7 +532,9 @@ void ProjectController::setTrackToggle(const QString& actionId, const QString& t
     QSet<QString>& ids = trackToggles_[actionId];
     if (on) ids.insert(trackId);
     else ids.remove(trackId);
-    tracks_.setToggle(trackId, actionId == QStringLiteral("track.recordArm") ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
+    const bool arm = actionId == QStringLiteral("track.recordArm");
+    tracks_.setToggle(trackId, arm ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
+    mixer_.setToggle(trackId, arm, on);
     emit trackTogglesChanged();
 }
 
@@ -542,7 +544,7 @@ bool ProjectController::selectedToggle(const QString& actionId) const {
 }
 
 void ProjectController::setTool(const QString& tool) {
-    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue"};
+    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom"};
     if (!known.contains(tool) || tool == tool_) return;
     tool_ = tool;
     emit toolChanged();
@@ -611,17 +613,44 @@ void ProjectController::splitRegion(const QString& regionId, double atBeats) {
                  {"newRegionId", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}});
 }
 
+nlohmann::json ProjectController::resizeCommand(const RegionRow& row, double startBeats, double lengthBeats) const {
+    const double minLength = std::min(std::max(snapBeats(), 1.0 / 16.0), row.lengthBeats);  // a short region stays short
+    const double start = std::clamp(startBeats, 0.0, kMaxBeats);
+    const double end = std::clamp(start + std::max(lengthBeats, minLength), 0.0, kMaxBeats);
+    const std::int64_t from = regionPosition(row, start);
+    std::int64_t length = regionPosition(row, end) - from;
+    if (length <= 0) length = 1;  // the Core refuses what is still wrong (a start at the very end of the range)
+    return {{"type", "resize_region"}, {"regionId", row.id.toStdString()}, {"start", from}, {"length", length}};
+}
+
 void ProjectController::resizeRegion(const QString& regionId, double startBeats, double lengthBeats) {
     if (!host_ || !std::isfinite(startBeats) || !std::isfinite(lengthBeats)) return;
     const RegionRow* row = regions_.find(regionId);
     if (!row) return;
-    const double minLength = std::min(std::max(snapBeats(), 1.0 / 16.0), row->lengthBeats);  // a short region stays short
-    const double start = std::clamp(startBeats, 0.0, kMaxBeats);
-    const double end = std::clamp(start + std::max(lengthBeats, minLength), 0.0, kMaxBeats);
-    const std::int64_t from = regionPosition(*row, start);
-    std::int64_t length = regionPosition(*row, end) - from;
-    if (length <= 0) length = 1;  // the Core refuses what is still wrong (a start at the very end of the range)
-    sendCommand({{"type", "resize_region"}, {"regionId", regionId.toStdString()}, {"start", from}, {"length", length}});
+    sendCommand(resizeCommand(*row, startBeats, lengthBeats));
+}
+
+// An edge of `regionId` was dragged: when it is one of several selected regions, every selected region gets the same change
+// (Logic: the same delta for all), as one "Length Change" step.
+void ProjectController::resizeSelectedRegions(const QString& regionId, double startBeats, double lengthBeats) {
+    if (!host_ || !std::isfinite(startBeats) || !std::isfinite(lengthBeats)) return;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row) return;
+    if (selectedRegions_.size() < 2 || !selectedRegions_.contains(regionId)) {
+        resizeRegion(regionId, startBeats, lengthBeats);
+        return;
+    }
+    const double dStart = startBeats - row->startBeats;
+    const double dEnd = (startBeats + lengthBeats) - (row->startBeats + row->lengthBeats);
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedRegions_)) {
+        const RegionRow* r = regions_.find(id);
+        if (!r) continue;
+        const double s = std::max(0.0, r->startBeats + dStart);
+        const double e = std::max(s, r->startBeats + r->lengthBeats + dEnd);
+        commands.push_back(resizeCommand(*r, s, e - s));
+    }
+    if (!commands.empty()) sendCommand({{"type", "transaction"}, {"commands", commands}});
 }
 
 void ProjectController::splitSelectedAtPlayhead() {
@@ -715,6 +744,24 @@ void ProjectController::setMute(const QString& trackId, bool on) { setStripField
 
 void ProjectController::setSolo(const QString& trackId, bool on) { setStripField(trackId, "solo", on); }
 
+// Option-click on S: only this track is soloed (one undo step).
+void ProjectController::soloExclusive(const QString& trackId) {
+    nlohmann::json commands = nlohmann::json::array();
+    for (const TrackRow& t : allRows_) {
+        const bool want = t.id == trackId;
+        if (!t.master && t.solo != want) commands.push_back({{"type", "set_strip"}, {"trackId", t.id.toStdString()}, {"solo", want}});
+    }
+    if (!commands.empty()) sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
+// Option-click on a lit S: every solo off (one undo step).
+void ProjectController::clearSolo() {
+    nlohmann::json commands = nlohmann::json::array();
+    for (const TrackRow& t : allRows_)
+        if (t.solo) commands.push_back({{"type", "set_strip"}, {"trackId", t.id.toStdString()}, {"solo", false}});
+    if (!commands.empty()) sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
 void ProjectController::toggleMute(const QString& trackId) {
     if (const TrackRow* t = tracks_.find(trackId)) setMute(trackId, !t->mute);
 }
@@ -723,17 +770,39 @@ void ProjectController::toggleSolo(const QString& trackId) {
     if (const TrackRow* t = tracks_.find(trackId)) setSolo(trackId, !t->solo);
 }
 
+nlohmann::json ProjectController::moveCommand(const RegionRow& row, double startBeats) const {
+    const double clamped = std::clamp(startBeats, 0.0, kMaxBeats);
+    std::int64_t start = static_cast<std::int64_t>(std::llround(clamped * lpc::kPPQ));
+    if (row.absolute) {
+        const double frames = tempoMap_.ticksToSamples(start, sampleRate_);
+        start = std::min<std::int64_t>(std::llround(frames * 1e6 / sampleRate_), lpc::kMaxPosition);
+    }
+    return {{"type", "move_region"}, {"regionId", row.id.toStdString()}, {"start", start}};
+}
+
 void ProjectController::moveRegion(const QString& regionId, double startBeats) {
     if (!host_ || !std::isfinite(startBeats)) return;
     const RegionRow* row = regions_.find(regionId);
     if (!row) return;
-    const double clamped = std::clamp(startBeats, 0.0, kMaxBeats);
-    std::int64_t start = static_cast<std::int64_t>(std::llround(clamped * lpc::kPPQ));
-    if (row->absolute) {
-        const double frames = tempoMap_.ticksToSamples(start, sampleRate_);
-        start = std::min<std::int64_t>(std::llround(frames * 1e6 / sampleRate_), lpc::kMaxPosition);
+    sendCommand(moveCommand(*row, startBeats));
+}
+
+// A selected region was dragged: all the selected regions move by the same amount, as one "Drag" step.
+void ProjectController::moveSelectedRegions(const QString& regionId, double startBeats) {
+    if (!host_ || !std::isfinite(startBeats)) return;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row) return;
+    if (selectedRegions_.size() < 2 || !selectedRegions_.contains(regionId)) {
+        moveRegion(regionId, startBeats);
+        return;
     }
-    sendCommand({{"type", "move_region"}, {"regionId", regionId.toStdString()}, {"start", start}});
+    double delta = startBeats - row->startBeats;
+    for (const QString& id : std::as_const(selectedRegions_))  // the group stops at the start of the project
+        if (const RegionRow* r = regions_.find(id)) delta = std::max(delta, -r->startBeats);
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedRegions_))
+        if (const RegionRow* r = regions_.find(id)) commands.push_back(moveCommand(*r, r->startBeats + delta));
+    if (!commands.empty()) sendCommand({{"type", "transaction"}, {"commands", commands}});
 }
 
 void ProjectController::deleteRegions(const QStringList& regionIds) {

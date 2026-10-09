@@ -106,6 +106,7 @@ public:
     bool hasProject() const { return host_ != nullptr; }
     bool selectedRecordArm() const { return selectedToggle(QStringLiteral("track.recordArm")); }
     bool selectedInputMonitor() const { return selectedToggle(QStringLiteral("track.inputMonitor")); }
+    int routingRevision() const { return routingRevision_; }
     bool selectedShowInTracks() const {
         const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
         return !t || t->showInTracks;
@@ -256,6 +257,15 @@ public:
     // Starts plug-in hosting and the first scan when audio output is on (once). The application calls it at start-up; opening a
     // project calls it too, so a controller made without it still hosts plug-ins.
     Q_INVOKABLE void startPlugins();
+    // Insert edits: one undo step each. `toTrackId` empty: inside the track; else the insert goes to that track at `to`.
+    Q_INVOKABLE void moveInsert(const QString& trackId, int from, int to, const QString& toTrackId = QString());
+    Q_INVOKABLE void setInsertBypass(const QString& trackId, int index, bool on);
+    // The right strip of the Inspector shows this bus (or the master) instead of the output of the shown track; "" or the
+    // output of the shown track puts it back. View state only: not in the project, not undoable.
+    Q_INVOKABLE void showBus(const QString& busId);
+    // The buses and auxes the Core accepts as a send target or output of `trackId` (no cycle, not itself): [{id, name}].
+    Q_INVOKABLE QVariantList targetsFor(const QString& trackId) const;
+    Q_PROPERTY(int routingRevision READ routingRevision NOTIFY routingRevisionChanged)  // changes with every snapshot
     Q_INVOKABLE void newBusFor(const QString& trackId, const QString& role);
     Q_INVOKABLE void setShowInTracks(const QString& trackId, bool on);  // buses and auxes only
     Q_INVOKABLE void setRegionGain(const QString& regionId, double db);
@@ -294,7 +304,8 @@ signals:
     void mixerVisibleChanged();
     void panelsChanged();
     void selectionChanged();
-    void trackFlagsChanged();  // the first selected track, or one of its flags, changed
+    void trackFlagsChanged();
+    void routingRevisionChanged();  // the first selected track, or one of its flags, changed
     void trackTogglesChanged();
     void toolChanged();
     void snapChanged();
@@ -316,6 +327,8 @@ private:
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
     void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done);
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
+    QString inspectorBusId_, pinOwner_;  // the pinned bus of the right strip and the track it was pinned for
+    int routingRevision_ = 0;
     QString selectWhenListed_;  // a track made by a command: selected as soon as a snapshot lists it
     void refresh(std::uint64_t revision);
     void applySnapshot(Snapshot snapshot, std::uint64_t generation);

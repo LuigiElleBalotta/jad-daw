@@ -994,6 +994,133 @@ private slots:
         c.startPlugins();                       // and asking again is harmless
         QVERIFY(!c.plugins()->supported());
     }
+    void moveInsertIsOneUndoStepInsideATrackAndAcrossTracks() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio"), instrument = trackIdOfKind(c, "instrument");
+        c.selectTrack(audio, "replace");
+        c.addInsert(audio, "builtin.gain");
+        c.addInsert(audio, "builtin.gain");
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 2);
+        c.setInsertParam(audio, 0, "gainDb", 5.0);
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().at(0).toMap().value("gainDb").toDouble(), 5.0);
+        QSignalSpy sent(&c, &jad::ProjectController::commandSent);
+        c.moveInsert(audio, 0, 1);
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().at(1).toMap().value("gainDb").toDouble(), 5.0);
+        QCOMPARE(sent.count(), 1);
+        c.undo();
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().at(0).toMap().value("gainDb").toDouble(), 5.0);
+        c.moveInsert(audio, 0, 0, instrument);  // to another track
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 1);
+        c.selectTrack(instrument, "replace");
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 1);
+        QCOMPARE(c.inspector()->track().value("inserts").toList().at(0).toMap().value("gainDb").toDouble(), 5.0);
+        c.undo();
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 0);
+        c.moveInsert(audio, 0, 7);  // out of range: rejected, the error is shown, nothing changes
+        QTRY_VERIFY(c.lastError().startsWith("bad_index"));
+    }
+    void insertBypassIsOneUndoStepAndShownInTheRow() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        c.selectTrack(audio, "replace");
+        c.addInsert(audio, "builtin.gain");
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 1);
+        QVERIFY(!c.inspector()->track().value("inserts").toList().at(0).toMap().value("bypass").toBool());
+        c.setInsertBypass(audio, 0, true);
+        QTRY_VERIFY(c.inspector()->track().value("inserts").toList().at(0).toMap().value("bypass").toBool());
+        c.undo();
+        QTRY_VERIFY(!c.inspector()->track().value("inserts").toList().at(0).toMap().value("bypass").toBool());
+    }
+    void showBusPinsTheRightStripUntilTheSelectionChanges() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio"), bus = trackIdOfKind(c, "bus"), instrument = trackIdOfKind(c, "instrument");
+        c.selectTrack(audio, "replace");
+        QTRY_VERIFY(!c.inspector()->output().isEmpty());
+        QVERIFY(!c.inspector()->pinned());
+        c.showBus(bus);
+        QTRY_VERIFY(c.inspector()->pinned());
+        QCOMPARE(c.inspector()->output().value("trackId").toString(), bus);
+        c.selectTrack(instrument, "replace");                      // another track: the pin goes
+        QTRY_VERIFY(!c.inspector()->pinned());
+        c.showBus(bus);
+        QTRY_VERIFY(c.inspector()->pinned());
+        c.showBus(c.inspector()->track().value("outputId").toString());  // the output of the shown track: back to normal
+        QTRY_VERIFY(!c.inspector()->pinned());
+        c.showBus(bus);
+        QTRY_VERIFY(c.inspector()->pinned());
+        c.selectTrack(bus, "replace");                             // the pinned bus becomes the shown track
+        c.selectTrack(audio, "replace");
+        QTRY_VERIFY(!c.inspector()->pinned());
+    }
+    void aPinnedBusThatIsDeletedUnpins() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        c.addTrack("bus");
+        QTRY_VERIFY(c.mixer()->rowCount() >= 5);
+        const auto roles = c.mixer()->roleNames();
+        QString fresh;
+        for (int i = 0; i < c.mixer()->rowCount(); ++i)
+            if (c.mixer()->data(c.mixer()->index(i), roles.key("name")).toString().startsWith("Bus ")) fresh = c.mixer()->data(c.mixer()->index(i), roles.key("trackId")).toString();
+        QVERIFY(!fresh.isEmpty());
+        c.selectTrack(audio, "replace");
+        c.showBus(fresh);
+        QTRY_VERIFY(c.inspector()->pinned());
+        c.undo();                                                  // the bus goes away
+        QTRY_VERIFY(!c.inspector()->pinned());
+    }
+    void targetsForLeavesOutWhatTheCoreRefuses() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio"), bus = trackIdOfKind(c, "bus");
+        const auto ids = [&](const QString& track) {
+            QStringList out;
+            for (const QVariant& v : c.targetsFor(track)) out << v.toMap().value("id").toString();
+            return out;
+        };
+        QVERIFY(ids(audio).contains(bus));
+        QVERIFY(!ids(bus).contains(bus));              // not itself
+        c.addTrack("bus");
+        QTRY_VERIFY(ids(audio).size() == 2);
+        QString other;
+        for (const QString& id : ids(audio))
+            if (id != bus) other = id;
+        const int revision = c.routingRevision();
+        c.setOutput(other, bus);                       // other -> bus
+        QTRY_VERIFY(c.routingRevision() != revision);
+        QVERIFY(!ids(bus).contains(other));            // bus would loop through its own output
+        QVERIFY(ids(other).contains(bus));             // the other direction is fine
+        QVERIFY(c.targetsFor("no-such-track").isEmpty());
+    }
+    void revertSaysSoWhenThePatchLeftTheCatalogue() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        c.selectTrack(audio, "replace");
+        c.submit(QStringLiteral(R"({"type":"set_patch_id","trackId":"%1","patchId":"gone.patch"})").arg(audio));
+        QTRY_COMPARE(c.inspector()->track().value("patchId").toString(), QStringLiteral("gone.patch"));
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.revertPatch();
+        QCOMPARE(notices.count(), 1);
+        QVERIFY(notices.at(0).at(0).toString().contains("'gone.patch'"));
+        QVERIFY(notices.at(0).at(0).toString().contains("no longer in the catalogue"));
+        QCOMPARE(c.inspector()->track().value("patchId").toString(), QStringLiteral("gone.patch"));  // nothing changed
+    }
     void theInspectorGoesNeutralWhenItsTrackIsDeleted() {
         TempDir dir;
         jad::ProjectController c(false);

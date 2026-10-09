@@ -38,14 +38,16 @@ struct Patch {
 };
 
 struct PatchProblem {
-    std::string where;  // the entry id, "#<index>" or ""
+    std::string where;  // [source and] the entry id, "#<index>" or ""
     std::string message;
 };
 
 // The built-in patch catalogue (core/data/patches.json) and the transactions that apply a patch or move a knob.
 class PatchLibrary {
 public:
-    static PatchLibrary fromJson(const nlohmann::json& doc);          // never throws; bad entries are skipped and reported
+    // Never throws; bad entries are skipped and reported. `source` (a file or resource name) leads the `where` of every problem.
+    static PatchLibrary fromJson(const nlohmann::json& doc, const std::string& source = {});
+    static PatchLibrary unreadable(const std::string& path, const std::string& message);  // an empty catalogue with that one problem
     static PatchLibrary fromFile(const std::filesystem::path& file);  // a missing or unreadable file gives a problem
 
     const std::vector<Patch>& patches() const;

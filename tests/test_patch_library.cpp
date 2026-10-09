@@ -168,3 +168,18 @@ TEST_CASE("PatchLibrary: a Smart Control reads its value back from the track", "
     a.strip.gainDb = 24.0f;                                                // outside the control range: clamped
     REQUIRE(*PatchLibrary::smartControlValue(a, level) == 6.0);
 }
+
+TEST_CASE("PatchLibrary: unreadable() reports one problem with the path and the message", "[patches]") {
+    const PatchLibrary lib = PatchLibrary::unreadable(":/qt/qml/Jad/patches/patches.json", "not valid JSON: unexpected end of input");
+    REQUIRE(lib.patches().empty());
+    REQUIRE(lib.problems().size() == 1);
+    REQUIRE(lib.problems()[0].where == ":/qt/qml/Jad/patches/patches.json");
+    REQUIRE(lib.problems()[0].message == "not valid JSON: unexpected end of input");
+}
+
+TEST_CASE("PatchLibrary: a problem of an entry names the source and the entry", "[patches]") {
+    const auto doc = nlohmann::json::parse(R"({"patches":[{"id":"bad"}]})");
+    const PatchLibrary lib = PatchLibrary::fromJson(doc, "patches.json");
+    REQUIRE(lib.problems().size() == 1);
+    REQUIRE(lib.problems()[0].where == "patches.json bad");
+}

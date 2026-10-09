@@ -22,13 +22,16 @@ class InspectorModel : public QObject {
     Q_PROPERTY(QVariantMap region READ region NOTIFY changed)
     Q_PROPERTY(QVariantList smartControls READ smartControls NOTIFY changed)
     Q_PROPERTY(QVariantList busTargets READ busTargets NOTIFY changed)
+    Q_PROPERTY(bool pinned READ pinned NOTIFY changed)  // the right strip shows a bus chosen by the user, not the output of the track
 public:
     explicit InspectorModel(QObject* parent = nullptr) : QObject(parent) {}
-    // `tracks` holds every track, the master included. Ids that do not exist are ignored.
+    // `tracks` holds every track, the master included. Ids that do not exist are ignored. `pinnedBusId` (a track, the master
+    // included) replaces the output of the shown track in `output`.
     void update(const std::vector<TrackRow>& tracks, const std::vector<RegionRow>& regions, const QStringList& selectedTracks,
-                const QStringList& selectedRegions);
+                const QStringList& selectedRegions, const QString& pinnedBusId = QString());
     bool hasTrack() const { return !shownTrackId_.isEmpty(); }
     bool hasRegion() const { return !region_.isEmpty(); }
+    bool pinned() const { return pinned_; }
     QVariantMap track() const { return track_; }
     QVariantMap output() const { return output_; }
     QVariantMap region() const { return region_; }
@@ -45,6 +48,7 @@ private:
     QVariantMap track_, output_, region_;
     QVariantList smart_, targets_;
     QString shownTrackId_, shownKind_, shownPatchId_;
+    bool pinned_ = false;
 };
 
 }  // namespace jad

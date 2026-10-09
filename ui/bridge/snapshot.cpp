@@ -78,7 +78,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         for (const lpc::ProcessorRef& ins : t.strip.inserts) {
             const auto g = ins.params.find("gainDb");
             tr.inserts.push_back({QString::fromStdString(ins.processorId), g == ins.params.end() ? 0.0 : g->second,
-                                  QString::fromStdString(ins.label), lpc::isVst3Id(ins.processorId)});
+                                  QString::fromStdString(ins.label), lpc::isVst3Id(ins.processorId), ins.bypass});
         }
         for (const lpc::Send& s : t.strip.sends) {
             const lpc::Track* target = p.findTrack(s.targetTrackId);

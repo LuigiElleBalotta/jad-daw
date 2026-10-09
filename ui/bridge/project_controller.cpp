@@ -65,13 +65,15 @@ struct EngineCallback final : lpc::IAudioCallback {
 constexpr double kMaxBeats = static_cast<double>(lpc::kMaxPosition) / lpc::kPPQ;
 
 std::shared_ptr<const lpc::PatchLibrary> loadPatchCatalogue() {
-    QFile file(QStringLiteral(":/qt/qml/Jad/patches/patches.json"));
-    if (!file.open(QIODevice::ReadOnly)) return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::fromJson(nlohmann::json::object()));  // reports one problem
+    const QString resource = QStringLiteral(":/qt/qml/Jad/patches/patches.json");
+    const std::string name = resource.toStdString();
+    QFile file(resource);
+    if (!file.open(QIODevice::ReadOnly)) return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::unreadable(name, "cannot open the patch catalogue"));
     try {
         const QByteArray bytes = file.readAll();
-        return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::fromJson(nlohmann::json::parse(bytes.constData(), bytes.constData() + bytes.size())));
-    } catch (const std::exception&) {
-        return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::fromJson(nlohmann::json::object()));  // reports one problem
+        return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::fromJson(nlohmann::json::parse(bytes.constData(), bytes.constData() + bytes.size()), name));
+    } catch (const std::exception& e) {
+        return std::make_shared<lpc::PatchLibrary>(lpc::PatchLibrary::unreadable(name, std::string("not valid JSON: ") + e.what()));
     }
 }
 
@@ -121,6 +123,7 @@ ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QO
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackTogglesChanged);
     patches_ = loadPatchCatalogue();
+    for (const lpc::PatchProblem& p : patches_->problems()) qWarning().noquote() << "patch catalogue:" << QString::fromStdString(p.where) << QString::fromStdString(p.message);
     library_.setLibrary(patches_.get());
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::refreshPanels);
 }
@@ -145,6 +148,8 @@ void ProjectController::clearError() { setError({}); }
 
 void ProjectController::teardown() {
     timer_.stop();
+    inspectorBusId_.clear();
+    pinOwner_.clear();
 #ifdef JAD_HAVE_JUCE
     if (pluginHost_) pluginHost_->closeAllEditors();  // the editors must go before the instances they show
 #endif
@@ -289,6 +294,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         t.inputMonitor = trackToggles_.value(QStringLiteral("track.inputMonitor")).contains(t.id);
     }
     tracks_.reset(withoutMaster);
+    ++routingRevision_;
     if (!selectWhenListed_.isEmpty() && tracks_.find(selectWhenListed_)) {
         selectedTracks_ = {selectWhenListed_};
         selectWhenListed_.clear();
@@ -312,6 +318,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
             masterId_ = t.id;
             masterGain_ = t.gainDb;
         }
+    emit routingRevisionChanged();
     emit projectChanged();
     pruneSelection();
     refreshPanels();
@@ -1047,7 +1054,11 @@ const TrackRow* ProjectController::rowOf(const QString& trackId) const {
 }
 
 void ProjectController::refreshPanels() {
-    inspector_.update(allRows_, regionRows_, selectedTracks_, selectedRegions_);
+    inspector_.update(allRows_, regionRows_, selectedTracks_, selectedRegions_, inspectorBusId_);
+    if (!inspectorBusId_.isEmpty() && (inspector_.trackId() != pinOwner_ || !inspector_.pinned())) {  // another track, or the bus is gone
+        inspectorBusId_.clear();
+        inspector_.update(allRows_, regionRows_, selectedTracks_, selectedRegions_);
+    }
     library_.setTrack(inspector_.shownKind(), inspector_.shownPatchId());
 }
 
@@ -1074,6 +1085,10 @@ void ProjectController::revertPatch() {
     const TrackRow* row = rowOf(inspector_.trackId());
     if (!row || row->patchId.isEmpty()) {
         emit notice(tr("This track has no patch to revert"));
+        return;
+    }
+    if (!patches_->find(row->patchId.toStdString())) {
+        emit notice(tr("Patch '%1' is no longer in the catalogue").arg(row->patchId));
         return;
     }
     applyPatch(row->patchId);
@@ -1269,6 +1284,57 @@ void ProjectController::newBusFor(const QString& trackId, const QString& role) {
 
 void ProjectController::setShowInTracks(const QString& trackId, bool on) {
     sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"showInTracks", on}});
+}
+
+void ProjectController::moveInsert(const QString& trackId, int from, int to, const QString& toTrackId) {
+    nlohmann::json cmd = {{"type", "move_insert"}, {"trackId", trackId.toStdString()}, {"from", from}, {"to", to}};
+    if (!toTrackId.isEmpty() && toTrackId != trackId) cmd["toTrackId"] = toTrackId.toStdString();
+    sendCommand(cmd);
+}
+
+void ProjectController::setInsertBypass(const QString& trackId, int index, bool on) {
+    sendCommand({{"type", "set_insert_bypass"}, {"trackId", trackId.toStdString()}, {"index", index}, {"bypass", on}});
+}
+
+void ProjectController::showBus(const QString& busId) {
+    const TrackRow* shown = rowOf(inspector_.trackId());
+    const bool exists = !busId.isEmpty() && std::any_of(allRows_.begin(), allRows_.end(), [&](const TrackRow& t) { return t.id == busId; });
+    if (!exists || !shown || shown->outputId == busId) inspectorBusId_.clear();
+    else {
+        inspectorBusId_ = busId;
+        pinOwner_ = shown->id;
+    }
+    refreshPanels();
+}
+
+QVariantList ProjectController::targetsFor(const QString& trackId) const {
+    QVariantList out;
+    const auto find = [this](const QString& id) -> const TrackRow* {
+        for (const TrackRow& t : allRows_)
+            if (t.id == id) return &t;
+        return nullptr;
+    };
+    if (!find(trackId)) return out;
+    // the Core's rule: a target B is refused when B reaches the track through outputs and sends
+    const auto reaches = [&](const QString& from, const QString& goal) {
+        QStringList stack{from}, seen;
+        while (!stack.isEmpty()) {
+            const QString cur = stack.takeLast();
+            if (cur == goal) return true;
+            if (seen.contains(cur)) continue;
+            seen.append(cur);
+            if (const TrackRow* t = find(cur)) {
+                if (!t->master && !t->outputId.isEmpty()) stack.append(t->outputId);
+                for (const SendRow& s : t->sends) stack.append(s.targetId);
+            }
+        }
+        return false;
+    };
+    for (const TrackRow& b : allRows_) {
+        if ((b.kind != "bus" && b.kind != "aux") || b.id == trackId || reaches(b.id, trackId)) continue;
+        out.append(QVariantMap{{"id", b.id}, {"name", b.name}});
+    }
+    return out;
 }
 
 void ProjectController::setRegionGain(const QString& regionId, double db) {

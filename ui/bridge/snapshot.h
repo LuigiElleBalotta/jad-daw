@@ -18,6 +18,7 @@ struct InsertRow {
     double gainDb = 0.0;  // the "gainDb" parameter (0 when absent)
     QString label;        // a plug-in's display name
     bool plugin = false;  // a hosted plug-in (its gain is not editable from the strip)
+    bool bypass = false;  // switched off: the signal passes through
 };
 struct SendRow {
     QString id, targetId, targetName;

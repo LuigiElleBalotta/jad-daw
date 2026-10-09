@@ -30,6 +30,7 @@ void LibraryModel::setTrack(const QString& kind, const QString& patchId) {
     const bool kindChanged = kind != kind_;
     kind_ = kind;
     patchId_ = patchId;
+    emit currentChanged();
     if (library_) {
         lpc::TrackKind k;
         if (const lpc::Patch* p = library_->find(patchId.toStdString()); p && kindOf(kind, &k) && p->kind == k)
@@ -71,9 +72,10 @@ void LibraryModel::rebuild() {
     } else {
         category_.clear();
     }
+    const bool same = categories == categories_ && patches == patches_;
     categories_ = categories;
     patches_ = patches;
-    emit changed();
+    if (!same) emit patchesChanged();
 }
 
 QStringList LibraryModel::problems() const {

@@ -143,6 +143,38 @@ private slots:
         QCOMPARE(model.neighbour(+1), QStringLiteral("a.one"));  // nothing current: the first (or the last going back)
         QCOMPARE(model.neighbour(-1), QStringLiteral("a.two"));
     }
+    void inspectorShowsAPinnedBusInPlaceOfTheOutput() {
+        jad::TrackRow master = row("m", "master", "Stereo Out", true);
+        jad::TrackRow bus = row("b", "bus", "Reverb");
+        jad::TrackRow a = row("a", "audio", "Vox");
+        a.outputId = "m";
+        a.outputName = "Stereo Out";
+        jad::InspectorModel model;
+        model.update({master, bus, a}, {}, {"a"}, {});
+        QVERIFY(!model.pinned());
+        QCOMPARE(model.output().value("trackId").toString(), QStringLiteral("m"));
+        model.update({master, bus, a}, {}, {"a"}, {}, "b");
+        QVERIFY(model.pinned());
+        QCOMPARE(model.output().value("trackId").toString(), QStringLiteral("b"));
+        model.update({master, bus, a}, {}, {"a"}, {}, "gone");  // a pinned track that does not exist is not pinned
+        QVERIFY(!model.pinned());
+        QCOMPARE(model.output().value("trackId").toString(), QStringLiteral("m"));
+    }
+    void libraryAnnouncesPatchesOnlyWhenTheListChanges() {
+        const auto lib = lpc::PatchLibrary::fromJson(nlohmann::json::parse(kDoc));
+        jad::LibraryModel model;
+        model.setLibrary(&lib);
+        QSignalSpy patches(&model, &jad::LibraryModel::patchesChanged);
+        QSignalSpy current(&model, &jad::LibraryModel::currentChanged);
+        model.setTrack("audio", "a.one");
+        QCOMPARE(patches.count(), 1);
+        QCOMPARE(current.count(), 1);
+        model.setTrack("audio", "a.two");  // same category, same list: only the current patch moved
+        QCOMPARE(patches.count(), 1);
+        QCOMPARE(current.count(), 2);
+        model.setSearch("gam");
+        QCOMPARE(patches.count(), 2);
+    }
     void libraryReportsCatalogueProblems() {
         const auto lib = lpc::PatchLibrary::fromJson(nlohmann::json::parse(R"({"patches":[{"id":"bad"}]})"));
         jad::LibraryModel model;

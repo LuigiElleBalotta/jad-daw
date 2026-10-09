@@ -14,14 +14,14 @@ namespace jad {
 class LibraryModel : public QObject {
     Q_OBJECT
     QML_ANONYMOUS
-    Q_PROPERTY(QStringList categories READ categories NOTIFY changed)
-    Q_PROPERTY(QString category READ category WRITE setCategory NOTIFY changed)
-    Q_PROPERTY(QString search READ search WRITE setSearch NOTIFY changed)
-    Q_PROPERTY(QVariantList patches READ patches NOTIFY changed)
-    Q_PROPERTY(QString currentPatchId READ currentPatchId NOTIFY changed)
-    Q_PROPERTY(QString kind READ kind NOTIFY changed)
-    Q_PROPERTY(QStringList problems READ problems NOTIFY changed)
-    Q_PROPERTY(int patchCount READ patchCount NOTIFY changed)
+    Q_PROPERTY(QStringList categories READ categories NOTIFY patchesChanged)
+    Q_PROPERTY(QString category READ category WRITE setCategory NOTIFY patchesChanged)
+    Q_PROPERTY(QString search READ search WRITE setSearch NOTIFY patchesChanged)
+    Q_PROPERTY(QVariantList patches READ patches NOTIFY patchesChanged)
+    Q_PROPERTY(QString currentPatchId READ currentPatchId NOTIFY currentChanged)
+    Q_PROPERTY(QString kind READ kind NOTIFY currentChanged)
+    Q_PROPERTY(QStringList problems READ problems NOTIFY patchesChanged)
+    Q_PROPERTY(int patchCount READ patchCount NOTIFY patchesChanged)
 public:
     explicit LibraryModel(QObject* parent = nullptr) : QObject(parent) {}
     void setLibrary(const lpc::PatchLibrary* library);  // not owned; must outlive the model
@@ -41,7 +41,8 @@ public:
     Q_INVOKABLE QString neighbour(int step) const;
 
 signals:
-    void changed();
+    void patchesChanged();  // the categories, the shown list, the search or the catalogue changed
+    void currentChanged();  // the track's kind or current patch changed
 
 private:
     void rebuild();

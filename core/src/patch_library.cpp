@@ -159,10 +159,11 @@ double mapRange(const SmartControl& c, double value, const SmartTarget& t) {
 
 }  // namespace
 
-PatchLibrary PatchLibrary::fromJson(const json& doc) {
+PatchLibrary PatchLibrary::fromJson(const json& doc, const std::string& source) {
     PatchLibrary lib;
+    const auto at = [&](const std::string& where) { return source.empty() ? where : (where.empty() ? source : source + " " + where); };
     if (!doc.is_object() || !doc.contains("patches") || !doc["patches"].is_array()) {
-        lib.problems_.push_back({"", "the catalogue must be an object with a \"patches\" array"});
+        lib.problems_.push_back({at(""), "the catalogue must be an object with a \"patches\" array"});
         return lib;
     }
     std::set<std::string> seen;
@@ -175,9 +176,15 @@ PatchLibrary PatchLibrary::fromJson(const json& doc) {
             if (!seen.insert(p.id).second) bad("duplicate patch id");
             lib.patches_.push_back(std::move(p));
         } catch (const std::exception& e) {
-            lib.problems_.push_back({where, e.what()});
+            lib.problems_.push_back({at(where), e.what()});
         }
     }
+    return lib;
+}
+
+PatchLibrary PatchLibrary::unreadable(const std::string& path, const std::string& message) {
+    PatchLibrary lib;
+    lib.problems_.push_back({path, message});
     return lib;
 }
 

@@ -13,7 +13,8 @@ Rectangle {
     property bool removable: false
     property bool missing: false  // a plug-in that is not installed
     readonly property bool hovered: area.containsMouse
-    signal clicked()
+    signal clicked(int modifiers)
+    signal rightClicked()
     signal removeRequested()
     signal dragged(real dx)
     signal dragReleased()
@@ -63,20 +64,22 @@ Rectangle {
         id: area
         anchors.fill: parent
         hoverEnabled: true
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
         property real pressX: 0
         property bool moved: false
         onPressed: (m) => { pressX = m.x; moved = false }
         onPositionChanged: (m) => {
-            if (!pressed) return
+            if (!pressed || pressedButtons !== Qt.LeftButton) return
             if (Math.abs(m.x - pressX) > 3) moved = true
             if (moved) root.dragged(m.x - pressX)
         }
         onReleased: { if (moved) root.dragReleased() }
         onDoubleClicked: root.doubleClicked()
         onClicked: (m) => {
+            if (m.button === Qt.RightButton) { root.rightClicked(); return }
             if (moved) return
             if (root.removable && m.x > root.width - 16) root.removeRequested()
-            else root.clicked()
+            else root.clicked(m.modifiers)
         }
     }
 }

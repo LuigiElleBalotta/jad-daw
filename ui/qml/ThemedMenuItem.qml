@@ -6,7 +6,7 @@ MenuItem {
     id: root
     implicitHeight: 28
     implicitWidth: 240
-    readonly property bool checkedState: root.action && root.action.on === true
+    readonly property bool checkedState: root.action ? root.action.on === true : (root.checkable && root.checked)
 
     contentItem: Item {
         Text {

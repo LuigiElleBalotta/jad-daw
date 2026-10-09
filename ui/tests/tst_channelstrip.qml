@@ -262,4 +262,45 @@ TestCase {
         mouseClick(s.instrumentSlot)
         compare(asked, 1)
     }
+    function test_shift_click_on_a_send_shows_its_bus_and_a_plain_click_does_not() {
+        var s = createTemporaryObject(stripC, this)
+        var got = []
+        s.busViewRequested.connect(function (id) { got.push(id) })
+        var slot = s.sendList.itemAt(0).slot
+        mouseClick(slot, 10, 9)
+        compare(got.length, 0)
+        mouseClick(slot, 10, 9, Qt.LeftButton, Qt.ShiftModifier)
+        compare(got, ["b"])
+    }
+    function test_shift_click_on_the_output_slot_shows_the_output_and_a_plain_click_opens_the_menu() {
+        var s = createTemporaryObject(stripC, this)
+        var changed = JSON.parse(JSON.stringify(keys))
+        changed.outputId = "m"
+        s.info = changed
+        var got = []
+        s.busViewRequested.connect(function (id) { got.push(id) })
+        mouseClick(s.outputSlot, 10, 9, Qt.LeftButton, Qt.ShiftModifier)
+        compare(got, ["m"])
+        verify(!s.outputMenu.visible)
+        mouseClick(s.outputSlot, 10, 9)
+        verify(s.outputMenu.visible)
+        s.outputMenu.close()
+    }
+    function test_a_pre_fader_send_is_marked_and_the_menu_toggles_it() {
+        var s = createTemporaryObject(stripC, this)
+        var row = s.sendList.itemAt(0)
+        compare(row.slot.value, "")
+        var changed = JSON.parse(JSON.stringify(keys))
+        changed.sends[0].preFader = true
+        s.info = changed
+        compare(s.sendList.itemAt(0).slot.value, "pre")
+        var got = []
+        s.sendPreFaderToggled.connect(function (id, on) { got.push([id, on]) })
+        mouseClick(s.sendList.itemAt(0).slot, 10, 9, Qt.RightButton)
+        verify(s.sendList.itemAt(0).menu.visible)
+        var item = s.sendList.itemAt(0).menu.itemAt(0)
+        verify(item.checked)
+        item.click()
+        compare(got, [["s1", false]])
+    }
 }

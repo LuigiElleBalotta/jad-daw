@@ -26,6 +26,8 @@ ChannelStrip {
     onInsertEditorRequested: (id, index) => project.openPluginEditor(id, index)
     onPluginManagerRequested: project.pluginManagerOpen = true
     onRenameRequested: (id, name) => project.renameTrack(id, name)
+    onBusViewRequested: (id) => project.showBus(id)
+    onSendPreFaderToggled: (sendId, on) => project.setSendPreFader(sendId, on)
     onLibraryRequested: project.libraryVisible = true
     onNewBusRequested: (id, role) => project.newBusFor(id, role)
     onSelectRequested: (id, modifiers) => project.selectTrack(id, modifiers & Qt.ShiftModifier ? "extend" : (modifiers & Qt.ControlModifier ? "toggle" : "replace"))

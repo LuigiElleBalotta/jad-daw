@@ -67,6 +67,8 @@ Panel {
     signal pluginManagerRequested()
     signal newBusRequested(string id, string role)       // role: "send" or "output"
     signal renameRequested(string id, string name)
+    signal busViewRequested(string busId)                   // Shift-click on a send or the output slot
+    signal sendPreFaderToggled(string sendId, bool on)
     signal libraryRequested()                              // the instrument slot was clicked
     signal selectRequested(string id, int modifiers)
 
@@ -232,6 +234,7 @@ Panel {
                 required property var modelData
                 property alias knob: sendKnob
                 property alias slot: sendSlot
+                property alias menu: preMenu
                 Layout.fillWidth: true
                 spacing: Theme.spacing[1]
                 StripSlot {
@@ -241,7 +244,19 @@ Panel {
                     filled: true
                     fillColor: Theme.accentPrimaryHover
                     removable: true
+                    value: sendRow.modelData.preFader ? qsTr("pre") : ""
                     onRemoveRequested: root.sendRemoveRequested(sendRow.modelData.id)
+                    onClicked: (modifiers) => { if (modifiers & Qt.ShiftModifier) root.busViewRequested(sendRow.modelData.targetId) }
+                    onRightClicked: preMenu.popup(sendSlot, 0, sendSlot.height)
+                }
+                ThemedMenu {
+                    id: preMenu
+                    ThemedMenuItem {
+                        text: qsTr("Pre Fader")
+                        checkable: true
+                        checked: sendRow.modelData.preFader
+                        onTriggered: root.sendPreFaderToggled(sendRow.modelData.id, checked)
+                    }
                 }
                 Knob {
                     id: sendKnob
@@ -268,7 +283,10 @@ Panel {
             Layout.fillWidth: true
             visible: root.slotsVisible
             text: root.info.outputName && root.info.outputName !== "" ? root.info.outputName : qsTr("Stereo Out")
-            onClicked: outputMenu.popup(outputSlot, 0, outputSlot.height)
+            onClicked: (modifiers) => {
+                if (modifiers & Qt.ShiftModifier) root.busViewRequested(root.info.outputId ?? "")
+                else outputMenu.popup(outputSlot, 0, outputSlot.height)
+            }
         }
         RowLayout {
             Layout.fillWidth: true

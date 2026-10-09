@@ -254,7 +254,7 @@
  {"id":"window.showEventFloat","label":"Show Event Float","menu":"Window","shortcut":"Alt+E","kind":"command","status":"stub"},
  {"id":"window.showRegionInspectorFloat","label":"Show Region Inspector Float","menu":"Window","shortcut":"Alt+Shift+R","kind":"command","status":"stub"},
  {"id":"window.showKeyboard","label":"Show Keyboard","menu":"Window","shortcut":"","kind":"command","status":"stub","sep":true},
- {"id":"window.showMusicalTyping","label":"Show Musical Typing","menu":"Window","shortcut":"Ctrl+K","kind":"command","status":"stub"},
+ {"id":"window.showMusicalTyping","label":"Show Musical Typing","menu":"Window","shortcut":"Ctrl+K","kind":"command","status":"ready"},
  {"id":"window.showStepInputKeyboard","label":"Show Step Input Keyboard","menu":"Window","shortcut":"Ctrl+Alt+K","kind":"command","status":"stub"},
  {"id":"mix.pluginWindow","label":"Show All Plug-in Windows","menu":"Window","shortcut":"V","kind":"command","status":"stub","sep":true},
  {"id":"window.pluginManager","label":"Plug-in Manager…","menu":"Window","shortcut":"","kind":"command","status":"ready","sep":true},

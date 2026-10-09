@@ -68,7 +68,7 @@ Dialog {
             Layout.fillHeight: true
 
             Text {  // the sections that do not exist yet
-                visible: root.section !== 1
+                visible: root.section !== 1 && root.section !== 2
                 anchors.centerIn: parent
                 text: qsTr("%1 settings are not implemented yet").arg(root.sections[root.section])
                 color: Theme.textSecondary
@@ -76,6 +76,62 @@ Dialog {
                 font.pixelSize: Theme.fontTypeBodySize
             }
 
+            ColumnLayout {  // MIDI: which input devices play and record
+                id: midi
+                visible: root.section === 2
+                anchors.fill: parent
+                anchors.margins: Theme.spacing[4]
+                spacing: Theme.spacing[3]
+                property var names: []
+                function reload() { names = root.project.midiInputNames() }
+                Component.onCompleted: reload()
+                Connections { target: root; function onAboutToShow() { midi.reload() } }
+                Text {
+                    text: qsTr("MIDI")
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontTypeTitleSize
+                    font.weight: Theme.fontTypeTitleWeight
+                }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: midi.names.length === 0 ? qsTr("No MIDI input devices were found.")
+                          : qsTr("Inputs in use (none checked: all of them). The notes play the selected or armed instrument track.")
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontTypeLabelSize
+                }
+                Repeater {
+                    model: midi.names
+                    delegate: Row {
+                        required property string modelData
+                        spacing: Theme.spacing[2]
+                        IconButton {
+                            implicitWidth: 40
+                            implicitHeight: 22
+                            label: root.project.midiInputsChosen.indexOf(modelData) >= 0 ? qsTr("On") : qsTr("Off")
+                            active: root.project.midiInputsChosen.indexOf(modelData) >= 0
+                            fillActive: true
+                            onClicked: {
+                                const list = root.project.midiInputsChosen.slice()
+                                const i = list.indexOf(modelData)
+                                if (i >= 0) list.splice(i, 1); else list.push(modelData)
+                                root.project.setMidiInputs(list)
+                            }
+                        }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: modelData; color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }
+                    }
+                }
+                Text {
+                    text: qsTr("%1 device(s) open").arg(root.project.midiOpenCount)
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontTypeLabelSize
+                }
+                Item { Layout.fillHeight: true }
+                IconButton { Layout.alignment: Qt.AlignRight; implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
+            }
             ColumnLayout {
                 id: audio
                 visible: root.section === 1

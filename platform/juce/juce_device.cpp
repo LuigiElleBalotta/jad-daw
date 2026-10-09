@@ -109,6 +109,46 @@ private:
 
 std::unique_ptr<IAudioDevice> makeJuceAudioDevice() { return std::make_unique<JuceAudioDevice>(); }
 
+namespace {
+class JuceMidiInputs final : public IMidiInputs, private juce::MidiInputCallback {
+public:
+    JuceMidiInputs(const std::vector<std::string>& names, IMidiSink& sink) : sink_(sink) {
+        for (const juce::MidiDeviceInfo& info : juce::MidiInput::getAvailableDevices()) {
+            const std::string name = info.name.toStdString();
+            if (!names.empty() && std::find(names.begin(), names.end(), name) == names.end()) continue;
+            if (auto in = juce::MidiInput::openDevice(info.identifier, this)) {
+                in->start();
+                inputs_.push_back(std::move(in));
+            }
+        }
+    }
+    ~JuceMidiInputs() override {
+        for (auto& in : inputs_) in->stop();
+    }
+    int count() const override { return static_cast<int>(inputs_.size()); }
+
+private:
+    void handleIncomingMidiMessage(juce::MidiInput*, const juce::MidiMessage& m) override {
+        const int size = m.getRawDataSize();
+        if (size < 1 || size > 3) return;
+        const juce::uint8* d = m.getRawData();
+        sink_.midi(d[0], size > 1 ? d[1] : 0, size > 2 ? d[2] : 0);
+    }
+    IMidiSink& sink_;
+    std::vector<std::unique_ptr<juce::MidiInput>> inputs_;
+};
+}  // namespace
+
+std::vector<std::string> listJuceMidiInputs() {
+    std::vector<std::string> out;
+    for (const juce::MidiDeviceInfo& info : juce::MidiInput::getAvailableDevices()) out.push_back(info.name.toStdString());
+    return out;
+}
+
+std::unique_ptr<IMidiInputs> openJuceMidiInputs(const std::vector<std::string>& names, IMidiSink& sink) {
+    return std::make_unique<JuceMidiInputs>(names, sink);
+}
+
 AudioDeviceChoices listJuceAudioDevices(const std::string& output, const std::string& input) {
     AudioDeviceChoices out;
     juce::AudioDeviceManager manager;

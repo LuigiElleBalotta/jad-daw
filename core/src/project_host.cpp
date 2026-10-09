@@ -268,6 +268,16 @@ std::future<void> ProjectHost::startRecording(std::int64_t startFrame, std::int6
     });
 }
 
+std::future<void> ProjectHost::setLiveTarget(Uuid track) {
+    return call([this, track] {
+        if (degraded_) return;
+        audio::AudioMsg m;
+        m.kind = audio::MsgKind::SetLiveTarget;
+        m.track = track;
+        post(m);
+    });
+}
+
 std::future<void> ProjectHost::stopRecording() {
     return call([this] { postTransport(audio::MsgKind::StopRecord); });
 }

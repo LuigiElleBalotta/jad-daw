@@ -830,7 +830,7 @@ private slots:
         QSignalSpy notices(&c, &jad::ProjectController::notice);
         c.startRecording();
         QVERIFY(!c.recording());
-        QVERIFY(notices.count() >= 1 && notices.last().at(0).toString().contains("Arm an audio track"));
+        QVERIFY(notices.count() >= 1 && notices.last().at(0).toString().contains("Arm a track"));
         QString audio;
         for (int i = 0; i < c.tracks()->rowCount(); ++i)
             if (c.tracks()->kindAt(i) == "audio") audio = c.tracks()->trackIdAt(i);
@@ -1004,6 +1004,54 @@ private slots:
         double peak = 0;
         for (const QVariant& v : c.eqCurve(boost, 64, 20, 20000)) peak = std::max(peak, v.toDouble());
         QVERIFY(peak > 11.0);
+    }
+    void notesPlayedWhileRecordingBecomeAMidiRegionOnTheArmedInstrumentTrack() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString instrument;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "instrument") instrument = c.tracks()->trackIdAt(i);
+        QVERIFY(!instrument.isEmpty());
+        const int before = c.regions()->rowCount();
+        c.setTrackToggle("track.recordArm", instrument, true);
+        QTRY_COMPARE(c.liveTargetTrack(), instrument);   // the armed instrument plays what is played
+        c.locateBeats(16.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 16.0) < 0.01);
+        c.startRecording();
+        QVERIFY(c.recording());
+        QTest::qWait(150);
+        c.playNote(62, 100, true);
+        QTest::qWait(200);
+        c.playNote(62, 0, false);
+        QTest::qWait(100);
+        c.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 15000);
+        const jad::RegionRow* made = nullptr;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->trackId == instrument && std::abs(r->startBeats - 16.0) < 0.2) made = r;
+        }
+        QVERIFY(made);
+        const QVariantList notes = c.regionNotes(made->id);
+        QCOMPARE(notes.size(), 1);
+        QCOMPARE(notes.first().toMap().value("note").toInt(), 62);
+        QVERIFY(notes.first().toMap().value("length").toDouble() > 0.2);   // 0.2 s at 120 bpm is 0.4 beats
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), before);
+    }
+    void midiInputsAreChosenAndRemembered() {
+        jad::ProjectController c(false);
+        QSignalSpy spy(&c, &jad::ProjectController::midiChanged);
+        c.setMidiInputs({"Keystation", "Pad"});
+        QCOMPARE(c.midiInputsChosen(), QStringList({"Keystation", "Pad"}));
+        QVERIFY(spy.count() >= 1);
+        QSettings s(QDir(QDir::tempPath()).filePath("jad-midi-test.ini"), QSettings::IniFormat);
+        c.saveMidiSettings(s);
+        jad::ProjectController d(false);
+        d.loadMidiSettings(s);
+        QCOMPARE(d.midiInputsChosen(), QStringList({"Keystation", "Pad"}));
     }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;

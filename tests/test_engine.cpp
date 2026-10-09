@@ -289,3 +289,53 @@ TEST_CASE("engine: a monitored track plays the chosen input channels through its
     e.processBlock(l.data(), r.data(), 256);
     REQUIRE(std::abs(l[100]) < 0.01f);
 }
+
+TEST_CASE("engine: live MIDI plays the target instrument with the transport stopped and is kept while recording", "[engine][midi]") {
+    std::mt19937_64 rng(11);
+    Project p(Uuid::random(rng));
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Instrument;
+    t.name = "Keys";
+    t.instrument = ProcessorRef{"builtin.sine", {}, "", "", false};
+    REQUIRE(makeAddTrack(t)->apply(p).ok());
+    MediaStore media;
+    AudioEngine e(kSr);
+    for (const AudioMsg& m : initialMessages(p, media, nullptr, nullptr)) e.applyDirect(m);
+    std::vector<float> l(512), r(512);
+    e.processBlock(l.data(), r.data(), 512);
+    float silent = 0;
+    for (const float v : l) silent = std::max(silent, std::abs(v));
+    REQUIRE(silent == 0.0f);                                                   // nothing plays, nothing is live
+    AudioMsg target = msg(MsgKind::SetLiveTarget, 100);
+    target.track = t.id;
+    e.applyDirect(target);
+    REQUIRE(e.pushUiMidi({0x90, 69, 100}));                                    // note on, A4
+    e.processBlock(l.data(), r.data(), 512);
+    e.processBlock(l.data(), r.data(), 512);
+    float heard = 0;
+    for (const float v : l) heard = std::max(heard, std::abs(v));
+    REQUIRE(heard > 0.01f);                                                    // the stopped transport still sounds the live note
+    REQUIRE(e.pushDeviceMidi({0x80, 69, 0}));                                  // note off from a device thread
+    for (int i = 0; i < 8; ++i) e.processBlock(l.data(), r.data(), 512);       // the 5 ms release is over
+    float after = 0;
+    for (const float v : l) after = std::max(after, std::abs(v));
+    REQUIRE(after == 0.0f);
+    // while recording, the events are kept with the position
+    e.applyDirect(msg(MsgKind::Locate, 101, 9600));
+    AudioMsg rec = msg(MsgKind::StartRecord, 102, 0);
+    rec.obj = makeOwned(new ClickTrack);
+    e.applyDirect(rec);
+    REQUIRE(e.pushUiMidi({0x90, 60, 90}));
+    e.processBlock(l.data(), r.data(), 512);
+    REQUIRE(e.pushUiMidi({0x80, 60, 0}));
+    e.processBlock(l.data(), r.data(), 512);
+    AudioEngine::MidiRecEvent a, b;
+    REQUIRE(e.takeMidiRecorded(a));
+    REQUIRE(e.takeMidiRecorded(b));
+    REQUIRE(a.event.status == 0x90);
+    REQUIRE(a.event.data1 == 60);
+    REQUIRE(a.position == 9600);
+    REQUIRE(b.event.status == 0x80);
+    REQUIRE(b.position == 9600 + 512);
+}

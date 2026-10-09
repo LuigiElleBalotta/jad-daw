@@ -128,7 +128,12 @@ public:
 
     // Returns an object the caller must send back to the project thread for destruction (ptr is null if none).
     Owned apply(const AudioMsg& m) noexcept;
-    void render(std::int64_t blockStart, int frames, float* outL, float* outR) noexcept;
+    // withRegions = false renders only what is live (notes played now, monitored input): the transport is stopped
+    void render(std::int64_t blockStart, int frames, float* outL, float* outR, bool withRegions = true) noexcept;
+    // A note played live on an instrument track (the synth keeps it until the note-off); false when there is no such track.
+    bool liveNote(const Uuid& track, bool on, std::uint8_t note, std::uint8_t velocity) noexcept;
+    // true while something needs the graph with the transport stopped: a sounding voice or a monitored input
+    bool liveNeeded() const noexcept;
     void allNotesOff() noexcept;
     float masterPeak() const noexcept { return masterPeak_; }
     // The input of the block (one pointer per channel, already moved to the first frame that render() will play); tracks that are
@@ -143,7 +148,7 @@ public:
 
 private:
     TrackNode* find(const Uuid& id) const noexcept;
-    void processNode(TrackNode& t, std::int64_t blockStart, int n, bool anySolo) noexcept;
+    void processNode(TrackNode& t, std::int64_t blockStart, int n, bool anySolo, bool withRegions) noexcept;
     void renderAudio(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n) noexcept;
     void renderInstrument(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n) noexcept;
     static void deleteNode(void* p);

@@ -30,6 +30,13 @@ struct AudioDeviceChoices {
     int inputChannels = 0, outputChannels = 0;  // of the chosen devices
 };
 
+// Called on the thread of a MIDI input device. Must be real-time safe.
+class IMidiSink {
+public:
+    virtual ~IMidiSink() = default;
+    virtual void midi(unsigned char status, unsigned char data1, unsigned char data2) noexcept = 0;
+};
+
 class IAudioDevice {
 public:
     virtual ~IAudioDevice() = default;

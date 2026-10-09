@@ -32,8 +32,10 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
       project and the offline bounce renders them. (A parameter change rebuilds the effect: its tail restarts.)
 
 ## 4. MIDI
-- [ ] MIDI input device selection, MIDI recording into a region (notes, with the count-in), step input keyboard.
-- [ ] A basic polyphonic synth with envelope as the default instrument (the sine stays as "Sine").
+- [x] MIDI input devices (File > Preferences > MIDI), live play of the selected or armed instrument track (also with the transport stopped), MIDI
+      recording into a region with the count-in (cycle passes merge), Musical Typing window (Window > Show Musical Typing, Ctrl+K).
+      Not covered: step input, sustain pedal and pitch bend/CC recording (only notes are stored).
+- [x] A polyphonic Synth (waveform, ADSR, low-pass) chosen from the instrument slot; the sine stays as "Sine" (the default).
 - [ ] VST3 instruments (hosting) and MIDI to plug-ins.
 
 ## 5. Audio editing

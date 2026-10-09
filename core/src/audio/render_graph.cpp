@@ -170,13 +170,18 @@ float autoValue(const std::vector<AutoPoint>& pts, std::int64_t frame) noexcept 
 }
 }  // namespace
 
-void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool anySolo) noexcept {
+void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool anySolo, bool withRegions) noexcept {
     float* l = t.l.data();
     float* r = t.r.data();
     TrackConfig* cfg = t.config;
     if (cfg) {
-        if (t.kind == TrackKind::Audio) renderAudio(t, *cfg, blockStart, n);
-        else if (t.kind == TrackKind::Instrument) renderInstrument(t, *cfg, blockStart, n);
+        if (withRegions) {
+            if (t.kind == TrackKind::Audio) renderAudio(t, *cfg, blockStart, n);
+            else if (t.kind == TrackKind::Instrument) renderInstrument(t, *cfg, blockStart, n);
+        } else if (t.kind == TrackKind::Instrument) {  // stopped: only the notes played live
+            t.synth.setParams(cfg->synthParams);
+            t.synth.render(l, r, n);
+        }
         if (t.monitorL >= 0 && input_ && t.monitorL < inputChannels_) {  // the input is part of the signal that the inserts process
             const float* inL = input_[t.monitorL];
             const float* inR = t.monitorR >= 0 && t.monitorR < inputChannels_ ? input_[t.monitorR] : inL;
@@ -255,7 +260,23 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     }
 }
 
-void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float* outR) noexcept {
+bool RenderGraph::liveNote(const Uuid& track, bool on, std::uint8_t note, std::uint8_t velocity) noexcept {
+    TrackNode* n = find(track);
+    if (!n || n->kind != TrackKind::Instrument) return false;
+    if (on) n->synth.noteOn(note, velocity);
+    else n->synth.noteOff(note);
+    return true;
+}
+
+bool RenderGraph::liveNeeded() const noexcept {
+    for (int i = 0; i < count_; ++i) {
+        const TrackNode& t = *nodes_[static_cast<std::size_t>(i)];
+        if (t.monitorL >= 0 || t.synth.active()) return true;
+    }
+    return false;
+}
+
+void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float* outR, bool withRegions) noexcept {
     const int n = std::min(frames, kMaxBlock);
     std::fill_n(outL, frames, 0.0f);
     std::fill_n(outR, frames, 0.0f);
@@ -268,7 +289,7 @@ void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float
         if (t.strip.solo && isSource(t.kind)) anySolo = true;
         if (t.kind == TrackKind::Master) master_ = &t;
     }
-    for (int i = 0; i < count_; ++i) processNode(*nodes_[static_cast<std::size_t>(i)], blockStart, n, anySolo);
+    for (int i = 0; i < count_; ++i) processNode(*nodes_[static_cast<std::size_t>(i)], blockStart, n, anySolo, withRegions);
 
     float peak = 0.0f;
     if (master_) {

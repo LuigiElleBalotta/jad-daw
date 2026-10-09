@@ -64,6 +64,10 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
         case MsgKind::SetMonitor:
             graph_.apply(m);
             break;
+        case MsgKind::SetLiveTarget:
+            if (!liveTarget_.isNull()) graph_.liveNote(liveTarget_, false, 0, 0);  // nothing keeps ringing on the old target
+            liveTarget_ = m.track;
+            break;
         case MsgKind::StartRecord: {
             Owned old = makeOwned(countClick_);
             countClick_ = static_cast<ClickTrack*>(m.obj.ptr);
@@ -177,6 +181,24 @@ void AudioEngine::capture(int offset, int n) noexcept {
     if (!rec_.push(c)) recDropped_.fetch_add(1, std::memory_order_relaxed);
 }
 
+// The MIDI that arrived since the last block: notes go to the live target and, while a take runs, are kept with their position.
+void AudioEngine::drainMidi() noexcept {
+    auto handle = [this](const MidiEvent& e) {
+        const std::uint8_t type = e.status & 0xF0;
+        const bool on = type == 0x90 && e.data2 > 0;
+        const bool off = type == 0x80 || (type == 0x90 && e.data2 == 0);
+        if (on || off) {
+            if (!liveTarget_.isNull()) graph_.liveNote(liveTarget_, on, e.data1, e.data2);
+        } else if (type == 0xB0 && (e.data1 == 123 || e.data1 == 120)) {  // all notes off
+            if (!liveTarget_.isNull()) graph_.allNotesOff();
+        }
+        if (recording_ && playing_ && (on || off || type == 0xB0 || type == 0xE0)) midiRec_.push(MidiRecEvent{position_, e});
+    };
+    MidiEvent e;
+    while (midiDevice_.pop(e)) handle(e);
+    while (midiUi_.pop(e)) handle(e);
+}
+
 void AudioEngine::drain() noexcept {
     // Stops early when the feedback queue is full (nothing may be leaked) or after a fixed budget;
     // what is left stays queued for the next block.
@@ -186,6 +208,7 @@ void AudioEngine::drain() noexcept {
 
 void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
     drain();
+    drainMidi();
     int done = 0;
     while (done < frames) {
         int n = std::min(frames - done, kMaxBlock);
@@ -214,6 +237,10 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
             if (clickOn_ && click_) mixClick(outL + done, outR + done, position_, n);
             if (recording_) capture(done, n);
             position_ += n;
+        } else if (graph_.liveNeeded()) {  // stopped, but notes ring or an input is monitored
+            for (int c = 0; c < inChannels_; ++c) inPtr_[c] = inBuf_[c].data() + std::min(done, static_cast<int>(inBuf_[c].size()));
+            graph_.setInput(inPtr_, inChannels_);
+            graph_.render(position_, n, outL + done, outR + done, false);
         } else {
             std::fill_n(outL + done, n, 0.0f);
             std::fill_n(outR + done, n, 0.0f);

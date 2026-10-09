@@ -46,6 +46,18 @@ public:
         int frames = 0;
         std::int64_t position = 0;  // the project position (in frames) of the first frame
     };
+    // Live MIDI: a device's thread and the UI thread each own one queue (single producer each); the engine plays the events on the live target
+    // track at the start of the next block and, while recording, keeps them with the project position for the MIDI take.
+    struct MidiEvent {
+        std::uint8_t status = 0, data1 = 0, data2 = 0;
+    };
+    struct MidiRecEvent {
+        std::int64_t position = 0;
+        MidiEvent event;
+    };
+    bool pushDeviceMidi(MidiEvent e) { return midiDevice_.push(e); }
+    bool pushUiMidi(MidiEvent e) { return midiUi_.push(e); }
+    bool takeMidiRecorded(MidiRecEvent& out) { return midiRec_.pop(out); }
     bool recording() const { return recordingPub_.load(std::memory_order_relaxed); }
     bool takeRecorded(RecChunk& out) { return rec_.pop(out); }
     // the input level of a channel since the last call (linear peak); any thread, reading resets it
@@ -73,6 +85,10 @@ private:
     bool playing_ = false;
     ClickTrack* click_ = nullptr;  // the metronome's beats; replaced through SetClick, the old one goes back as garbage
     SpscQueue<RecChunk, 512> rec_;
+    SpscQueue<MidiEvent, 1024> midiDevice_, midiUi_;
+    SpscQueue<MidiRecEvent, 4096> midiRec_;
+    Uuid liveTarget_;
+    void drainMidi() noexcept;
     std::vector<float> inBuf_[kMaxInputs];
     const float* inPtr_[kMaxInputs] = {};
     int inFrames_ = 0, inChannels_ = 0;

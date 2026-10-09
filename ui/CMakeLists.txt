@@ -53,6 +53,7 @@ qt_add_qml_module(jad_ui_lib
         qml/MetronomeSettings.qml
         qml/NewTracksDialog.qml
         qml/ParamSlider.qml
+        qml/MusicalTypingWindow.qml
         qml/EffectEditorWindow.qml
         qml/PreferencesDialog.qml
         qml/SelectField.qml

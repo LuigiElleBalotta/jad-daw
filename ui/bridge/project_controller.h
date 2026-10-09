@@ -22,6 +22,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "lpc/audio/click.h"
+#include "lpc/audio/engine.h"
 #include "lpc/device.h"
 #include "bridge/inspector_model.h"
 #include "bridge/library_model.h"
@@ -113,6 +114,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(int recordingDelay READ recordingDelay WRITE setRecordingDelay NOTIFY audioSettingsChanged)  // samples
     Q_PROPERTY(QString effectEditorTrack READ effectEditorTrack NOTIFY effectEditorChanged)  // the insert whose editor is open ("" = none)
     Q_PROPERTY(int effectEditorIndex READ effectEditorIndex NOTIFY effectEditorChanged)
+    Q_PROPERTY(QStringList midiInputsChosen READ midiInputsChosen NOTIFY midiChanged)  // the MIDI inputs in use (empty: all)
+    Q_PROPERTY(int midiOpenCount READ midiOpenCount NOTIFY midiChanged)
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -190,6 +193,15 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    QStringList midiInputsChosen() const { return midiChosen_; }
+    int midiOpenCount() const;
+    Q_INVOKABLE QStringList midiInputNames() const;   // the MIDI input devices of the system
+    Q_INVOKABLE void setMidiInputs(const QStringList& names);
+    // A note played from the screen (musical typing, the on-screen keyboard): it plays the live target and is recorded like a device's note
+    Q_INVOKABLE void playNote(int note, int velocity, bool on);
+    Q_INVOKABLE QString liveTargetTrack() const { return liveTarget_; }  // the instrument track that sounds the live MIDI
+    void loadMidiSettings(QSettings& s);
+    void saveMidiSettings(QSettings& s) const;
     QString effectEditorTrack() const { return effectEditorTrack_; }
     int effectEditorIndex() const { return effectEditorIndex_; }
     Q_INVOKABLE void openEffectEditor(const QString& trackId, int index);
@@ -504,6 +516,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void midiChanged();
     void effectEditorChanged();
     void audioSettingsChanged();
     void recordingChanged();
@@ -645,6 +658,16 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    QStringList midiChosen_;
+    QString liveTarget_;
+    std::unique_ptr<lpc::IMidiSink> midiSink_;
+    std::shared_ptr<void> midiInputs_;  // the open MIDI inputs (platform object, destroyed before the engine)
+    QStringList recMidiTracks_;         // the armed instrument tracks of the recording in progress
+    std::vector<lpc::audio::AudioEngine::MidiRecEvent> recMidi_;
+    void applyLiveTarget();
+    void openMidi();
+    void drainMidiRecording();
+    void finishMidiRecording(std::int64_t startFrame, std::int64_t endFrame);
     QString effectEditorTrack_;
     int effectEditorIndex_ = -1;
     QString audioOutput_, audioInput_;

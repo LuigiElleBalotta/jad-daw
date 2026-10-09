@@ -64,6 +64,7 @@ struct EngineCallback final : lpc::IAudioCallback {
     lpc::audio::AudioEngine& engine;
 };
 
+
 constexpr double kMaxBeats = static_cast<double>(lpc::kMaxPosition) / lpc::kPPQ;
 
 std::shared_ptr<const lpc::PatchLibrary> loadPatchCatalogue() {
@@ -120,6 +121,7 @@ ProjectController::ProjectController(QObject* parent) : ProjectController(true, 
 
 ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QObject(parent), openAudioDevice_(openAudioDevice) {
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackFlagsChanged);
+    connect(this, &ProjectController::selectionChanged, this, [this] { applyLiveTarget(); });
     connect(this, &ProjectController::projectChanged, this, &ProjectController::trackFlagsChanged);
     timer_.setInterval(33);
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
@@ -155,6 +157,7 @@ void ProjectController::teardown() {
 #ifdef JAD_HAVE_JUCE
     if (pluginHost_) pluginHost_->closeAllEditors();  // the editors must go before the instances they show
 #endif
+    midiInputs_.reset();  // the MIDI threads stop before the engine goes
     host_.reset();    // joins the project thread first: nothing posts to the engine any more
     driver_.reset();
     if (device_) device_->close();
@@ -201,6 +204,7 @@ void ProjectController::openDevice() {
     if (!haveDevice && engine_) driver_ = std::make_unique<EngineDriver>(*engine_, sampleRate_);
     emit deviceErrorChanged();
     emit audioSettingsChanged();
+    openMidi();
 }
 
 bool ProjectController::openProject(const QUrl& folder) {
@@ -348,6 +352,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     emit routingRevisionChanged();
     emit projectChanged();
     applyMonitoring();
+    applyLiveTarget();
     pruneSelection();
     refreshPanels();
 }
@@ -565,6 +570,7 @@ void ProjectController::setTrackToggle(const QString& actionId, const QString& t
     if (!safe) tracks_.setToggle(trackId, arm ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
     mixer_.setToggle(trackId, safe ? MixerModel::SoloSafe : (arm ? MixerModel::RecordArm : MixerModel::InputMonitor), on);
     if (actionId == QStringLiteral("track.inputMonitor")) applyMonitoring();
+    if (arm) applyLiveTarget();
     emit trackTogglesChanged();
 }
 
@@ -1246,6 +1252,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
     loadClickSettings(s);
     loadAudioSettings(s);
+    loadMidiSettings(s);
 }
 
 void ProjectController::savePanelState(QSettings& s) const {
@@ -1258,6 +1265,7 @@ void ProjectController::savePanelState(QSettings& s) const {
     s.setValue("panels/mixerDetached", mixerDetached_);
     saveClickSettings(s);
     saveAudioSettings(s);
+    saveMidiSettings(s);
 }
 
 void ProjectController::setLeftColumnWidth(double width) {

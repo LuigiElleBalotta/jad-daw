@@ -78,6 +78,7 @@ ApplicationWindow {
     NewTracksDialog { id: newTracksDialog; project: controller }
     PreferencesDialog { id: preferencesDialog; project: controller }
     EffectEditorWindow { id: effectEditor; project: controller }
+    MusicalTypingWindow { id: musicalTyping; project: controller; visible: false }
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
     // the Mixer in a window of its own (View > Mixer when it is detached, Window > Open Mixer)
     Window {
@@ -198,6 +199,7 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "window.showMusicalTyping": () => { musicalTyping.visible = !musicalTyping.visible },
         "file.preferences": () => preferencesDialog.open(),
         "transport.record": () => controller.toggleRecording(),
         "transport.punch": () => { controller.punchEnabled = !controller.punchEnabled },

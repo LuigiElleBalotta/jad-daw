@@ -129,6 +129,10 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Effects:** the Audio FX menu of a strip offers Gain, Channel EQ, Compressor, Limiter, Noise Gate, Delay and Reverb besides the VST3 plug-ins; a
   double click on one opens its editor (a slider per parameter, the EQ also draws its response), the EQ box of the strip shows the curve and a
   click on it inserts or opens the Channel EQ, the gain reduction bar follows the compressors. The offline bounce renders them too.
+- **MIDI:** File > Preferences > MIDI chooses the input devices; the notes play the selected (or armed) instrument track, also with the transport
+  stopped, and are recorded into a MIDI region on the armed instrument tracks (after the count-in). Window > Show Musical Typing opens a keyboard
+  window (A S D F G H J K L are the white keys, W E T Y U O P the black ones, Z/X the octave, C/V the velocity). The instrument slot of a strip
+  chooses Sine or Synth (waveform, ADSR, filter); a double click on it opens the Synth's editor. Hosting VST3 instruments is not done yet.
 - **File:** Save As, Save a Copy As, Import Audio File and Bounce (an offline render to a 24-bit WAV; plug-in inserts are skipped).
 
 ![Piano Roll](docs/images/piano-roll.png)

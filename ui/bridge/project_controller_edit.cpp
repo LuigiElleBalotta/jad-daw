@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <nlohmann/json.hpp>
 
 #include "bridge/project_controller.h"
@@ -918,8 +919,12 @@ void ProjectController::startRecording() {
             recTracks_ << t.id;
             recInputs_.insert(t.id, t.input);
         }
-    if (recTracks_.isEmpty()) {
-        emit notice("Arm an audio track (R) to record");
+    recMidiTracks_.clear();
+    recMidi_.clear();
+    for (const TrackRow& t : allRows_)
+        if (t.kind == "instrument" && !t.master && armed.contains(t.id)) recMidiTracks_ << t.id;
+    if (recTracks_.isEmpty() && recMidiTracks_.isEmpty()) {
+        emit notice("Arm a track (R) to record");
         return;
     }
     const bool quickPunch = playing_;  // pressing Record while the project plays: record from here, no count-in
@@ -951,6 +956,7 @@ void ProjectController::startRecording() {
 }
 
 void ProjectController::drainRecording() {
+    drainMidiRecording();
     constexpr std::size_t kMaxFrames = 48000u * 60u * 30u;  // half an hour at 48 kHz
     lpc::audio::AudioEngine::RecChunk c;
     while (engine_ && engine_->takeRecorded(c)) {
@@ -975,6 +981,13 @@ void ProjectController::finishRecording() {
     recording_ = false;
     recFinishing_ = false;
     emit recordingChanged();
+    if (!recChunks_.empty()) finishMidiRecording(recChunks_.front().position, recChunks_.back().position + recChunks_.back().frames);
+    else { recMidiTracks_.clear(); recMidi_.clear(); }
+    if (recTracks_.isEmpty()) {  // only instrument tracks were armed: the notes are the take
+        recChannels_.clear();
+        recChunks_.clear();
+        return;
+    }
     if (recChunks_.empty() || recChannels_.empty()) {
         emit notice("Nothing was recorded");
         recChannels_.clear();
@@ -1221,6 +1234,136 @@ void ProjectController::setInstrumentParam(const QString& trackId, const QString
                      {"instrument", {{"processorId", t.instrument.toStdString()}, {"params", params}, {"state", ""}}}});
         return;
     }
+}
+
+namespace {
+struct EngineMidi final : lpc::IMidiSink {
+    explicit EngineMidi(lpc::audio::AudioEngine& e) : engine(e) {}
+    void midi(unsigned char status, unsigned char d1, unsigned char d2) noexcept override { engine.pushDeviceMidi({status, d1, d2}); }
+    lpc::audio::AudioEngine& engine;
+};
+}  // namespace
+
+int ProjectController::midiOpenCount() const {
+#ifdef JAD_HAVE_JUCE
+    return midiInputs_ ? static_cast<lpc::IMidiInputs*>(midiInputs_.get())->count() : 0;
+#else
+    return 0;
+#endif
+}
+
+QStringList ProjectController::midiInputNames() const {
+    QStringList out;
+#ifdef JAD_HAVE_JUCE
+    for (const std::string& n : lpc::listJuceMidiInputs()) out << QString::fromStdString(n);
+#endif
+    return out;
+}
+
+void ProjectController::openMidi() {
+    midiInputs_.reset();
+    midiSink_.reset();
+#ifdef JAD_HAVE_JUCE
+    if (!openAudioDevice_ || !engine_) {
+        emit midiChanged();
+        return;
+    }
+    midiSink_ = std::make_unique<EngineMidi>(*engine_);
+    std::vector<std::string> names;
+    for (const QString& n : std::as_const(midiChosen_)) names.push_back(n.toStdString());
+    std::shared_ptr<lpc::IMidiInputs> open = lpc::openJuceMidiInputs(names, *midiSink_);
+    midiInputs_ = std::static_pointer_cast<void>(open);
+#endif
+    emit midiChanged();
+}
+
+void ProjectController::setMidiInputs(const QStringList& names) {
+    midiChosen_ = names;
+    if (engine_) openMidi();
+    else emit midiChanged();
+}
+
+void ProjectController::loadMidiSettings(QSettings& s) {
+    midiChosen_ = s.value("midi/inputs").toStringList();
+    emit midiChanged();
+}
+
+void ProjectController::saveMidiSettings(QSettings& s) const { s.setValue("midi/inputs", midiChosen_); }
+
+void ProjectController::playNote(int note, int velocity, bool on) {
+    if (!engine_) return;
+    note = std::clamp(note, 0, 127);
+    engine_->pushUiMidi({static_cast<std::uint8_t>(on ? 0x90 : 0x80), static_cast<std::uint8_t>(note), static_cast<std::uint8_t>(on ? std::clamp(velocity, 1, 127) : 0)});
+}
+
+// The live MIDI goes to the first armed instrument track, else to the selected instrument track.
+void ProjectController::applyLiveTarget() {
+    QString target;
+    const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
+    for (const TrackRow& t : allRows_)
+        if (t.kind == "instrument" && armed.contains(t.id)) { target = t.id; break; }
+    if (target.isEmpty())
+        for (const QString& id : std::as_const(selectedTracks_))
+            for (const TrackRow& t : allRows_)
+                if (t.id == id && t.kind == "instrument") { target = id; break; }
+    if (target == liveTarget_) return;
+    liveTarget_ = target;
+    if (host_) host_->setLiveTarget(lpc::Uuid::parse(target.toStdString()).value_or(lpc::Uuid{}));
+}
+
+void ProjectController::drainMidiRecording() {
+    lpc::audio::AudioEngine::MidiRecEvent e;
+    while (engine_ && engine_->takeMidiRecorded(e)) recMidi_.push_back(e);
+}
+
+// The notes played during the take become a MIDI region on each armed instrument track (the passes of a cycle merge).
+void ProjectController::finishMidiRecording(std::int64_t startFrame, std::int64_t endFrame) {
+    drainMidiRecording();
+    const QStringList tracks = recMidiTracks_;
+    recMidiTracks_.clear();
+    std::vector<lpc::audio::AudioEngine::MidiRecEvent> events;
+    events.swap(recMidi_);
+    if (tracks.isEmpty() || events.empty() || !host_) return;
+    auto toTicks = [this](std::int64_t frames) { return static_cast<std::int64_t>(tempoMap_.samplesToTicks(static_cast<double>(frames), sampleRate_)); };
+    const std::int64_t startTick = toTicks(startFrame);
+    const std::int64_t barTicks = static_cast<std::int64_t>(std::llround(barBeats() * lpc::kPPQ));
+    struct Open { std::int64_t tick; int velocity; };
+    std::map<int, Open> held;
+    nlohmann::json notes = nlohmann::json::array();
+    std::int64_t lastTick = startTick;
+    auto close = [&](int note, std::int64_t offTick) {
+        const auto it = held.find(note);
+        if (it == held.end()) return;
+        const std::int64_t length = std::max<std::int64_t>(offTick - it->second.tick, lpc::kPPQ / 32);
+        notes.push_back({{"start", it->second.tick - startTick}, {"length", length}, {"note", note}, {"velocity", it->second.velocity}});
+        lastTick = std::max(lastTick, it->second.tick + length);
+        held.erase(it);
+    };
+    for (const auto& e : events) {
+        const std::int64_t tick = std::max(toTicks(e.position), startTick);
+        const int type = e.event.status & 0xF0;
+        const bool on = type == 0x90 && e.event.data2 > 0;
+        const bool off = type == 0x80 || (type == 0x90 && e.event.data2 == 0);
+        if (on) {
+            close(e.event.data1, tick);  // a repeated note ends the one before
+            held[e.event.data1] = {tick, e.event.data2};
+        } else if (off) {
+            close(e.event.data1, tick);
+        }
+    }
+    const std::int64_t endTick = std::max(toTicks(endFrame), lastTick);
+    for (const auto& [note, o] : std::map<int, Open>(held)) close(note, endTick);  // notes still held when the take stops
+    if (notes.empty()) return;
+    const std::int64_t length = std::max<std::int64_t>(barTicks, ((endTick - startTick + barTicks - 1) / barTicks) * barTicks);
+    nlohmann::json commands = nlohmann::json::array();
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    for (const QString& id : tracks)
+        commands.push_back({{"type", "add_region"}, {"trackId", id.toStdString()}, {"index", -1},
+                            {"region", {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"},
+                                        {"start", startTick}, {"length", length}, {"mediaId", nullId}, {"sourceOffsetFrames", 0},
+                                        {"gainDb", 0}, {"notes", notes}}}});
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+    emit notice(QString("Recorded %1 note%2").arg(static_cast<int>(notes.size())).arg(notes.size() == 1 ? "" : "s"));
 }
 
 }  // namespace jad

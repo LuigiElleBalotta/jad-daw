@@ -2,7 +2,8 @@ add_library(lpc_juce_device STATIC
     juce_device.cpp
     plugin_processor.cpp
     editor_window.cpp
-    juce_plugin_host.cpp)
+    juce_plugin_host.cpp
+    plugin_scanner.cpp)
 target_include_directories(lpc_juce_device PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(lpc_juce_device PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=0 JUCE_PLUGINHOST_VST3=1)

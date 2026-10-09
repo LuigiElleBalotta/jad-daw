@@ -136,3 +136,13 @@ the top (`MadreDolcissimaTMF_1#02` with a loop/lock icon at both ends), a large 
   two **selection fields** (start `2609467`, end `9350047`, in samples). Body: overview strip, a sample-based ruler (`2.650.000 2.700.000 2.750.000`), the
   waveform in white on a dark grey grid with a dB scale (`100 80 60 40 20 0 -20 … -100`), orange dashed lines at the transient markers, and at the bottom the rows
   **Anchor / Region / S. Loop** (the region bar spans the file).
+
+### Audio Track Editor with Flex Pitch (verified)
+
+Choosing **Flex Pitch** from the Flex popup (track header or editor bar) runs a modal analysis: **"Analyze Audio Material"** with the file name
+(`Analyzing: MadreDolcissimaTMF_1#02.aif`), the step name (`Pitch Analysis`), a progress bar and a stop (x) button. After it the editor body changes to a
+**piano-roll-like view**: a vertical piano keyboard at the left (with `C3` labelled), horizontal pitch lanes, the pitch curves of the audio drawn as blue
+blobs/lines over the waveform, a bar ruler, and a different **left pane**: track icon + name (`Audio 1`, `All Regions selected (1)`), **Time Quantize** (popup `off`,
+**Q**, Strength slider 100), **Scale Quantize** (popups `Off` and a scale, **Q**), **Pitch Correction** slider (0) and **Gain** slider (0). The editor bar keeps
+the Flex popup (`Flex Pitch`), the tool popup, **Snap: Smart** and zoom. The track header keeps its row, and the Region Inspector keeps Fine Tune / Flex & Follow / Gain.
+Three different editing views therefore exist for audio: waveform (Flex Time modes), Smart Tempo, File, and the Flex Pitch pitch view.

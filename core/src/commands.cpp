@@ -64,6 +64,7 @@ private:
         if (p.tracks.size() >= kMaxProjectTracks) return CommandError{"limit", "a project holds at most 1024 tracks"};
         if (track_.id.isNull() || p.findTrack(track_.id)) return CommandError{"duplicate_id", "track id missing or already used"};
         if (auto e = checkTrackProps(track_.name, track_.color)) return e;
+        if (auto e = checkShowInTracks(track_.kind, track_.showInTracks)) return e;
         if (index_ < -1 || index_ > static_cast<int>(p.tracks.size())) return CommandError{"bad_index", "track index out of range"};
         if (auto e = checkStripValues(track_.strip.gainDb, track_.strip.pan)) return e;
         if (!track_.strip.output.isNull()) {
@@ -198,6 +199,7 @@ public:
         json j = {{"type", type()}, {"trackId", id_}};
         if (patch_.name) j["name"] = *patch_.name;
         if (patch_.color) j["color"] = *patch_.color;
+        if (patch_.showInTracks) j["showInTracks"] = *patch_.showInTracks;
         return j;
     }
     ApplyResult apply(Project& p) const override {
@@ -205,6 +207,8 @@ public:
         if (!t) return fail("not_found", "no such track");
         if (t->kind == TrackKind::Master) return fail("invalid_kind", "the master track cannot be renamed or recoloured");
         if (auto e = checkTrackProps(patch_.name.value_or(t->name), patch_.color.value_or(t->color))) return fail(*e);
+        if (patch_.showInTracks)
+            if (auto e = checkShowInTracks(t->kind, *patch_.showInTracks)) return fail(*e);
         TrackPatch previous;
         if (patch_.name) {
             previous.name = t->name;
@@ -213,6 +217,10 @@ public:
         if (patch_.color) {
             previous.color = t->color;
             t->color = *patch_.color;
+        }
+        if (patch_.showInTracks) {
+            previous.showInTracks = t->showInTracks;
+            t->showInTracks = *patch_.showInTracks;
         }
         return success(makeSetTrackProps(id_, std::move(previous)));
     }
@@ -728,6 +736,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             TrackPatch patch;
             if (j.contains("name")) patch.name = j["name"].get<std::string>();
             if (j.contains("color")) patch.color = j["color"].get<std::string>();
+            if (j.contains("showInTracks")) patch.showInTracks = j["showInTracks"].get<bool>();
             return makeSetTrackProps(j.at("trackId").get<Uuid>(), patch);
         }
         if (type == "set_signature") return makeSetSignature(j.at("tick").get<Ticks>(), j.at("numerator").get<int>(), j.at("denominator").get<int>());

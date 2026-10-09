@@ -16,6 +16,7 @@ struct StripPatch {
 struct TrackPatch {
     std::optional<std::string> name;
     std::optional<std::string> color;
+    std::optional<bool> showInTracks;
 };
 
 CommandPtr makeAddTrack(Track track, int index = -1);  // index -1 appends

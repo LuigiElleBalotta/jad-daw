@@ -33,6 +33,7 @@ bool validTrackName(const std::string& name);      // 1 to 64 UTF-8 code points,
 bool validPatchId(const std::string& id);          // 1 to 64 characters of A-Z a-z 0-9 . _ -
 MaybeError checkPatchId(const std::string& id);    // "" (no patch) or a valid id
 MaybeError checkTrackProps(const std::string& name, const std::string& color);
+MaybeError checkShowInTracks(TrackKind kind, bool show);  // only buses and auxes can be hidden
 bool validRelativeMediaPath(const std::string& path);
 // True when `goal` can be reached from `from` by following outputs and sends.
 bool reaches(const Project& p, const Uuid& from, const Uuid& goal);

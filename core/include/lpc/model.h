@@ -82,6 +82,7 @@ struct Track {
     Strip strip;
     std::optional<ProcessorRef> instrument;
     std::string patchId;  // the built-in patch applied to the track; empty when none
+    bool showInTracks = true;  // false: a bus or aux that lives in the Mixer only, not in the Tracks area
     std::vector<Region> regions;
     std::vector<AutomationLane> automation;
     bool operator==(const Track&) const = default;

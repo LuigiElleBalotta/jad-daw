@@ -121,3 +121,32 @@ TEST_CASE("model json: invalid documents throw instead of producing a project", 
 
     REQUIRE_THROWS(projectFromJson(nlohmann::json::array()));
 }
+
+TEST_CASE("model json: showInTracks is written only when false and read back", "[model][json][visibility]") {
+    Project p;
+    Track bus;
+    bus.id = Uuid{9, 9};
+    bus.kind = TrackKind::Bus;
+    bus.name = "Bus";
+    p.tracks.push_back(bus);
+    REQUIRE_FALSE(toJson(p).at("tracks").at(1).contains("showInTracks"));
+    p.tracks[1].showInTracks = false;
+    const auto j = toJson(p);
+    REQUIRE(j.at("tracks").at(1).at("showInTracks") == false);
+    REQUIRE(projectFromJson(j) == p);
+}
+
+TEST_CASE("model json: showInTracks must be a boolean on a bus or aux", "[model][json][visibility]") {
+    Project p;
+    Track bus;
+    bus.id = Uuid{9, 9};
+    bus.kind = TrackKind::Bus;
+    bus.name = "Bus";
+    p.tracks.push_back(bus);
+    auto j = toJson(p);
+    j["tracks"][1]["showInTracks"] = "no";
+    REQUIRE_THROWS_AS(projectFromJson(j), std::runtime_error);
+    j["tracks"][1]["showInTracks"] = false;
+    j["tracks"][1]["kind"] = "audio";
+    REQUIRE_THROWS_AS(projectFromJson(j), std::runtime_error);
+}

@@ -116,6 +116,11 @@ MaybeError checkTrackProps(const std::string& name, const std::string& color) {
     return std::nullopt;
 }
 
+MaybeError checkShowInTracks(TrackKind kind, bool show) {
+    if (!show && !isBusLike(kind)) return CommandError{"bad_value", "only buses and auxes can be hidden from the Tracks area"};
+    return std::nullopt;
+}
+
 bool validPatchId(const std::string& id) {
     if (id.empty() || id.size() > 64) return false;
     for (const unsigned char c : id)
@@ -176,6 +181,7 @@ MaybeError checkProject(const Project& p) {
     for (const Track& t : p.tracks) {
         if (auto e = checkTrackProps(t.name, t.color)) return e;
         if (auto e = checkPatchId(t.patchId)) return e;
+        if (auto e = checkShowInTracks(t.kind, t.showInTracks)) return e;
         if (auto e = checkStripValues(t.strip.gainDb, t.strip.pan)) return e;
         const bool wantsInstrument = t.kind == TrackKind::Instrument;
         if (wantsInstrument != t.instrument.has_value() || (wantsInstrument && !isKnownInstrument(t.instrument->processorId)))

@@ -135,3 +135,59 @@ TEST_CASE("the property and signature commands survive a JSON round trip", "[com
         REQUIRE(commandFromJson(j)->toJson() == j);
     }
 }
+
+TEST_CASE("set_track_props: showInTracks hides a bus and undo restores it", "[commands][props][visibility]") {
+    Project p{Uuid::random(gRng)};
+    const Track bus = track(TrackKind::Bus, "Bus 1");
+    REQUIRE(makeAddTrack(bus)->apply(p).ok());
+    const Project before = p;
+    TrackPatch patch;
+    patch.showInTracks = false;
+    auto res = makeSetTrackProps(bus.id, patch)->apply(p);
+    REQUIRE(res.ok());
+    REQUIRE_FALSE(p.findTrack(bus.id)->showInTracks);
+    REQUIRE(res.inverse->apply(p).ok());
+    REQUIRE(p == before);
+    REQUIRE(p.findTrack(bus.id)->showInTracks);
+}
+
+TEST_CASE("set_track_props: only buses and auxes can be hidden", "[commands][props][visibility]") {
+    Project p{Uuid::random(gRng)};
+    const Track audio = track(TrackKind::Audio, "Audio");
+    REQUIRE(makeAddTrack(audio)->apply(p).ok());
+    const Project before = p;
+    TrackPatch patch;
+    patch.showInTracks = false;
+    for (const Uuid& id : {audio.id, p.master()->id}) {
+        auto r = makeSetTrackProps(id, patch)->apply(p);
+        REQUIRE_FALSE(r.ok());
+        REQUIRE(p == before);
+    }
+    REQUIRE(makeSetTrackProps(audio.id, patch)->apply(p).error->code == "bad_value");
+}
+
+TEST_CASE("add_track: a hidden bus is accepted, a hidden audio track is not", "[commands][visibility]") {
+    Project p{Uuid::random(gRng)};
+    Track bus = track(TrackKind::Bus, "Bus 1");
+    bus.showInTracks = false;
+    auto added = makeAddTrack(bus)->apply(p);
+    REQUIRE(added.ok());
+    REQUIRE_FALSE(p.findTrack(bus.id)->showInTracks);
+    REQUIRE(added.inverse->apply(p).ok());
+
+    Track audio = track(TrackKind::Audio, "Audio");
+    audio.showInTracks = false;
+    auto r = makeAddTrack(audio)->apply(p);
+    REQUIRE_FALSE(r.ok());
+    REQUIRE(r.error->code == "bad_value");
+}
+
+TEST_CASE("set_track_props: the JSON command carries showInTracks", "[commands][json][visibility]") {
+    const Uuid id = Uuid::random(gRng);
+    TrackPatch patch;
+    patch.showInTracks = false;
+    const auto j = makeSetTrackProps(id, patch)->toJson();
+    REQUIRE(j.at("showInTracks") == false);
+    const auto back = commandFromJson(j);
+    REQUIRE(back->toJson() == j);
+}

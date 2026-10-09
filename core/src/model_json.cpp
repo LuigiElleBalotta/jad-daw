@@ -94,6 +94,7 @@ void to_json(nlohmann::json& j, const Track& t) {
          {"strip", t.strip},     {"regions", t.regions}, {"automation", t.automation}};
     j["instrument"] = t.instrument ? nlohmann::json(*t.instrument) : nlohmann::json(nullptr);
     if (!t.patchId.empty()) j["patchId"] = t.patchId;
+    if (!t.showInTracks) j["showInTracks"] = false;
 }
 
 void from_json(const nlohmann::json& j, Track& t) {
@@ -107,6 +108,10 @@ void from_json(const nlohmann::json& j, Track& t) {
     const auto& inst = j.at("instrument");
     t.instrument = inst.is_null() ? std::nullopt : std::optional<ProcessorRef>(inst.get<ProcessorRef>());
     t.patchId = j.value("patchId", std::string());
+    if (j.contains("showInTracks")) {
+        if (!j["showInTracks"].is_boolean()) throw std::runtime_error("showInTracks must be a boolean");
+        t.showInTracks = j["showInTracks"].get<bool>();
+    }
 }
 
 nlohmann::json toJson(const Project& p) {

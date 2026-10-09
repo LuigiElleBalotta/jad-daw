@@ -144,6 +144,7 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             TrackPatch patch;
             if (chance(70)) patch.name = "R" + std::to_string(pick(1000));
             if (chance(40)) patch.color = chance(85) ? "green" : "chartreuse";  // sometimes invalid
+            if (chance(30)) patch.showInTracks = chance(50);  // hiding a non-bus is refused: that path is exercised too
             return makeSetTrackProps(nonMaster[pick(nonMaster.size())]->id, patch);
         }
         case 18:

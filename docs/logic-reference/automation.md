@@ -19,3 +19,10 @@ Automation).
 instrument plug-in's parameters, one submenu per plug-in) · (sep) header "MIDI": **MIDI Channel ▸** · **MIDI Volume** · **MIDI Pan** · **Modulation** · **Expression** ·
 **Sustain** · **MIDI Control 0-63 ▸** · **MIDI Control 64-127 ▸** · **Pitch Bend** · **Aftertouch** · **Program Change**.
 (An audio track shows the "Automation" block without the MIDI block.) So plug-in parameters and every MIDI controller are automatable lanes.
+
+## Drawing automation
+
+With the automation view on and the **Pencil** tool, a click-drag along a track lane draws an automation curve for the parameter shown (`Volume`): a yellow line with
+a point at each end and value labels (`+0,0 dB` at the start, `-0,3 dB` at the end); the lane is tinted yellow while it is editable, the mode popup turns green
+(`Read` lit) and Edit shows "Undo Automation Edit". With the automation view off the same drag does something else (region creation). The Flex toggle (second blue
+icon of the group) is independent: with it on, the audio waveforms in the Tracks area show the flex markers (dense vertical transient lines).

@@ -7,11 +7,8 @@
 - Instrument slot and double-click on a track header open the Library
 - Splitter for `smartControlsHeight`
 
-## Tracks area vs Mixer (reported 2026-10-09)
-- Aux and Bus tracks always show in the Tracks area; in Logic a bus made from a send shows only in the Mixer, and appears in
-  the Tracks area only when created as a track or shown on purpose (e.g. for automation). The model has no visibility flag
-  (`TrackKind::Aux/Bus` only). Likely fix: a per-track `showInTracks` flag, false for buses created from a send, true for Aux
-  tracks created with New Track, plus a menu entry to show or hide it. To be decided in its own small spec after VST3.
+## Tracks area vs Mixer
+Done: `Track.showInTracks`, "New Bus" in the Send and Output menus, Track > Show in Tracks Area (spec `specs/2026-10-09-tracks-area-visibility-design.md`).
 
 ## Minor findings
 - Knob `onCanceled` only partly covered by `cancel()`
@@ -30,6 +27,5 @@
 
 ## Next
 - VST3 hosting as effects: done (spec `specs/2026-10-09-vst3-hosting-design.md`, plan `plans/2026-10-09-vst3-hosting.md`)
-- TODO after VST3: buses made from a send show only in the Mixer, not in the Tracks area (see "Tracks area vs Mixer"); small
-  spec for a `showInTracks` flag and a show/hide menu entry
+- Tracks area visibility of buses: done
 - Then the deferred interactions and minor findings above

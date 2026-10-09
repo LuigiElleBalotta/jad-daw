@@ -18,7 +18,7 @@ Panel {
 
     readonly property string trackId: info.trackId ?? ""
     // a gesture in flight belongs to the track it started on: showing another track drops it, no command
-    onTrackIdChanged: { fader.cancel(); panKnob.cancel(); dragIndex = -1 }
+    onTrackIdChanged: { fader.cancel(); panKnob.cancel(); dragIndex = -1; renaming = false }
     readonly property string trackName: info.name ?? ""
     readonly property string trackColor: info.color ?? "purple"
     readonly property string kind: info.kind ?? "audio"
@@ -46,6 +46,8 @@ Panel {
     readonly property alias sendMenu: sendMenu
     readonly property alias outputMenu: outputMenu
     readonly property alias stripName: nameLabel
+    readonly property alias nameInput: nameInput
+    property bool renaming: false
 
     signal gainReleased(string id, real db)
     signal panReleased(string id, real pan)
@@ -63,8 +65,16 @@ Panel {
     signal insertEditorRequested(string id, int index)
     signal pluginManagerRequested()
     signal newBusRequested(string id, string role)       // role: "send" or "output"
+    signal renameRequested(string id, string name)
     signal selectRequested(string id, int modifiers)
 
+    function beginRename() {
+        if (master) return
+        renaming = true
+        nameInput.text = trackName
+        nameInput.forceActiveFocus()
+        nameInput.selectAll()
+    }
     function requestOutput(outputId) { outputRequested(trackId, outputId) }
     function requestSend(targetId) { sendAddRequested(trackId, targetId) }
     function requestGainInsert() { insertAddRequested(trackId) }
@@ -80,6 +90,16 @@ Panel {
 
     implicitWidth: 96
     radius: Theme.radiusRegion
+
+    // a click on the strip outside the name field, or another track becoming the selection, confirms a name being edited
+    TapHandler {
+        onPressedChanged: {
+            if (!pressed || !root.renaming) return
+            const p = nameInput.mapFromItem(root, point.position)
+            if (p.x < 0 || p.y < 0 || p.x > nameInput.width || p.y > nameInput.height) root.forceActiveFocus()
+        }
+    }
+    onSelectedChanged: { if (renaming && !selected) nameInput.commit() }
 
     component TargetMenu: ThemedMenu {
         id: menu
@@ -312,20 +332,48 @@ Panel {
             radius: 1
             color: Theme["track" + root.capitalColor + "Solid"]
         }
-        Text {
-            id: nameLabel
+        Item {
             Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-            text: root.trackName
-            elide: Text.ElideRight
-            color: root.selected ? Theme.accentPrimary : Theme.textPrimary
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontTypeLabelSize
-            font.weight: Theme.fontTypeLabelWeight
+            Layout.preferredHeight: nameLabel.implicitHeight
+            Text {
+                id: nameLabel
+                anchors.fill: parent
+                visible: !root.renaming
+                horizontalAlignment: Text.AlignHCenter
+                text: root.trackName
+                elide: Text.ElideRight
+                color: root.selected ? Theme.accentPrimary : Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontTypeLabelSize
+                font.weight: Theme.fontTypeLabelWeight
+            }
             MouseArea {
                 anchors.fill: parent
-                enabled: !root.master
+                enabled: !root.master && !root.renaming
                 onClicked: (m) => root.selectRequested(root.trackId, m.modifiers)
+                onDoubleClicked: root.beginRename()
+            }
+            TextInput {
+                id: nameInput
+                anchors.fill: parent
+                visible: root.renaming
+                horizontalAlignment: TextInput.AlignHCenter
+                color: Theme.textPrimary
+                selectByMouse: true
+                clip: true
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontTypeLabelSize
+                font.weight: Theme.fontTypeLabelWeight
+                // Return and a click elsewhere confirm the name; Escape cancels
+                function commit() {
+                    const name = text.trim()
+                    root.renaming = false
+                    if (name !== "" && name !== root.trackName) root.renameRequested(root.trackId, name)
+                }
+                onAccepted: commit()
+                Keys.onShortcutOverride: (event) => { if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) event.accepted = true }
+                Keys.onEscapePressed: root.renaming = false
+                onActiveFocusChanged: if (!activeFocus && root.renaming) commit()
             }
         }
     }

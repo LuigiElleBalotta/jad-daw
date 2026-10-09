@@ -202,4 +202,34 @@ TestCase {
         mouseClick(s.stripName)
         compare(got.length, 0)
     }
+    function test_double_click_on_the_strip_name_renames() {
+        var s = createTemporaryObject(stripC, this)
+        var names = []
+        s.renameRequested.connect(function (id, name) { names.push([id, name]) })
+        mouseDoubleClickSequence(s.stripName)
+        verify(s.renaming)
+        s.nameInput.text = "Lead"
+        keyClick(Qt.Key_Return)
+        compare(names, [["t", "Lead"]])
+        verify(!s.renaming)
+    }
+    function test_escape_cancels_and_a_click_elsewhere_confirms_the_strip_name() {
+        var s = createTemporaryObject(stripC, this)
+        var names = []
+        s.renameRequested.connect(function (id, name) { names.push(name) })
+        mouseDoubleClickSequence(s.stripName)
+        s.nameInput.text = "Nope"
+        keyClick(Qt.Key_Escape)
+        compare(names.length, 0)
+        mouseDoubleClickSequence(s.stripName)
+        s.nameInput.text = "Pad"
+        s.nameInput.focus = false
+        compare(names, ["Pad"])
+    }
+    function test_the_master_name_cannot_be_renamed() {
+        var s = createTemporaryObject(stripC, this)
+        s.info = { trackId: "m", name: "Master", color: "purple", kind: "master", master: true, gainDb: 0, pan: 0, inserts: [], sends: [] }
+        mouseDoubleClickSequence(s.stripName)
+        verify(!s.renaming)
+    }
 }

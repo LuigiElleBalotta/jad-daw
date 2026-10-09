@@ -79,4 +79,15 @@ TestCase {
         mouseClick(h.monitorButton)
         compare(got, [["t1", "track.recordArm", true], ["t1", "track.recordArm", false], ["t1", "track.inputMonitor", true]])
     }
+    function test_a_click_elsewhere_confirms_the_new_name() {
+        var h = createTemporaryObject(hdr, this, { height: 72 })
+        var names = []
+        h.renamed.connect(function (id, name) { names.push(name) })
+        mouseDoubleClickSequence(h.nameLabel)
+        verify(h.editing)
+        h.nameInput.text = "Pad"
+        h.nameInput.focus = false     // focus moves away: the typed name is kept
+        compare(names, ["Pad"])
+        verify(!h.editing)
+    }
 }

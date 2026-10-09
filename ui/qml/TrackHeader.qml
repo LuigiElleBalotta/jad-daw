@@ -133,15 +133,17 @@ Item {
                 clip: true
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontTypeBodySize
-                onAccepted: {
+                // Return and a click elsewhere confirm the name (as in Logic); Escape cancels
+                function commit() {
                     const name = text.trim()
                     root.editing = false
                     if (name !== "" && name !== root.trackName) root.renamed(root.trackId, name)
                 }
+                onAccepted: commit()
                 // Return is also a global shortcut (go to beginning): it must confirm the field, not run the shortcut
                 Keys.onShortcutOverride: (event) => { if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) event.accepted = true }
                 Keys.onEscapePressed: root.editing = false
-                onActiveFocusChanged: if (!activeFocus) root.editing = false
+                onActiveFocusChanged: if (!activeFocus && root.editing) commit()
             }
         }
         Row {

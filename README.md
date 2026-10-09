@@ -78,7 +78,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   plug-ins too (a plug-in that is not installed is reported and skipped).
 
 - **Mixer** (`X`): one strip per track, built from the same channel-strip component as the Inspector (instrument,
-  inserts, sends, output, pan, fader, mute, solo), the master strip last.
+  inserts, sends, output, pan, fader, mute, solo), the master strip last. Double click a strip name to rename the track (Return
+  or a click elsewhere confirms, Escape cancels); a click selects it. "New Bus" in a Send or Output menu makes a bus that lives in
+  the Mixer only; Track > Show in Tracks Area puts a bus or aux in the Tracks area (and takes it out again).
 
 ![Mixer](docs/images/mixer.png)
 ![Menus](docs/images/menus.png)

@@ -49,6 +49,8 @@ Rectangle {
         contentHeight: height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        // a click on the empty mixer takes the focus away from a name being edited, which confirms it
+        TapHandler { onPressedChanged: if (pressed) root.forceActiveFocus() }
 
         Row {
             id: strips

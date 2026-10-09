@@ -2,6 +2,7 @@
 #include <string>
 #include <QHash>
 #include <QString>
+#include <QVariantMap>
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -20,6 +21,7 @@ struct InsertRow {
     QString label;        // a plug-in's display name
     bool plugin = false;  // a hosted plug-in (its gain is not editable from the strip)
     bool bypass = false;  // switched off: the signal passes through
+    QVariantMap params;   // every parameter of a built-in effect, by name
 };
 struct SendRow {
     QString id, targetId, targetName;

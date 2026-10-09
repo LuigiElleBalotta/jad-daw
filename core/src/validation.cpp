@@ -1,4 +1,5 @@
 #include "lpc/validation.h"
+#include "lpc/effect_specs.h"
 
 #include <cctype>
 #include <cmath>
@@ -85,10 +86,12 @@ MaybeError checkInsert(const ProcessorRef& insert) {
     }
     if (insert.processorId.rfind("vst3:", 0) == 0) return CommandError{"bad_value", "malformed plug-in id: " + insert.processorId};
     if (!isKnownEffect(insert.processorId)) return CommandError{"bad_value", "unknown insert processor: " + insert.processorId};
-    // builtin.gain is the only effect for now: one parameter, gainDb
+    const EffectSpec* spec = findEffectSpec(insert.processorId);  // every parameter must be one of the effect's, inside its range
     for (const auto& [name, value] : insert.params) {
-        if (name != "gainDb") return CommandError{"bad_value", "unknown parameter '" + name + "' for " + insert.processorId};
-        if (!inRange(value, -96.0, 24.0)) return CommandError{"bad_value", "gainDb must be a number in [-96, 24]"};
+        const EffectParam* param = spec ? spec->find(name) : nullptr;
+        if (!param) return CommandError{"bad_value", "unknown parameter '" + name + "' for " + insert.processorId};
+        if (!inRange(value, param->min, param->max))
+            return CommandError{"bad_value", name + " must be a number in [" + std::to_string(param->min) + ", " + std::to_string(param->max) + "]"};
     }
     return std::nullopt;
 }

@@ -18,6 +18,8 @@ public:
     // Latency in frames, read on the project thread when the graph is built.
     virtual int latencySamples() const { return 0; }
     virtual void process(float* l, float* r, int frames) noexcept = 0;
+    // The gain reduction (dB, 0 or more) of the last block, for the strip's meter; read on the audio thread after process().
+    virtual float reductionDb() const noexcept { return 0.0f; }
     virtual nlohmann::json describe() const = 0;  // not real-time; used by tests
 };
 
@@ -83,6 +85,6 @@ private:
 
 // Creates an insert effect from a model reference; nullptr when the processor id is unknown.
 // Project thread only (allocates).
-std::unique_ptr<IProcessor> makeEffect(const ProcessorRef& ref);
+std::unique_ptr<IProcessor> makeEffect(const ProcessorRef& ref, double sampleRate = 48000.0);
 
 }  // namespace lpc::audio

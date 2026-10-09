@@ -33,6 +33,7 @@ public:
     bool playing() const { return playingPub_.load(std::memory_order_relaxed); }
     // the post-fader peak of every track since the last call (linear); for the UI thread only
     void takeTrackPeaks(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackPeaks(out); }
+    void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackReductions(out); }
     float masterPeak() const { return masterPeakPub_.load(std::memory_order_relaxed); }
     std::size_t pendingMessages() const { return messages_.sizeApprox(); }
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }

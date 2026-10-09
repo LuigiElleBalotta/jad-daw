@@ -77,6 +77,7 @@ ApplicationWindow {
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
     PreferencesDialog { id: preferencesDialog; project: controller }
+    EffectEditorWindow { id: effectEditor; project: controller }
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
     // the Mixer in a window of its own (View > Mixer when it is detached, Window > Open Mixer)
     Window {

@@ -5,6 +5,12 @@ namespace lpc {
 
 inline constexpr const char* kProcGain = "builtin.gain";
 inline constexpr const char* kProcSine = "builtin.sine";
+inline constexpr const char* kProcEq = "builtin.eq";
+inline constexpr const char* kProcCompressor = "builtin.compressor";
+inline constexpr const char* kProcLimiter = "builtin.limiter";
+inline constexpr const char* kProcGate = "builtin.gate";
+inline constexpr const char* kProcDelay = "builtin.delay";
+inline constexpr const char* kProcReverb = "builtin.reverb";
 
 // A hosted plug-in: "vst3:" and 32 lowercase hex digits.
 inline bool isVst3Id(std::string_view id) {
@@ -15,7 +21,7 @@ inline bool isVst3Id(std::string_view id) {
     return true;
 }
 
-inline bool isKnownEffect(std::string_view id) { return id == kProcGain; }
+bool isKnownEffect(std::string_view id);  // a built-in effect (see effect_specs.h)
 inline bool isKnownInstrument(std::string_view id) { return id == kProcSine; }
 
 }  // namespace lpc

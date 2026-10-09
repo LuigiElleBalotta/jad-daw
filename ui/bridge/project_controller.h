@@ -111,6 +111,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(double punchStartBeats READ punchStartBeats NOTIFY punchChanged)
     Q_PROPERTY(double punchEndBeats READ punchEndBeats NOTIFY punchChanged)
     Q_PROPERTY(int recordingDelay READ recordingDelay WRITE setRecordingDelay NOTIFY audioSettingsChanged)  // samples
+    Q_PROPERTY(QString effectEditorTrack READ effectEditorTrack NOTIFY effectEditorChanged)  // the insert whose editor is open ("" = none)
+    Q_PROPERTY(int effectEditorIndex READ effectEditorIndex NOTIFY effectEditorChanged)
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -188,6 +190,15 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    QString effectEditorTrack() const { return effectEditorTrack_; }
+    int effectEditorIndex() const { return effectEditorIndex_; }
+    Q_INVOKABLE void openEffectEditor(const QString& trackId, int index);
+    Q_INVOKABLE void closeEffectEditor();
+    Q_INVOKABLE QVariantList effectSpecs() const;                    // the built-in effects and their parameters (effect_specs.h)
+    Q_INVOKABLE QVariantList trackInserts(const QString& trackId) const;  // the inserts of a track, with their parameters
+    Q_INVOKABLE QString trackName(const QString& trackId) const;
+    // the Channel EQ's response in dB at `points` frequencies from minHz to maxHz (log spaced) for the parameters in `values`
+    Q_INVOKABLE QVariantList eqCurve(const QVariantMap& values, int points, double minHz, double maxHz) const;
     int sampleRateHz() const { return sampleRate_; }
     QString audioOutput() const { return audioOutput_; }
     QString audioInput() const { return audioInput_; }
@@ -264,6 +275,7 @@ public:
     // the level a strip's meter shows (falls back after a peak) and the highest level since the last reset (the peak field); linear
     Q_INVOKABLE double trackPeak(const QString& trackId) const { return meter_.value(trackId); }
     Q_INVOKABLE double trackHold(const QString& trackId) const { return hold_.value(trackId); }
+    Q_INVOKABLE double trackReduction(const QString& trackId) const { return reduction_.value(trackId); }  // dB of gain reduction now
     Q_INVOKABLE void resetPeaks();
     bool anySolo() const {
         for (const TrackRow& t : allRows_)
@@ -487,6 +499,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void effectEditorChanged();
     void audioSettingsChanged();
     void recordingChanged();
     void punchChanged();
@@ -627,6 +640,8 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    QString effectEditorTrack_;
+    int effectEditorIndex_ = -1;
     QString audioOutput_, audioInput_;
     int audioBuffer_ = 256;
     std::function<lpc::AudioDeviceChoices(const std::string&, const std::string&)> deviceLister_;
@@ -659,7 +674,7 @@ private:
     QString automationParam_ = QStringLiteral("volume");
     std::vector<MarkerRow> markerRows_;
     void sendMarkers(const std::vector<MarkerRow>& rows);
-    QHash<QString, double> meter_, hold_;
+    QHash<QString, double> meter_, hold_, reduction_;
     QString deviceError_;
     QString lastError_;
 };

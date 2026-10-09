@@ -126,6 +126,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   back to back; anywhere else each file makes a new audio track named after it. Files at another sample rate are converted to the
   project's (cubic interpolation) and stored as 24-bit WAV in the project folder. MP3 and FLAC are decoded with dr_mp3 and dr_flac
   (`third_party/dr_libs`, public domain / MIT-0).
+- **Effects:** the Audio FX menu of a strip offers Gain, Channel EQ, Compressor, Limiter, Noise Gate, Delay and Reverb besides the VST3 plug-ins; a
+  double click on one opens its editor (a slider per parameter, the EQ also draws its response), the EQ box of the strip shows the curve and a
+  click on it inserts or opens the Channel EQ, the gain reduction bar follows the compressors. The offline bounce renders them too.
 - **File:** Save As, Save a Copy As, Import Audio File and Bounce (an offline render to a 24-bit WAV; plug-in inserts are skipped).
 
 ![Piano Roll](docs/images/piano-roll.png)

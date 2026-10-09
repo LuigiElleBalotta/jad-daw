@@ -10,7 +10,7 @@ namespace jad {
 inline QVariantMap trackToMap(const TrackRow& t) {
     QVariantList inserts, sends;
     for (const InsertRow& i : t.inserts)
-        inserts.append(QVariantMap{{"processorId", i.processorId}, {"gainDb", i.gainDb}, {"label", i.label}, {"plugin", i.plugin}, {"bypass", i.bypass}});
+        inserts.append(QVariantMap{{"processorId", i.processorId}, {"gainDb", i.gainDb}, {"label", i.label}, {"plugin", i.plugin}, {"bypass", i.bypass}, {"params", i.params}});
     for (const SendRow& s : t.sends)
         sends.append(QVariantMap{{"id", s.id}, {"targetId", s.targetId}, {"targetName", s.targetName}, {"levelDb", s.levelDb}, {"preFader", s.preFader}});
     return {{"trackId", t.id},         {"name", t.name},           {"color", t.color},         {"kind", t.kind},

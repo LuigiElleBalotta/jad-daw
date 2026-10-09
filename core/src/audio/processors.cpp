@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "lpc/audio/effects.h"
 #include "lpc/processor_ids.h"
 
 namespace lpc::audio {
@@ -89,12 +90,12 @@ void SineSynth::render(float* l, float* r, int frames) noexcept {
     }
 }
 
-std::unique_ptr<IProcessor> makeEffect(const ProcessorRef& ref) {
+std::unique_ptr<IProcessor> makeEffect(const ProcessorRef& ref, double sampleRate) {
     if (ref.processorId == kProcGain) {
         const auto it = ref.params.find("gainDb");
         return std::make_unique<GainProcessor>(it == ref.params.end() ? 0.0f : static_cast<float>(it->second));
     }
-    return nullptr;
+    return makeBuiltinEffect(ref, sampleRate);
 }
 
 }  // namespace lpc::audio

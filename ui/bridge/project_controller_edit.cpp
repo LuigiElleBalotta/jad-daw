@@ -22,6 +22,9 @@
 #include "lpc/media_store.h"
 #include "lpc/wav.h"
 #include "lpc/offline_render.h"
+#include "lpc/audio/effects.h"
+#include "lpc/effect_specs.h"
+#include "lpc/processor_ids.h"
 #include "lpc/project_host.h"
 #include "lpc/validation.h"
 
@@ -1115,6 +1118,65 @@ void ProjectController::saveAudioSettings(QSettings& s) const {
     s.setValue("audio/input", audioInput_);
     s.setValue("audio/buffer", audioBuffer_);
     s.setValue("audio/recordingDelay", recordingDelay_);
+}
+
+void ProjectController::openEffectEditor(const QString& trackId, int index) {
+    effectEditorTrack_ = trackId;
+    effectEditorIndex_ = index;
+    emit effectEditorChanged();
+}
+
+void ProjectController::closeEffectEditor() {
+    if (effectEditorTrack_.isEmpty()) return;
+    effectEditorTrack_.clear();
+    effectEditorIndex_ = -1;
+    emit effectEditorChanged();
+}
+
+QVariantList ProjectController::effectSpecs() const {
+    static const QVariantList specs = [] {
+        QVariantList out;
+        for (const lpc::EffectSpec& s : lpc::effectSpecs()) {
+            QVariantList params;
+            for (const lpc::EffectParam& p : s.params)
+                params.append(QVariantMap{{"name", QString::fromStdString(p.name)}, {"label", QString::fromStdString(p.label)},
+                                          {"unit", QString::fromStdString(p.unit)}, {"min", p.min}, {"max", p.max}, {"def", p.def},
+                                          {"logarithmic", p.logarithmic}});
+            out.append(QVariantMap{{"id", QString::fromStdString(s.id)}, {"name", QString::fromStdString(s.name)},
+                                   {"group", QString::fromStdString(s.group)}, {"params", params}});
+        }
+        return out;
+    }();
+    return specs;
+}
+
+QVariantList ProjectController::trackInserts(const QString& trackId) const {
+    QVariantList out;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId) continue;
+        for (const InsertRow& i : t.inserts)
+            out.append(QVariantMap{{"processorId", i.processorId}, {"label", i.label}, {"plugin", i.plugin}, {"bypass", i.bypass}, {"params", i.params}});
+    }
+    return out;
+}
+
+QString ProjectController::trackName(const QString& trackId) const {
+    for (const TrackRow& t : allRows_)
+        if (t.id == trackId) return t.name;
+    return {};
+}
+
+QVariantList ProjectController::eqCurve(const QVariantMap& values, int points, double minHz, double maxHz) const {
+    lpc::ProcessorRef ref;
+    ref.processorId = lpc::kProcEq;
+    for (auto it = values.begin(); it != values.end(); ++it) ref.params[it.key().toStdString()] = it.value().toDouble();
+    QVariantList out;
+    points = std::clamp(points, 2, 2000);
+    for (int i = 0; i < points; ++i) {
+        const double f = minHz * std::pow(maxHz / minHz, static_cast<double>(i) / (points - 1));
+        out.append(lpc::audio::eqResponseDb(ref, sampleRate_, f));
+    }
+    return out;
 }
 
 }  // namespace jad

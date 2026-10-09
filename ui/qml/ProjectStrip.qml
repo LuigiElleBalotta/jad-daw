@@ -11,6 +11,22 @@ ChannelStrip {
     pluginGroups: project.plugins.menu
     knownPluginIds: project.plugins.knownIds
 
+    effectGroups: {
+        const groups = {}, order = []
+        for (const s of project.effectSpecs()) {
+            if (s.id === "builtin.gain") continue
+            if (!groups[s.group]) { groups[s.group] = []; order.push(s.group) }
+            groups[s.group].push({ id: s.id, name: s.name })
+        }
+        return order.map(g => ({ group: g, effects: groups[g] }))
+    }
+    effectNames: { const m = {}; for (const s of project.effectSpecs()) m[s.id] = s.name; return m }
+    // the Channel EQ of the track, if it has one: the index of its insert and its response
+    readonly property int eqIndex: { for (let i = 0; i < (info.inserts ?? []).length; ++i) if (info.inserts[i].processorId === "builtin.eq") return i; return -1 }
+    eqCurve: eqIndex >= 0 ? project.eqCurve(info.inserts[eqIndex].params ?? ({}), 64, 20, 20000) : []
+    onEffectInsertRequested: (id, processorId) => project.addInsert(id, processorId)
+    onEffectEditorRequested: (id, index) => project.openEffectEditor(id, index)
+    onEqRequested: (id) => { if (eqIndex >= 0) project.openEffectEditor(id, eqIndex); else project.addInsert(id, "builtin.eq") }
     inputChoices: { project.inputChannels; return project.inputChoices() }
     onInputChosen: (id, input) => project.setTrackInput(id, input)
     onGestureStarted: project.beginGesture()
@@ -46,6 +62,7 @@ ChannelStrip {
     onSoloClearRequested: project.clearSolo()
     level: { project.peaksRevision; return project.trackPeak(root.trackId) }
     peakHold: { project.peaksRevision; return project.trackHold(root.trackId) }
+    reduction: { project.peaksRevision; return project.trackReduction(root.trackId) }
     onPeakReset: project.resetPeaks()
     onSelectRequested: (id, modifiers) => project.selectTrack(id, modifiers & Qt.ShiftModifier ? "extend" : (modifiers & Qt.ControlModifier ? "toggle" : "replace"))
     selected: project.selectedTrackIds.indexOf(root.trackId) >= 0

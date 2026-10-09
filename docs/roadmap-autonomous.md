@@ -25,10 +25,11 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - [x] Input level meter on the armed track's strip (its meter shows the input).
 
 ## 3. Built-in effects for mixing
-- [ ] Channel EQ (low/high shelf + 3 parametric bands), with a curve display in the strip's EQ box.
-- [ ] Compressor (threshold, ratio, attack, release, make-up, gain-reduction meter).
-- [ ] Reverb (algorithmic, a few parameters) and Delay (time, feedback, mix), Limiter, Gate.
-- [ ] They appear in the Audio FX slot menu, have their own small editor windows, are saved in the project, bounce correctly.
+- [x] Channel EQ (low/high shelf + 3 parametric bands, output gain), with its response curve in the strip's EQ box and in its editor.
+- [x] Compressor (threshold, ratio, attack, release, knee, make-up, mix) with the gain-reduction bar of the strip.
+- [x] Reverb (Freeverb layout) and Delay (time, feedback, mix, ping-pong), Limiter (1 ms look-ahead, reported as latency), Noise Gate.
+- [x] They appear in the Audio FX slot menu (grouped), a double click opens an editor window with a slider per parameter, they are saved in the
+      project and the offline bounce renders them. (A parameter change rebuilds the effect: its tail restarts.)
 
 ## 4. MIDI
 - [ ] MIDI input device selection, MIDI recording into a region (notes, with the count-in), step input keyboard.

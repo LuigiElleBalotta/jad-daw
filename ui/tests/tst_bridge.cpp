@@ -974,6 +974,37 @@ private slots:
         c.setRecordingDelay(100000);
         QCOMPARE(c.recordingDelay(), 48000);         // kept in range
     }
+    void builtInEffectsHaveSpecsParametersAndAnEditorState() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        const QVariantList specs = c.effectSpecs();
+        QStringList ids;
+        for (const QVariant& v : specs) ids << v.toMap().value("id").toString();
+        QVERIFY(ids.contains("builtin.eq") && ids.contains("builtin.compressor") && ids.contains("builtin.reverb"));
+        const QString audio = firstAudioTrackId(c);
+        c.addInsert(audio, "builtin.compressor");
+        QTRY_VERIFY(c.trackInserts(audio).size() >= 1);
+        const int last = static_cast<int>(c.trackInserts(audio).size()) - 1;
+        QCOMPARE(c.trackInserts(audio).at(last).toMap().value("processorId").toString(), QString("builtin.compressor"));
+        c.setInsertParam(audio, last, "threshold", -30.0);
+        QTRY_COMPARE(c.trackInserts(audio).at(last).toMap().value("params").toMap().value("threshold").toDouble(), -30.0);
+        c.setInsertParam(audio, last, "ratio", 99.0);   // out of its range: the Core refuses it
+        c.openEffectEditor(audio, last);
+        QCOMPARE(c.effectEditorTrack(), audio);
+        QCOMPARE(c.effectEditorIndex(), last);
+        c.closeEffectEditor();
+        QVERIFY(c.effectEditorTrack().isEmpty());
+        QVariantMap flat;
+        const QVariantList curve = c.eqCurve(flat, 16, 20, 20000);
+        QCOMPARE(curve.size(), 16);
+        QVERIFY(std::abs(curve.first().toDouble()) < 0.01);                  // a flat EQ
+        QVariantMap boost{{"m2Freq", 1000.0}, {"m2Gain", 12.0}};
+        double peak = 0;
+        for (const QVariant& v : c.eqCurve(boost, 64, 20, 20000)) peak = std::max(peak, v.toDouble());
+        QVERIFY(peak > 11.0);
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

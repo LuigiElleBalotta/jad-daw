@@ -1188,6 +1188,18 @@ void ProjectController::tick() {
         }
         if (moved) { ++peaksRevision_; emit peaksChanged(); }
     }
+    {   // the gain reduction of each track's compressors: it falls back a little each tick
+        std::vector<std::pair<lpc::Uuid, float>> gr;
+        engine_->takeTrackReductions(gr);
+        bool moved = false;
+        for (const auto& [id, value] : gr) {
+            double& r = reduction_[QString::fromStdString(id.toString())];
+            const double next = std::max<double>(value, r * 0.85);
+            const double shown = next < 0.05 ? 0.0 : next;
+            if (shown != r) { r = shown; moved = true; }
+        }
+        if (moved) { ++peaksRevision_; emit peaksChanged(); }
+    }
     if (recording_) {
         drainRecording();
         if (punchEnabled_ && !recFinishing_ && !punchStopSent_ && playing_ && positionBeats_ > punchEndBeats_) {  // Autopunch: out

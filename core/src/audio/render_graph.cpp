@@ -184,7 +184,11 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
                 r[i] += inR[i];
             }
         }
-        for (const auto& insert : cfg->inserts) insert->process(l, r, n);
+        t.blockReduction = 0.0f;
+        for (const auto& insert : cfg->inserts) {
+            insert->process(l, r, n);
+            t.blockReduction = std::max(t.blockReduction, insert->reductionDb());
+        }
     }
 
     std::copy_n(l, n, preL_.data());  // pre-fader tap for sends
@@ -280,8 +284,21 @@ void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float
         peakHi_[k].store(t.id.hi, std::memory_order_relaxed);
         peakLo_[k].store(t.id.lo, std::memory_order_relaxed);
         peakVal_[k].store(std::max(peakVal_[k].load(std::memory_order_relaxed), t.blockPeak), std::memory_order_relaxed);
+        reductionVal_[k].store(std::max(reductionVal_[k].load(std::memory_order_relaxed), t.blockReduction), std::memory_order_relaxed);
     }
     peakCount_.store(count_, std::memory_order_release);
+}
+
+void RenderGraph::takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) noexcept {
+    const int n = peakCount_.load(std::memory_order_acquire);
+    out.clear();
+    for (int i = 0; i < n; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        Uuid id;
+        id.hi = peakHi_[k].load(std::memory_order_relaxed);
+        id.lo = peakLo_[k].load(std::memory_order_relaxed);
+        out.emplace_back(id, reductionVal_[k].exchange(0.0f, std::memory_order_relaxed));
+    }
 }
 
 void RenderGraph::takeTrackPeaks(std::vector<std::pair<Uuid, float>>& out) noexcept {

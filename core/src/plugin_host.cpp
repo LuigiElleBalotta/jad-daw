@@ -7,7 +7,7 @@ namespace lpc {
 
 namespace {
 std::unique_ptr<audio::IProcessor> makeLiveInsert(const ProcessorRef& ref, IPluginHost* host, const InsertSlot& slot, double sampleRate, int maxBlock) {
-    if (!isVst3Id(ref.processorId)) return audio::makeEffect(ref);
+    if (!isVst3Id(ref.processorId)) return audio::makeEffect(ref, sampleRate);
     if (host) {
         if (std::shared_ptr<audio::IProcessor> live = host->acquire(slot, ref, sampleRate, maxBlock))
             return std::make_unique<audio::SharedProcessor>(std::move(live));

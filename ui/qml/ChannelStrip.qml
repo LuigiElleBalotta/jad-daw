@@ -11,6 +11,10 @@ Panel {
     property var info: ({})
     property var targets: []     // the buses and auxes a send or the output can go to: [{id, name}]
     property real peak: 0        // the master strip's meter
+    property real reduction: 0      // dB of gain reduction by the track's compressors, drawn in the gain reduction bar
+    property var effectGroups: []   // [{group, effects: [{id, name}]}] for the Audio FX menu
+    property var effectNames: ({})  // processor id -> display name
+    property var eqCurve: []        // the response (dB) of the track's Channel EQ, drawn in the EQ box; empty when it has none
     property var inputChoices: [] // the entries of the Input menu: stereo first, then each input of the device
     property real level: 0       // the meter of a track strip (linear)
     property real peakHold: 0    // the highest level since the last reset: the peak field
@@ -88,6 +92,9 @@ Panel {
     signal gainMoved(string id, real db)
     signal panMoved(string id, real pan)
     signal inputChosen(string id, int input)                    // the Input slot: 0 = 1+2 stereo, n = input n
+    signal effectInsertRequested(string id, string processorId)  // a built-in effect from the Audio FX menu
+    signal effectEditorRequested(string id, int index)         // a double click on a built-in effect
+    signal eqRequested(string id)                               // a click on the EQ box
     signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
@@ -104,7 +111,7 @@ Panel {
     function isMissing(ins) { return ins.plugin === true && knownPluginIds.indexOf(ins.processorId) < 0 }
     function insertLabel(ins) {
         if (ins.plugin) return ins.label && ins.label !== "" ? ins.label : qsTr("Plug-in")
-        return ins.processorId === "builtin.gain" ? qsTr("Gain") : ins.processorId
+        return effectNames[ins.processorId] ?? ins.processorId
     }
 
     readonly property bool acceptsInserts: slotsVisible && !master && visible  // a place an insert can be dropped
@@ -212,6 +219,27 @@ Panel {
         signal managerChosen()
         ThemedMenuItem { text: qsTr("Gain"); onTriggered: root.requestGainInsert() }
         Instantiator {
+            model: root.effectGroups
+            delegate: ThemedMenu {
+                id: effectMenu
+                required property var modelData
+                title: modelData.group
+                Instantiator {
+                    model: effectMenu.modelData.effects
+                    delegate: ThemedMenuItem {
+                        required property var modelData
+                        text: modelData.name
+                        onTriggered: root.effectInsertRequested(root.trackId, modelData.id)
+                    }
+                    onObjectAdded: (index, object) => effectMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => effectMenu.removeItem(object)
+                }
+            }
+            onObjectAdded: (index, object) => insertMenu.insertMenu(index + 1, object)
+            onObjectRemoved: (index, object) => insertMenu.removeMenu(object)
+        }
+        MenuSeparator {}
+        Instantiator {
             model: root.pluginGroups
             delegate: ThemedMenu {
                 id: vendorMenu
@@ -228,7 +256,7 @@ Panel {
                     onObjectRemoved: (index, object) => vendorMenu.removeItem(object)
                 }
             }
-            onObjectAdded: (index, object) => insertMenu.insertMenu(index + 1, object)
+            onObjectAdded: (index, object) => insertMenu.insertMenu(root.effectGroups.length + 2 + index, object)
             onObjectRemoved: (index, object) => insertMenu.removeMenu(object)
         }
         MenuSeparator {}
@@ -271,7 +299,19 @@ Panel {
         FixedRow {  // the gain reduction bar
             rowHeight: root.tight ? 0 : StripMetrics.gainReduction
             visible: !root.tight
-            Rectangle { anchors.fill: parent; visible: root.slotsVisible; radius: 1; color: Theme.surfaceCanvas }
+            Rectangle {
+                anchors.fill: parent
+                visible: root.slotsVisible
+                radius: 1
+                color: Theme.surfaceCanvas
+                Rectangle {  // grows from the right: the deeper the reduction the longer
+                    anchors.right: parent.right
+                    height: parent.height
+                    radius: 1
+                    width: parent.width * Math.min(1, root.reduction / 24)
+                    color: Theme.stateSolo
+                }
+            }
         }
         FixedRow {  // the EQ display: a click would insert a Channel EQ
             rowHeight: root.tight ? 0 : StripMetrics.eq
@@ -283,7 +323,27 @@ Panel {
                 radius: Theme.radiusControl - 2
                 color: Theme.surfaceCanvas
                 border.color: Theme.borderSubtle
-                MouseArea { anchors.fill: parent; onClicked: root.stubUsed(qsTr("EQ")) }
+                Canvas {  // the response of the track's Channel EQ
+                    id: eqCanvas
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    visible: root.eqCurve.length > 1
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.reset()
+                        ctx.strokeStyle = Theme.accentPrimary
+                        ctx.lineWidth = 1.5
+                        ctx.beginPath()
+                        for (let i = 0; i < root.eqCurve.length; ++i) {
+                            const x = i / (root.eqCurve.length - 1) * width
+                            const y = height / 2 - Math.max(-18, Math.min(18, root.eqCurve[i])) / 18 * (height / 2)
+                            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                        }
+                        ctx.stroke()
+                    }
+                    Connections { target: root; function onEqCurveChanged() { eqCanvas.requestPaint() } }
+                }
+                MouseArea { anchors.fill: parent; onClicked: root.eqRequested(root.trackId) }
             }
         }
         FixedRow {  // the input of an audio strip, the instrument of an instrument strip
@@ -341,7 +401,10 @@ Panel {
                             root.insertMoveRequested(root.trackId, index, place.to, place.trackId === root.trackId ? "" : place.trackId)
                         }
                         onRemoveRequested: root.insertRemoveRequested(root.trackId, index)
-                        onDoubleClicked: { if (modelData.plugin) root.insertEditorRequested(root.trackId, index) }
+                        onDoubleClicked: {
+                            if (modelData.plugin) root.insertEditorRequested(root.trackId, index)
+                            else if (modelData.processorId !== "builtin.gain") root.effectEditorRequested(root.trackId, index)
+                        }
                         onDragged: (dx) => {
                             if (modelData.plugin) return
                             root.dragIndex = index

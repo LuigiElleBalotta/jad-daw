@@ -28,4 +28,7 @@
 - CI for the UI-B commits (not passing at merge time, ignored on purpose)
 
 ## Next
-- VST3 hosting as effects: separate Core/platform spec
+- VST3 hosting as effects: spec `specs/2026-10-09-vst3-hosting-design.md`, then plan
+- TODO after VST3: buses made from a send show only in the Mixer, not in the Tracks area (see "Tracks area vs Mixer"); small
+  spec for a `showInTracks` flag and a show/hide menu entry
+- Then the deferred interactions and minor findings above

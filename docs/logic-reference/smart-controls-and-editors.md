@@ -49,6 +49,15 @@ top to bottom) with, at the left, an expander arrow, a purple round icon, the no
 size (`/16`), small steppers (direction, offset, gate), and the row's mode label ("On/Off"). Sixteen dark cells per row (groups of four
 separated by a slightly wider gap), the first cell outlined as the cursor.
 
+### Score (tab)
+
+The **Inspector changes with the editor**: in Score it shows, top to bottom, **Filter: All Instruments** · **Region: Default** (Style `0`,
+Quantize ▾ Default, Interpretation ✓, Syncopation ☐, No Overlap ✓, Max. Dots `1`) · **Event: Insert Defaults** (MIDI Channel ▾ 1, Velocity
+`0`, Text ▾ Plain Text, Lyric ☐) · **Part Box: Customized** (a palette of notation symbols: an "All" button and a grid of about 24 icon
+buttons, with note-value icons below). The local menu bar is **Layout ▾ · Edit ▾ · Functions ▾ · View ▾**, three layout toggles in purple,
+the same icon toggles and link button as the Piano Roll, tool popup, zoom. With no MIDI region selected the page (light grey, paper
+colour) says "Create a MIDI region." and shows only the ruler.
+
 ## Notes for the clone
 
 - The Editors area is a **tab strip with four editors**, not only the Piano Roll; the first implementation can show Piano Roll and

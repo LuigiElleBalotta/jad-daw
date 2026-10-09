@@ -10,6 +10,7 @@
 #include "lpc/demo_project.h"
 #include "lpc/media_store.h"
 #include "lpc/offline_render.h"
+#include "lpc/processor_ids.h"
 #include "lpc/project_io.h"
 #include "lpc/wav.h"
 
@@ -20,6 +21,19 @@
 #endif
 
 namespace lpc::cli {
+
+namespace {
+PluginHostFactory gPluginHostFactory;
+
+bool usesPlugins(const lpc::Project& p) {
+    for (const lpc::Track& t : p.tracks)
+        for (const lpc::ProcessorRef& i : t.strip.inserts)
+            if (lpc::isVst3Id(i.processorId)) return true;
+    return false;
+}
+}  // namespace
+
+void setPluginHostFactory(PluginHostFactory factory) { gPluginHostFactory = std::move(factory); }
 
 #ifdef _WIN32
 std::string wideToUtf8(const wchar_t* wide) {
@@ -140,6 +154,20 @@ int cmdRender(const std::vector<std::string>& args, std::ostream& out, std::ostr
     MediaStore media(dir, /*streaming=*/false);  // memory sources: deterministic output
     RenderOptions options;
     if (seconds) options.frames = static_cast<std::int64_t>(std::llround(std::min(*seconds * project.sampleRate, 1e15)));
+    std::shared_ptr<lpc::IPluginHost> plugins;
+    if (usesPlugins(project)) {
+        if (!gPluginHostFactory) err << "warning: this build cannot host plug-ins; they are skipped\n";
+        else plugins = gPluginHostFactory();
+        options.plugins = plugins.get();
+        if (plugins) {
+            std::vector<std::string> installed;
+            for (const lpc::PluginDescriptor& d : plugins->catalogue()) installed.push_back(d.id);
+            for (const lpc::Track& t : project.tracks)
+                for (const lpc::ProcessorRef& i : t.strip.inserts)
+                    if (lpc::isVst3Id(i.processorId) && std::find(installed.begin(), installed.end(), i.processorId) == installed.end())
+                        err << "warning: plug-in " << (i.label.empty() ? i.processorId : i.label) << " is not installed; it passes the sound through\n";
+        }
+    }
     const RenderResult result = renderOffline(project, media, options);
     writeWav(toPath(p.positional[1]), result.sampleRate, 2, result.interleaved, format);
     for (const std::string& w : media.warnings()) err << "warning: " << w << "\n";

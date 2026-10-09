@@ -9,7 +9,11 @@ if(LPC_WITH_JUCE)
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_MODAL_LOOPS_PERMITTED=0
-        JUCE_STANDALONE_APPLICATION=1)
+        JUCE_STANDALONE_APPLICATION=1
+        LPC_CLI_HAS_PLUGINS=1)
+    add_dependencies(lpc-cli lpc-plugin-scanner)
+    add_custom_command(TARGET lpc-cli POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:lpc-plugin-scanner> $<TARGET_FILE_DIR:lpc-cli>)
     target_link_libraries(lpc-cli
         PRIVATE
             lpc_cli_lib

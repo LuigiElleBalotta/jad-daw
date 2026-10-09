@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -16,6 +17,40 @@ namespace lpc::audio {
 inline constexpr int kMaxTracks = 1024;
 inline constexpr int kMaxBlock = 512;         // render() handles at most this many frames per call
 inline constexpr int kMaxBlockEvents = 256;   // MIDI events per track per block; extra events are dropped
+
+inline constexpr int kMaxPdcFrames = 1 << 18;  // longest compensation delay of one edge (about 5.4 s at 48 kHz)
+
+// A fixed delay of stereo audio. The buffers are allocated in the constructor (project thread); process() never allocates.
+class DelayLine {
+public:
+    DelayLine() : size_(0) {}
+    explicit DelayLine(int frames)
+        : size_(frames > 0 ? frames : 0), l_(static_cast<std::size_t>(size_), 0.0f), r_(static_cast<std::size_t>(size_), 0.0f) {}
+    int frames() const { return size_; }
+    // out = in delayed by frames(). `in` and `out` must not overlap.
+    void process(const float* inL, const float* inR, float* outL, float* outR, int n) noexcept {
+        if (size_ == 0) {
+            std::copy_n(inL, n, outL);
+            std::copy_n(inR, n, outR);
+            return;
+        }
+        std::size_t p = pos_;
+        const std::size_t size = static_cast<std::size_t>(size_);
+        for (int i = 0; i < n; ++i) {
+            outL[i] = l_[p];
+            outR[i] = r_[p];
+            l_[p] = inL[i];
+            r_[p] = inR[i];
+            if (++p == size) p = 0;
+        }
+        pos_ = p;
+    }
+
+private:
+    int size_;
+    std::vector<float> l_, r_;
+    std::size_t pos_ = 0;
+};
 
 struct NoteSpan {
     std::int64_t onFrame = 0;
@@ -38,6 +73,7 @@ struct SendPlayback {
     Uuid target;
     float gain = 1.0f;
     bool preFader = false;
+    DelayLine delay;  // plug-in delay compensation
 };
 
 struct TrackConfig {
@@ -45,6 +81,7 @@ struct TrackConfig {
     std::vector<std::unique_ptr<IProcessor>> inserts;
     std::vector<SendPlayback> sends;
     Uuid output;  // null = master
+    DelayLine outputDelay;  // plug-in delay compensation of the output edge
     std::vector<std::shared_ptr<IFrameSource>> keepAlive;
 };
 
@@ -95,7 +132,7 @@ private:
     std::array<TrackNode*, kMaxTracks> tmp_{};
     int count_ = 0;
     TrackNode* master_ = nullptr;
-    std::vector<float> scratchL_, scratchR_, preL_, preR_;
+    std::vector<float> scratchL_, scratchR_, preL_, preR_, dlyL_, dlyR_;
     float masterPeak_ = 0.0f;
 };
 

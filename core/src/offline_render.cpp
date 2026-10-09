@@ -38,7 +38,8 @@ RenderResult renderOffline(const Project& p, MediaStore& media, const RenderOpti
     out.interleaved.assign(static_cast<std::size_t>(total) * 2, 0.0f);
 
     audio::AudioEngine engine(static_cast<double>(p.sampleRate));
-    for (const audio::AudioMsg& m : initialMessages(p, media)) engine.applyDirect(m);
+    for (const audio::AudioMsg& m : initialMessages(p, media, options.plugins)) engine.applyDirect(m);
+    const std::int64_t skip = computePdc(p, options.plugins).totalLatency;  // frames the plug-ins delay everything by
     audio::AudioMsg locate;
     locate.kind = audio::MsgKind::Locate;
     locate.frame = start;
@@ -49,12 +50,14 @@ RenderResult renderOffline(const Project& p, MediaStore& media, const RenderOpti
 
     const int block = std::clamp(options.blockSize, 1, 65536);
     std::vector<float> l(static_cast<std::size_t>(block)), r(static_cast<std::size_t>(block));
-    for (std::int64_t pos = 0; pos < total; pos += block) {
-        const int n = static_cast<int>(std::min<std::int64_t>(block, total - pos));
+    for (std::int64_t pos = 0; pos < total + skip; pos += block) {
+        const int n = static_cast<int>(std::min<std::int64_t>(block, total + skip - pos));
         engine.processBlock(l.data(), r.data(), n);
         for (int i = 0; i < n; ++i) {
-            out.interleaved[static_cast<std::size_t>((pos + i) * 2)] = l[static_cast<std::size_t>(i)];
-            out.interleaved[static_cast<std::size_t>((pos + i) * 2 + 1)] = r[static_cast<std::size_t>(i)];
+            const std::int64_t at = pos + i - skip;
+            if (at < 0) continue;
+            out.interleaved[static_cast<std::size_t>(at * 2)] = l[static_cast<std::size_t>(i)];
+            out.interleaved[static_cast<std::size_t>(at * 2 + 1)] = r[static_cast<std::size_t>(i)];
         }
     }
     engine.collectGarbage();

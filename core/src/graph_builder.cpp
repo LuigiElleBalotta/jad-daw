@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "lpc/audio/processors.h"
+#include "lpc/processor_ids.h"
 
 namespace lpc {
 
@@ -44,11 +45,11 @@ AudioMsg stripMsg(const Track& t) {
     return m;
 }
 
-AudioMsg configMsg(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins) {
+AudioMsg configMsg(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     AudioMsg m;
     m.kind = MsgKind::SetConfig;
     m.track = t.id;
-    m.obj = makeOwned(buildConfig(p, t, media, plugins).release());
+    m.obj = makeOwned(buildConfig(p, t, media, plugins, pdc).release());
     return m;
 }
 
@@ -57,6 +58,20 @@ AudioMsg reorderMsg(const Project& p) {
     m.kind = MsgKind::Reorder;
     m.obj = makeOwned(new std::vector<Uuid>(processingOrder(p)));
     return m;
+}
+
+int clampLatency(int v) { return std::clamp(v, 0, kMaxPdcFrames); }
+
+int trackLatency(const Project& p, const Track& t, IPluginHost* plugins) {
+    if (!plugins) return 0;
+    long long sum = 0;
+    for (std::size_t i = 0; i < t.strip.inserts.size(); ++i) {
+        const ProcessorRef& ref = t.strip.inserts[i];
+        if (!isVst3Id(ref.processorId)) continue;
+        if (auto live = plugins->acquire(InsertSlot{t.id, static_cast<int>(i)}, ref, static_cast<double>(p.sampleRate), kMaxBlock))
+            sum += clampLatency(live->latencySamples());
+    }
+    return clampLatency(static_cast<int>(std::min<long long>(sum, kMaxPdcFrames)));
 }
 
 bool stripChanged(const Track& a, const Track& b) {
@@ -109,7 +124,47 @@ std::vector<Uuid> processingOrder(const Project& p) {
     return order;
 }
 
-std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins) {
+PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
+    PdcPlan plan;
+    const Track* master = p.master();
+    const std::vector<Uuid> order = processingOrder(p);
+    std::unordered_map<Uuid, int> latency, in;
+    for (const Track& t : p.tracks) {
+        latency[t.id] = trackLatency(p, t, plugins);
+        in[t.id] = 0;
+    }
+    auto forEachEdge = [&](const Track& t, auto&& fn) {  // fn(isOutput, sendIndex, target)
+        const Uuid out = t.strip.output.isNull() && master ? master->id : t.strip.output;
+        fn(true, -1, out);
+        for (std::size_t i = 0; i < t.strip.sends.size(); ++i) fn(false, static_cast<int>(i), t.strip.sends[i].targetTrackId);
+    };
+    for (const Uuid& id : order) {  // sources before the buses they feed
+        const Track* t = p.findTrack(id);
+        if (!t || t->kind == TrackKind::Master) continue;
+        const int out = in[id] + latency[id];
+        forEachEdge(*t, [&](bool, int, const Uuid& to) {
+            if (auto it = in.find(to); it != in.end() && to != id) it->second = std::max(it->second, out);
+        });
+    }
+    for (const Track& t : p.tracks) {
+        if (t.kind == TrackKind::Master) continue;
+        EdgeDelays e;
+        e.sends.assign(t.strip.sends.size(), 0);
+        const int out = in[t.id] + latency[t.id];
+        forEachEdge(t, [&](bool isOutput, int sendIndex, const Uuid& to) {
+            const auto it = in.find(to);
+            if (it == in.end() || to == t.id) return;
+            const int delay = std::clamp(it->second - out, 0, kMaxPdcFrames);
+            if (isOutput) e.output = delay;
+            else e.sends[static_cast<std::size_t>(sendIndex)] = delay;
+        });
+        plan.edges[t.id] = std::move(e);
+    }
+    if (master) plan.totalLatency = std::clamp(in[master->id] + latency[master->id], 0, kMaxPdcFrames);
+    return plan;
+}
+
+std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
     for (const Region& r : t.regions) {
         RegionPlayback rp;
@@ -139,31 +194,48 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             cfg->inserts.push_back(std::move(effect));
         ++slotIndex;
     }
-    for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader});
+    for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}});
     cfg->output = t.strip.output;
+    if (pdc) {
+        if (const auto it = pdc->edges.find(t.id); it != pdc->edges.end()) {
+            cfg->outputDelay = DelayLine(it->second.output);
+            for (std::size_t i = 0; i < cfg->sends.size() && i < it->second.sends.size(); ++i)
+                cfg->sends[i].delay = DelayLine(it->second.sends[i]);
+        }
+    }
     return cfg;
 }
 
-std::unique_ptr<TrackNode> buildNode(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins) {
-    return std::make_unique<TrackNode>(t.id, t.kind, stripParamsOf(t.strip), buildConfig(p, t, media, plugins).release(),
+std::unique_ptr<TrackNode> buildNode(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
+    return std::make_unique<TrackNode>(t.id, t.kind, stripParamsOf(t.strip), buildConfig(p, t, media, plugins, pdc).release(),
                                        static_cast<double>(p.sampleRate));
 }
 
 std::vector<AudioMsg> initialMessages(const Project& p, MediaStore& media, IPluginHost* plugins) {
+    const PdcPlan pdc = computePdc(p, plugins);
     std::vector<AudioMsg> out;
-    for (const Track& t : p.tracks) out.push_back(addMsg(buildNode(p, t, media, plugins)));
+    for (const Track& t : p.tracks) out.push_back(addMsg(buildNode(p, t, media, plugins, &pdc)));
     out.push_back(reorderMsg(p));
+    return out;
+}
+
+std::vector<AudioMsg> refreshMessages(const Project& p, MediaStore& media, IPluginHost* plugins) {
+    const PdcPlan pdc = computePdc(p, plugins);
+    std::vector<AudioMsg> out;
+    for (const Track& t : p.tracks) out.push_back(configMsg(p, t, media, plugins, &pdc));
     return out;
 }
 
 std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after, MediaStore& media, IPluginHost* plugins) {
     std::vector<AudioMsg> out;
+    const PdcPlan planBefore = computePdc(before, plugins);
+    const PdcPlan planAfter = computePdc(after, plugins);
     bool structural = false;
     const bool timingChanged = before.tempoMap != after.tempoMap || before.sampleRate != after.sampleRate;
 
     for (const Track& a : after.tracks) {
         if (!before.findTrack(a.id)) {
-            out.push_back(addMsg(buildNode(after, a, media, plugins)));
+            out.push_back(addMsg(buildNode(after, a, media, plugins, &planAfter)));
             structural = true;
         }
     }
@@ -171,7 +243,11 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
         const Track* b = before.findTrack(a.id);
         if (!b) continue;
         if (stripChanged(*b, a)) out.push_back(stripMsg(a));
-        if (timingChanged || configChanged(*b, a)) out.push_back(configMsg(after, a, media, plugins));
+        const auto eb = planBefore.edges.find(a.id);
+        const auto ea = planAfter.edges.find(a.id);
+        const bool delaysChanged = (eb == planBefore.edges.end()) != (ea == planAfter.edges.end()) ||
+                                   (eb != planBefore.edges.end() && !(eb->second == ea->second));
+        if (timingChanged || delaysChanged || configChanged(*b, a)) out.push_back(configMsg(after, a, media, plugins, &planAfter));
     }
     for (const Track& b : before.tracks) {
         if (!after.findTrack(b.id)) {

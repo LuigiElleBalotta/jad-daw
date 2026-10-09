@@ -13,7 +13,7 @@ TrackNode::TrackNode(Uuid id_, TrackKind kind_, const StripParams& strip_, Track
     : id(id_), kind(kind_), strip(strip_), config(config_), l(kMaxBlock, 0.0f), r(kMaxBlock, 0.0f), synth(sampleRate) {}
 
 RenderGraph::RenderGraph(double sampleRate)
-    : sampleRate_(sampleRate), scratchL_(kMaxBlock), scratchR_(kMaxBlock), preL_(kMaxBlock), preR_(kMaxBlock) {}
+    : sampleRate_(sampleRate), scratchL_(kMaxBlock), scratchR_(kMaxBlock), preL_(kMaxBlock), preR_(kMaxBlock), dlyL_(kMaxBlock), dlyR_(kMaxBlock) {}
 
 RenderGraph::~RenderGraph() {
     for (int i = 0; i < count_; ++i) delete nodes_[static_cast<std::size_t>(i)];
@@ -152,7 +152,7 @@ void RenderGraph::renderInstrument(TrackNode& t, const TrackConfig& cfg, std::in
 void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool anySolo) noexcept {
     float* l = t.l.data();
     float* r = t.r.data();
-    const TrackConfig* cfg = t.config;
+    TrackConfig* cfg = t.config;
     if (cfg) {
         if (t.kind == TrackKind::Audio) renderAudio(t, *cfg, blockStart, n);
         else if (t.kind == TrackKind::Instrument) renderInstrument(t, *cfg, blockStart, n);
@@ -185,11 +185,16 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
 
     if (t.kind == TrackKind::Master || !cfg) return;
     if (!muted) {
-        for (const SendPlayback& s : cfg->sends) {
+        for (SendPlayback& s : cfg->sends) {
             TrackNode* dst = find(s.target);
             if (!dst || dst == &t) continue;
             const float* srcL = s.preFader ? preL_.data() : l;
             const float* srcR = s.preFader ? preR_.data() : r;
+            if (s.delay.frames() > 0) {
+                s.delay.process(srcL, srcR, dlyL_.data(), dlyR_.data(), n);
+                srcL = dlyL_.data();
+                srcR = dlyR_.data();
+            }
             for (int i = 0; i < n; ++i) {
                 dst->l[static_cast<std::size_t>(i)] += srcL[i] * s.gain;
                 dst->r[static_cast<std::size_t>(i)] += srcR[i] * s.gain;
@@ -198,9 +203,16 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     }
     TrackNode* out = cfg->output.isNull() ? master_ : find(cfg->output);
     if (out && out != &t) {
+        const float* srcL = l;
+        const float* srcR = r;
+        if (cfg->outputDelay.frames() > 0) {
+            cfg->outputDelay.process(l, r, dlyL_.data(), dlyR_.data(), n);
+            srcL = dlyL_.data();
+            srcR = dlyR_.data();
+        }
         for (int i = 0; i < n; ++i) {
-            out->l[static_cast<std::size_t>(i)] += l[i];
-            out->r[static_cast<std::size_t>(i)] += r[i];
+            out->l[static_cast<std::size_t>(i)] += srcL[i];
+            out->r[static_cast<std::size_t>(i)] += srcR[i];
         }
     }
 }
@@ -246,8 +258,9 @@ nlohmann::json RenderGraph::describe() const {
                                    {"src", reinterpret_cast<std::uintptr_t>(r.source)}, {"notes", notes}});
             }
             for (const auto& p : t.config->inserts) inserts.push_back(p->describe());
-            for (const SendPlayback& s : t.config->sends) sends.push_back({{"target", s.target.toString()}, {"gain", s.gain}, {"pre", s.preFader}});
+            for (const SendPlayback& s : t.config->sends) sends.push_back({{"target", s.target.toString()}, {"gain", s.gain}, {"pre", s.preFader}, {"delay", s.delay.frames()}});
             j["output"] = t.config->output.toString();
+            j["outputDelay"] = t.config->outputDelay.frames();
         }
         j["regions"] = regions;
         j["inserts"] = inserts;

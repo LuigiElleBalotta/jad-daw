@@ -772,6 +772,11 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         }
         if (type == "set_insert_state")
             return makeSetInsertState(j.at("trackId").get<Uuid>(), j.at("index").get<int>(), j.at("state").get<std::string>());
+        if (type == "move_insert")
+            return makeMoveInsert(j.at("trackId").get<Uuid>(), j.at("from").get<int>(), j.at("to").get<int>(),
+                                  j.contains("toTrackId") ? j["toTrackId"].get<Uuid>() : Uuid{});
+        if (type == "set_insert_bypass")
+            return makeSetInsertBypass(j.at("trackId").get<Uuid>(), j.at("index").get<int>(), j.at("bypass").get<bool>());
         if (type == "transaction") {
             std::vector<CommandPtr> inner;
             for (const auto& c : j.at("commands")) inner.push_back(commandFromJson(c));

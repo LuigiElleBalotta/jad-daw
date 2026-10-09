@@ -52,6 +52,10 @@ CommandPtr makeAddInsert(Uuid trackId, ProcessorRef insert, int index = -1);  //
 CommandPtr makeRemoveInsert(Uuid trackId, int index);
 CommandPtr makeSetInsertParam(Uuid trackId, int index, std::string param, std::optional<double> value);  // nullopt removes it
 CommandPtr makeSetInsertState(Uuid trackId, int index, std::string state);  // plug-in inserts only; base64 state
+// Moves one insert. Without toTrackId (null) inside the track's chain: `to` is the index after the move (0..n-1). With another
+// track: the insert leaves `trackId` and is inserted into `toTrackId` at `to` (0..m).
+CommandPtr makeMoveInsert(Uuid trackId, int from, int to, Uuid toTrackId = {});
+CommandPtr makeSetInsertBypass(Uuid trackId, int index, bool bypass);
 CommandPtr makeTransaction(std::vector<CommandPtr> commands);
 
 CommandPtr commandFromJson(const nlohmann::json& j);  // throws std::runtime_error

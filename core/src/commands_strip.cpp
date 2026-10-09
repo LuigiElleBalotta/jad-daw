@@ -232,8 +232,72 @@ private:
     std::string state_;
 };
 
+class MoveInsertCmd final : public Command {
+public:
+    MoveInsertCmd(Uuid trackId, int from, int to, Uuid toTrackId) : trackId_(trackId), from_(from), to_(to), toTrackId_(toTrackId) {}
+    std::string type() const override { return "move_insert"; }
+    json toJson() const override {
+        json j = {{"type", type()}, {"trackId", trackId_}, {"from", from_}, {"to", to_}};
+        if (!toTrackId_.isNull()) j["toTrackId"] = toTrackId_;
+        return j;
+    }
+    ApplyResult apply(Project& p) const override {
+        Track* src = p.findTrack(trackId_);
+        if (!src) return fail("not_found", "no such track");
+        auto& from = src->strip.inserts;
+        if (from_ < 0 || from_ >= static_cast<int>(from.size())) return fail("bad_index", "insert index out of range");
+        if (toTrackId_.isNull() || toTrackId_ == trackId_) {
+            if (to_ < 0 || to_ >= static_cast<int>(from.size())) return fail("bad_index", "insert index out of range");
+            if (to_ != from_) {
+                ProcessorRef moved = std::move(from[static_cast<std::size_t>(from_)]);
+                from.erase(from.begin() + from_);
+                from.insert(from.begin() + to_, std::move(moved));
+            }
+            return success(makeMoveInsert(trackId_, to_, from_));
+        }
+        Track* dst = p.findTrack(toTrackId_);
+        if (!dst) return fail("not_found", "no such target track");
+        if (dst->kind == TrackKind::Master) return fail("bad_target", "the master track cannot hold inserts");
+        auto& into = dst->strip.inserts;
+        if (to_ < 0 || to_ > static_cast<int>(into.size())) return fail("bad_index", "insert index out of range");
+        ProcessorRef moved = std::move(from[static_cast<std::size_t>(from_)]);
+        from.erase(from.begin() + from_);
+        into.insert(into.begin() + to_, std::move(moved));
+        return success(makeMoveInsert(toTrackId_, to_, from_, trackId_));
+    }
+
+private:
+    Uuid trackId_;
+    int from_, to_;
+    Uuid toTrackId_;
+};
+
+class SetInsertBypassCmd final : public Command {
+public:
+    SetInsertBypassCmd(Uuid trackId, int index, bool bypass) : trackId_(trackId), index_(index), bypass_(bypass) {}
+    std::string type() const override { return "set_insert_bypass"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"index", index_}, {"bypass", bypass_}}; }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        auto& chain = t->strip.inserts;
+        if (index_ < 0 || index_ >= static_cast<int>(chain.size())) return fail("bad_index", "insert index out of range");
+        ProcessorRef& insert = chain[static_cast<std::size_t>(index_)];
+        const bool previous = insert.bypass;
+        insert.bypass = bypass_;
+        return success(makeSetInsertBypass(trackId_, index_, previous));
+    }
+
+private:
+    Uuid trackId_;
+    int index_;
+    bool bypass_;
+};
+
 }  // namespace
 
+CommandPtr makeMoveInsert(Uuid trackId, int from, int to, Uuid toTrackId) { return std::make_unique<MoveInsertCmd>(trackId, from, to, toTrackId); }
+CommandPtr makeSetInsertBypass(Uuid trackId, int index, bool bypass) { return std::make_unique<SetInsertBypassCmd>(trackId, index, bypass); }
 CommandPtr makeSetInsertState(Uuid trackId, int index, std::string state) {
     return std::make_unique<SetInsertStateCmd>(trackId, index, std::move(state));
 }

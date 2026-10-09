@@ -39,6 +39,7 @@ struct ProcessorRef {
     std::map<std::string, double> params;
     std::string state;  // opaque, base64 for real plugins
     std::string label;  // display name of a plug-in (informational; empty for built-ins)
+    bool bypass = false;  // the insert passes the signal unchanged (a plug-in keeps its latency)
     bool operator==(const ProcessorRef&) const = default;
 };
 

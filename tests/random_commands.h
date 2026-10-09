@@ -26,7 +26,7 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
     std::vector<const Track*> senders = sources;
     senders.insert(senders.end(), busLike.begin(), busLike.end());
 
-    switch (pick(28)) {
+    switch (pick(30)) {
         case 0: {  // add track
             static const TrackKind kinds[] = {TrackKind::Audio, TrackKind::Midi, TrackKind::Instrument, TrackKind::Bus, TrackKind::Aux};
             Track t;
@@ -192,6 +192,15 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             const Track& t = p.tracks[pick(p.tracks.size())];
             return makeSetInsertParam(t.id, static_cast<int>(pick(3)), chance(90) ? "gainDb" : "cutoff",
                                       chance(20) ? std::optional<double>() : std::optional<double>(static_cast<double>(pick(40)) - 20.0));
+        }
+        case 28: {  // move an insert (inside a track or to another one; sometimes out of range)
+            const Track& t = p.tracks[pick(p.tracks.size())];
+            const Uuid to = chance(50) ? p.tracks[pick(p.tracks.size())].id : Uuid{};
+            return makeMoveInsert(t.id, static_cast<int>(pick(4)), static_cast<int>(pick(4)), to);
+        }
+        case 29: {  // insert bypass (sometimes out of range)
+            const Track& t = p.tracks[pick(p.tracks.size())];
+            return makeSetInsertBypass(t.id, static_cast<int>(pick(3)), chance(50));
         }
         default:
             return nullptr;

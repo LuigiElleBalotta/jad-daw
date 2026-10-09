@@ -47,6 +47,17 @@ plug-in list in plug-in menu** (so the "Recent" block of the plug-in menus is a 
 
 Other View sub-tabs (Tracks, Editors) and other categories: not captured.
 
+### Advanced
+
+A single option, **☑ Enable Complete Features** ("Expands simplified features to include all available features"), with a read-only list of
+what it turns on, and a "Learn More" button:
+- *Customization and Control:* key commands, screensets, region colors, control bar, track headers, zoom levels, controller assignments.
+- *Editing:* Undo History, list editors, Quick Swipe Comping, drum replacement, in-place bouncing, additional tools.
+- *Audio:* Project Audio Browser, Audio File Editor, Surround, other advanced audio features.
+- *Mixing:* advanced automation, Mixer views, automation groups, advanced plug-in window controls.
+- *Score Editor:* multiple tracks, score sets, Page view.
+So Logic has a "simplified" mode that hides much of the UI; the clone can ship with complete features always on.
+
 ### Other categories
 
-Not captured yet: Audio, Recording, MIDI, Score, Movie, Automation, Control Surfaces, My Info, Advanced.
+Not captured yet: Audio, Recording, MIDI, Score, Movie, Automation, Control Surfaces, My Info, and the Cycle, Catch, Notifications, Accessibility and View-Tracks/Editors sub-tabs.

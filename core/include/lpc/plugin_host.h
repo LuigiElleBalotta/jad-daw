@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,8 +39,9 @@ public:
     // Project thread. Drops every instance not listed (slot and the ref it must match).
     virtual void prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) = 0;
     // UI thread. Serialises the live state (base64) and remembers it as "already in the model" so the command that stores
-    // it does not make the next acquire reload the instance. Empty string when there is no live instance.
-    virtual std::string captureState(const InsertSlot& slot) = 0;
+    // it does not make the next acquire reload the instance. nullopt when there is no live instance; an empty string is a
+    // live plug-in whose state is legitimately empty.
+    virtual std::optional<std::string> captureState(const InsertSlot& slot) = 0;
     virtual void setReadyListener(std::function<void(const InsertSlot&)> listener) = 0;  // any thread
 };
 

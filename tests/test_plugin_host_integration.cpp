@@ -85,8 +85,9 @@ TEST_CASE("host+plugins: committing a captured state does not reload the instanc
     ProjectHost host(rig.initial, rig.engine, rig.media, &rig.plugins);
     drain(rig.engine, host);
     REQUIRE(rig.plugins.created == 1);
-    const std::string captured = rig.plugins.captureState(InsertSlot{rig.track, 0});  // the editor closed
-    REQUIRE_FALSE(host.submit(makeSetInsertState(rig.track, 0, captured)).get().has_value());
+    const std::optional<std::string> captured = rig.plugins.captureState(InsertSlot{rig.track, 0});  // the editor closed
+    REQUIRE(captured);
+    REQUIRE_FALSE(host.submit(makeSetInsertState(rig.track, 0, *captured)).get().has_value());
     drain(rig.engine, host);
     REQUIRE(rig.plugins.created == 1);
 

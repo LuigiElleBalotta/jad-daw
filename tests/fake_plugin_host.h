@@ -82,10 +82,10 @@ public:
         }
     }
 
-    std::string captureState(const InsertSlot& slot) override {
+    std::optional<std::string> captureState(const InsertSlot& slot) override {
         std::lock_guard lock(mutex_);
         auto it = live_.find(keyOf(slot));
-        if (it == live_.end()) return {};
+        if (it == live_.end()) return std::nullopt;
         it->second.state = nextCaptured;
         return nextCaptured;
     }

@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,7 +21,7 @@ public:
     std::shared_ptr<audio::IProcessor> acquire(const InsertSlot& slot, const ProcessorRef& ref, double sampleRate, int maxBlock) override;
     void setWanted(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override;
     void prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override;
-    std::string captureState(const InsertSlot& slot) override;
+    std::optional<std::string> captureState(const InsertSlot& slot) override;
     void setReadyListener(std::function<void(const InsertSlot&)> listener) override;
 
     // Message thread only.

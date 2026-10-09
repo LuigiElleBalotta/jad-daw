@@ -18,5 +18,4 @@ Done: `Track.showInTracks`, "New Bus" in the Send and Output menus, Track > Show
 - VST3 hosting as effects: done (spec `specs/2026-10-09-vst3-hosting-design.md`, plan `plans/2026-10-09-vst3-hosting.md`)
 - Tracks area visibility of buses: done
 - Deferred interactions and minor findings: done
-- Open: `captureState()` returns "" both when there is no live instance and when the plug-in state is legitimately empty
 - Not done: an insert menu with the other effects, plug-in instruments, automation of plug-in parameters

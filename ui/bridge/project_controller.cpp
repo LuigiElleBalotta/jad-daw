@@ -1189,8 +1189,9 @@ void ProjectController::openPluginEditor(const QString& trackId, int index) {
 void ProjectController::commitPluginState(const lpc::InsertSlot& slot) {
 #ifdef JAD_HAVE_JUCE
     if (!pluginHost_ || !host_) return;
-    const std::string state = pluginHost_->captureState(slot);  // also tells the host this is now the model's state
-    if (state.empty()) return;
+    const std::optional<std::string> captured = pluginHost_->captureState(slot);  // also tells the host this is now the model's state
+    if (!captured) return;
+    const std::string& state = *captured;
     const lpc::Uuid track = slot.track;
     const int index = slot.index;
     const bool changed = host_->read([track, index, &state](const lpc::Project& p) {

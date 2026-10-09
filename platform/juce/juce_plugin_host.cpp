@@ -230,12 +230,12 @@ void JucePluginHost::prune(const std::vector<std::pair<InsertSlot, ProcessorRef>
     });
 }
 
-std::string JucePluginHost::captureState(const InsertSlot& slot) {
+std::optional<std::string> JucePluginHost::captureState(const InsertSlot& slot) {
     std::shared_ptr<PluginProcessor> proc;
     {
         std::lock_guard lock(impl_->mutex);
         const auto it = impl_->entries.find(keyOf(slot));
-        if (it == impl_->entries.end() || !it->second.proc) return {};
+        if (it == impl_->entries.end() || !it->second.proc) return std::nullopt;
         proc = it->second.proc;
     }
     const std::string state = proc->captureState();

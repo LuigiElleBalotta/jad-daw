@@ -124,7 +124,9 @@ TEST_CASE("juce host: a captured state is standard base64 the Core accepts", "[j
     host.setCatalogue({d});
     const InsertSlot slot{Uuid{1, 9}, 0};
     REQUIRE(host.acquire(slot, refOf(d), 48000.0, 512));
-    const std::string state = host.captureState(slot);
+    const std::optional<std::string> captured = host.captureState(slot);
+    REQUIRE(captured);
+    const std::string& state = *captured;
     REQUIRE_FALSE(state.empty());
     REQUIRE(validBase64(state));  // JUCE's own MemoryBlock encoding is not base64: the Core rejected it
 }
@@ -148,9 +150,10 @@ TEST_CASE("juce host: captured state counts as the current state", "[juce][plugi
     host.setCatalogue({d});
     const InsertSlot slot{Uuid{1, 4}, 0};
     auto a = host.acquire(slot, refOf(d), 48000.0, 512);
-    const std::string captured = host.captureState(slot);
-    REQUIRE_FALSE(captured.empty());
-    auto b = host.acquire(slot, refOf(d, captured), 48000.0, 512);  // the model now holds what was captured
+    const std::optional<std::string> captured = host.captureState(slot);
+    REQUIRE(captured);
+    REQUIRE_FALSE(captured->empty());
+    auto b = host.acquire(slot, refOf(d, *captured), 48000.0, 512);  // the model now holds what was captured
     REQUIRE(a == b);
 }
 

@@ -276,6 +276,13 @@ public:
     Q_INVOKABLE void selectOverlappedRegions();
     Q_INVOKABLE void selectSameColoredRegions();
     Q_INVOKABLE void selectMutedRegions();
+    Q_INVOKABLE void selectInsideLocators();
+    Q_INVOKABLE void deselectOutsideLocators();
+    Q_INVOKABLE void selectSimilarRegions();   // the same audio file, or MIDI of the same length, as a selected region
+    Q_INVOKABLE void selectEqualRegions();     // the same source, length and content as a selected region
+    Q_INVOKABLE void moveSelectedToPlayhead(); // the group moves so that its first region starts at the playhead
+    Q_INVOKABLE void splitAtLocators();        // the selected regions (all when none) are cut at the cycle's start and end
+    Q_INVOKABLE void deleteSelectedAndMove();  // delete, and later regions on the same tracks close the gap
     Q_INVOKABLE void selectEmptyRegions();
     Q_INVOKABLE void invertRegionSelection();
     Q_INVOKABLE void selectNeighbourRegion(int direction);  // -1 previous, +1 next, on the track of the first selected region

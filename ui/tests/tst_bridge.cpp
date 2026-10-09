@@ -733,6 +733,70 @@ private slots:
         c.nudgeSelectedRegions(1);
         QTRY_VERIFY(std::abs(c.regions()->find(id)->startBeats - (start + 2.0)) < 0.01);
     }
+    void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString id = c.regions()->regionIdAt(0);
+        c.selectRegion(id, "replace");
+        c.locateBeats(30.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 30.0) < 0.01);
+        c.moveSelectedToPlayhead();
+        QTRY_VERIFY(std::abs(c.regions()->find(id)->startBeats - 30.0) < 0.01);
+    }
+    void splitAtLocatorsCutsTheRegionsThatCrossThem() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const jad::RegionRow first = *c.regions()->find(c.regions()->regionIdAt(0));
+        const int n = c.regions()->rowCount();
+        c.selectRegion(first.id, "replace");
+        c.setLoopRange(first.startBeats + 1, first.startBeats + 2);
+        c.splitAtLocators();
+        QTRY_COMPARE(c.regions()->rowCount(), n + 2);  // cut at both locators: three pieces
+    }
+    void selectInsideLocatorsAndSimilarRegions() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const jad::RegionRow first = *c.regions()->find(c.regions()->regionIdAt(0));
+        c.setLoopRange(first.startBeats - 0.5, first.startBeats + first.lengthBeats + 0.5);
+        c.selectInsideLocators();
+        QVERIFY(c.selectedRegionIds().contains(first.id));
+        c.selectRegion(first.id, "replace");
+        c.selectSimilarRegions();
+        QVERIFY(c.selectedRegionIds().contains(first.id));
+        c.selectEqualRegions();
+        QVERIFY(c.selectedRegionIds().contains(first.id));
+    }
+    void deleteAndMoveClosesTheGap() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const QString id = c.regions()->regionIdAt(0);
+        const jad::RegionRow gone = *c.regions()->find(id);
+        // the first region on its track that starts after it, if any
+        const jad::RegionRow* later = nullptr;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->id != id && r->trackId == gone.trackId && r->startBeats >= gone.startBeats + gone.lengthBeats - 1e-6) later = r;
+        }
+        const int n = c.regions()->rowCount();
+        c.selectRegion(id, "replace");
+        c.deleteSelectedAndMove();
+        QTRY_COMPARE(c.regions()->rowCount(), n - 1);
+        if (later) {
+            const QString laterId = later->id;
+            const double was = later->startBeats;
+            QTRY_VERIFY(std::abs(c.regions()->find(laterId)->startBeats - (was - gone.lengthBeats)) < 0.01);
+        }
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), n);
+    }
     void muteAllSwitchesEveryStripInTheSameState() {
         TempDir dir;
         jad::ProjectController c(false);

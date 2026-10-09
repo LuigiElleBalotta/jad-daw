@@ -32,7 +32,13 @@ after splitting loops · ☑ Select regions on track selection · ☐ Select tra
 Shortcut Menu) · Trackpad: ☐ Enable Force Touch trackpad *(dim)* · Pointer Tool in Tracks Provides: ☐ Fade tool click zones, ☐ Marquee tool
 click zones, ☐ Quick Swipe and Take Editing click zones · Limit Dragging to One Direction In: ☐ Piano Roll Editor and Score Editor, ☐ Tracks
 area · Double-Clicking a MIDI Region Opens ▾ (Piano Roll Editor) · Piano Roll Editor: ☑ Region border trimming.
-Other General sub-tabs (Cycle, Catch, Notifications, Accessibility): not captured.
+**Cycle:** Cycle Pre-Processing ▾ (Off) · ☐ Smooth Cycle Algorithm.
+**Catch:** "Catch mode default settings": ☑ Catch when starting playback · ☑ Catch when moving playhead · ☐ Catch content by position if Catch and Link
+are enabled (explanatory text: editors with the Catch button follow the playhead; Control-click on a Catch button changes it for one editor).
+**Notifications:** list of warnings previously set to "Do not show again" (columns Text and Triggered Button, a popup per row), buttons Reset
+Selected Warnings *(dim)* and Reset All Warnings.
+**Accessibility:** "Enable Playhead position announcements when": ☑ Playing ☐ Recording ☑ Scrubbing (VoiceOver) · ☐ Open Plug-in windows in
+Controls view by default.
 
 ### View (sub-tabs: General, Tracks, Mixer, Editors)
 
@@ -89,6 +95,10 @@ resolution depends on horizontal zoom · ☑ Pickup mode · ☑ Flash Mute and S
 Labels and Value Displays": ☑ Only when all parameters fit on one page · Show Value Units For: ☑ Instrument/plug-in parameters ☑ Volume and
 other parameters. Buttons **Controller Assignments…** and **Setup…**.
 
+### My Info
+
+"Logic Pro will use this information to identify your songs when sharing them": text fields Composer Name, Artist Name, Album Name, Playlist.
+
 ### Advanced
 
 A single option, **☑ Enable Complete Features** ("Expands simplified features to include all available features"), with a read-only list of
@@ -102,4 +112,4 @@ So Logic has a "simplified" mode that hides much of the UI; the clone can ship w
 
 ### Other categories
 
-Not captured yet: Audio, Recording, MIDI, Score, Movie, Automation, Control Surfaces, My Info, and the Cycle, Catch, Notifications, Accessibility and View-Tracks/Editors sub-tabs.
+Not captured yet: the Movie category, the Audio sub-tabs after Devices, the MIDI sub-tabs after General, and the Control Surfaces sub-tabs after General.

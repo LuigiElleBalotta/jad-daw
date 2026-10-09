@@ -68,6 +68,7 @@ struct RegionPlayback {
     const IFrameSource* source = nullptr;  // audio regions; kept alive by TrackConfig::keepAlive
     std::int64_t sourceOffsetFrames = 0;
     float gain = 1.0f;
+    std::int64_t fadeInFrames = 0, fadeOutFrames = 0;  // ramps (a quarter of a sine) at the start and the end
     std::vector<NoteSpan> notes;  // MIDI regions, sorted by onFrame
 };
 

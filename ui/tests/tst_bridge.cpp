@@ -1053,6 +1053,29 @@ private slots:
         d.loadMidiSettings(s);
         QCOMPARE(d.midiInputsChosen(), QStringList({"Keystation", "Pad"}));
     }
+    void regionFadesAreCommandsInBeatsWithUndo() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio) audio = r->id;
+        }
+        QVERIFY(!audio.isEmpty());
+        QCOMPARE(c.regions()->find(audio)->fadeInBeats, 0.0);
+        c.setRegionFades(audio, 0.5, 0.25);
+        QTRY_VERIFY(std::abs(c.regions()->find(audio)->fadeInBeats - 0.5) < 0.01);
+        QVERIFY(std::abs(c.regions()->find(audio)->fadeOutBeats - 0.25) < 0.01);
+        c.setRegionFades(audio, 9999.0, 0.0);              // longer than the region: kept inside it
+        QTRY_VERIFY(c.regions()->find(audio)->fadeInBeats > 0.5);
+        QVERIFY(c.regions()->find(audio)->fadeInBeats <= c.regions()->find(audio)->lengthBeats + 1e-6);
+        c.undo();
+        QTRY_VERIFY(std::abs(c.regions()->find(audio)->fadeInBeats - 0.5) < 0.01);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(audio)->fadeInBeats, 0.0);
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

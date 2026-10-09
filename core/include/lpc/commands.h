@@ -52,6 +52,7 @@ struct SendPatch {
     std::optional<bool> preFader;
 };
 CommandPtr makeSetSend(Uuid sendId, SendPatch patch);  // a patch changes only the fields it carries
+CommandPtr makeSetRegionFades(Uuid regionId, std::int64_t fadeIn, std::int64_t fadeOut);  // the unit of the region's start; 0 = none; each at most the length
 CommandPtr makeSetRegionGain(Uuid regionId, float gainDb);
 CommandPtr makeAddInsert(Uuid trackId, ProcessorRef insert, int index = -1);  // index -1 appends
 CommandPtr makeRemoveInsert(Uuid trackId, int index);

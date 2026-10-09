@@ -39,7 +39,8 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - [ ] VST3 instruments (hosting) and MIDI to plug-ins.
 
 ## 5. Audio editing
-- [ ] Fades (in, out) and crossfades on regions, region gain handles.
+- [x] Fades (in, out) on audio regions: quarter-sine ramps, handles at the top corners of a selected region, `set_region_fades` with undo. Not covered:
+      crossfade curves other than that, automatic crossfades of overlapping regions, region gain handles (the Inspector has the gain).
 - [ ] Waveform zoom, Audio Track Editor (region waveform in the Editors area), Audio File Editor basics (trim, normalize, reverse).
 - [ ] Time stretch / pitch shift for regions (offline), Strip Silence, region mute/loop.
 

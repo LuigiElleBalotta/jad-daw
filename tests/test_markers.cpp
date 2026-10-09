@@ -93,3 +93,41 @@ TEST_CASE("strip input: set_strip carries the recording input, with undo and JSO
     const CommandPtr again = commandFromJson(makeSetStrip(t.id, StripPatch{.input = 4})->toJson());
     REQUIRE(again);
 }
+
+TEST_CASE("fades: set_region_fades is validated, undone, kept through JSON and split between the parts", "[fade]") {
+    std::mt19937_64 rng(12);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Audio;
+    t.name = "A";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    MediaItem item{Uuid::random(rng), "audio/a.wav", "h", 48000, 2, 480000};
+    REQUIRE_FALSE(s.execute(p, makeAddMedia(item)).has_value());
+    Region r;
+    r.id = Uuid::random(rng);
+    r.timeBase = TimeBase::Musical;
+    r.start = 0;
+    r.length = 8 * kPPQ;
+    r.mediaId = item.id;
+    REQUIRE_FALSE(s.execute(p, makeAddRegion(t.id, r)).has_value());
+    REQUIRE_FALSE(s.execute(p, makeSetRegionFades(r.id, kPPQ, 2 * kPPQ)).has_value());
+    REQUIRE(p.findTrack(t.id)->regions[0].fadeIn == kPPQ);
+    REQUIRE(s.execute(p, makeSetRegionFades(r.id, -1, 0)).has_value());               // negative
+    REQUIRE(s.execute(p, makeSetRegionFades(r.id, 9 * kPPQ, 0)).has_value());         // longer than the region
+    nlohmann::json j = p.findTrack(t.id)->regions[0];
+    REQUIRE(j.at("fadeIn") == kPPQ);
+    REQUIRE(j.get<Region>().fadeOut == 2 * kPPQ);
+    const Uuid right = Uuid::random(rng);
+    REQUIRE_FALSE(s.execute(p, makeSplitRegion(r.id, 4 * kPPQ, right)).has_value());
+    REQUIRE(p.findTrack(t.id)->regions[0].fadeIn == kPPQ);                            // the left part keeps the fade-in
+    REQUIRE(p.findTrack(t.id)->regions[0].fadeOut == 0);                              // and loses the fade-out
+    REQUIRE(p.findTrack(t.id)->regions[1].fadeIn == 0);
+    REQUIRE(p.findTrack(t.id)->regions[1].fadeOut == 2 * kPPQ);
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.findTrack(t.id)->regions.size() == 1);
+    REQUIRE(p.findTrack(t.id)->regions[0].fadeOut == 2 * kPPQ);                       // the split is undone with its fades
+    nlohmann::json plain = Region{};
+    REQUIRE_FALSE(plain.contains("fadeIn"));
+}

@@ -444,3 +444,19 @@ TEST_CASE("graph: automation drives the fader and the pan from the block start",
     REQUIRE(s.r[600] < s.r[10]);                       // falling along the lane
     REQUIRE(s.r[1500] == Catch::Approx(0.0f).margin(1e-5f));  // after the last point: its value
 }
+
+TEST_CASE("graph: region fades ramp the ends with a quarter sine and leave the middle alone", "[graph][fade]") {
+    Rig rig;
+    TrackConfig* cfg = rig.dcConfig(1.0f, 0, 2000);
+    cfg->regions[0].fadeInFrames = 1000;
+    cfg->regions[0].fadeOutFrames = 400;
+    rig.addNode(1, TrackKind::Audio, cfg);
+    rig.addMaster();
+    const Stereo s = rig.render(2048, 256);
+    REQUIRE(s.l[0] < 0.01f);                                        // starts silent
+    REQUIRE(s.l[500] == Catch::Approx(std::sin(1.5707963 * 500.5 / 1000.0)).margin(0.02));   // half way up the quarter sine
+    REQUIRE(s.l[1200] == Catch::Approx(1.0f).margin(1e-5f));         // the middle: untouched
+    REQUIRE(s.l[1999] < 0.01f);                                      // ends silent
+    REQUIRE(s.l[2000 - 200] == Catch::Approx(std::sin(1.5707963 * 199.5 / 400.0)).margin(0.02));
+    REQUIRE(s.l[2010] == 0.0f);                                      // after the region
+}

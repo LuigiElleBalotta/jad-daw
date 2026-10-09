@@ -22,6 +22,10 @@ Item {
     property string tool: "pointer"
     property bool selected: false
     property bool muted: false
+    property real fadeInBeats: 0           // the fades of an audio region
+    property real fadeOutBeats: 0
+    property real fadeInPx: -1             // live feedback while a fade handle is dragged (-1: not dragged)
+    property real fadeOutPx: -1
     property string regionName
     property real dragDeltaPx: 0
     property real leftEdgePx: 0   // live feedback while an edge is dragged
@@ -35,6 +39,7 @@ Item {
     signal splitRequested(string id, real atBeats)
     signal glueRequested(string id)
     signal muteRequested(string id)
+    signal fadesRequested(string id, real fadeInBeats, real fadeOutBeats)  // a fade handle was dragged
     signal editRequested(string id)  // a double click opens the region in the editor (Piano Roll)
 
     // "bar beat" of a position in beats, or the length as "bars beats"
@@ -122,6 +127,25 @@ Item {
             }
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
+        }
+
+        Canvas {  // the fades: the part of the waveform that is faded away is shaded
+            id: fadeShape
+            anchors.fill: parent
+            visible: root.isAudio && (root.fadeInBeats > 0 || root.fadeOutBeats > 0 || root.fadeInPx >= 0 || root.fadeOutPx >= 0)
+            readonly property real fin: root.fadeInPx >= 0 ? root.fadeInPx : root.fadeInBeats * root.pixelsPerBeat
+            readonly property real fout: root.fadeOutPx >= 0 ? root.fadeOutPx : root.fadeOutBeats * root.pixelsPerBeat
+            onFinChanged: requestPaint()
+            onFoutChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.reset()
+                ctx.fillStyle = "rgba(0,0,0,0.35)"
+                if (fin > 0) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.min(fin, width), 0); ctx.lineTo(0, height); ctx.closePath(); ctx.fill() }
+                if (fout > 0) { ctx.beginPath(); ctx.moveTo(width, 0); ctx.lineTo(Math.max(0, width - fout), 0); ctx.lineTo(width, height); ctx.closePath(); ctx.fill() }
+            }
         }
 
         Rectangle {  // the help tag while the region is dragged (Logic's "Move Region")
@@ -228,4 +252,49 @@ Track: %3")
     }
     Edge { isLeft: true; anchors.left: parent.left }
     Edge { isLeft: false; anchors.right: parent.right }
+
+    // the fade handles at the top corners of a selected audio region (pointer tool): drag sideways to set the fade
+    component FadeHandle: Rectangle {
+        id: handle
+        required property bool isIn
+        visible: root.isAudio && !root.missing && root.tool === "pointer" && (root.selected || hover.hovered || handleArea.pressed) && root.width > 40
+        width: 9; height: 9; radius: 2
+        color: Theme.textPrimary
+        border.color: Theme.surfaceCanvas
+        x: isIn ? Math.min(root.width - 9, (root.fadeInPx >= 0 ? root.fadeInPx : root.fadeInBeats * root.pixelsPerBeat)) - (isIn ? 0 : 0)
+                : Math.max(0, root.width - 9 - (root.fadeOutPx >= 0 ? root.fadeOutPx : root.fadeOutBeats * root.pixelsPerBeat))
+        y: 1
+        z: 15
+        HoverHandler { id: hover }
+        MouseArea {
+            id: handleArea
+            anchors.fill: parent
+            anchors.margins: -3
+            cursorShape: Qt.SizeHorCursor
+            preventStealing: true
+            property real pressX: 0
+            property real startPx: 0
+            onPressed: (m) => {
+                pressX = mapToItem(root, m.x, m.y).x
+                startPx = handle.isIn ? root.fadeInBeats * root.pixelsPerBeat : root.fadeOutBeats * root.pixelsPerBeat
+                if (handle.isIn) root.fadeInPx = startPx; else root.fadeOutPx = startPx
+            }
+            onPositionChanged: (m) => {
+                if (!pressed) return
+                const d = mapToItem(root, m.x, m.y).x - pressX
+                const px = Math.max(0, Math.min(root.width, startPx + (handle.isIn ? d : -d)))
+                if (handle.isIn) root.fadeInPx = px; else root.fadeOutPx = px
+            }
+            onReleased: {
+                const fin = root.fadeInPx >= 0 ? root.fadeInPx / root.pixelsPerBeat : root.fadeInBeats
+                const fout = root.fadeOutPx >= 0 ? root.fadeOutPx / root.pixelsPerBeat : root.fadeOutBeats
+                root.fadeInPx = -1
+                root.fadeOutPx = -1
+                root.fadesRequested(root.regionId, fin, fout)
+            }
+            onCanceled: { root.fadeInPx = -1; root.fadeOutPx = -1 }
+        }
+    }
+    FadeHandle { isIn: true }
+    FadeHandle { isIn: false }
 }

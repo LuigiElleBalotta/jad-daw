@@ -110,8 +110,15 @@ void RenderGraph::renderAudio(TrackNode& t, const TrackConfig& cfg, std::int64_t
         const int offset = static_cast<int>(lo - blockStart);
         reg.source->read(reg.sourceOffsetFrames + (lo - reg.startFrame), scratchL_.data(), scratchR_.data(), count);
         for (int i = 0; i < count; ++i) {
-            t.l[static_cast<std::size_t>(offset + i)] += scratchL_[static_cast<std::size_t>(i)] * reg.gain;
-            t.r[static_cast<std::size_t>(offset + i)] += scratchR_[static_cast<std::size_t>(i)] * reg.gain;
+            float g = reg.gain;
+            if (reg.fadeInFrames > 0 || reg.fadeOutFrames > 0) {  // a quarter sine each way: two regions fading over the same span add up to constant power
+                const std::int64_t f = lo + i;
+                const std::int64_t fromStart = f - reg.startFrame, toEnd = reg.endFrame - f;
+                if (reg.fadeInFrames > 0 && fromStart < reg.fadeInFrames) g *= std::sin(1.5707963f * (static_cast<float>(fromStart) + 0.5f) / static_cast<float>(reg.fadeInFrames));
+                if (reg.fadeOutFrames > 0 && toEnd <= reg.fadeOutFrames) g *= std::sin(1.5707963f * (static_cast<float>(toEnd) - 0.5f) / static_cast<float>(reg.fadeOutFrames));
+            }
+            t.l[static_cast<std::size_t>(offset + i)] += scratchL_[static_cast<std::size_t>(i)] * g;
+            t.r[static_cast<std::size_t>(offset + i)] += scratchR_[static_cast<std::size_t>(i)] * g;
         }
     }
 }

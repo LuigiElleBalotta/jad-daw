@@ -134,6 +134,28 @@ private:
     float gainDb_;
 };
 
+class SetRegionFadesCmd final : public Command {
+public:
+    SetRegionFadesCmd(Uuid id, std::int64_t fadeIn, std::int64_t fadeOut) : id_(id), in_(fadeIn), out_(fadeOut) {}
+    std::string type() const override { return "set_region_fades"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"fadeIn", in_}, {"fadeOut", out_}}; }
+    ApplyResult apply(Project& p) const override {
+        std::size_t index = 0;
+        Track* t = p.findTrackOfRegion(id_, &index);
+        if (!t) return fail("not_found", "no such region");
+        Region& r = t->regions[index];
+        if (in_ < 0 || out_ < 0 || in_ > r.length || out_ > r.length) return fail("bad_value", "a fade must be between 0 and the length of the region");
+        const std::int64_t pi = r.fadeIn, po = r.fadeOut;
+        r.fadeIn = in_;
+        r.fadeOut = out_;
+        return success(makeSetRegionFades(id_, pi, po));
+    }
+
+private:
+    Uuid id_;
+    std::int64_t in_, out_;
+};
+
 class AddInsertCmd final : public Command {
 public:
     AddInsertCmd(Uuid trackId, ProcessorRef insert, int index) : trackId_(trackId), insert_(std::move(insert)), index_(index) {}
@@ -302,6 +324,7 @@ CommandPtr makeSetInsertState(Uuid trackId, int index, std::string state) {
     return std::make_unique<SetInsertStateCmd>(trackId, index, std::move(state));
 }
 CommandPtr makeSetSend(Uuid sendId, SendPatch patch) { return std::make_unique<SetSendCmd>(sendId, patch); }
+CommandPtr makeSetRegionFades(Uuid regionId, std::int64_t fadeIn, std::int64_t fadeOut) { return std::make_unique<SetRegionFadesCmd>(regionId, fadeIn, fadeOut); }
 CommandPtr makeSetRegionGain(Uuid regionId, float gainDb) { return std::make_unique<SetRegionGainCmd>(regionId, gainDb); }
 CommandPtr makeAddInsert(Uuid trackId, ProcessorRef insert, int index) { return std::make_unique<AddInsertCmd>(trackId, std::move(insert), index); }
 CommandPtr makeRemoveInsert(Uuid trackId, int index) { return std::make_unique<RemoveInsertCmd>(trackId, index); }

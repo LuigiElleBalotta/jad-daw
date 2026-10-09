@@ -31,6 +31,7 @@ struct Region {
     Uuid mediaId;             // null for MIDI regions
     std::int64_t sourceOffsetFrames = 0;
     float gainDb = 0.0f;
+    std::int64_t fadeIn = 0, fadeOut = 0;  // audio: the ramps at the ends, in the unit of start (each at most as long as the region)
     std::vector<MidiNote> notes;
     bool operator==(const Region&) const = default;
 };

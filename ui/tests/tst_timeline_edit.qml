@@ -155,4 +155,19 @@ TestCase {
         mouseRelease(r, 159, 10)
         compare(got.length, 0)
     }
+
+    function test_a_fade_handle_drag_asks_for_the_new_fades() {
+        var r = createTemporaryObject(itemC, this, { isAudio: true, selected: true, tool: "pointer" })
+        var got = []
+        r.fadesRequested.connect(function (id, fin, fout) { got.push([id, fin, fout]) })
+        // the in handle sits at the top-left corner: drag it 80 px (2 beats at 40 px per beat)
+        mousePress(r, 4, 5)
+        mouseMove(r, 44, 5)
+        mouseMove(r, 84, 5)
+        mouseRelease(r, 84, 5)
+        compare(got.length, 1)
+        compare(got[0][0], "r1")
+        verify(Math.abs(got[0][1] - 2) < 0.2)
+        compare(got[0][2], 0)
+    }
 }

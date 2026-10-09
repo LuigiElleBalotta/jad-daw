@@ -259,6 +259,8 @@ Item {
                 tool: root.project.tool
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 muted: model.muted
+                fadeInBeats: model.fadeInBeats
+                fadeOutBeats: model.fadeOutBeats
                 x: root.beatsToX(startBeats)
                 y: trackIndex * root.rowHeight - root.scrollY + 2
                 width: lengthBeats * root.pixelsPerBeat
@@ -272,6 +274,7 @@ Item {
                 onSplitRequested: (id, atBeats) => root.project.splitRegion(id, atBeats)
                 onGlueRequested: (id) => root.project.joinWithNext(id)
                 onEditRequested: (id) => root.editRequested(id)
+                onFadesRequested: (id, fin, fout) => root.project.setRegionFades(id, fin, fout)
                 onMuteRequested: (id) => { root.project.selectRegion(id, "replace"); root.project.toggleMuteSelectedRegions() }
             }
         }

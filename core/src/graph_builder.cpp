@@ -193,6 +193,16 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         rp.startFrame = regionFrame(p, r, r.start);
         rp.endFrame = regionFrame(p, r, r.start + r.length);
         rp.gain = dbToLinear(r.gainDb);
+        if (r.fadeIn > 0 || r.fadeOut > 0) {  // the fades in frames, together at most as long as the region
+            const std::int64_t length = rp.endFrame - rp.startFrame;
+            rp.fadeInFrames = r.fadeIn > 0 ? regionFrame(p, r, r.start + r.fadeIn) - rp.startFrame : 0;
+            rp.fadeOutFrames = r.fadeOut > 0 ? rp.endFrame - regionFrame(p, r, r.start + r.length - r.fadeOut) : 0;
+            if (rp.fadeInFrames + rp.fadeOutFrames > length && length > 0) {
+                const double k = static_cast<double>(length) / static_cast<double>(rp.fadeInFrames + rp.fadeOutFrames);
+                rp.fadeInFrames = static_cast<std::int64_t>(static_cast<double>(rp.fadeInFrames) * k);
+                rp.fadeOutFrames = length - rp.fadeInFrames;
+            }
+        }
         if (t.kind == TrackKind::Audio) {
             const MediaItem* item = p.findMedia(r.mediaId);
             std::shared_ptr<IFrameSource> src = item ? media.open(*item) : nullptr;

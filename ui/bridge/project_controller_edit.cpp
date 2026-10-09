@@ -1366,4 +1366,20 @@ void ProjectController::finishMidiRecording(std::int64_t startFrame, std::int64_
     emit notice(QString("Recorded %1 note%2").arg(static_cast<int>(notes.size())).arg(notes.size() == 1 ? "" : "s"));
 }
 
+void ProjectController::setRegionFades(const QString& regionId, double fadeInBeats, double fadeOutBeats) {
+    const RegionRow* r = regions_.find(regionId);
+    if (!host_ || !r || !r->audio || !std::isfinite(fadeInBeats) || !std::isfinite(fadeOutBeats)) return;
+    const double len = r->lengthBeats;
+    const double in = std::clamp(fadeInBeats, 0.0, len), out = std::clamp(fadeOutBeats, 0.0, len);
+    // the unit of the region: ticks, or microseconds for a region in real time
+    auto unit = [&](double fromBeats, double lengthBeats) -> std::int64_t {
+        if (lengthBeats <= 0) return 0;
+        const auto a = static_cast<lpc::Ticks>(std::llround(fromBeats * lpc::kPPQ)), b = static_cast<lpc::Ticks>(std::llround((fromBeats + lengthBeats) * lpc::kPPQ));
+        if (!r->absolute) return b - a;
+        return static_cast<std::int64_t>(std::llround((tempoMap_.ticksToSamples(b, sampleRate_) - tempoMap_.ticksToSamples(a, sampleRate_)) * 1e6 / sampleRate_));
+    };
+    sendCommand({{"type", "set_region_fades"}, {"regionId", regionId.toStdString()}, {"fadeIn", unit(r->startBeats, in)},
+                 {"fadeOut", unit(r->startBeats + len - out, out)}});
+}
+
 }  // namespace jad

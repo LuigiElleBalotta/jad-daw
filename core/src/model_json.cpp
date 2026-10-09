@@ -77,6 +77,26 @@ void from_json(const nlohmann::json& j, Strip& s) {
     s.input = j.value("input", 0);
 }
 
+void to_json(nlohmann::json& j, const Region& r) {
+    j = {{"id", r.id}, {"timeBase", r.timeBase}, {"start", r.start}, {"length", r.length}, {"mediaId", r.mediaId},
+         {"sourceOffsetFrames", r.sourceOffsetFrames}, {"gainDb", r.gainDb}, {"notes", r.notes}};
+    if (r.fadeIn != 0) j["fadeIn"] = r.fadeIn;  // written only when set: older projects and files stay as they were
+    if (r.fadeOut != 0) j["fadeOut"] = r.fadeOut;
+}
+
+void from_json(const nlohmann::json& j, Region& r) {
+    j.at("id").get_to(r.id);
+    j.at("timeBase").get_to(r.timeBase);
+    j.at("start").get_to(r.start);
+    j.at("length").get_to(r.length);
+    j.at("mediaId").get_to(r.mediaId);
+    j.at("sourceOffsetFrames").get_to(r.sourceOffsetFrames);
+    j.at("gainDb").get_to(r.gainDb);
+    j.at("notes").get_to(r.notes);
+    r.fadeIn = j.value("fadeIn", std::int64_t{0});
+    r.fadeOut = j.value("fadeOut", std::int64_t{0});
+}
+
 void to_json(nlohmann::json& j, const MidiNote& n) {
     j = {{"start", n.start}, {"length", n.length}, {"note", n.note}, {"velocity", n.velocity}};
     if (n.muted) j["muted"] = true;  // written only when set, so older projects and files stay as they were

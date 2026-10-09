@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "bridge/project_controller.h"
+#include "lpc/audio/engine.h"
 #include "lpc/demo_project.h"
 #include "lpc/project_io.h"
 #include "lpc/wav.h"
@@ -818,6 +819,39 @@ private slots:
         d.loadClickSettings(s);
         QCOMPARE(d.clickMode(), QString("grouped"));
         QCOMPARE(d.clickGrouping(), QString("3+2+2"));
+    }
+    void recordingNeedsAnArmedAudioTrackAndMakesARegionFromTheInput() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.startRecording();
+        QVERIFY(!c.recording());
+        QVERIFY(notices.count() >= 1 && notices.last().at(0).toString().contains("Arm an audio track"));
+        QString audio;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "audio") audio = c.tracks()->trackIdAt(i);
+        QVERIFY(!audio.isEmpty());
+        c.setTrackToggle("track.recordArm", audio, true);
+        const int before = c.regions()->rowCount();
+        c.locateBeats(8.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 8.0) < 0.01);
+        c.startRecording();
+        QVERIFY(c.recording());
+        QTest::qWait(600);  // the engine driver of a project without a device pumps the engine in real time: silence is captured
+        c.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 15000);
+        QVERIFY(!c.recording());
+        const jad::RegionRow* take = nullptr;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->trackId == audio && std::abs(r->startBeats - 8.0) < 0.01) take = r;
+        }
+        QVERIFY(take);                        // at the position where recording started
+        QVERIFY(take->lengthBeats > 0.5);     // about 0.6 s at 120 bpm is 1.2 beats
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), before);
     }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;

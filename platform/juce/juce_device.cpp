@@ -63,9 +63,10 @@ private:
     void audioDeviceAboutToStart(juce::AudioIODevice*) override {}
     void audioDeviceStopped() override {}
 
-    void audioDeviceIOCallbackWithContext(const float* const*, int, float* const* outputs, int numOutputs, int numSamples,
+    void audioDeviceIOCallbackWithContext(const float* const* inputs, int numInputs, float* const* outputs, int numOutputs, int numSamples,
                                           const juce::AudioIODeviceCallbackContext&) override {
         if (numOutputs <= 0) return;
+        if (numInputs > 0 && inputs[0] != nullptr) callback_->input(inputs[0], numInputs > 1 && inputs[1] != nullptr ? inputs[1] : inputs[0], numSamples);
         if (numOutputs >= 2) {
             callback_->process(outputs[0], outputs[1], numSamples);
             for (int c = 2; c < numOutputs; ++c) juce::FloatVectorOperations::clear(outputs[c], numSamples);

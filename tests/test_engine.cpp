@@ -212,3 +212,33 @@ TEST_CASE("engine: a click slot with a sample plays the sample, the others the b
     for (int i = 300; i < 512; ++i) blip = std::max(blip, std::abs(l[static_cast<std::size_t>(i)]));
     REQUIRE(blip > 0.05f);                                                                            // slot 2: the built-in click
 }
+
+TEST_CASE("engine: a recording counts in with the click, then captures the input of the playing blocks", "[engine][record]") {
+    AudioEngine e(kSr);
+    AudioMsg rec = msg(MsgKind::StartRecord, 1, 300);  // 300 frames of count-in
+    rec.obj = makeOwned(new ClickTrack{{0, 150}, {1, 0}, {1, 2}});
+    e.applyDirect(rec);
+    REQUIRE(e.recording());
+    std::vector<float> l(512), r(512), inL(512), inR(512);
+    for (std::size_t i = 0; i < 512; ++i) { inL[i] = 0.25f; inR[i] = -0.25f; }
+    e.input(inL.data(), inR.data(), 512);
+    e.processBlock(l.data(), r.data(), 512);
+    float blip = 0;
+    for (int i = 0; i < 300; ++i) blip = std::max(blip, std::abs(l[static_cast<std::size_t>(i)]));
+    REQUIRE(blip > 0.05f);                      // the count-in is audible
+    ClickTrack none;
+    ClickTrack* unused = &none;
+    (void)unused;
+    AudioEngine::RecChunk c;
+    std::size_t frames = 0;
+    while (e.takeRecorded(c)) {
+        for (int i = 0; i < c.frames; ++i) { REQUIRE(c.l[i] == 0.25f); REQUIRE(c.r[i] == -0.25f); }
+        frames += static_cast<std::size_t>(c.frames);
+    }
+    REQUIRE(frames == 212);                     // only the part after the count-in (512 - 300)
+    e.applyDirect(msg(MsgKind::Stop, 2));
+    REQUIRE_FALSE(e.recording());
+    e.input(inL.data(), inR.data(), 512);
+    e.processBlock(l.data(), r.data(), 512);
+    REQUIRE_FALSE(e.takeRecorded(c));           // stopped: nothing more is captured
+}

@@ -52,6 +52,9 @@ public:
     std::future<void> locate(std::int64_t frame);
     std::future<void> setLoop(std::int64_t startFrame, std::int64_t endFrame);
     std::future<void> setClickSettings(audio::ClickSettings settings);  // how the bar is counted and the click sounds (sample files)
+    // Starts recording: the transport is placed at startFrame, the count-in clicks play for countInFrames, then playback starts and
+    // the engine captures the input until stop(). The click track is the count-in's beats from frame 0 (may be empty).
+    std::future<void> startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn);
     std::future<void> setMetronome(bool on);  // a click on every beat of the tempo map while playing, accent on the first beat of a bar
 
     // Called on the project thread after every accepted submit/undo/redo and after a rebuild of the audio

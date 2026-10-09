@@ -96,6 +96,9 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString clickMode READ clickMode WRITE setClickMode NOTIFY clickSettingsChanged)          // "beats", "eighths", "sixteenths" or "grouped"
     Q_PROPERTY(QString clickGrouping READ clickGrouping WRITE setClickGrouping NOTIFY clickSettingsChanged)  // "3+2+2"
     Q_PROPERTY(int clickRevision READ clickRevision NOTIFY clickSettingsChanged)
+    Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(bool countInEnabled READ countInEnabled WRITE setCountInEnabled NOTIFY recordingChanged)
+    Q_PROPERTY(int countInBars READ countInBars WRITE setCountInBars NOTIFY recordingChanged)  // bars of count-in before a recording, 1..4
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -173,6 +176,16 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    bool recording() const { return recording_; }
+    bool countInEnabled() const { return countIn_; }
+    void setCountInEnabled(bool on);
+    int countInBars() const { return countInBars_; }
+    void setCountInBars(int bars);
+    // Records the input of the audio device into the first record-armed audio track from the playhead, after the count-in when it is on;
+    // stop() ends it and the take becomes a region (one undo step) in that track.
+    Q_INVOKABLE void startRecording();
+    Q_INVOKABLE void toggleRecording();
+    lpc::audio::AudioEngine* engineForTest() const { return engine_.get(); }  // the tests drive the engine by hand
     QString clickMode() const { return QString::fromStdString(clickSettings_.mode); }
     void setClickMode(const QString& mode);
     QString clickGrouping() const { return QString::fromStdString(clickSettings_.grouping); }
@@ -431,6 +444,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void recordingChanged();
     void clickSettingsChanged();
     void commandSent(const QString& type);
     // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
@@ -567,6 +581,13 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    bool recording_ = false, recFinishing_ = false, countIn_ = false;
+    int countInBars_ = 1;
+    QString recTrack_;
+    double recStartBeats_ = 0.0;
+    std::vector<float> recBuf_;  // the take so far, interleaved stereo
+    void drainRecording();
+    void finishRecording();
     lpc::audio::ClickSettings clickSettings_;
     int clickRevision_ = 0;
     void clickSettingsEdited();

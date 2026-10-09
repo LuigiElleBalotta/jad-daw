@@ -59,6 +59,7 @@ namespace {
 struct EngineCallback final : lpc::IAudioCallback {
     explicit EngineCallback(lpc::audio::AudioEngine& e) : engine(e) {}
     void process(float* l, float* r, int n) noexcept override { engine.processBlock(l, r, n); }
+    void input(const float* l, const float* r, int n) noexcept override { engine.input(l, r, n); }
     lpc::audio::AudioEngine& engine;
 };
 
@@ -1055,6 +1056,7 @@ void ProjectController::play() {
 }
 
 void ProjectController::stop() {
+    if (recording_) recFinishing_ = true;  // tick() collects what the engine still holds and makes the region
     if (host_) host_->stop();
 }
 
@@ -1144,6 +1146,10 @@ void ProjectController::tick() {
             if (value > h) { h = value; moved = true; }
         }
         if (moved) { ++peaksRevision_; emit peaksChanged(); }
+    }
+    if (recording_) {
+        drainRecording();
+        if (recFinishing_ && !engine_->recording()) finishRecording();
     }
     const double peak = engine_->masterPeak();
     if (peak != peak_) {

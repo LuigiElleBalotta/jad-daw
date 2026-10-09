@@ -19,6 +19,7 @@ inline constexpr int kMaxMessagesPerBlock = 1024;  // bounds the work one audio 
 class AudioEngine {
 public:
     explicit AudioEngine(double sampleRate);
+    ~AudioEngine();  // frees the click objects still held (the audio thread is stopped by then)
     double sampleRate() const { return sampleRate_; }
 
     // ---- project thread
@@ -36,7 +37,18 @@ public:
     std::size_t pendingMessages() const { return messages_.sizeApprox(); }
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }
 
+    // ---- recording: the input of the playing blocks is captured in chunks, in order; read them from one thread
+    struct RecChunk {
+        float l[kMaxBlock];
+        float r[kMaxBlock];
+        int frames = 0;
+    };
+    bool recording() const { return recordingPub_.load(std::memory_order_relaxed); }
+    bool takeRecorded(RecChunk& out) { return rec_.pop(out); }
+    std::uint64_t recordedDropped() const { return recDropped_.load(std::memory_order_relaxed); }  // chunks lost because nobody read them
+
     // ---- audio thread
+    void input(const float* l, const float* r, int frames) noexcept;  // the input for the next processBlock
     void processBlock(float* outL, float* outR, int frames) noexcept;
 
     // ---- tests: only while the audio thread is stopped
@@ -54,6 +66,16 @@ private:
     // owned by the audio thread
     bool playing_ = false;
     ClickTrack* click_ = nullptr;  // the metronome's beats; replaced through SetClick, the old one goes back as garbage
+    SpscQueue<RecChunk, 1024> rec_;
+    std::vector<float> inL_, inR_;
+    int inFrames_ = 0;
+    bool recording_ = false;
+    std::int64_t countLeft_ = 0, countPos_ = 0;  // the count-in before a recording: frames left, frames played
+    ClickTrack* countClick_ = nullptr;
+    std::atomic<bool> recordingPub_{false};
+    std::atomic<std::uint64_t> recDropped_{0};
+    void mixClickTrack(const ClickTrack* track, float* outL, float* outR, std::int64_t from, int n) noexcept;
+    void capture(int offset, int n) noexcept;
     ClickKit* kit_ = nullptr;      // the samples of the click sounds (SetClickKit)
     bool clickOn_ = false;
     struct ClickVoice {            // a sound being played: a sample, or the built-in blip when sample is null

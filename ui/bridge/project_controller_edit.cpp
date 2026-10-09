@@ -1,6 +1,7 @@
 // The Edit menu of the Tracks area on regions: copy, cut, paste, duplicate, mute, the Select, Trim, Length and Move commands.
 // Each change is one command (or one transaction) and so one undo step, like the Core's own commands.
 #include <QSettings>
+#include <QDateTime>
 #include <QTimer>
 #include <QtConcurrent>
 #include <QPointer>
@@ -789,6 +790,110 @@ void ProjectController::saveClickSettings(QSettings& s) const {
         s.setValue(QStringLiteral("click/file%1").arg(slot), QString::fromStdString(clickSettings_.files[static_cast<std::size_t>(slot)]));
         s.setValue(QStringLiteral("click/gain%1").arg(slot), clickSettings_.gain[static_cast<std::size_t>(slot)]);
     }
+}
+
+void ProjectController::setCountInEnabled(bool on) {
+    if (on == countIn_) return;
+    countIn_ = on;
+    emit recordingChanged();
+}
+
+void ProjectController::setCountInBars(int bars) {
+    bars = std::clamp(bars, 1, 4);
+    if (bars == countInBars_) return;
+    countInBars_ = bars;
+    emit recordingChanged();
+}
+
+void ProjectController::toggleRecording() {
+    if (recording_) stop();
+    else startRecording();
+}
+
+void ProjectController::startRecording() {
+    if (!host_ || !engine_ || recording_) return;
+    if (degraded()) {
+        setError("Audio engine not running: recording is unavailable until it recovers");
+        return;
+    }
+    if (openAudioDevice_ && !device_) {
+        setError(QString("No audio device: ") + (deviceError_.isEmpty() ? QString("no device") : deviceError_));
+        return;
+    }
+    QString track;
+    for (const TrackRow& t : allRows_)
+        if (t.kind == "audio" && !t.master && trackToggles_.value(QStringLiteral("track.recordArm")).contains(t.id)) { track = t.id; break; }
+    if (track.isEmpty()) {
+        emit notice("Arm an audio track (R) to record");
+        return;
+    }
+    const lpc::Ticks tick = static_cast<lpc::Ticks>(std::llround(std::clamp(positionBeats_, 0.0, kMaxBeatsEdit) * lpc::kPPQ));
+    const auto startFrame = static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(tick, sampleRate_)));
+    lpc::audio::ClickTrack count;
+    std::int64_t countFrames = 0;
+    if (countIn_) {  // the bars before the take, at the tempo of the start, counted 1 2 3 4 with an accent on the first
+        const double framesPerBeat = sampleRate_ * 60.0 / tempoMap_.bpmAt(tick) * 4.0 / beatUnit_;
+        const int beats = countInBars_ * beatsPerBar_;
+        for (int k = 0; k < beats; ++k) {
+            count.frames.push_back(static_cast<std::int64_t>(std::llround(k * framesPerBeat)));
+            count.accent.push_back(k % beatsPerBar_ == 0 ? 1 : 0);
+            count.slot.push_back(static_cast<std::uint8_t>(std::min(k % beatsPerBar_ + 1, 32)));
+        }
+        countFrames = static_cast<std::int64_t>(std::llround(beats * framesPerBeat));
+    }
+    recBuf_.clear();
+    recTrack_ = track;
+    recStartBeats_ = positionBeats_;
+    recording_ = true;
+    recFinishing_ = false;
+    host_->startRecording(startFrame, countFrames, std::move(count));
+    emit recordingChanged();
+}
+
+void ProjectController::drainRecording() {
+    constexpr std::size_t kMaxFloats = 48000u * 2u * 60u * 30u;  // half an hour at 48 kHz
+    lpc::audio::AudioEngine::RecChunk c;
+    while (engine_ && engine_->takeRecorded(c)) {
+        if (recBuf_.size() + static_cast<std::size_t>(c.frames) * 2 > kMaxFloats) {
+            if (!recFinishing_) {
+                recFinishing_ = true;
+                emit notice("The take reached 30 minutes: recording stopped");
+                if (host_) host_->stop();
+            }
+            continue;
+        }
+        for (int i = 0; i < c.frames; ++i) {
+            recBuf_.push_back(c.l[i]);
+            recBuf_.push_back(c.r[i]);
+        }
+    }
+}
+
+void ProjectController::finishRecording() {
+    drainRecording();
+    recording_ = false;
+    recFinishing_ = false;
+    emit recordingChanged();
+    if (recBuf_.empty()) {
+        emit notice("Nothing was recorded");
+        return;
+    }
+    const QString name = QStringLiteral("Recording %1.wav").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh.mm.ss"));
+    const std::filesystem::path tmp = std::filesystem::temp_directory_path() / name.toStdU16String();
+    try {
+        lpc::writeWav(tmp, sampleRate_, 2, recBuf_, lpc::WavFormat::Pcm24);
+    } catch (const std::exception& e) {
+        setError(QString("Cannot save the recording: ") + QString::fromUtf8(e.what()));
+        recBuf_.clear();
+        return;
+    }
+    const double seconds = static_cast<double>(recBuf_.size() / 2) / sampleRate_;
+    recBuf_.clear();
+    runImport(QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), recTrack_, recStartBeats_, [this, tmp, seconds](bool ok, double) {
+        std::error_code ignore;
+        std::filesystem::remove(tmp, ignore);
+        if (ok) emit notice(QString("Recorded %1 s").arg(seconds, 0, 'f', 1));
+    });
 }
 
 }  // namespace jad

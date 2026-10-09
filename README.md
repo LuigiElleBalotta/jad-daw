@@ -116,6 +116,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   tempo and the time signature. Record > Metronome Settings chooses how a bar is counted (beats `1 2 3 4`, eighths `1 & 2 &`,
   sixteenths `1 e & a`, or grouped `1 la li 2 la li`, with groups such as `3+2+2` for 7/8) and a WAV file of your own for each count
   (a voice saying the numbers, a cowbell...); a count without a file plays the built-in click. No sounds are shipped with the app.
+- **Recording (audio):** arm an audio track with its R button, press Record (`R`) and the input of the audio device is captured from the
+  playhead until Stop; the take becomes a region in that track (one undo step). The Count-in button (`1 2 3`) plays one bar of click
+  first. Not there yet: MIDI recording, input monitoring, latency compensation, punch in/out, several armed tracks, takes and comping.
 - **File:** Save As, Save a Copy As, Import Audio File and Bounce (an offline render to a 24-bit WAV; plug-in inserts are skipped).
 
 ![Piano Roll](docs/images/piano-roll.png)

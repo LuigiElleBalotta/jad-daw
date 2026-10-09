@@ -45,7 +45,28 @@ Display MIDI Data As ▾ (MIDI 1.0).
 plug-in list in plug-in menu** (so the "Recent" block of the plug-in menus is a setting, on by default). *Level Meters:* Peak Hold Time ▾
 (800 ms) · Return Time ▾ (IEC Type I (11.8 dB/s)–Recommended) · Channel Order ▾ (Clockwise (Ls L C R Rs LFE)).
 
-Other View sub-tabs (Tracks, Editors) and other categories: not captured.
+**View > Tracks:** ☐ Show track or bar number while scrolling. *Appearance:* Track Color ▾ (Static) · Region Color ▾ (Individual) · Marker Color ▾
+(Static) · Background ▾ (Dark) · Grid Lines ☑ Automatic. *Regions:* ☐ Shaded loops · ☑ Show "+" button next to Session Player regions.
+**View > Editors:** Piano Roll: ☐ Bright background.
+
+### Audio (sub-tabs: Devices, General, Sampler, Editing, I/O Assignments, File Editor, MP3)
+
+**Devices:** Core Audio ☑ Enabled · Output Device ▾ · Input Device ▾ (the interface in use) · I/O Buffer Size ▾ (128) Samples · Resulting
+Latency (read-only text: "12,5 ms Roundtrip (6,1 ms Output)") · Recording Delay (slider + stepper, 0 Samples) · Processing Threads ▾
+(Automatic) · Process Buffer Range ▾ (Small) · Multithreading ▾ (Playback & Live Tracks) · Summing ▾ (High Precision (64-bit)) · ReWire
+Behavior ▾ (Off) · **Apply** button (dim until a change). Other sub-tabs not captured.
+
+### Recording
+
+*Audio Recording:* File Type ▾ (AIFF) · Bit Depth ▾ (24-bit). *MIDI Recording:* Auto Record Enable ▾ (The Focused Track). *Overlapping Track
+Recordings* (two columns, MIDI and Audio): Cycle Off ▾ (Merge / Create Take Folder) · Cycle On ▾ (Merge / Create Take Folder) · Replace ▾
+(Region Erase, MIDI column only). Button **Recording Project Settings…**.
+
+### MIDI (sub-tabs: General, Reset Messages, Sync, Inputs)
+
+**General:** ☑ MIDI 2.0 · ☑ External stop message ends recording · button Reset All MIDI Drivers. *Articulation Switches* (a small table with a
+"Set" column header): MIDI Remote ▾ (Off | Global) · MIDI Channel ▾ (All | Global) · Octave Offset (stepper, 0, dim | Per Channel Strip ▾).
+Other sub-tabs not captured.
 
 ### Advanced
 

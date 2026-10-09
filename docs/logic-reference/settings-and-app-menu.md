@@ -60,7 +60,15 @@ plug-in list in plug-in menu** (so the "Recent" block of the plug-in menus is a 
 **Devices:** Core Audio ☑ Enabled · Output Device ▾ · Input Device ▾ (the interface in use) · I/O Buffer Size ▾ (128) Samples · Resulting
 Latency (read-only text: "12,5 ms Roundtrip (6,1 ms Output)") · Recording Delay (slider + stepper, 0 Samples) · Processing Threads ▾
 (Automatic) · Process Buffer Range ▾ (Small) · Multithreading ▾ (Playback & Live Tracks) · Summing ▾ (High Precision (64-bit)) · ReWire
-Behavior ▾ (Off) · **Apply** button (dim until a change). Other sub-tabs not captured.
+Behavior ▾ (Off) · **Apply** button (dim until a change). **General:** ☑ Display audio engine overload message · Sample Accurate Automation ▾ (Off) · Automatic Bus Assignment Uses ▾ (All Busses) · ☑ Software
+monitoring · ☑ Input monitoring only for the focused track, and only when input monitoring is enabled (as in GarageBand) · ☐ Independent monitoring
+level for record-enabled channel strips · Dim Level (slider + stepper, -20 dB). *Plug-in Latency:* Compensation ▾ (All) · ☑ Playback pre-roll ·
+☐ Low Latency Monitoring Mode · Limit (slider + stepper, 5 ms, dim until the mode is on).
+**Sampler** (inner tabs Misc / Virtual Memory): Sample Storage ▾ (Original) · Search Samples On ▾ (Local Volumes) · Read Root Key From ▾
+(File/Analysis) · Root Key at File Name Position ▾ (Auto) · ☑ Keep common samples in memory when switching projects.
+**Editing:** *Crossfades for Merge and Take Comping:* Crossfade Time (slider + stepper, 20 ms) · Crossfade Curve (slider + stepper, 0). *Scrubbing:*
+☐ Scrubbing with audio in Tracks area · Maximum Scrub Speed ▾ (Normal) · Scrub Response ▾ (Normal).
+I/O Assignments, File Editor and MP3 sub-tabs not captured.
 
 ### Recording
 

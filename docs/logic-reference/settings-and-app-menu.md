@@ -27,7 +27,26 @@ a rounded panel with the controls. Labels are right-aligned in a column, control
 - Auto Backup ▾ (Last 10 Alternative Versions).
 - Recent Items ▾ (System Default).
 
+**Editing:** Number of Undo Steps (stepper, 100) · ☑ Groove template edits immediately update all associated regions · ☑ Create new regions
+after splitting loops · ☑ Select regions on track selection · ☐ Select tracks on region/marquee selection · Right Mouse Button ▾ (Opens
+Shortcut Menu) · Trackpad: ☐ Enable Force Touch trackpad *(dim)* · Pointer Tool in Tracks Provides: ☐ Fade tool click zones, ☐ Marquee tool
+click zones, ☐ Quick Swipe and Take Editing click zones · Limit Dragging to One Direction In: ☐ Piano Roll Editor and Score Editor, ☐ Tracks
+area · Double-Clicking a MIDI Region Opens ▾ (Piano Roll Editor) · Piano Roll Editor: ☑ Region border trimming.
+Other General sub-tabs (Cycle, Catch, Notifications, Accessibility): not captured.
+
+### View (sub-tabs: General, Tracks, Mixer, Editors)
+
+**General:** Appearance ▾ (System Setting). *Windows:* ☐ Large local window menus · ☐ Large inspectors · ☐ Wide playhead · ☑ Show help tags ·
+☐ Show beats and time in help tags · ☐ Show default values · ☑ Show animations. *Displays:* Display Middle C As ▾ (C3 (Yamaha)) · Display Time
+As ▾ (SMPTE/EBU with Subframes) with ☐ Zeros as spaces · Display Tempo As ▾ (Beats per Minute (BPM, Maelzel)) · Clock Format ▾ (1 1 1 1) ·
+Display MIDI Data As ▾ (MIDI 1.0).
+
+**Mixer:** ☑ Show "Mastering Assistant" Button in Stereo Output. *Plug-in Window:* **☑ Open plug-in window on insertion** · **☑ Show recent
+plug-in list in plug-in menu** (so the "Recent" block of the plug-in menus is a setting, on by default). *Level Meters:* Peak Hold Time ▾
+(800 ms) · Return Time ▾ (IEC Type I (11.8 dB/s)–Recommended) · Channel Order ▾ (Clockwise (Ls L C R Rs LFE)).
+
+Other View sub-tabs (Tracks, Editors) and other categories: not captured.
+
 ### Other categories
 
-Not captured yet: the other sub-tabs of General, and Audio, Recording, MIDI, Score, Movie, Automation, Control Surfaces, View, My Info,
-Advanced (Advanced has a "Show Advanced Tools" style checklist in Logic; contents to be captured).
+Not captured yet: Audio, Recording, MIDI, Score, Movie, Automation, Control Surfaces, My Info, Advanced.

@@ -36,6 +36,7 @@
  {"id":"track.rename","label":"Rename Track","menu":"Track","shortcut":"","kind":"command","status":"ready"},
  {"id":"track.mute","label":"Mute","menu":"Track","shortcut":"M","kind":"command","status":"ready"},
  {"id":"track.solo","label":"Solo","menu":"Track","shortcut":"S","kind":"command","status":"ready"},
+ {"id":"track.showInTracks","label":"Show in Tracks Area","menu":"Track","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"track.recordArm","label":"Record Enable","menu":"Track","shortcut":"","kind":"toggle","status":"stub"},
  {"id":"track.inputMonitor","label":"Input Monitoring","menu":"Track","shortcut":"","kind":"toggle","status":"stub"},
  {"id":"track.freeze","label":"Freeze","menu":"Track","shortcut":"","kind":"toggle","status":"stub"},

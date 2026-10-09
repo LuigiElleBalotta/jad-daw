@@ -77,6 +77,7 @@ ApplicationWindow {
         "track.newInstrument": () => controller.addTrack("instrument"),
         "track.newBus": () => controller.addTrack("bus"),
         "track.delete": () => controller.deleteSelectedTracks(),
+        "track.showInTracks": (on) => { if (controller.selectedTrackIds.length > 0) controller.setShowInTracks(controller.selectedTrackIds[0], on) },
         "track.rename": () => { if (controller.selectedTrackIds.length > 0) trackList.beginRename(controller.selectedTrackIds[0]) },
         "track.recordArm": (on) => root.setSelectedToggle("track.recordArm", on),
         "track.inputMonitor": (on) => root.setSelectedToggle("track.inputMonitor", on),
@@ -135,6 +136,7 @@ ApplicationWindow {
         "tool.eraser": controller.tool === "eraser",
         "tool.scissors": controller.tool === "scissors",
         "tool.glue": controller.tool === "glue",
+        "track.showInTracks": controller.selectedShowInTracks,
         "track.recordArm": controller.selectedRecordArm,
         "track.inputMonitor": controller.selectedInputMonitor,
         "snap.off": controller.snap === "off",
@@ -152,6 +154,7 @@ ApplicationWindow {
     })
     readonly property var disabledStates: ({
         "file.save": !controller.hasProject,
+        "track.showInTracks": !controller.selectedCanHide,
         "track.recordArm": controller.selectedTrackIds.length === 0,
         "track.inputMonitor": controller.selectedTrackIds.length === 0
     })

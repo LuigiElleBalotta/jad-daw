@@ -115,6 +115,8 @@ private:
 ProjectController::ProjectController(QObject* parent) : ProjectController(true, parent) {}
 
 ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QObject(parent), openAudioDevice_(openAudioDevice) {
+    connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackFlagsChanged);
+    connect(this, &ProjectController::projectChanged, this, &ProjectController::trackFlagsChanged);
     timer_.setInterval(33);
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackTogglesChanged);

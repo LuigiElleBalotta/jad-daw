@@ -168,4 +168,38 @@ TestCase {
         mouseDoubleClickSequence(s.panKnob)
         compare(got, [["t", 0]])
     }
+
+    function test_new_bus_entries_lead_the_send_and_output_menus() {
+        var s = createTemporaryObject(stripC, this)
+        var got = []
+        s.newBusRequested.connect(function (id, role) { got.push([id, role]) })
+        compare(s.sendMenu.itemAt(0).text, "New Bus")
+        compare(s.outputMenu.itemAt(0).text, "New Bus")
+        s.sendMenu.itemAt(0).triggered()
+        s.outputMenu.itemAt(0).triggered()
+        compare(got, [["t", "send"], ["t", "output"]])
+    }
+    function test_send_slot_stays_available_without_targets() {
+        var s = createTemporaryObject(stripC, this)
+        s.targets = []
+        verify(s.sendMenu.count >= 1)   // New Bus is always there
+    }
+    function test_strip_name_selects_the_track_with_the_modifiers() {
+        var s = createTemporaryObject(stripC, this)
+        var got = []
+        s.selectRequested.connect(function (id, mods) { got.push([id, mods]) })
+        mouseClick(s.stripName)
+        mouseClick(s.stripName, 5, 5, Qt.LeftButton, Qt.ShiftModifier)
+        compare(got.length, 2)
+        compare(got[0], ["t", Qt.NoModifier])
+        compare(got[1], ["t", Qt.ShiftModifier])
+    }
+    function test_the_master_name_does_not_select() {
+        var s = createTemporaryObject(stripC, this)
+        s.info = { trackId: "m", name: "Master", color: "purple", kind: "master", master: true, gainDb: 0, pan: 0, inserts: [], sends: [] }
+        var got = []
+        s.selectRequested.connect(function (id, mods) { got.push(id) })
+        mouseClick(s.stripName)
+        compare(got.length, 0)
+    }
 }

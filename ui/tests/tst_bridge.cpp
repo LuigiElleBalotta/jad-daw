@@ -925,6 +925,21 @@ private slots:
             QCOMPARE(c.tracks()->trackIdAt(row), track);  // the timeline row and the header row are the same track
         }
     }
+    void theTrackMenuStateFollowsTheSelectedTrack() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        c.selectTrack(trackIdOfKind(c, "audio"), "replace");
+        QVERIFY(!c.selectedCanHide());
+        QVERIFY(c.selectedShowInTracks());
+        const QString bus = trackIdOfKind(c, "bus");
+        c.selectTrack(bus, "replace");
+        QVERIFY(c.selectedCanHide());
+        c.setShowInTracks(bus, false);
+        QTRY_VERIFY(!c.selectedShowInTracks());   // still selected, now hidden
+        QVERIFY(c.selectedCanHide());
+    }
     void newBusForASendIsOneUndoStep() {
         TempDir dir;
         jad::ProjectController c(false);

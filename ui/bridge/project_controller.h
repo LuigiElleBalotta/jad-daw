@@ -71,6 +71,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(QStringList selectedRegionIds READ selectedRegionIds NOTIFY selectionChanged)
     Q_PROPERTY(bool selectedRecordArm READ selectedRecordArm NOTIFY trackTogglesChanged)  // of the first selected track
     Q_PROPERTY(bool selectedInputMonitor READ selectedInputMonitor NOTIFY trackTogglesChanged)
+    Q_PROPERTY(bool selectedShowInTracks READ selectedShowInTracks NOTIFY trackFlagsChanged)  // of the first selected track
+    Q_PROPERTY(bool selectedCanHide READ selectedCanHide NOTIFY trackFlagsChanged)            // the first selected track is a bus or aux
     Q_PROPERTY(int trackHeightIndex READ trackHeightIndex WRITE setTrackHeightIndex NOTIFY trackHeightChanged)
     Q_PROPERTY(double masterGainDb READ masterGainDb NOTIFY projectChanged)
     Q_PROPERTY(bool mixerVisible READ mixerVisible WRITE setMixerVisible NOTIFY mixerVisibleChanged)
@@ -104,6 +106,14 @@ public:
     bool hasProject() const { return host_ != nullptr; }
     bool selectedRecordArm() const { return selectedToggle(QStringLiteral("track.recordArm")); }
     bool selectedInputMonitor() const { return selectedToggle(QStringLiteral("track.inputMonitor")); }
+    bool selectedShowInTracks() const {
+        const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
+        return !t || t->showInTracks;
+    }
+    bool selectedCanHide() const {
+        const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
+        return t && (t->kind == QLatin1String("bus") || t->kind == QLatin1String("aux"));
+    }
     QString projectName() const { return name_; }
     double bpm() const { return bpm_; }
     int beatsPerBar() const { return beatsPerBar_; }
@@ -281,6 +291,7 @@ signals:
     void mixerVisibleChanged();
     void panelsChanged();
     void selectionChanged();
+    void trackFlagsChanged();  // the first selected track, or one of its flags, changed
     void trackTogglesChanged();
     void toolChanged();
     void snapChanged();

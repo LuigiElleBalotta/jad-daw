@@ -14,6 +14,7 @@ Panel {
     property bool showSlots: true
     property var pluginGroups: []      // [{vendor, plugins: [{id, name}]}], from the plug-in catalogue
     property var knownPluginIds: []    // ids of the plug-ins that are installed
+    property bool selected: false      // the track is selected in the project (the name is drawn in the accent colour)
 
     readonly property string trackId: info.trackId ?? ""
     // a gesture in flight belongs to the track it started on: showing another track drops it, no command
@@ -42,6 +43,9 @@ Panel {
     readonly property alias insertList: insertRepeater
     readonly property alias sendList: sendRepeater
     readonly property alias insertMenu: insertMenu
+    readonly property alias sendMenu: sendMenu
+    readonly property alias outputMenu: outputMenu
+    readonly property alias stripName: nameLabel
 
     signal gainReleased(string id, real db)
     signal panReleased(string id, real pan)
@@ -58,6 +62,8 @@ Panel {
     signal pluginInsertRequested(string id, string pluginId, string name)
     signal insertEditorRequested(string id, int index)
     signal pluginManagerRequested()
+    signal newBusRequested(string id, string role)       // role: "send" or "output"
+    signal selectRequested(string id, int modifiers)
 
     function requestOutput(outputId) { outputRequested(trackId, outputId) }
     function requestSend(targetId) { sendAddRequested(trackId, targetId) }
@@ -78,8 +84,12 @@ Panel {
     component TargetMenu: ThemedMenu {
         id: menu
         property bool withMaster: false
+        property bool withNewBus: false
         property var targets: []
         signal chosen(string targetId)
+        signal newBusChosen()
+        ThemedMenuItem { visible: menu.withNewBus; height: visible ? implicitHeight : 0; text: qsTr("New Bus"); onTriggered: menu.newBusChosen() }
+        MenuSeparator { visible: menu.withNewBus; height: visible ? implicitHeight : 0 }
         Instantiator {
             model: (menu.withMaster ? [{ id: "", name: qsTr("Stereo Out") }] : []).concat(menu.targets)
             delegate: ThemedMenuItem {
@@ -87,12 +97,25 @@ Panel {
                 text: modelData.name
                 onTriggered: menu.chosen(modelData.id)
             }
-            onObjectAdded: (index, object) => menu.insertItem(index, object)
+            onObjectAdded: (index, object) => menu.insertItem(index + (menu.withNewBus ? 2 : 0), object)  // after New Bus and its separator
             onObjectRemoved: (index, object) => menu.removeItem(object)
         }
     }
-    TargetMenu { id: outputMenu; withMaster: true; targets: root.targets; onChosen: (id) => root.requestOutput(id) }
-    TargetMenu { id: sendMenu; targets: root.targets; onChosen: (id) => root.requestSend(id) }
+    TargetMenu {
+        id: outputMenu
+        withMaster: true
+        withNewBus: true
+        targets: root.targets
+        onChosen: (id) => root.requestOutput(id)
+        onNewBusChosen: root.newBusRequested(root.trackId, "output")
+    }
+    TargetMenu {
+        id: sendMenu
+        withNewBus: true
+        targets: root.targets
+        onChosen: (id) => root.requestSend(id)
+        onNewBusChosen: root.newBusRequested(root.trackId, "send")
+    }
     ThemedMenu {
         id: insertMenu
         signal managerChosen()
@@ -209,7 +232,7 @@ Panel {
         StripSlot {
             id: addSendSlot
             Layout.fillWidth: true
-            visible: root.slotsVisible && root.targets.length > 0
+            visible: root.slotsVisible
             text: qsTr("Send +")
             onClicked: sendMenu.popup(addSendSlot, 0, addSendSlot.height)
         }
@@ -290,14 +313,20 @@ Panel {
             color: Theme["track" + root.capitalColor + "Solid"]
         }
         Text {
+            id: nameLabel
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             text: root.trackName
             elide: Text.ElideRight
-            color: Theme.textPrimary
+            color: root.selected ? Theme.accentPrimary : Theme.textPrimary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontTypeLabelSize
             font.weight: Theme.fontTypeLabelWeight
+            MouseArea {
+                anchors.fill: parent
+                enabled: !root.master
+                onClicked: (m) => root.selectRequested(root.trackId, m.modifiers)
+            }
         }
     }
 }

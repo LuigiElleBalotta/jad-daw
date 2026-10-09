@@ -227,6 +227,8 @@ public:
     // Save As then opens the copy, a copy leaves the current project open.
     Q_INVOKABLE bool saveProjectAs(const QUrl& folder, bool openCopy);
     // File > Import Audio File: into the selected audio track (else the first one) at the playhead
+    // File > Bounce: the whole project is rendered offline, without the audio device, to a 24-bit WAV file (plug-in inserts are skipped)
+    Q_INVOKABLE void bounceProject(const QUrl& file);
     Q_INVOKABLE void importAudioFilesHere(const QList<QUrl>& files);
     Q_INVOKABLE void submit(const QString& commandJson);
     Q_INVOKABLE void undo();

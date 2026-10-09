@@ -1,6 +1,8 @@
 // The Edit menu of the Tracks area on regions: copy, cut, paste, duplicate, mute, the Select, Trim, Length and Move commands.
 // Each change is one command (or one transaction) and so one undo step, like the Core's own commands.
 #include <QTimer>
+#include <QtConcurrent>
+#include <QPointer>
 #include <QUuid>
 
 #include <algorithm>
@@ -10,6 +12,9 @@
 
 #include "bridge/project_controller.h"
 #include "lpc/model_json.h"
+#include "lpc/media_store.h"
+#include "lpc/wav.h"
+#include "lpc/offline_render.h"
 #include "lpc/project_host.h"
 #include "lpc/validation.h"
 
@@ -631,6 +636,33 @@ void ProjectController::importAudioFilesHere(const QList<QUrl>& files) {
         return;
     }
     importAudioFiles(files, target, positionBeats_);
+}
+
+void ProjectController::bounceProject(const QUrl& file) {
+    if (!host_) return;
+    std::filesystem::path out = file.toLocalFile().toStdWString();
+    if (out.extension().empty()) out += ".wav";
+    if (!saveProject()) return;
+    const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+    if (lpc::projectEndFrame(project) == 0) {
+        setError("Nothing to bounce: the project has no regions");
+        return;
+    }
+    emit notice("Bouncing…");
+    const std::filesystem::path root = dir_;
+    QPointer<ProjectController> self(this);
+    (void)QtConcurrent::run([self, project, root, out] {
+        QString message;
+        try {
+            lpc::MediaStore media(root, /*streaming=*/false);
+            const lpc::RenderResult r = lpc::renderOffline(project, media);
+            lpc::writeWav(out, r.sampleRate, 2, r.interleaved, lpc::WavFormat::Pcm24);
+            message = QString("Bounced %1 s to %2").arg(static_cast<double>(r.frames) / r.sampleRate, 0, 'f', 1).arg(QString::fromStdWString(out.filename().wstring()));
+        } catch (const std::exception& e) {
+            message = QString("Bounce failed: ") + QString::fromUtf8(e.what());
+        }
+        if (self) QMetaObject::invokeMethod(self, [self, message] { if (self) emit self->notice(message); }, Qt::QueuedConnection);
+    });
 }
 
 }  // namespace jad

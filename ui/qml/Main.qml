@@ -59,6 +59,14 @@ ApplicationWindow {
         onAccepted: controller.saveProjectAs(selectedFolder, openCopy)
     }
     FileDialog {
+        id: bounceDialog
+        title: qsTr("Bounce the project")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "wav"
+        nameFilters: [qsTr("WAV audio (*.wav)")]
+        onAccepted: controller.bounceProject(selectedFile)
+    }
+    FileDialog {
         id: importDialog
         title: qsTr("Import audio files")
         fileMode: FileDialog.OpenFiles
@@ -116,6 +124,7 @@ ApplicationWindow {
         "file.saveAs": () => { saveAsDialog.openCopy = true; saveAsDialog.open() },
         "file.saveACopyAs": () => { saveAsDialog.openCopy = false; saveAsDialog.open() },
         "file.importAudio": () => importDialog.open(),
+        "file.bounce": () => bounceDialog.open(),
         "file.quit": () => Qt.quit(),
         "edit.undo": () => controller.undo(),
         "edit.redo": () => controller.redo(),
@@ -254,6 +263,7 @@ ApplicationWindow {
         "file.saveAs": !controller.hasProject,
         "file.saveACopyAs": !controller.hasProject,
         "file.importAudio": !controller.hasProject,
+        "file.bounce": !controller.hasProject,
         "track.showInTracks": !controller.selectedCanHide,
         "track.recordArm": controller.selectedTrackIds.length === 0,
         "track.inputMonitor": controller.selectedTrackIds.length === 0

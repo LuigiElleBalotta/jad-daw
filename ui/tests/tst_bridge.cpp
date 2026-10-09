@@ -762,6 +762,18 @@ private slots:
         QCOMPARE(c.regions()->rowCount(), n);
         QVERIFY(!c.saveProjectAs(url(copy), false));  // not empty any more
     }
+    void bounceWritesAWavFileOfTheProject() {
+        TempDir dir;
+        TempDir other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const auto out = other.path() / "mix.wav";
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.bounceProject(url(out));
+        QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(out) && std::filesystem::file_size(out) > 1000 && notices.count() >= 2, 20000);
+        QVERIFY(notices.last().at(0).toString().startsWith("Bounced"));
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

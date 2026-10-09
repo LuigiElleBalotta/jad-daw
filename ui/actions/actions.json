@@ -19,7 +19,7 @@
  {"id":"file.importAudio","label":"Import Audio File…","menu":"File","shortcut":"Ctrl+Shift+I","kind":"command","status":"ready"},
  {"id":"file.import","label":"Import","menu":"File","shortcut":"","kind":"command","status":"stub"},
  {"id":"file.export","label":"Export","menu":"File","shortcut":"","kind":"command","status":"stub"},
- {"id":"file.bounce","label":"Bounce…","menu":"File","shortcut":"","kind":"command","status":"stub"},
+ {"id":"file.bounce","label":"Bounce…","menu":"File","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.share","label":"Share","menu":"File","shortcut":"","kind":"command","status":"stub"},
  {"id":"file.quit","label":"Quit","menu":"File","shortcut":"Ctrl+Q","kind":"command","status":"ready","sep":true},
  {"id":"edit.undo","label":"Undo","menu":"Edit","shortcut":"Ctrl+Z","kind":"command","status":"ready"},

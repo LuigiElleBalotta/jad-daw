@@ -10,9 +10,9 @@ ThemedMenu {
 
     Component { id: itemC; ThemedMenuItem { required property string actionId; action: ActionHub.actionFor(actionId) } }
     Component { id: sepC; MenuSeparator {} }
-    Component { id: subC; ActionTreeMenu {} }
 
     function build() {
+        const subC = Qt.createComponent("ActionTreeMenu.qml")  // by name: a component cannot instantiate itself in a declaration
         for (const n of nodes) {
             if (n.sep) menu.addItem(sepC.createObject(menu))
             if (n.kind === "item") menu.addItem(itemC.createObject(menu, { actionId: n.id }))

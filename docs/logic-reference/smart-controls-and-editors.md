@@ -113,3 +113,14 @@ Tab strip **Project | All Files**. Project tab = the **Project Audio Browser**: 
 list with columns **Name** (disclosure arrow, e.g. `Mad…i.wav`), **Info** (`44,1 kHz 24-…`), **bpm** (`137,9`, dim when absent) and **Region Length**; expanding a
 file shows its regions with a thumbnail waveform and the length in SMPTE (`00:03:32:00.37`). When open, the Tracks area shows "Drag audio files here to create
 audio tracks". "All Files" tab (the file system browser) not captured.
+
+## Audio Track Editor (double-click on an audio region; Editors area)
+
+Tab strip **Track | File | Smart Tempo** (Track = the audio of the selected region on its track; File = the Audio File Editor; Smart Tempo = tempo analysis).
+Local bar: **Edit ▾ · Functions ▾ · View ▾**, two toggle icons (automation curve, a blue "Flex" toggle), a popup showing the Flex mode (**Flex Time - Polyphonic**),
+a toggle (listen/follow), a tool popup (pointer + command-click tool), **Snap: Smart**, zoom. Body: a time ruler in bars (`35 37 39 …`), the region name bar at
+the top (`MadreDolcissimaTMF_1#02` with a loop/lock icon at both ends), a large waveform with a vertical amplitude scale at the left (`100 75 50 25 0 -25 -50 -75
+-100`), vertical grid lines at the detected transients. The same Flex popup as in the track header applies here.
+
+**Region Inspector of an audio region** (differs from a MIDI region): Mute · Loop · Quantize *(dim)* · Q-Swing · Transpose · **Fine Tune** · Pitch Source ·
+**Flex & Follow ▾ (Bars)** · **Gain** · More ▸. (A MIDI region shows Quantize ▾, Q-Swing, Transpose, Pitch Source, Velocity Offset.)

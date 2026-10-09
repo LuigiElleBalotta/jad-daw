@@ -69,4 +69,16 @@ TestCase {
         tryVerify(function () { return p.notes[0].start > n1.start + 0.4 })
         compare(p.notes[0].start + p.notes[0].length, end)
     }
+
+    function test_mute_notes_toggles_the_selected_notes() {
+        const p = setup()
+        p.project.tool = "pointer"
+        mouseClick(p.grid, beatX(p, 1), noteY(p, 60), Qt.LeftButton, Qt.AltModifier)
+        tryVerify(function () { return p.notes.length === 1 })
+        p.selected = [0]
+        p.muteNotes()
+        tryVerify(function () { return p.notes[0].muted === true })
+        p.muteNotes()
+        tryVerify(function () { return p.notes[0].muted === false })
+    }
 }

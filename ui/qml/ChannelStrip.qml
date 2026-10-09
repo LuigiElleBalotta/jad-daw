@@ -10,7 +10,9 @@ Panel {
     id: root
     property var info: ({})
     property var targets: []     // the buses and auxes a send or the output can go to: [{id, name}]
-    property real peak: 0        // shown on the master strip only
+    property real peak: 0        // the master strip's meter
+    property real level: 0       // the meter of a track strip (linear)
+    property real peakHold: 0    // the highest level since the last reset: the peak field
     property bool showSlots: true
     property bool longFader: false    // View > Long Faders
     property var pluginGroups: []      // [{vendor, plugins: [{id, name}]}], from the plug-in catalogue
@@ -482,8 +484,8 @@ Panel {
                 border.color: Theme.borderSubtle
                 Text {
                     anchors.centerIn: parent
-                    text: root.peak > 0 ? (20 * Math.log(root.peak) / Math.LN10).toFixed(1).replace(".", ",") : ""
-                    color: root.peak > 1 ? Theme.stateClip : Theme.textSecondary
+                    text: root.peakHold > 0 ? (20 * Math.log(root.peakHold) / Math.LN10).toFixed(1).replace(".", ",") : ""
+                    color: root.peakHold > 1 ? Theme.stateClip : Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontTypeCaptionSize
                 }
@@ -513,7 +515,7 @@ Panel {
                 Layout.preferredWidth: 10
                 Layout.fillHeight: true
                 visible: !root.master
-                peak: 0
+                peak: root.level
             }
             Item { Layout.fillWidth: true }
         }

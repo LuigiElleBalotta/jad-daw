@@ -413,3 +413,20 @@ TEST_CASE("graph: rendering and strip/config messages never allocate", "[graph][
     garbage.destroy();
     REQUIRE(test::rt::violations() == 0);
 }
+
+TEST_CASE("graph: every track reports its post-fader peak and reading clears it", "[graph]") {
+    Rig rig;
+    rig.addNode(1, TrackKind::Audio, rig.dcConfig(0.5f, 0, 1000), strip(0.5f));
+    rig.addNode(2, TrackKind::Audio, rig.dcConfig(0.25f, 0, 1000), strip(1.0f, 0.0f, true));  // muted: silent
+    rig.addMaster();
+    rig.render(512);
+    std::vector<std::pair<Uuid, float>> peaks;
+    rig.g.takeTrackPeaks(peaks);
+    REQUIRE(peaks.size() == 3);
+    auto peakOf = [&](std::uint64_t n) { for (auto& [u, p] : peaks) if (u == id(n)) return p; return -1.0f; };
+    REQUIRE(peakOf(1) == Catch::Approx(0.25f));  // 0.5 * 0.5
+    REQUIRE(peakOf(2) == 0.0f);
+    REQUIRE(peakOf(kMaster) == Catch::Approx(0.25f));
+    rig.g.takeTrackPeaks(peaks);  // nothing played since: cleared
+    REQUIRE(peakOf(1) == 0.0f);
+}

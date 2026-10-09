@@ -29,6 +29,8 @@ public:
     std::uint64_t appliedSeq() const { return appliedSeq_.load(std::memory_order_acquire); }
     std::int64_t positionFrames() const { return positionPub_.load(std::memory_order_relaxed); }
     bool playing() const { return playingPub_.load(std::memory_order_relaxed); }
+    // the post-fader peak of every track since the last call (linear); for the UI thread only
+    void takeTrackPeaks(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackPeaks(out); }
     float masterPeak() const { return masterPeakPub_.load(std::memory_order_relaxed); }
     std::size_t pendingMessages() const { return messages_.sizeApprox(); }
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }

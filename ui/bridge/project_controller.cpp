@@ -1079,6 +1079,12 @@ void ProjectController::setLoopBeats(double startBeats, double endBeats) {
     emit loopChanged();
 }
 
+void ProjectController::resetPeaks() {
+    hold_.clear();
+    ++peaksRevision_;
+    emit peaksChanged();
+}
+
 void ProjectController::tick() {
     if (!engine_) return;
     const bool playing = engine_->playing();
@@ -1092,6 +1098,21 @@ void ProjectController::tick() {
         positionSeconds_ = seconds;
         positionBeats_ = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(frames), sampleRate_)) / lpc::kPPQ;
         emit positionChanged();
+    }
+    {
+        std::vector<std::pair<lpc::Uuid, float>> raw;
+        engine_->takeTrackPeaks(raw);
+        bool moved = false;
+        for (const auto& [id, value] : raw) {
+            const QString key = QString::fromStdString(id.toString());
+            double& m = meter_[key];
+            const double next = std::max<double>(value, m * 0.8);  // a meter falls back at a fixed pace
+            const double shown = next < 1e-4 ? 0.0 : next;
+            if (shown != m) { m = shown; moved = true; }
+            double& h = hold_[key];
+            if (value > h) { h = value; moved = true; }
+        }
+        if (moved) { ++peaksRevision_; emit peaksChanged(); }
     }
     const double peak = engine_->masterPeak();
     if (peak != peak_) {

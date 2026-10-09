@@ -86,6 +86,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool audioEnabled READ audioEnabled WRITE setAudioEnabled NOTIFY audioEnabledChanged)
     Q_PROPERTY(double masterPeak READ masterPeak NOTIFY peakChanged)
+    Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
     Q_PROPERTY(jad::MixerModel* mixer READ mixer CONSTANT)
@@ -158,6 +159,11 @@ public:
     QString deviceError() const { return deviceError_; }
     QString lastError() const { return lastError_; }
     double masterPeak() const { return peak_; }
+    int peaksRevision() const { return peaksRevision_; }
+    // the level a strip's meter shows (falls back after a peak) and the highest level since the last reset (the peak field); linear
+    Q_INVOKABLE double trackPeak(const QString& trackId) const { return meter_.value(trackId); }
+    Q_INVOKABLE double trackHold(const QString& trackId) const { return hold_.value(trackId); }
+    Q_INVOKABLE void resetPeaks();
     bool anySolo() const {
         for (const TrackRow& t : allRows_)
             if (t.solo) return true;
@@ -349,6 +355,7 @@ signals:
     void deviceErrorChanged();
     void lastErrorChanged();
     void peakChanged();
+    void peaksChanged();
     void commandSent(const QString& type);
     // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
     void notice(const QString& message);
@@ -479,6 +486,8 @@ private:
     double positionSeconds_ = 0.0;
     double positionBeats_ = 0.0;
     double peak_ = 0.0;
+    int peaksRevision_ = 0;
+    QHash<QString, double> meter_, hold_;
     QString deviceError_;
     QString lastError_;
 };

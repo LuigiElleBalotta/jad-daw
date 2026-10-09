@@ -182,6 +182,8 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     }
     t.smoothL = targetL;
     t.smoothR = targetR;
+    t.blockPeak = 0.0f;
+    for (int i = 0; i < n; ++i) t.blockPeak = std::max({t.blockPeak, std::abs(l[i]), std::abs(r[i])});
 
     if (t.kind == TrackKind::Master || !cfg) return;
     if (!muted) {
@@ -241,6 +243,26 @@ void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float
         }
     }
     masterPeak_ = peak;
+    for (int i = 0; i < count_; ++i) {
+        const TrackNode& t = *nodes_[static_cast<std::size_t>(i)];
+        const auto k = static_cast<std::size_t>(i);
+        peakHi_[k].store(t.id.hi, std::memory_order_relaxed);
+        peakLo_[k].store(t.id.lo, std::memory_order_relaxed);
+        peakVal_[k].store(std::max(peakVal_[k].load(std::memory_order_relaxed), t.blockPeak), std::memory_order_relaxed);
+    }
+    peakCount_.store(count_, std::memory_order_release);
+}
+
+void RenderGraph::takeTrackPeaks(std::vector<std::pair<Uuid, float>>& out) noexcept {
+    const int n = peakCount_.load(std::memory_order_acquire);
+    out.clear();
+    for (int i = 0; i < n; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        Uuid id;
+        id.hi = peakHi_[k].load(std::memory_order_relaxed);
+        id.lo = peakLo_[k].load(std::memory_order_relaxed);
+        out.emplace_back(id, peakVal_[k].exchange(0.0f, std::memory_order_relaxed));
+    }
 }
 
 nlohmann::json RenderGraph::describe() const {

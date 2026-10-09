@@ -180,6 +180,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             cfg->keepAlive.push_back(std::move(src));
         } else {
             for (const MidiNote& n : r.notes) {
+                if (n.muted) continue;
                 const std::int64_t on = toFrames(p.tempoMap.ticksToSamples(r.start + n.start, p.sampleRate));
                 const std::int64_t off = toFrames(p.tempoMap.ticksToSamples(r.start + n.start + n.length, p.sampleRate));
                 rp.notes.push_back(NoteSpan{on, std::max(on, off), n.note, n.velocity});

@@ -262,7 +262,8 @@ QVariantList ProjectController::regionNotes(const QString& regionId) const {
         out.append(QVariantMap{{"start", n.value("start", 0) / static_cast<double>(lpc::kPPQ)},
                                {"length", n.value("length", 0) / static_cast<double>(lpc::kPPQ)},
                                {"note", n.value("note", 60)},
-                               {"velocity", n.value("velocity", 100)}});
+                               {"velocity", n.value("velocity", 100)},
+                               {"muted", n.value("muted", false)}});
     }
     return out;
 }
@@ -282,6 +283,7 @@ void ProjectController::setRegionNotes(const QString& regionId, const QVariantLi
                         {"length", std::max<std::int64_t>(1, static_cast<std::int64_t>(std::llround(std::clamp(length, 0.0, kMaxBeatsEdit) * lpc::kPPQ)))},
                         {"note", std::clamp(m.value("note").toInt(), 0, 127)},
                         {"velocity", std::clamp(m.value("velocity", 100).toInt(), 1, 127)}});
+        if (m.value("muted").toBool()) list.back()["muted"] = true;
     }
     region["notes"] = list;
     sendCommand({{"type", "replace_region"}, {"region", region}});

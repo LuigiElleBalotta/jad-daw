@@ -42,7 +42,9 @@ ChannelStrip {
     onSoloAllRequested: (on) => project.soloAll(on)
     onSoloExclusiveRequested: (id) => project.soloExclusive(id)
     onSoloClearRequested: project.clearSolo()
-    onPeakReset: project.announceStub(qsTr("Peak reset"))
+    level: { project.peaksRevision; return project.trackPeak(root.trackId) }
+    peakHold: { project.peaksRevision; return project.trackHold(root.trackId) }
+    onPeakReset: project.resetPeaks()
     onSelectRequested: (id, modifiers) => project.selectTrack(id, modifiers & Qt.ShiftModifier ? "extend" : (modifiers & Qt.ControlModifier ? "toggle" : "replace"))
     selected: project.selectedTrackIds.indexOf(root.trackId) >= 0
 }

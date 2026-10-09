@@ -19,6 +19,7 @@ struct MidiNote {
     Ticks length = 0;
     std::uint8_t note = 60;
     std::uint8_t velocity = 100;
+    bool muted = false;  // Mute Notes: kept in the region, not played
     bool operator==(const MidiNote&) const = default;
 };
 

@@ -63,6 +63,7 @@ void from_json(const nlohmann::json& j, TimeBase& b) { enumFromJson(j, b, kBases
 
 void to_json(nlohmann::json& j, const MidiNote& n) {
     j = {{"start", n.start}, {"length", n.length}, {"note", n.note}, {"velocity", n.velocity}};
+    if (n.muted) j["muted"] = true;  // written only when set, so older projects and files stay as they were
 }
 
 void from_json(const nlohmann::json& j, MidiNote& n) {
@@ -74,6 +75,7 @@ void from_json(const nlohmann::json& j, MidiNote& n) {
     j.at("length").get_to(n.length);
     n.note = static_cast<std::uint8_t>(note);
     n.velocity = static_cast<std::uint8_t>(velocity);
+    n.muted = j.value("muted", false);
 }
 
 void to_json(nlohmann::json& j, const TempoMap& m) {

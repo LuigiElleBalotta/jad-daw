@@ -74,7 +74,7 @@ Item {
     onRegionIdChanged: { selected = []; working = null; if (hasMidi) scrollBeats = Math.max(0, regionStart - 1) }
     onHasMidiChanged: if (hasMidi) scrollBeats = Math.max(0, regionStart - 1)
 
-    function copyNotes(list) { return list.map(n => ({ start: n.start, length: n.length, note: n.note, velocity: n.velocity })) }
+    function copyNotes(list) { return list.map(n => ({ start: n.start, length: n.length, note: n.note, velocity: n.velocity, muted: n.muted === true })) }
     function commit(list) {
         working = null
         if (hasMidi) project.setRegionNotes(regionId, list)
@@ -108,7 +108,7 @@ Item {
         if (selected.length === 0) return
         const list = selected.map(i => notes[i]).sort((a, b) => a.start - b.start)
         const first = list[0].start
-        noteClip = list.map(n => ({ start: n.start - first, length: n.length, note: n.note, velocity: n.velocity }))
+        noteClip = list.map(n => ({ start: n.start - first, length: n.length, note: n.note, velocity: n.velocity, muted: n.muted === true }))
     }
     function cut() { copy(); deleteSelected() }
     function paste() {
@@ -116,7 +116,7 @@ Item {
         const at = Math.max(0, snap(project.positionBeats - regionStart))
         const list = copyNotes(notes)
         const first = list.length
-        for (const n of noteClip) list.push({ start: at + n.start, length: n.length, note: n.note, velocity: n.velocity })
+        for (const n of noteClip) list.push({ start: at + n.start, length: n.length, note: n.note, velocity: n.velocity, muted: n.muted === true })
         selected = noteClip.map((n, i) => first + i)
         commit(list)
     }
@@ -127,7 +127,7 @@ Item {
         for (const n of picked) { first = Math.min(first, n.start); last = Math.max(last, n.start + n.length) }
         const list = copyNotes(notes)
         const base = list.length
-        for (const n of picked) list.push({ start: n.start + (last - first), length: n.length, note: n.note, velocity: n.velocity })
+        for (const n of picked) list.push({ start: n.start + (last - first), length: n.length, note: n.note, velocity: n.velocity, muted: n.muted === true })
         selected = picked.map((n, i) => base + i)
         commit(list)
     }
@@ -182,6 +182,15 @@ Item {
         const all = Object.assign({}, preQuantize)
         delete all[regionId]
         preQuantize = all
+        commit(list)
+    }
+    // Mute Notes On/Off: the selected notes (all when none are) stay in the region but do not play; a mixed selection mutes all
+    function muteNotes() {
+        if (!hasMidi) return
+        const list = copyNotes(notes)
+        const idx = targets()
+        const unmute = idx.length > 0 && idx.every(i => list[i].muted)
+        for (const i of idx) list[i].muted = !unmute
         commit(list)
     }
     function setLength(beats) {
@@ -420,7 +429,7 @@ Item {
             }
         }
         MenuSeparator {}
-        ThemedMenuItem { text: qsTr("Mute Notes On/Off"); onTriggered: root.project.announceStub(qsTr("Mute Notes")) }
+        ThemedMenuItem { text: qsTr("Mute Notes On/Off"); onTriggered: root.muteNotes() }
         ThemedMenuItem { text: qsTr("MIDI Transform"); onTriggered: root.project.announceStub(qsTr("MIDI Transform")) }
     }
     ThemedMenu {
@@ -534,7 +543,8 @@ Item {
                     width: Math.max(3, modelData.length * root.pixelsPerBeat)
                     height: root.rowHeight - 2
                     radius: 2
-                    color: Qt.hsla(0.36, 0.55, 0.45 + modelData.velocity / 127 * 0.25, 1)
+                    color: modelData.muted === true ? Qt.hsla(0, 0, 0.35, 1) : Qt.hsla(0.36, 0.55, 0.45 + modelData.velocity / 127 * 0.25, 1)
+                    opacity: modelData.muted === true ? 0.55 : 1
                     border.color: picked ? Theme.textPrimary : Qt.darker(color, 1.5)
                     border.width: picked ? 2 : 1
                     Rectangle {  // the velocity bar
@@ -688,7 +698,7 @@ Item {
                         if (hit >= 0) { root.selected = [hit]; return }
                         const start = Math.max(0, root.snap(b))
                         const list = root.copyNotes(root.notes)
-                        list.push({ start: start, length: root.gridUnit, note: pressNote, velocity: root.defaultVelocity })
+                        list.push({ start: start, length: root.gridUnit, note: pressNote, velocity: root.defaultVelocity, muted: false })
                         origin = root.copyNotes(list)
                         root.selected = [list.length - 1]
                         root.working = list

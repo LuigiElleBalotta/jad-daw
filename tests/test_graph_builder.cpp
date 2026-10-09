@@ -4,6 +4,7 @@
 #include "lpc/audio/render_graph.h"
 #include "lpc/commands.h"
 #include "lpc/graph_builder.h"
+#include "lpc/model_json.h"
 #include "lpc/undo_stack.h"
 #include "random_commands.h"
 
@@ -159,6 +160,28 @@ TEST_CASE("builder: MIDI notes become sorted frame spans", "[builder]") {
     REQUIRE(cfg->regions[0].notes[0].note == 60);
     REQUIRE(cfg->regions[0].notes[1].onFrame == 48000);
     REQUIRE(cfg->regions[0].notes[1].note == 64);
+}
+
+TEST_CASE("builder: muted MIDI notes stay in the model but are not played", "[builder]") {
+    Scene s(Project(Uuid::random(gRng)));
+    Track inst = track(TrackKind::Instrument, "Keys");
+    Region r;
+    r.id = Uuid::random(gRng);
+    r.length = 4 * kPPQ;
+    MidiNote quiet{0, kPPQ, 60, 100};
+    quiet.muted = true;
+    r.notes.push_back(quiet);
+    r.notes.push_back({kPPQ, kPPQ, 64, 90});
+    inst.regions.push_back(r);
+    add(s.p, inst);
+    const auto cfg = buildConfig(s.p, *s.p.findTrack(inst.id), s.media);
+    REQUIRE(cfg->regions[0].notes.size() == 1);
+    REQUIRE(cfg->regions[0].notes[0].note == 64);
+    nlohmann::json j = quiet;
+    REQUIRE(j.at("muted") == true);
+    REQUIRE(j.get<MidiNote>().muted);
+    nlohmann::json plain = MidiNote{0, kPPQ, 60, 100};
+    REQUIRE_FALSE(plain.contains("muted"));
 }
 
 TEST_CASE("builder: a region whose media is missing is skipped and reported", "[builder]") {

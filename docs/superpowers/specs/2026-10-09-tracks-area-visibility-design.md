@@ -25,21 +25,21 @@ and folders, Track Stacks.
 - JSON: the field `showInTracks` is written **only when false**, so existing projects and golden files stay byte-identical;
   a missing field means true; a value that is not a boolean is a load error.
 - Validation (`checkProject` and every command that creates or edits a track): `showInTracks == false` is allowed only on
-  tracks of kind Bus or Aux (error `bad_value`, message "only buses and auxes can be hidden from the Tracks area") and only
-  while the track holds no regions (a region could not be seen or edited); `add_region` on a hidden track and hiding a track
-  that has regions are refused with the same code. The master is never hidden (it is not a Tracks area row anyway).
-  Today nothing forbids regions on a bus (`checkRegion` has no rule for buses and the UI never makes one), so this rule is new.
+  tracks of kind Bus or Aux (error `bad_value`, message "only buses and auxes can be hidden from the Tracks area"). No rule about
+  regions is needed: `checkRegion` already refuses regions on any track that is not audio, MIDI or instrument
+  (`invalid_kind`), so a bus or aux never holds one and a hidden track never has a region to lose. The master is never hidden
+  (it is not a Tracks area row anyway).
 - `TrackPatch` (used by `set_track_props`) gains `std::optional<bool> showInTracks`; the JSON command accepts the field
   `showInTracks`; the inverse restores the previous value; `add_track` carries the flag inside the `Track` JSON.
 - Core tests: JSON round trip (flag false, flag absent in old files, golden project unchanged), validation of audio and
-  instrument tracks, regions on hidden tracks (both directions), `set_track_props` with exact inverse, the random undo/redo property test with the new patch field.
+  instrument tracks, `set_track_props` with exact inverse, the random undo/redo property test with the new patch field.
 
 ## 3. Bridge
 
 - `TrackRow` gains `showInTracks`; `snapshot.cpp` fills it.
 - `TrackListModel` (the Tracks area headers) lists only the rows with `showInTracks`; its numbering ("1", "2", ...) counts
   the shown tracks only. `RegionRow::trackIndex` (the timeline row) is the index among the **shown** non-master tracks, so
-  the timeline and the headers agree. A region always belongs to a shown track (a hidden track cannot hold regions, section 2),
+  the timeline and the headers agree. A region always belongs to a shown track (only audio, MIDI and instrument tracks hold regions, and they are never hidden),
   so no region is ever dropped.
 - `MixerModel` lists every track, shown or not.
 - `ProjectController`:

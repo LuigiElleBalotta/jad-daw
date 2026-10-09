@@ -272,3 +272,31 @@ TEST_CASE("juce host: replacing the state closes the old editor before the old i
     REQUIRE(next);
     REQUIRE_FALSE(host.editorOpen(slot));
 }
+
+TEST_CASE("juce host: an insert moved to another track keeps its live instance", "[juce][plugin]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const std::string state = stateWithGain(d, 0.5f);
+    const InsertSlot from{Uuid{3, 1}, 0}, to{Uuid{3, 2}, 0};
+    host.setWanted({{from, refOf(d, state)}});
+    auto a = host.acquire(from, refOf(d, state), 48000.0, 512);
+    REQUIRE(a);
+    host.setWanted({{to, refOf(d, state)}});  // the insert now lives on the other track, the old slot is not asked for any more
+    auto b = host.acquire(to, refOf(d, state), 48000.0, 512);
+    REQUIRE(b == a);
+}
+
+TEST_CASE("juce host: identical inserts on two tracks never share an instance", "[juce][plugin]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const InsertSlot one{Uuid{4, 1}, 0}, two{Uuid{4, 2}, 0};
+    host.setWanted({{one, refOf(d)}, {two, refOf(d)}});  // both are still wanted where they are
+    auto a = host.acquire(one, refOf(d), 48000.0, 512);
+    auto b = host.acquire(two, refOf(d), 48000.0, 512);
+    REQUIRE(a);
+    REQUIRE(b);
+    REQUIRE(a != b);
+    REQUIRE(host.acquire(one, refOf(d), 48000.0, 512) == a);  // and they stay where they are
+}

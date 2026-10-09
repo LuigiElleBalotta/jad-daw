@@ -75,6 +75,8 @@ private:
     void resync();
     void notifyChanged();
     void publish(const Project& before);
+    std::vector<std::pair<InsertSlot, ProcessorRef>> liveInserts() const;
+    void wantInstances();  // tells the plug-in host which slots the project holds, before instances are asked for
     void pruneInstances();
     void rebuildAllConfigs();
     void postTransport(audio::MsgKind kind, std::int64_t frame = 0, std::int64_t frame2 = 0);

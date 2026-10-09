@@ -11,6 +11,7 @@ ProjectHost::ProjectHost(Project initial, audio::AudioEngine& engine, MediaStore
     : project_(std::move(initial)), engine_(engine), media_(media), plugins_(plugins), thread_([this] { run(); }) {
     if (plugins_) plugins_->setReadyListener([this](const InsertSlot&) { enqueue([this] { rebuildAllConfigs(); }); });
     enqueue([this] {
+        wantInstances();
         auto messages = initialMessages(project_, media_, plugins_, &plan_);
         postAll(messages);
         pruneInstances();
@@ -85,6 +86,7 @@ void ProjectHost::postAll(std::vector<audio::AudioMsg>& messages) {
 // The audio graph may have missed messages: drop every track it could hold and send the whole model again.
 void ProjectHost::resync() {
     std::vector<audio::AudioMsg> messages;
+    wantInstances();
     for (const Uuid& id : everAdded_) {
         audio::AudioMsg m;
         m.kind = audio::MsgKind::RemoveTrack;
@@ -105,6 +107,7 @@ void ProjectHost::notifyChanged() {
 
 void ProjectHost::publish(const Project& before) {
     if (degraded_) return;  // run() rebuilds the graph once the engine drains its queue again
+    wantInstances();
     auto messages = diffToMessages(before, project_, media_, plugins_, &plan_);
     postAll(messages);
     pruneInstances();
@@ -112,17 +115,25 @@ void ProjectHost::publish(const Project& before) {
 
 void ProjectHost::rebuildAllConfigs() {
     if (degraded_) return;  // the rebuild that follows will pick the live instances up
+    wantInstances();
     auto messages = refreshMessages(project_, media_, plugins_, &plan_);
     postAll(messages);
 }
 
-void ProjectHost::pruneInstances() {
-    if (!plugins_) return;
+std::vector<std::pair<InsertSlot, ProcessorRef>> ProjectHost::liveInserts() const {
     std::vector<std::pair<InsertSlot, ProcessorRef>> live;
     for (const Track& t : project_.tracks)
         for (std::size_t i = 0; i < t.strip.inserts.size(); ++i)
             if (isVst3Id(t.strip.inserts[i].processorId)) live.push_back({InsertSlot{t.id, static_cast<int>(i)}, t.strip.inserts[i]});
-    plugins_->prune(live);
+    return live;
+}
+
+void ProjectHost::wantInstances() {
+    if (plugins_) plugins_->setWanted(liveInserts());
+}
+
+void ProjectHost::pruneInstances() {
+    if (plugins_) plugins_->prune(liveInserts());
 }
 
 void ProjectHost::postTransport(audio::MsgKind kind, std::int64_t frame, std::int64_t frame2) {

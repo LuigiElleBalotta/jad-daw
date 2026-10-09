@@ -18,6 +18,7 @@ public:
     std::vector<PluginDescriptor> catalogue() const override;
 
     std::shared_ptr<audio::IProcessor> acquire(const InsertSlot& slot, const ProcessorRef& ref, double sampleRate, int maxBlock) override;
+    void setWanted(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override;
     void prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override;
     std::string captureState(const InsertSlot& slot) override;
     void setReadyListener(std::function<void(const InsertSlot&)> listener) override;

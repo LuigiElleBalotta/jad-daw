@@ -31,6 +31,10 @@ public:
     // unchanged; nullptr while it is not available (loading, missing, failed). A first call starts loading in the background
     // and the ready listener fires when the instance exists.
     virtual std::shared_ptr<audio::IProcessor> acquire(const InsertSlot& slot, const ProcessorRef& ref, double sampleRate, int maxBlock) = 0;
+    // Project thread, before a rebuild asks for instances: the slots the project holds now (slot and the ref it must match).
+    // A live instance whose slot is listed with the same id and state stays there: no other slot may take it over. An instance
+    // whose slot is no longer listed may be taken over by the slot that now holds the same plug-in and state (a moved insert).
+    virtual void setWanted(const std::vector<std::pair<InsertSlot, ProcessorRef>>& /*live*/) {}
     // Project thread. Drops every instance not listed (slot and the ref it must match).
     virtual void prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) = 0;
     // UI thread. Serialises the live state (base64) and remembers it as "already in the model" so the command that stores

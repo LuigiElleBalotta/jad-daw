@@ -32,6 +32,7 @@ struct JucePluginHost::Impl {
     std::function<void(const InsertSlot&)> ready;
     std::uint64_t nextGeneration = 0;
     bool alive = true;
+    std::map<std::string, std::pair<std::string, std::string>> wanted;  // slot key -> (id, state) the project holds now
 
     // message thread only
     juce::AudioPluginFormatManager formats;
@@ -133,11 +134,14 @@ std::shared_ptr<audio::IProcessor> JucePluginHost::acquire(const InsertSlot& slo
         if (same && target.proc) return target.proc;
         if (same && (target.pending || target.failed)) return nullptr;
 
-        // An insert that moved (one was added or removed in front of it): take over the live instance of the same plug-in and
-        // state from another index of the same track. The entries swap, so a plug-in that takes the other's place can do the same.
+        // An insert that moved (one was added or removed in front of it, or it went to another track): take over the live
+        // instance of the same plug-in and state from a slot the project no longer holds there. A slot that is still wanted with
+        // that id and state keeps its instance (two identical inserts never share one). The entries swap, so a plug-in that
+        // takes the other's place can do the same.
         std::string otherKey;
         for (auto& [k, o] : impl_->entries) {
-            if (k == key || !(o.slot.track == slot.track) || o.id != ref.processorId || o.state != ref.state || !o.proc) continue;
+            if (k == key || o.id != ref.processorId || o.state != ref.state || !o.proc) continue;
+            if (const auto w = impl_->wanted.find(k); w != impl_->wanted.end() && w->second.first == o.id && w->second.second == o.state) continue;
             const InsertSlot otherSlot = o.slot;
             std::swap(target, o);
             target.slot = slot;
@@ -192,6 +196,12 @@ std::shared_ptr<audio::IProcessor> JucePluginHost::acquire(const InsertSlot& slo
         });
     }
     return adopted;
+}
+
+void JucePluginHost::setWanted(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) {
+    std::lock_guard lock(impl_->mutex);
+    impl_->wanted.clear();
+    for (const auto& [slot, ref] : live) impl_->wanted[keyOf(slot)] = {ref.processorId, ref.state};
 }
 
 void JucePluginHost::prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) {

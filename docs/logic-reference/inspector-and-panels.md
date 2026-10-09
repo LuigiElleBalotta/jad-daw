@@ -37,11 +37,17 @@ instrument track); a search field "Search Sounds" with a magnifier; two columns 
 popup, **Revert**, **Delete**, **Save…**. With "No Plug-in" on an instrument slot the Library shows the category browser instead of a
 patch.
 
-## Create New Track (the "+" button above the track list)
+## Create New Track (the "+" button above the track list, ⌥⌘N)
 
-A sheet: type buttons (Audio, Software Instrument, External MIDI, Drummer/Session Players, Guitar or Bass), a popup for the
-Instrument (software instrument) and the Audio Output, Input, "Open Library" checkbox, and "Number of tracks to create". Buttons:
-Cancel / Create. "Software Instrument" is preselected after the first one.
+A modal sheet titled **Create New Track**, centred, ~750 px wide. Top: four **type cards**, each an icon on top, a title, and one or more option buttons under it:
+- **MIDI** (green music-note icon): *Software Instrument* (default, lit green) · *External MIDI*.
+- **Pattern** (purple grid icon): *Software Instrument* · *External MIDI* (the Step Sequencer tracks).
+- **Session Player** (yellow guitar icon): *Drummer* · *Bass Player* · *Keyboard Player*.
+- **Audio** (blue waveform icon): *Mic or Line* · *Guitar or Bass*.
+The selected card has a green outline. Below, a collapsible **Details** section (triangle): **Instrument:** popup (here `AmpliTube 5`, the last used) with **☐ Multi-timbral** and a
+parts field (`4 parts`, dim) and **☑ Open Library**; **Audio Output:** popup (`Stereo Output`) with **☐ Ascending** and the device line `Device: (Scarlett 4i4 USB) ⓘ`.
+For an Audio card the details show input format, input source, monitoring, and a record-enable checkbox. Bottom: a **?** help button at the left, **Number of tracks to
+create:** field (`1`), **Cancel** and **Create** (default). A new track is added at the end of the track list and selected.
 
 ## Tracks area toolbar (local menu bar)
 

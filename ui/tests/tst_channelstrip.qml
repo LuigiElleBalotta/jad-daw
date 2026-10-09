@@ -412,4 +412,19 @@ TestCase {
         mouseClick(s.insertList.itemAt(1), 6, 9)
         compare(got[2], ["t", 1, false])                          // a bypassed insert is switched on again
     }
+    function test_escape_during_a_drag_drops_it() {
+        var s = createTemporaryObject(threeC, this)
+        var moves = []
+        s.insertMoveRequested.connect(function () { moves.push(1) })
+        var slot = s.insertList.itemAt(0)
+        var p = slot.mapToItem(this, 10, 9)
+        mousePress(this, p.x, p.y)
+        mouseMove(this, p.x, p.y + 20, 0, Qt.LeftButton)
+        mouseMove(this, p.x, p.y + 45, 0, Qt.LeftButton)
+        keyClick(Qt.Key_Escape)
+        mouseMove(this, p.x, p.y + 50, 0, Qt.LeftButton)
+        mouseRelease(this, p.x, p.y + 50)
+        compare(moves.length, 0)
+        compare(slot.moveDy, 0)
+    }
 }

@@ -87,6 +87,12 @@ Rectangle {
         color: Theme.textPrimary
         font.pixelSize: Theme.fontTypeBodySize
     }
+    Keys.onEscapePressed: {
+        if (area.axis !== 2) return
+        area.axis = 3
+        root.moveDy = 0
+        root.moveCancelled()
+    }
     MouseArea {
         id: area
         anchors.fill: parent
@@ -95,7 +101,7 @@ Rectangle {
         property real pressX: 0  // scene coordinates: the slot follows the pointer, so item coordinates would stand still
         property real pressY: 0
         property bool moved: false
-        property int axis: 0  // 0 undecided, 1 horizontal (gain), 2 move
+        property int axis: 0  // 0 undecided, 1 horizontal (gain), 2 move, 3 cancelled with Escape (the rest of the gesture is ignored)
         onPressed: (m) => { const p = mapToItem(null, m.x, m.y); pressX = p.x; pressY = p.y; moved = false; axis = 0; root.moveDy = 0 }
         onPositionChanged: (m) => {
             if (!pressed || pressedButtons !== Qt.LeftButton) return
@@ -103,15 +109,16 @@ Rectangle {
             const dx = p.x - pressX, dy = p.y - pressY
             if (axis === 0) {  // the axis is decided once per gesture, after 4 px
                 if (Math.max(Math.abs(dx), Math.abs(dy)) <= 4) return
-                if (root.movable && (!root.horizontalDrag || Math.abs(dy) > Math.abs(dx))) { axis = 2; root.moveStarted() }
+                if (root.movable && (!root.horizontalDrag || Math.abs(dy) > Math.abs(dx))) { axis = 2; root.forceActiveFocus(); root.moveStarted() }
                 else if (root.horizontalDrag) axis = 1
                 else return
                 moved = true
             }
             if (axis === 1 && root.movable && root.boundsItem) {
                 const inside = root.boundsItem.mapFromItem(null, p.x, p.y)
-                if (inside.x < 0 || inside.x > root.boundsItem.width) { axis = 2; root.dragAborted(); root.moveStarted() }
+                if (inside.x < 0 || inside.x > root.boundsItem.width) { axis = 2; root.forceActiveFocus(); root.dragAborted(); root.moveStarted() }
             }
+            if (axis === 3) return
             if (axis === 1) {
                 root.dragged(dx)
             } else {

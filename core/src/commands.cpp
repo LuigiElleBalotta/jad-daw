@@ -761,6 +761,8 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             return makeSetInsertParam(j.at("trackId").get<Uuid>(), j.at("index").get<int>(), j.at("param").get<std::string>(),
                                       v.is_null() ? std::nullopt : std::optional<double>(v.get<double>()));
         }
+        if (type == "set_insert_state")
+            return makeSetInsertState(j.at("trackId").get<Uuid>(), j.at("index").get<int>(), j.at("state").get<std::string>());
         if (type == "transaction") {
             std::vector<CommandPtr> inner;
             for (const auto& c : j.at("commands")) inner.push_back(commandFromJson(c));

@@ -207,8 +207,36 @@ private:
     std::optional<double> value_;
 };
 
+class SetInsertStateCmd final : public Command {
+public:
+    SetInsertStateCmd(Uuid trackId, int index, std::string state) : trackId_(trackId), index_(index), state_(std::move(state)) {}
+    std::string type() const override { return "set_insert_state"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"index", index_}, {"state", state_}}; }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        auto& chain = t->strip.inserts;
+        if (index_ < 0 || index_ >= static_cast<int>(chain.size())) return fail("bad_index", "insert index out of range");
+        ProcessorRef next = chain[static_cast<std::size_t>(index_)];
+        if (!isVst3Id(next.processorId)) return fail("bad_value", "only plug-in inserts have a state");
+        std::string previous = std::move(next.state);
+        next.state = state_;
+        if (auto e = checkInsert(next)) return fail(*e);
+        chain[static_cast<std::size_t>(index_)] = std::move(next);
+        return success(makeSetInsertState(trackId_, index_, std::move(previous)));
+    }
+
+private:
+    Uuid trackId_;
+    int index_;
+    std::string state_;
+};
+
 }  // namespace
 
+CommandPtr makeSetInsertState(Uuid trackId, int index, std::string state) {
+    return std::make_unique<SetInsertStateCmd>(trackId, index, std::move(state));
+}
 CommandPtr makeSetSend(Uuid sendId, SendPatch patch) { return std::make_unique<SetSendCmd>(sendId, patch); }
 CommandPtr makeSetRegionGain(Uuid regionId, float gainDb) { return std::make_unique<SetRegionGainCmd>(regionId, gainDb); }
 CommandPtr makeAddInsert(Uuid trackId, ProcessorRef insert, int index) { return std::make_unique<AddInsertCmd>(trackId, std::move(insert), index); }

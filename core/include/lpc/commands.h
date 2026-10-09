@@ -50,6 +50,7 @@ CommandPtr makeSetRegionGain(Uuid regionId, float gainDb);
 CommandPtr makeAddInsert(Uuid trackId, ProcessorRef insert, int index = -1);  // index -1 appends
 CommandPtr makeRemoveInsert(Uuid trackId, int index);
 CommandPtr makeSetInsertParam(Uuid trackId, int index, std::string param, std::optional<double> value);  // nullopt removes it
+CommandPtr makeSetInsertState(Uuid trackId, int index, std::string state);  // plug-in inserts only; base64 state
 CommandPtr makeTransaction(std::vector<CommandPtr> commands);
 
 CommandPtr commandFromJson(const nlohmann::json& j);  // throws std::runtime_error

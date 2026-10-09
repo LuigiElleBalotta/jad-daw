@@ -747,6 +747,21 @@ private slots:
         QTRY_VERIFY(c.tracks()->rowCount() < withNew);
         QCOMPARE(c.regions()->rowCount(), regions);  // nothing with a region went
     }
+    void saveACopyWritesAWholeProjectAndKeepsTheCurrentOne() {
+        TempDir dir;
+        TempDir other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        const auto copy = other.path() / "copy";
+        QVERIFY(c.saveProjectAs(url(copy), false));
+        jad::ProjectController d(false);
+        QVERIFY(d.openProject(url(copy)));
+        QTRY_COMPARE(d.regions()->rowCount(), n);
+        QCOMPARE(c.regions()->rowCount(), n);
+        QVERIFY(!c.saveProjectAs(url(copy), false));  // not empty any more
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

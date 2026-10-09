@@ -223,6 +223,11 @@ public:
     Q_INVOKABLE bool openProject(const QUrl& folder);
     Q_INVOKABLE bool newProject(const QUrl& folder);
     Q_INVOKABLE bool saveProject();
+    // Save As / Save a Copy As: the whole project folder (media included) is written to `folder`, which must be empty or new;
+    // Save As then opens the copy, a copy leaves the current project open.
+    Q_INVOKABLE bool saveProjectAs(const QUrl& folder, bool openCopy);
+    // File > Import Audio File: into the selected audio track (else the first one) at the playhead
+    Q_INVOKABLE void importAudioFilesHere(const QList<QUrl>& files);
     Q_INVOKABLE void submit(const QString& commandJson);
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();

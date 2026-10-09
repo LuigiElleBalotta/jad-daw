@@ -4,6 +4,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <filesystem>
 #include <cmath>
 #include <nlohmann/json.hpp>
 
@@ -591,6 +592,45 @@ void ProjectController::deleteUnusedTracks() {
         return;
     }
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+bool ProjectController::saveProjectAs(const QUrl& folder, bool openCopy) {
+    if (!host_) return false;
+    const std::filesystem::path target = folder.toLocalFile().toStdWString();
+    std::error_code ec;
+    if (std::filesystem::exists(target, ec) && !std::filesystem::is_empty(target, ec)) {
+        setError("Choose an empty or new folder");
+        return false;
+    }
+    if (std::filesystem::equivalent(target, dir_, ec)) {
+        setError("That is the folder of this project");
+        return false;
+    }
+    if (!saveProject()) return false;  // the folder on disk is now up to date
+    std::filesystem::create_directories(target, ec);
+    std::filesystem::copy(dir_, target, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+        setError(QString("Cannot copy the project: ") + QString::fromStdString(ec.message()));
+        return false;
+    }
+    if (openCopy) return openProject(QUrl::fromLocalFile(QString::fromStdWString(target.wstring())));
+    emit notice("A copy of the project was saved");
+    return true;
+}
+
+void ProjectController::importAudioFilesHere(const QList<QUrl>& files) {
+    if (!host_ || files.isEmpty()) return;
+    QString target;
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && t->kind == "audio") { target = id; break; }
+    if (target.isEmpty())
+        for (const TrackRow& t : allRows_)
+            if (t.kind == "audio" && !t.master) { target = t.id; break; }
+    if (target.isEmpty()) {
+        setError("Add an audio track first");
+        return;
+    }
+    importAudioFiles(files, target, positionBeats_);
 }
 
 }  // namespace jad

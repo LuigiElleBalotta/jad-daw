@@ -52,6 +52,20 @@ ApplicationWindow {
         onAccepted: controller.newProject(selectedFolder)
     }
 
+    FolderDialog {
+        id: saveAsDialog
+        property bool openCopy: true
+        title: openCopy ? qsTr("Save the project as") : qsTr("Save a copy of the project as")
+        onAccepted: controller.saveProjectAs(selectedFolder, openCopy)
+    }
+    FileDialog {
+        id: importDialog
+        title: qsTr("Import audio files")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [qsTr("WAV audio (*.wav)")]
+        onAccepted: controller.importAudioFilesHere(selectedFiles)
+    }
+
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
     // the Mixer in a window of its own (View > Mixer when it is detached, Window > Open Mixer)
     Window {
@@ -99,6 +113,9 @@ ApplicationWindow {
         "file.new": () => newDialog.open(),
         "file.open": () => openDialog.open(),
         "file.save": () => controller.saveProject(),
+        "file.saveAs": () => { saveAsDialog.openCopy = true; saveAsDialog.open() },
+        "file.saveACopyAs": () => { saveAsDialog.openCopy = false; saveAsDialog.open() },
+        "file.importAudio": () => importDialog.open(),
         "file.quit": () => Qt.quit(),
         "edit.undo": () => controller.undo(),
         "edit.redo": () => controller.redo(),
@@ -234,6 +251,9 @@ ApplicationWindow {
     })
     readonly property var disabledStates: ({
         "file.save": !controller.hasProject,
+        "file.saveAs": !controller.hasProject,
+        "file.saveACopyAs": !controller.hasProject,
+        "file.importAudio": !controller.hasProject,
         "track.showInTracks": !controller.selectedCanHide,
         "track.recordArm": controller.selectedTrackIds.length === 0,
         "track.inputMonitor": controller.selectedTrackIds.length === 0

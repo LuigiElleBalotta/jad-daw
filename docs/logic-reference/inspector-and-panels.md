@@ -59,6 +59,13 @@ same row. Audio tracks add a "Polyphonic (Auto)" Flex row below and an input mon
 Control bar height ~ 56 px; local toolbar ~ 30 px; track header 64 px high at the default height; ruler 24 px; Inspector column ~ 190 px;
 Library column ~ 260 px.
 
+## Toolbar (View > Show Toolbar, ⌃⌥⌘T; the third icon of the left group in the control bar)
+
+A second row of large icon buttons with a caption under each, between the control bar and the Library/Inspector/Tracks area. Seen, left
+to right: Articulation · Track Zoom · Note Repeat · Spot Erase · Split by Playhead · Split by Locators · Join *(dim)* · Bounce Regions
+*(dim)* · Move to Playhead · Nudge Value (a stepper popup showing "Tick" with arrows) · Repeat Section · Cut Section · Insert Section
+*(dim)* · Insert Silence · Set Locators *(dim)* · Zoom · Colors. "Customize Toolbar…" in View lets the user choose the buttons.
+
 ## Not captured yet
 
 Smart Controls and Editors areas, Loop Browser, Note Pad, Browsers, List Editors, Piano Roll, plug-in windows, Settings dialogs.

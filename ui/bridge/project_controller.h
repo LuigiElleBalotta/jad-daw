@@ -314,7 +314,7 @@ public:
     Q_INVOKABLE void setRegionNotes(const QString& regionId, const QVariantList& notes);  // one undo step
     Q_INVOKABLE QVariantMap regionInfo(const QString& regionId) const;  // {trackName, trackId, startBeats, lengthBeats, audio, found}
     Q_PROPERTY(int revision READ revision NOTIFY projectChanged)  // grows with every snapshot: bindings on regionNotes() follow it
-    int revision() const { return static_cast<int>(shownRevision_ & 0x7fffffff); }
+    int revision() const { return static_cast<int>(snapshots_ & 0x7fffffff); }  // counts the snapshots applied, so that it changes even when the host's revision does not (a project just opened)
     Q_PROPERTY(double nudgeBeats READ nudgeBeats NOTIFY nudgeChanged)
     double nudgeBeats() const { return nudgeBeats_; }
     Q_INVOKABLE void splitSelectedAtPlayhead();  // every selected region that strictly contains the playhead, one undo step
@@ -543,6 +543,7 @@ private:
     int peaksRevision_ = 0;
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
+    std::uint64_t snapshots_ = 0;
     QString automationParam_ = QStringLiteral("volume");
     std::vector<MarkerRow> markerRows_;
     void sendMarkers(const std::vector<MarkerRow>& rows);

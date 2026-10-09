@@ -49,6 +49,17 @@ TestCase {
         compare(c.automationPoints(id, "volume").length, 1)
     }
 
+    function test_the_lane_follows_changes_made_elsewhere() {
+        const c = setup()
+        const id = c.tracks.trackIdAt(0)
+        const lane = createTemporaryObject(laneC, this, { project: c, trackId: id, param: "volume" })
+        compare(lane.points.length, 0)
+        c.setAutomationPoints(id, "volume", [{ beats: 1, value: -3 }, { beats: 2, value: -9 }])
+        tryVerify(function () { return lane.points.length === 2 })
+        c.undo()
+        tryVerify(function () { return lane.points.length === 0 })
+    }
+
     function test_alt_click_deletes_a_point() {
         const c = setup()
         const id = c.tracks.trackIdAt(0)

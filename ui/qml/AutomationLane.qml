@@ -13,7 +13,12 @@ Item {
     property real snapBeats: 0
     property color lineColor: param === "volume" ? Theme.accentPrimary : Theme.stateSolo
 
-    readonly property var stored: { project.revision; return project.automationPoints(trackId, param) }
+    property var stored: []                      // the points in the project, read again whenever it changes
+    function refresh() { stored = project.automationPoints(trackId, param) }
+    onTrackIdChanged: refresh()
+    onParamChanged: refresh()
+    Component.onCompleted: refresh()
+    Connections { target: root.project; function onProjectChanged() { root.refresh() } }
     property var working: null                   // the points while one is dragged
     readonly property var points: working !== null ? working : stored
     property int dragIndex: -1

@@ -40,7 +40,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   headers, timeline and mixer. Every action comes from one table, `ui/actions/actions.json`: label, menu, default
   shortcut (Logic Pro's), and whether it is **ready** or a **stub**.
 - A stub is present and can be switched on, but nothing is behind it yet (recording, metronome, count-in, punch,
-  library, inspector, editors, copy/paste...). Switching a stub on shows a "not implemented yet" notice; switching it off
+  Score, Step Sequencer, Session Players, plug-in automation...). Switching a stub on shows a "not implemented yet" notice; switching it off
   shows nothing. Everything else works through the Core's JSON commands, with undo/redo.
 - Real today: open/create/save projects (a `.lpc` folder), play, locate, cycle, tempo and time signature (double click
   the LCD), master volume, tracks (new, delete, rename, colour, heights, select with click / Shift / Ctrl), mute, solo,
@@ -103,10 +103,19 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
   follows and the sound changes at once; the whole drag is one undo step.
 - **Editors** (`E`, the Ed button, or a double click on a region): the Piano Roll with the keyboard, the ruler, the region bar and the
-  notes of the selected MIDI region. Pointer: click selects (Shift extends), drag moves, drag the right edge resizes; Pencil draws a
-  note; Eraser deletes; Delete removes the selection. Every change is one undo step. The other tabs say they are not implemented yet.
+  notes of the selected MIDI region. Pointer: click selects (Shift extends), drag moves, drag either end of a note resizes it, Option-click
+  draws a note; Pencil draws a note; Eraser deletes; Delete removes the selection. Quantize (strength, swing, Dequantize), Scale Quantize
+  (scale, key, Snap to Scale), velocity lane, transpose, nudge, Mute Notes and copy/paste of notes work, and every change is one undo
+  step. The other tabs say they are not implemented yet.
+- **Tracks area extras:** right-click on an empty part of an instrument track offers Create MIDI Region; the Global Tracks (Track >
+  Show Global Tracks, `G`) add Marker, Tempo and Signature lanes under the ruler (double-click adds, drag moves a marker, right-click
+  deletes); the cycle area is drawn along the top of the ruler and can be dragged, moved and resized; Mix > Show Automation (`A`)
+  draws the volume or pan automation of each track over its row (click adds a point, drag moves it, Option-click or double-click
+  deletes it) and the lane drives the fader while it exists. Strips show real per-track meters and a peak field (click resets).
+- **File:** Save As, Save a Copy As, Import Audio File and Bounce (an offline render to a 24-bit WAV; plug-in inserts are skipped).
 
 ![Piano Roll](docs/images/piano-roll.png)
+![Global Tracks and automation](docs/images/global-tracks-automation.png)
 ![Menus](docs/images/menus.png)
 
 - Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example
@@ -115,9 +124,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   action are ignored and logged. Only some default shortcuts are confirmed against Logic Pro; the checklist is in
   `docs/shortcuts-check.md`.
 - Screenshots (used above) are taken by the app itself:
-  `jad-daw --project demo.lpc --no-audio --screenshot out.png --size 1280x800 [--tool scissors] [--select-track 2] [--select-region 1] [--open-menu 2] [--panels library,inspector,smart,mixer] [--apply-patch audio.bright-vocal]`.
+  `jad-daw --project demo.lpc --no-audio --screenshot out.png --size 1280x800 [--tool scissors] [--select-track 2] [--select-region 1] [--open-menu 2] [--panels library,inspector,smart,mixer,editors,global,automation] [--apply-patch audio.bright-vocal]`.
 
-Known limits: a fader or knob only changes the sound after it is released, the macOS bundle has no icon yet, several
+Known limits: the macOS bundle has no icon yet, several
 buttons use text labels because there are no icons for them yet, and the panels behind Quick Help, Editors and Loops do
 not exist yet. The engine has one effect (gain) and one synth (sine), so the built-in patches and Smart Controls are
 small; plug-ins are VST3 effects only (no instruments, MIDI, sidechain or automation of plug-in parameters), stereo in and out, Windows only, and a plug-in that crashes while playing takes the app down; changes made inside a plug-in window become one undo step when it closes. A project with a track name that is empty, longer than 64 characters or has

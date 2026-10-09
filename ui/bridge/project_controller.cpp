@@ -286,6 +286,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     if (generation != generation_) return;  // read for a project that has been replaced
     if (s.revision < shownRevision_) return;  // an older read finished after a newer one
     shownRevision_ = s.revision;
+    ++snapshots_;
     for (TrackRow& t : s.tracks) {
         t.recordArm = trackToggles_.value(QStringLiteral("track.recordArm")).contains(t.id);
         t.inputMonitor = trackToggles_.value(QStringLiteral("track.inputMonitor")).contains(t.id);

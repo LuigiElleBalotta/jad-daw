@@ -15,9 +15,17 @@ Item {
     height: laneHeight * lanes
     clip: true
 
-    readonly property var markerList: { project.revision; return project.markers() }
-    readonly property var tempoList: { project.revision; return project.tempoEvents() }
-    readonly property var signatureList: { project.revision; return project.signatureEvents() }
+    // refreshed whenever the project changes (a binding on project.revision alone was not re-evaluated for a project opened at start)
+    property var markerList: []
+    property var tempoList: []
+    property var signatureList: []
+    function refresh() {
+        markerList = project.markers()
+        tempoList = project.tempoEvents()
+        signatureList = project.signatureEvents()
+    }
+    Component.onCompleted: refresh()
+    Connections { target: root.project; function onProjectChanged() { root.refresh() } }
     readonly property real barBeats: project.barBeats
 
     function beatsToX(b) { return (b - scrollBeats) * pixelsPerBeat }

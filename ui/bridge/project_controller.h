@@ -284,6 +284,7 @@ public:
     Q_INVOKABLE void selectSameColoredRegions();
     Q_INVOKABLE void selectMutedRegions();
     Q_INVOKABLE void selectInsideLocators();
+    Q_INVOKABLE double projectEndBeats() const;  // the end of the last region
     Q_INVOKABLE void deleteUnusedTracks();     // audio and instrument tracks without regions
     Q_INVOKABLE void deselectOutsideLocators();
     Q_INVOKABLE void selectSimilarRegions();   // the same audio file, or MIDI of the same length, as a selected region

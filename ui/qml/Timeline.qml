@@ -36,6 +36,12 @@ Item {
         const info = project.selectedRegionIds.length > 0 ? project.regionInfo(project.selectedRegionIds[0]) : null
         if (info && info.found) scrollBeats = Math.max(0, info.startBeats - 1)
     }
+    // View > Zoom to Fit: the whole project, from the first beat to its end
+    function zoomToFit() {
+        const end = Math.max(project.projectEndBeats(), project.barBeats * 4)
+        pixelsPerBeat = Math.max(minPixelsPerBeat, Math.min(maxPixelsPerBeat, (width * 0.96) / end))
+        scrollBeats = 0
+    }
     function scrollByBeats(d) { scrollBeats = Math.max(0, scrollBeats + d) }
     function scrollByPixelsY(d) {
         const maxY = Math.max(0, contentHeight - (height - rulerHeight))

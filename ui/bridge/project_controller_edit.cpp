@@ -665,4 +665,10 @@ void ProjectController::bounceProject(const QUrl& file) {
     });
 }
 
+double ProjectController::projectEndBeats() const {
+    double end = 0;
+    for (const RegionRow& r : regionRows_) end = std::max(end, r.startBeats + r.lengthBeats);
+    return end;
+}
+
 }  // namespace jad

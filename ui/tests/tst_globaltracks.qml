@@ -97,4 +97,17 @@ TestCase {
         tryVerify(function () { return c.loopEndBeats > c.loopStartBeats })
         verify(c.loopEndBeats - c.loopStartBeats >= 4)
     }
+
+    function test_zoom_to_fit_shows_the_whole_project() {
+        const c = setup()
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        c.createRegion(c.tracks.trackIdAt(0), 0, 64)
+        tryVerify(function () { return c.projectEndBeats() === 64 })
+        const t = createTemporaryObject(tlC, this, { project: c })
+        t.zoomToFit()
+        verify(t.pixelsPerBeat * 64 <= t.width)
+        verify(t.pixelsPerBeat * 64 > t.width * 0.9)
+        compare(t.scrollBeats, 0)
+    }
 }

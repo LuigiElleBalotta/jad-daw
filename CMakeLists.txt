@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(LPC_BUILD_CLI "Build lpc-cli (downloads JUCE)" ON)
 option(LPC_BUILD_UI "Build the Qt Quick UI (needs Qt 6)" OFF)
 option(LPC_WITH_JUCE "Build the audio device backend (downloads JUCE, AGPLv3)" ON)
+option(LPC_BUILD_PLUGIN_TESTS "Build the test VST3, the scanner tests and the platform plug-in tests (needs JUCE)" OFF)
 
 include(FetchContent)
 FetchContent_Declare(Catch2
@@ -33,6 +34,9 @@ if(LPC_WITH_JUCE AND (LPC_BUILD_CLI OR LPC_BUILD_UI))
         GIT_TAG 8.0.4
         GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(JUCE)
+    if(LPC_BUILD_PLUGIN_TESTS)
+        add_subdirectory(tools/test-plugin)
+    endif()
     add_subdirectory(platform/juce)
 endif()
 if(LPC_BUILD_CLI)

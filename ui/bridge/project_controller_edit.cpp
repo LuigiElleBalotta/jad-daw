@@ -580,4 +580,17 @@ void ProjectController::deleteSelectedAndMove() {
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
+void ProjectController::deleteUnusedTracks() {
+    if (!host_) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const TrackRow& t : allRows_)
+        if (!t.master && t.regionCount == 0 && (t.kind == "audio" || t.kind == "instrument" || t.kind == "midi") && t.sends.empty())
+            commands.push_back({{"type", "remove_track"}, {"trackId", t.id.toStdString()}});
+    if (commands.empty()) {
+        emit notice("Every track is in use");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

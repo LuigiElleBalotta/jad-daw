@@ -166,6 +166,7 @@ ApplicationWindow {
         "view.library": () => { controller.libraryVisible = !controller.libraryVisible },
         "track.globalTracks": () => { controller.globalTracksVisible = !controller.globalTracksVisible },
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
+        "track.deleteUnusedTracks": () => controller.deleteUnusedTracks(),
         "edit.selectAllInsideLocators": () => controller.selectInsideLocators(),
         "edit.selectDeselectOutsideLocators": () => controller.deselectOutsideLocators(),
         "edit.selectSimilarRegions": () => controller.selectSimilarRegions(),

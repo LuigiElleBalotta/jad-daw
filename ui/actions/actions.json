@@ -114,7 +114,7 @@
  {"id":"track.other","label":"Other","menu":"Track","shortcut":"","kind":"command","status":"stub"},
  {"id":"track.rename","label":"Rename Track","menu":"Track","shortcut":"Shift+Return","kind":"command","status":"ready"},
  {"id":"track.delete","label":"Delete Track","menu":"Track","shortcut":"Ctrl+Backspace","kind":"command","status":"ready","sep":true},
- {"id":"track.deleteUnusedTracks","label":"Delete Unused Tracks","menu":"Track","shortcut":"Ctrl+Shift+Backspace","kind":"command","status":"stub"},
+ {"id":"track.deleteUnusedTracks","label":"Delete Unused Tracks","menu":"Track","shortcut":"Ctrl+Shift+Backspace","kind":"command","status":"ready"},
  {"id":"track.createTrackStack","label":"Create Track Stack…","menu":"Track","shortcut":"Ctrl+Shift+D","kind":"command","status":"stub","sep":true},
  {"id":"track.flattenStack","label":"Flatten Stack","menu":"Track","shortcut":"Ctrl+Shift+U","kind":"command","status":"stub"},
  {"id":"track.convertFolderStackToSummingStack","label":"Convert Folder Stack to Summing Stack","menu":"Track","shortcut":"","kind":"command","status":"stub"},

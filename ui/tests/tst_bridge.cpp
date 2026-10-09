@@ -733,6 +733,20 @@ private slots:
         c.nudgeSelectedRegions(1);
         QTRY_VERIFY(std::abs(c.regions()->find(id)->startBeats - (start + 2.0)) < 0.01);
     }
+    void deleteUnusedTracksKeepsTheTracksWithRegions() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int before = c.tracks()->rowCount();
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 1);
+        const int withNew = before + 1;
+        const int regions = c.regions()->rowCount();
+        c.deleteUnusedTracks();
+        QTRY_VERIFY(c.tracks()->rowCount() < withNew);
+        QCOMPARE(c.regions()->rowCount(), regions);  // nothing with a region went
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

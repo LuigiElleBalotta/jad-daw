@@ -26,6 +26,8 @@ ChannelStrip {
     onInsertEditorRequested: (id, index) => project.openPluginEditor(id, index)
     onPluginManagerRequested: project.pluginManagerOpen = true
     onRenameRequested: (id, name) => project.renameTrack(id, name)
+    onInsertMoveRequested: (id, from, to, toTrackId) => project.moveInsert(id, from, to, toTrackId)
+    onInsertBypassToggled: (id, index, on) => project.setInsertBypass(id, index, on)
     onBusViewRequested: (id) => project.showBus(id)
     onSendPreFaderToggled: (sendId, on) => project.setSendPreFader(sendId, on)
     onLibraryRequested: project.libraryVisible = true

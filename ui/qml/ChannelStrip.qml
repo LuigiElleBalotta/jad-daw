@@ -67,6 +67,8 @@ Panel {
     signal pluginManagerRequested()
     signal newBusRequested(string id, string role)       // role: "send" or "output"
     signal renameRequested(string id, string name)
+    signal insertMoveRequested(string id, int from, int to, string toTrackId)  // toTrackId empty: inside this track
+    signal insertBypassToggled(string id, int index, bool on)
     signal busViewRequested(string busId)                   // Shift-click on a send or the output slot
     signal sendPreFaderToggled(string sendId, bool on)
     signal libraryRequested()                              // the instrument slot was clicked
@@ -89,10 +91,36 @@ Panel {
         return ins.processorId === "builtin.gain" ? qsTr("Gain") : ins.processorId
     }
 
+    readonly property bool acceptsInserts: slotsVisible && !master && visible  // a place an insert can be dropped
+    property real dropLineY: 0
+    property bool dropLineVisible: false
+    // The place in the chain (0..n) the pointer is at, as the number of inserts whose centre is above `localY` (`skip`: the
+    // index of the insert being dragged, which does not count).
+    function dropIndexAt(localY, skip) {
+        let n = 0
+        for (let i = 0; i < insertRepeater.count; ++i) {
+            const item = insertRepeater.itemAt(i)
+            if (i === skip || !item) continue
+            if (root.mapFromItem(item, 0, item.height / 2).y < localY) ++n
+        }
+        return n
+    }
+    function showDropLine(place, skip) {
+        let others = []
+        for (let i = 0; i < insertRepeater.count; ++i)
+            if (i !== skip && insertRepeater.itemAt(i)) others.push(insertRepeater.itemAt(i))
+        if (others.length === 0) dropLineY = root.mapFromItem(addInsertSlot, 0, 0).y
+        else if (place <= 0) dropLineY = root.mapFromItem(others[0], 0, 0).y
+        else dropLineY = root.mapFromItem(others[Math.min(place, others.length) - 1], 0, others[0].height).y
+        dropLineVisible = true
+    }
+    function hideDropLine() { dropLineVisible = false }
+    Component.onCompleted: InsertDrag.register(root)
+    Component.onDestruction: InsertDrag.unregister(root)
     property int dragIndex: -1
     property real dragGain: 0
     // the list changed under a gain drag (an undo, a rebuild): the gesture belongs to a row that may not be there any more
-    onInsertsChanged: dragIndex = -1
+    onInsertsChanged: { dragIndex = -1; InsertDrag.cancelIf(root) }
 
     implicitWidth: 96
     radius: Theme.radiusRegion
@@ -171,6 +199,16 @@ Panel {
     }
     Connections { target: insertMenu; function onManagerChosen() { root.pluginManagerRequested() } }
 
+    Rectangle {  // where a dragged insert would land
+        visible: root.dropLineVisible
+        x: Theme.spacing[2]
+        y: root.dropLineY - 1
+        width: root.width - Theme.spacing[2] * 2
+        height: 2
+        color: Theme.accentPrimary
+        z: 50
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacing[2]
@@ -204,6 +242,21 @@ Panel {
                 missing: root.isMissing(modelData)
                 filled: true
                 removable: true
+                movable: true
+                boundsItem: root
+                onDragAborted: root.dragIndex = -1
+                horizontalDrag: !modelData.plugin
+                showBypass: true
+                bypassed: modelData.bypass === true
+                onBypassToggled: (on) => root.insertBypassToggled(root.trackId, index, on)
+                onMoveStarted: InsertDrag.begin(root, index)
+                onMoved: (x, y) => InsertDrag.update(x, y)
+                onMoveCancelled: InsertDrag.cancel()
+                onMoveReleased: (x, y) => {
+                    const place = InsertDrag.end(x, y)  // null: the drag was dropped or ended over no strip
+                    if (!place || (place.trackId === root.trackId && place.to === index)) return
+                    root.insertMoveRequested(root.trackId, index, place.to, place.trackId === root.trackId ? "" : place.trackId)
+                }
                 onRemoveRequested: root.insertRemoveRequested(root.trackId, index)
                 onDoubleClicked: { if (modelData.plugin) root.insertEditorRequested(root.trackId, index) }
                 onDragged: (dx) => {

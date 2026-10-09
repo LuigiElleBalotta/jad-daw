@@ -303,4 +303,113 @@ TestCase {
         item.click()
         compare(got, [["s1", false]])
     }
+
+    readonly property var three: ({ trackId: "t", name: "Keys", color: "purple", kind: "audio", master: false, gainDb: 0, pan: 0,
+                                    mute: false, solo: false, outputName: "Stereo Out", sends: [],
+                                    inserts: [{ processorId: "builtin.gain", gainDb: 1 }, { processorId: "builtin.gain", gainDb: 2 },
+                                              { processorId: "builtin.gain", gainDb: 3 },
+                                              { processorId: "vst3:00000000000000000000000000000001", gainDb: 0, plugin: true, label: "Verb" }] })
+    readonly property var other: ({ trackId: "u", name: "Pad", color: "teal", kind: "audio", master: false, gainDb: 0, pan: 0,
+                                    mute: false, solo: false, outputName: "Stereo Out", sends: [],
+                                    inserts: [{ processorId: "builtin.gain", gainDb: 9 }] })
+    Component { id: threeC; ChannelStrip { width: 96; height: 640; info: three } }
+    Component { id: otherC; ChannelStrip { width: 96; height: 640; info: other } }
+
+    function dragSlot(slot, dx, dy) {  // the slot follows the pointer: positions are scene positions, as for a real mouse
+        var p = slot.mapToItem(this, 10, 9)
+        mousePress(this, p.x, p.y)
+        mouseMove(this, p.x + dx / 2, p.y + dy / 2, 0, Qt.LeftButton)
+        mouseMove(this, p.x + dx, p.y + dy, 0, Qt.LeftButton)
+        mouseRelease(this, p.x + dx, p.y + dy)
+    }
+    function test_a_vertical_drag_moves_a_gain_insert_inside_the_strip() {
+        var s = createTemporaryObject(threeC, this)
+        var moves = [], gains = []
+        s.insertMoveRequested.connect(function (id, from, to, toId) { moves.push([id, from, to, toId]) })
+        s.insertGainReleased.connect(function (id, i, db) { gains.push(i) })
+        dragSlot(s.insertList.itemAt(0), 0, 45)
+        compare(moves, [["t", 0, 2, ""]])
+        compare(gains.length, 0)
+    }
+    function test_a_vertical_drag_up_moves_to_the_front() {
+        var s = createTemporaryObject(threeC, this)
+        var moves = []
+        s.insertMoveRequested.connect(function (id, from, to, toId) { moves.push([from, to]) })
+        dragSlot(s.insertList.itemAt(2), 0, -60)
+        compare(moves, [[2, 0]])
+    }
+    function test_a_horizontal_drag_still_changes_the_gain_of_a_gain_insert() {
+        var s = createTemporaryObject(threeC, this)
+        var moves = [], gains = []
+        s.insertMoveRequested.connect(function (id, from, to, toId) { moves.push(from) })
+        s.insertGainReleased.connect(function (id, i, db) { gains.push([i, db]) })
+        dragSlot(s.insertList.itemAt(1), 30, 1)
+        compare(moves.length, 0)
+        compare(gains.length, 1)
+        compare(gains[0][0], 1)
+    }
+    function test_a_plug_in_slot_moves_with_any_drag_and_never_changes_gain() {
+        var s = createTemporaryObject(threeC, this)
+        var moves = [], gains = []
+        s.insertMoveRequested.connect(function (id, from, to, toId) { moves.push([from, to]) })
+        s.insertGainReleased.connect(function (id, i, db) { gains.push(i) })
+        dragSlot(s.insertList.itemAt(3), 0, -45)   // up two and a half slots
+        compare(moves, [[3, 1]])
+        dragSlot(s.insertList.itemAt(3), 20, 0)     // sideways inside the strip: it ends where it started
+        compare(moves.length, 1)
+        compare(gains.length, 0)
+    }
+    function test_releasing_on_the_start_position_or_outside_every_strip_sends_nothing() {
+        var s = createTemporaryObject(threeC, this)
+        var moves = []
+        s.insertMoveRequested.connect(function () { moves.push(1) })
+        dragSlot(s.insertList.itemAt(1), 0, 5)      // not enough to leave its place
+        dragSlot(s.insertList.itemAt(1), 400, 0)    // far to the right of every strip
+        compare(moves.length, 0)
+    }
+    function test_an_insert_can_be_dropped_on_another_strip() {
+        var a = createTemporaryObject(threeC, this, { x: 0 })
+        var b = createTemporaryObject(otherC, this, { x: 120 })
+        var moves = [], gains = []
+        a.insertMoveRequested.connect(function (id, from, to, toId) { moves.push([id, from, to, toId]) })
+        a.insertGainReleased.connect(function (id, i, db) { gains.push(i) })
+        dragSlot(a.insertList.itemAt(1), 130, 60)   // onto the lower part of the other strip: after its only insert
+        compare(moves, [["t", 1, 1, "u"]])
+        compare(gains.length, 0)   // leaving the strip turned the gain drag into a move: no gain was sent
+        moves = []
+        dragSlot(a.insertList.itemAt(1), 130, -25)  // onto the top of the other strip: before its insert
+        compare(moves, [["t", 1, 0, "u"]])
+    }
+    function test_the_inserts_changing_during_a_drag_drops_it() {
+        var s = createTemporaryObject(threeC, this)
+        var moves = []
+        s.insertMoveRequested.connect(function () { moves.push(1) })
+        var slot = s.insertList.itemAt(0)
+        var p = slot.mapToItem(this, 10, 9)
+        mousePress(this, p.x, p.y)
+        mouseMove(this, p.x, p.y + 20, 0, Qt.LeftButton)
+        mouseMove(this, p.x, p.y + 45, 0, Qt.LeftButton)
+        var changed = JSON.parse(JSON.stringify(three))
+        changed.inserts.splice(0, 1)
+        s.info = changed
+        mouseRelease(this, p.x, p.y + 45)
+        compare(moves.length, 0)
+    }
+    function test_the_bypass_toggle_and_alt_click_switch_an_insert_off() {
+        var s = createTemporaryObject(threeC, this)
+        var got = []
+        s.insertBypassToggled.connect(function (id, i, on) { got.push([id, i, on]) })
+        var slot = s.insertList.itemAt(1)
+        mouseClick(slot, 6, 9)                                   // the power toggle on the left
+        compare(got, [["t", 1, true]])
+        mouseClick(slot, 40, 9, Qt.LeftButton, Qt.AltModifier)    // Alt-click on the name
+        compare(got.length, 2)
+        var changed = JSON.parse(JSON.stringify(three))
+        changed.inserts[1].bypass = true
+        s.info = changed
+        verify(s.insertList.itemAt(1).bypassed)
+        wait(100)                                                 // the layout places the new rows
+        mouseClick(s.insertList.itemAt(1), 6, 9)
+        compare(got[2], ["t", 1, false])                          // a bypassed insert is switched on again
+    }
 }

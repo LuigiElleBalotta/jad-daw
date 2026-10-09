@@ -67,6 +67,11 @@ bool sameIds(const std::vector<Row>& a, const std::vector<Row>& b) {
 }
 
 // Everything the UI shows, copied out of a Project on the project thread. Plain data: safe to move to the Qt thread.
+struct MarkerRow {
+    QString id, name;
+    double beats = 0;
+};
+
 struct Snapshot {
     std::uint64_t revision = 0;
     QString name;
@@ -76,6 +81,7 @@ struct Snapshot {
     int beatUnit = 4;  // the denominator of the first time signature
     std::vector<TrackRow> tracks;  // project order, master included
     std::vector<RegionRow> regions;
+    std::vector<MarkerRow> markers;  // sorted by position
     lpc::TempoMap tempoMap;
     QHash<QString, QString> mediaPaths;  // media id -> path relative to the project folder
 };

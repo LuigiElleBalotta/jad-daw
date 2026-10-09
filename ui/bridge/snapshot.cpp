@@ -51,6 +51,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
     s.beatsPerBar = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().numerator;
     s.beatUnit = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().denominator;
     s.tempoMap = p.tempoMap;
+    for (const lpc::Marker& m : p.markers)
+        s.markers.push_back({QString::fromStdString(m.id.toString()), QString::fromStdString(m.name), static_cast<double>(m.tick) / lpc::kPPQ});
     for (const lpc::MediaItem& m : p.mediaPool) s.mediaPaths.insert(QString::fromStdString(m.id.toString()), QString::fromStdString(m.path));
 
     int row = 0;       // colour rotation: counts every non-master track

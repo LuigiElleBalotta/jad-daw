@@ -27,6 +27,7 @@ CommandPtr makeRemoveTempo(Ticks tick);
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch);
 CommandPtr makeSetSignature(Ticks tick, int numerator, int denominator);
 CommandPtr makeRemoveSignature(Ticks tick);
+CommandPtr makeSetMarkers(std::vector<Marker> markers);  // replaces the whole list (sorted by tick, unique ids); the undo is the previous list
 CommandPtr makeAddMedia(MediaItem item, int index = -1);  // index -1 appends
 CommandPtr makeRemoveMedia(Uuid mediaId);
 CommandPtr makeAddRegion(Uuid trackId, Region region, int index = -1);  // index -1 appends

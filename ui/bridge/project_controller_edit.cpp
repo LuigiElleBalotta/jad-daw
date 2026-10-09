@@ -354,4 +354,95 @@ void ProjectController::setNudgeBeats(double beats) {
     emit nudgeChanged();
 }
 
+// ---------------------------------------------------------------- global tracks: markers, tempo, signature
+
+void ProjectController::setGlobalTracksVisible(bool on) {
+    if (on == globalTracksVisible_) return;
+    globalTracksVisible_ = on;
+    emit globalTracksVisibleChanged();
+}
+
+QVariantList ProjectController::markers() const {
+    QVariantList out;
+    for (const MarkerRow& m : markerRows_) out.append(QVariantMap{{"id", m.id}, {"beats", m.beats}, {"name", m.name}});
+    return out;
+}
+
+QVariantList ProjectController::tempoEvents() const {
+    QVariantList out;
+    for (const auto& e : tempoMap_.tempos()) out.append(QVariantMap{{"beats", static_cast<double>(e.tick) / lpc::kPPQ}, {"bpm", e.bpm}});
+    return out;
+}
+
+QVariantList ProjectController::signatureEvents() const {
+    QVariantList out;
+    for (const auto& e : tempoMap_.signatures())
+        out.append(QVariantMap{{"beats", static_cast<double>(e.tick) / lpc::kPPQ}, {"numerator", e.numerator}, {"denominator", e.denominator}});
+    return out;
+}
+
+void ProjectController::sendMarkers(const std::vector<MarkerRow>& rows) {
+    nlohmann::json list = nlohmann::json::array();
+    for (const MarkerRow& m : rows)
+        list.push_back({{"id", m.id.toStdString()},
+                        {"tick", static_cast<std::int64_t>(std::llround(std::clamp(m.beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))},
+                        {"name", m.name.left(200).toStdString()}});
+    sendCommand({{"type", "set_markers"}, {"markers", list}});
+}
+
+void ProjectController::addMarker(double beats, const QString& name) {
+    if (!host_ || !std::isfinite(beats)) return;
+    auto rows = markerRows_;
+    rows.push_back({QUuid::createUuid().toString(QUuid::WithoutBraces), name.isEmpty() ? QStringLiteral("Marker %1").arg(rows.size() + 1) : name, std::max(0.0, beats)});
+    sendMarkers(rows);
+}
+
+void ProjectController::createMarkerAtPlayhead() { addMarker(positionBeats_); }
+
+void ProjectController::moveMarker(const QString& id, double beats) {
+    if (!host_ || !std::isfinite(beats)) return;
+    auto rows = markerRows_;
+    for (MarkerRow& m : rows)
+        if (m.id == id) m.beats = std::max(0.0, beats);
+    sendMarkers(rows);
+}
+
+void ProjectController::renameMarker(const QString& id, const QString& name) {
+    if (!host_) return;
+    auto rows = markerRows_;
+    for (MarkerRow& m : rows)
+        if (m.id == id) m.name = name;
+    sendMarkers(rows);
+}
+
+void ProjectController::removeMarker(const QString& id) {
+    if (!host_) return;
+    auto rows = markerRows_;
+    rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const MarkerRow& m) { return m.id == id; }), rows.end());
+    sendMarkers(rows);
+}
+
+void ProjectController::setTempoAt(double beats, double bpm) {
+    if (!host_ || !std::isfinite(beats) || !std::isfinite(bpm)) return;
+    const auto tick = static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ));
+    sendCommand({{"type", "set_tempo"}, {"tick", tick}, {"bpm", std::clamp(bpm, 20.0, 999.0)}});
+}
+
+void ProjectController::removeTempoAt(double beats) {
+    if (!host_ || !std::isfinite(beats)) return;
+    sendCommand({{"type", "remove_tempo"}, {"tick", static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))}});
+}
+
+void ProjectController::setSignatureAt(double beats, int numerator, int denominator) {
+    const bool denominatorOk = denominator == 1 || denominator == 2 || denominator == 4 || denominator == 8 || denominator == 16 || denominator == 32;
+    if (!host_ || !std::isfinite(beats) || numerator < 1 || numerator > 32 || !denominatorOk) return;
+    const auto tick = static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ));
+    sendCommand({{"type", "set_signature"}, {"tick", tick}, {"numerator", numerator}, {"denominator", denominator}});
+}
+
+void ProjectController::removeSignatureAt(double beats) {
+    if (!host_ || !std::isfinite(beats)) return;
+    sendCommand({{"type", "remove_signature"}, {"tick", static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))}});
+}
+
 }  // namespace jad

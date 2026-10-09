@@ -311,6 +311,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     allRows_ = s.tracks;
     regionRows_ = s.regions;
     tempoMap_ = s.tempoMap;
+    markerRows_ = s.markers;
     mediaPaths_ = s.mediaPaths;
     sampleRate_ = s.sampleRate;
     name_ = s.name;

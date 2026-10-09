@@ -86,6 +86,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool audioEnabled READ audioEnabled WRITE setAudioEnabled NOTIFY audioEnabledChanged)
     Q_PROPERTY(double masterPeak READ masterPeak NOTIFY peakChanged)
+    Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -160,6 +161,21 @@ public:
     QString lastError() const { return lastError_; }
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
+    bool globalTracksVisible() const { return globalTracksVisible_; }
+    void setGlobalTracksVisible(bool on);
+    // the global tracks; every list follows `revision`
+    Q_INVOKABLE QVariantList markers() const;           // {id, beats, name}, sorted
+    Q_INVOKABLE QVariantList tempoEvents() const;       // {beats, bpm}
+    Q_INVOKABLE QVariantList signatureEvents() const;   // {beats, numerator, denominator}
+    Q_INVOKABLE void addMarker(double beats, const QString& name = QString());
+    Q_INVOKABLE void createMarkerAtPlayhead();
+    Q_INVOKABLE void moveMarker(const QString& id, double beats);
+    Q_INVOKABLE void renameMarker(const QString& id, const QString& name);
+    Q_INVOKABLE void removeMarker(const QString& id);
+    Q_INVOKABLE void setTempoAt(double beats, double bpm);
+    Q_INVOKABLE void removeTempoAt(double beats);
+    Q_INVOKABLE void setSignatureAt(double beats, int numerator, int denominator);
+    Q_INVOKABLE void removeSignatureAt(double beats);
     // the level a strip's meter shows (falls back after a peak) and the highest level since the last reset (the peak field); linear
     Q_INVOKABLE double trackPeak(const QString& trackId) const { return meter_.value(trackId); }
     Q_INVOKABLE double trackHold(const QString& trackId) const { return hold_.value(trackId); }
@@ -356,6 +372,7 @@ signals:
     void lastErrorChanged();
     void peakChanged();
     void peaksChanged();
+    void globalTracksVisibleChanged();
     void commandSent(const QString& type);
     // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
     void notice(const QString& message);
@@ -487,6 +504,9 @@ private:
     double positionBeats_ = 0.0;
     double peak_ = 0.0;
     int peaksRevision_ = 0;
+    bool globalTracksVisible_ = false;
+    std::vector<MarkerRow> markerRows_;
+    void sendMarkers(const std::vector<MarkerRow>& rows);
     QHash<QString, double> meter_, hold_;
     QString deviceError_;
     QString lastError_;

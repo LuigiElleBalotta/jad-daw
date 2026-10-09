@@ -11,7 +11,8 @@ Item {
     readonly property real minPixelsPerBeat: 4
     readonly property real maxPixelsPerBeat: 400
     readonly property real rowHeight: Theme.sizeTrackHeight[project.trackHeightIndex]
-    readonly property real rulerHeight: 24
+    readonly property real barRulerHeight: 24
+    readonly property real rulerHeight: barRulerHeight + (project.globalTracksVisible ? globalTracks.height : 0)  // the ruler and the global tracks
     readonly property real contentHeight: project.tracks.rowCount() * rowHeight
 
     signal regionMoved(string id, real beats)
@@ -66,13 +67,24 @@ Item {
     Ruler {
         id: ruler
         width: parent.width
-        height: root.rulerHeight
+        height: root.barRulerHeight
         pixelsPerBeat: root.pixelsPerBeat
         scrollBeats: root.scrollBeats
         barBeats: root.project.barBeats
         playheadBeats: root.project.positionBeats
         soloActive: root.project.anySolo
         onLocateRequested: (beats) => { root.forceActiveFocus(); root.project.locateBeats(Math.max(0, root.snapBeat(beats))) }
+    }
+
+    GlobalTracks {
+        id: globalTracks
+        y: root.barRulerHeight
+        width: parent.width
+        visible: root.project.globalTracksVisible
+        project: root.project
+        pixelsPerBeat: root.pixelsPerBeat
+        scrollBeats: root.scrollBeats
+        snapUnit: root.snapBeats
     }
 
     Item {

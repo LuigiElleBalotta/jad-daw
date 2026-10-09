@@ -18,7 +18,9 @@ Rectangle {
         color: Theme.surfacePanel
         Text {
             x: Theme.spacing[4]
-            anchors.verticalCenter: parent.verticalCenter
+            y: 0
+            height: 24
+            verticalAlignment: Text.AlignVCenter
             text: root.project.hasProject ? root.project.projectName : qsTr("No project")
             color: Theme.textSecondary
             font.family: Theme.fontFamily
@@ -26,6 +28,21 @@ Rectangle {
             font.weight: Theme.fontTypeLabelWeight
             elide: Text.ElideRight
             width: parent.width - Theme.spacing[4] * 2
+        }
+        Repeater {  // the names of the global tracks, next to their lanes
+            model: root.project.globalTracksVisible ? [qsTr("Marker"), qsTr("Tempo"), qsTr("Signature")] : []
+            delegate: Text {
+                required property string modelData
+                required property int index
+                x: Theme.spacing[4]
+                y: 24 + index * 18
+                height: 18
+                verticalAlignment: Text.AlignVCenter
+                text: modelData
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontTypeCaptionSize
+            }
         }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.borderSubtle }
     }

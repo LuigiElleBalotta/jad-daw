@@ -191,6 +191,30 @@ private:
     Ticks tick_;
 };
 
+class SetMarkersCmd final : public Command {
+public:
+    explicit SetMarkersCmd(std::vector<Marker> markers) : markers_(std::move(markers)) {}
+    std::string type() const override { return "set_markers"; }
+    json toJson() const override { return {{"type", type()}, {"markers", markers_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        if (markers_.size() > 10000) return fail("too_many", "at most 10000 markers");
+        for (std::size_t i = 0; i < markers_.size(); ++i) {
+            if (markers_[i].tick < 0 || markers_[i].tick > kMaxPosition) return fail("bad_marker", "a marker position is out of range");
+            if (markers_[i].name.size() > 200) return fail("bad_marker", "a marker name is longer than 200 bytes");
+            for (std::size_t k = 0; k < i; ++k)
+                if (markers_[k].id == markers_[i].id) return fail("bad_marker", "marker ids must be unique");
+        }
+        std::vector<Marker> previous = std::move(p.markers);
+        p.markers = markers_;
+        std::stable_sort(p.markers.begin(), p.markers.end(), [](const Marker& a, const Marker& b) { return a.tick < b.tick; });
+        return success(makeSetMarkers(std::move(previous)));
+    }
+
+private:
+    std::vector<Marker> markers_;
+};
+
 class SetTrackPropsCmd final : public Command {
 public:
     SetTrackPropsCmd(Uuid id, TrackPatch patch) : id_(id), patch_(std::move(patch)) {}
@@ -698,6 +722,7 @@ CommandPtr makeAddTrack(Track track, int index) { return std::make_unique<AddTra
 CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCmd>(trackId); }
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
+CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch) { return std::make_unique<SetTrackPropsCmd>(trackId, std::move(patch)); }
 CommandPtr makeSetSignature(Ticks tick, int numerator, int denominator) { return std::make_unique<SetSignatureCmd>(tick, numerator, denominator); }
@@ -731,6 +756,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             return makeSetStrip(j.at("trackId").get<Uuid>(), patch);
         }
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
+        if (type == "set_markers") return makeSetMarkers(j.at("markers").get<std::vector<Marker>>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());
         if (type == "set_track_props") {
             TrackPatch patch;

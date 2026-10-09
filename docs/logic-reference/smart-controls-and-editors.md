@@ -91,3 +91,18 @@ Tab strip **Event | Marker | Tempo | Signature**; the Tracks area and the editor
   (bar, beat, division, ticks: `1 1 1 1`, `34 4 3 1`, `140 4 4 227`) · **Tempo** (4 decimals, `137,9040`) · **SMPTE Position** (`01:00:58:22.72`). The
   project here has 8 tempo changes.
 - **Marker** and **Signature** tabs not captured.
+- **Marker list** (captured): Edit ▾ · Options ▾ · View ▾ · a toggle icon; **+**; **Marker Set:** popup (Untitled); columns **L, Position, Marker Name,
+  Length**.
+
+## Note Pad (control bar, ⌥⌘P; right column)
+
+Tab strip **Project | Track** (notes for the whole project or for the selected track). Under it a tiny toolbar: **Aa** (text format), a second icon, and an
+**Edit** button at the right; then a plain text area.
+
+## Loop Browser (control bar, O; right column)
+
+Top row: two view toggles (loops list, loops grid), at the right **Sound Packs: Show All ▾**. Row 2: a clear (x) button and the filter buttons
+**Instrument · Genre · Descriptors** and a heart (favourites). Row 3: **Scale:** popup (Any) · **Signature:** popup (Any) · a search field "Search Loops".
+List columns: type icon (blue waveform = audio loop, green note = software instrument loop) · **Name** · **Be…** (beats) · heart checkbox · **Tem…** (tempo)
+· **Key**. Examples: "12 Bar Blues Bass 16 beats 80 E", "12 String Dream 01 8 140 D", "12-8 Afro Cuban Conga 01 4 107". When open, the Tracks area
+shows a hint "Drag Apple Loops here to create tracks" at the bottom of the track list and workspace.

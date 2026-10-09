@@ -48,3 +48,18 @@ Customize Control Bar and Display… · Apply Defaults · Save As Defaults.
 
 Piano Roll and other editors, Mixer strips and slots (other than plug-in slots), Library, Inspector, MIDI region, empty workspace area,
 marker, automation point, tempo-track point, the LCD (no menu of its own).
+
+## Tracks area background (right-click on empty grid)
+
+Paste ⌘V · Paste Replace ⇧⌘V · Paste at Original Position · (sep) Select All ⌘A · Select All Inside Locators ⇧L · (sep) Select Empty Regions · Select
+Overlapped Regions ⇧O · Select Muted Regions ⇧M · (sep) Scroll in Play ⌃<.
+
+## MIDI region (right-click on a region of an instrument track)
+
+Top block (no submenu): **Mute Regions/Cells On/Off** ⌃M · Unlock SMPTE Position ⌘↑ *(dim)* · **Bounce Regions/Cells in Place…** ⌃B · Join Regions ⌘J *(dim)* ·
+Color Regions by Tracks ⌥⇧C. Then submenus: **Edit · Select · Playback · Quantize · Folder · Name and Color** · (sep) **Move · Trim · Split · Bounce and Join ·
+Convert** · (sep) Chords *(dim)* · Processing *(dim)* · **Automation · MIDI Transform · Tempo · Export**.
+
+Differences from an audio region: a MIDI region has **Quantize ▸** (✓ Off, 1/1 Note, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, **Triplets ▸**, **Swing Presets ▸**,
+**n-Tuplets and Mixed ▸**, **Apply Quantization Permanently** ⌃Q) and **MIDI Transform ▸**; the audio region's menu starts with the Flex marker entries and
+has Processing enabled. Chords and Processing stay dim for MIDI.

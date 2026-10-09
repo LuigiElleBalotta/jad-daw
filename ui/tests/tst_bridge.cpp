@@ -842,6 +842,24 @@ private slots:
         QTest::qWait(100);
         QCOMPARE(c.inspector()->track().value("gainDb").toDouble(), -2.0);
     }
+    void pluginInsertsGoThroughCommandsAndKeepTheirLabel() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = trackIdOfKind(c, "audio");
+        c.selectTrack(audio, "replace");
+        c.addPlugin(audio, "vst3:00112233445566778899aabbccddeeff", "Verb");
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 1);
+        const QVariantMap insert = c.inspector()->track().value("inserts").toList().first().toMap();
+        QCOMPARE(insert.value("plugin").toBool(), true);
+        QCOMPARE(insert.value("label").toString(), QString("Verb"));
+        c.setInsertState(audio, 0, "AAAA");  // undoable like any command
+        c.undo();
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 1);
+        c.removeInsert(audio, 0);
+        QTRY_COMPARE(c.inspector()->track().value("inserts").toList().size(), 0);
+    }
     void insertsSendsOutputAndRegionGainGoThroughCommands() {
         TempDir dir;
         jad::ProjectController c(false);

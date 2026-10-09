@@ -24,6 +24,7 @@
 #include "bridge/inspector_model.h"
 #include "bridge/library_model.h"
 #include "bridge/mixer_model.h"
+#include "bridge/plugins_model.h"
 #include "bridge/region_model.h"
 #include "bridge/snapshot.h"
 #include "bridge/track_list_model.h"
@@ -33,6 +34,11 @@ namespace lpc {
 class MediaStore;
 class PatchLibrary;
 class ProjectHost;
+struct InsertSlot;
+#ifdef JAD_HAVE_JUCE
+class JucePluginHost;
+class PluginScanner;
+#endif
 class IAudioDevice;
 class IAudioCallback;
 namespace audio {
@@ -82,6 +88,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(jad::MixerModel* mixer READ mixer CONSTANT)
     Q_PROPERTY(jad::InspectorModel* inspector READ inspector CONSTANT)
     Q_PROPERTY(jad::LibraryModel* library READ library CONSTANT)
+    Q_PROPERTY(jad::PluginsModel* plugins READ plugins CONSTANT)
+    Q_PROPERTY(bool pluginManagerOpen READ pluginManagerOpen WRITE setPluginManagerOpen NOTIFY panelsChanged)
     Q_PROPERTY(bool inspectorVisible READ inspectorVisible WRITE setInspectorVisible NOTIFY panelsChanged)
     Q_PROPERTY(bool libraryVisible READ libraryVisible WRITE setLibraryVisible NOTIFY panelsChanged)
     Q_PROPERTY(bool smartControlsVisible READ smartControlsVisible WRITE setSmartControlsVisible NOTIFY panelsChanged)
@@ -147,6 +155,9 @@ public:
     MixerModel* mixer() { return &mixer_; }
     InspectorModel* inspector() { return &inspector_; }
     LibraryModel* library() { return &library_; }
+    PluginsModel* plugins() { return &plugins_; }
+    bool pluginManagerOpen() const { return pluginManagerOpen_; }
+    void setPluginManagerOpen(bool on) { if (on != pluginManagerOpen_) { pluginManagerOpen_ = on; emit panelsChanged(); } }
     bool inspectorVisible() const { return inspectorVisible_; }
     bool libraryVisible() const { return libraryVisible_; }
     bool smartControlsVisible() const { return smartControlsVisible_; }
@@ -222,6 +233,9 @@ public:
     Q_INVOKABLE void revertPatch();                       // applies the patch of that track again
     Q_INVOKABLE void addInsert(const QString& trackId, const QString& processorId);
     Q_INVOKABLE void removeInsert(const QString& trackId, int index);
+    Q_INVOKABLE void addPlugin(const QString& trackId, const QString& pluginId, const QString& label);
+    Q_INVOKABLE void openPluginEditor(const QString& trackId, int index);
+    Q_INVOKABLE void setInsertState(const QString& trackId, int index, const QString& state);
     Q_INVOKABLE void setInsertParam(const QString& trackId, int index, const QString& param, double value);
     Q_INVOKABLE void addSend(const QString& trackId, const QString& targetId);
     Q_INVOKABLE void removeSend(const QString& sendId);
@@ -295,6 +309,10 @@ private:
     void toggleSelectedFlag(const char* field, bool TrackRow::*flag);
     std::int64_t regionPosition(const RegionRow& row, double beats) const;  // beats -> the region's own unit
     void setError(const QString& message);
+    void setUpPlugins();       // creates the plug-in host and starts the scan; once per controller
+    void refreshPluginRows();  // catalogue to the model and to the host
+    void commitPluginState(const lpc::InsertSlot& slot);
+    void commitPluginStates();
     void teardown();
     static std::filesystem::path toPath(const QUrl& url);
 
@@ -304,6 +322,8 @@ private:
     MixerModel mixer_;
     InspectorModel inspector_;
     LibraryModel library_;
+    PluginsModel plugins_;
+    bool pluginManagerOpen_ = false;
     std::shared_ptr<const lpc::PatchLibrary> patches_;  // the built-in catalogue; also read on the project thread
     std::vector<TrackRow> allRows_;                     // every track of the last snapshot, the master included
     std::vector<RegionRow> regionRows_;
@@ -311,6 +331,10 @@ private:
     double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0;
 
     std::unique_ptr<JuceInit> juce_;
+#ifdef JAD_HAVE_JUCE
+    std::shared_ptr<lpc::JucePluginHost> pluginHost_;  // after juce_: destroyed first
+    std::unique_ptr<lpc::PluginScanner> scanner_;
+#endif
     std::unique_ptr<lpc::audio::AudioEngine> engine_;
     std::unique_ptr<lpc::MediaStore> media_;
     std::unique_ptr<lpc::IAudioCallback> callback_;

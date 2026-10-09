@@ -16,6 +16,8 @@ namespace jad {
 struct InsertRow {
     QString processorId;
     double gainDb = 0.0;  // the "gainDb" parameter (0 when absent)
+    QString label;        // a plug-in's display name
+    bool plugin = false;  // a hosted plug-in (its gain is not editable from the strip)
 };
 struct SendRow {
     QString id, targetId, targetName;

@@ -9,7 +9,8 @@ namespace jad {
 // The strip view of a track as a plain map for QML (the Inspector, the mixer): see the keys below.
 inline QVariantMap trackToMap(const TrackRow& t) {
     QVariantList inserts, sends;
-    for (const InsertRow& i : t.inserts) inserts.append(QVariantMap{{"processorId", i.processorId}, {"gainDb", i.gainDb}});
+    for (const InsertRow& i : t.inserts)
+        inserts.append(QVariantMap{{"processorId", i.processorId}, {"gainDb", i.gainDb}, {"label", i.label}, {"plugin", i.plugin}});
     for (const SendRow& s : t.sends)
         sends.append(QVariantMap{{"id", s.id}, {"targetId", s.targetId}, {"targetName", s.targetName}, {"levelDb", s.levelDb}, {"preFader", s.preFader}});
     return {{"trackId", t.id},         {"name", t.name},           {"color", t.color},         {"kind", t.kind},

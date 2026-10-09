@@ -20,6 +20,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/lcd_parse.cpp
         bridge/inspector_model.cpp
         bridge/library_model.cpp
+        bridge/plugins_model.cpp
         shortcuts/shortcut_map.cpp
         actions/action_registry.cpp
     QML_FILES
@@ -103,6 +104,11 @@ if(TARGET lpc_juce_device)
 endif()
 
 qt_add_executable(jad-daw main.cpp)
+if(TARGET lpc-plugin-scanner)
+    add_dependencies(jad-daw lpc-plugin-scanner)
+    add_custom_command(TARGET jad-daw POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:lpc-plugin-scanner> $<TARGET_FILE_DIR:jad-daw>)
+endif()
 if(WIN32)
     enable_language(RC)
     target_sources(jad-daw PRIVATE jad-daw.rc)

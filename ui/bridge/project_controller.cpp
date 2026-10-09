@@ -29,10 +29,19 @@
 #include "lpc/validation.h"
 #include "lpc/wav.h"
 
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <QPointer>
+
+#include "lpc/plugin_catalogue.h"
+#include "lpc/processor_ids.h"
+
 #ifdef JAD_HAVE_JUCE
 #include <juce_events/juce_events.h>
 
 #include "juce_device.h"
+#include "juce_plugin_host.h"
+#include "plugin_scanner.h"
 #endif
 
 namespace jad {
@@ -134,6 +143,9 @@ void ProjectController::clearError() { setError({}); }
 
 void ProjectController::teardown() {
     timer_.stop();
+#ifdef JAD_HAVE_JUCE
+    if (pluginHost_) pluginHost_->closeAllEditors();  // the editors must go before the instances they show
+#endif
     host_.reset();    // joins the project thread first: nothing posts to the engine any more
     driver_.reset();
     if (device_) device_->close();
@@ -141,6 +153,9 @@ void ProjectController::teardown() {
     callback_.reset();
     media_.reset();
     engine_.reset();
+#ifdef JAD_HAVE_JUCE
+    if (pluginHost_) pluginHost_->releaseAll();  // the engine is gone: nothing uses the instances any more
+#endif
 }
 
 bool ProjectController::openProject(const QUrl& folder) {
@@ -171,6 +186,7 @@ bool ProjectController::openProject(const QUrl& folder) {
 #ifdef JAD_HAVE_JUCE
     if (openAudioDevice_) {
         if (!juce_) juce_ = std::make_unique<JuceInit>();
+        setUpPlugins();
         device_ = lpc::makeJuceAudioDevice();
         callback_ = std::make_unique<EngineCallback>(*engine_);
         std::string error;
@@ -189,7 +205,12 @@ bool ProjectController::openProject(const QUrl& folder) {
     if (!haveDevice) driver_ = std::make_unique<EngineDriver>(*engine_, project.sampleRate);
     emit deviceErrorChanged();
 
-    host_ = std::make_unique<lpc::ProjectHost>(std::move(project), *engine_, *media_);
+#ifdef JAD_HAVE_JUCE
+    lpc::IPluginHost* pluginHost = pluginHost_.get();
+#else
+    lpc::IPluginHost* pluginHost = nullptr;
+#endif
+    host_ = std::make_unique<lpc::ProjectHost>(std::move(project), *engine_, *media_, pluginHost);
     const std::uint64_t generation = generation_;
     host_->setChangeListener([this, generation](std::uint64_t rev) {
         QMetaObject::invokeMethod(this, [this, rev, generation] { if (generation == generation_) refresh(rev); }, Qt::QueuedConnection);
@@ -218,6 +239,8 @@ bool ProjectController::newProject(const QUrl& folder) {
 
 bool ProjectController::saveProject() {
     if (!host_) return false;
+    commitPluginStates();                                        // what an editor changed is part of the project
+    host_->read([](const lpc::Project&) { return 0; }).get();  // the commands above have run
     try {
         const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
         lpc::saveProject(project, dir_);
@@ -1066,6 +1089,104 @@ void ProjectController::setSmartControl(const QString& trackId, const QString& c
 void ProjectController::addInsert(const QString& trackId, const QString& processorId) {
     sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
                  {"insert", {{"processorId", processorId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}}}});
+}
+
+void ProjectController::setUpPlugins() {
+#ifdef JAD_HAVE_JUCE
+    if (pluginHost_) return;
+    pluginHost_ = std::make_shared<lpc::JucePluginHost>();
+    plugins_.setSupported(true);
+
+    lpc::PluginScanner::Options o;
+    o.scannerExe = std::filesystem::path(QCoreApplication::applicationDirPath().toStdU16String()) / "lpc-plugin-scanner.exe";
+    o.cacheFile = lpc::appConfigDir() / "plugins.json";
+    o.folders = lpc::PluginScanner::defaultFolders();
+    scanner_ = std::make_unique<lpc::PluginScanner>(o);
+    QPointer<ProjectController> self(this);
+    scanner_->setChangedListener([self] {  // scan thread
+        QMetaObject::invokeMethod(self.data(), [self] { if (self) self->refreshPluginRows(); }, Qt::QueuedConnection);
+    });
+    connect(&plugins_, &PluginsModel::rescanRequested, this, [this](int mode) {
+        if (scanner_) scanner_->start(static_cast<lpc::ScanMode>(mode));
+    });
+    pluginHost_->setEditorClosedListener([this](const lpc::InsertSlot& slot) { commitPluginState(slot); });
+    refreshPluginRows();                            // the cache is available at once
+    scanner_->start(lpc::ScanMode::NewAndChanged);  // then new and changed files, in the background
+#endif
+}
+
+void ProjectController::refreshPluginRows() {
+#ifdef JAD_HAVE_JUCE
+    if (!scanner_ || !pluginHost_) return;
+    const lpc::PluginCatalogue c = scanner_->snapshot();
+    pluginHost_->setCatalogue(c.descriptors());
+    std::vector<PluginRow> rows;
+    for (const lpc::ScanEntry& e : c.entries()) {
+        if (e.status == lpc::ScanStatus::Ok) {
+            for (const lpc::PluginDescriptor& d : e.descriptors)
+                rows.push_back({QString::fromStdString(d.id), QString::fromStdString(d.name), QString::fromStdString(d.vendor), "ok",
+                                QString::fromStdString(e.path), QString()});
+        } else {
+            const QString file = QFileInfo(QString::fromStdString(e.path)).completeBaseName();
+            rows.push_back({QString(), file, QString(), "failed", QString::fromStdString(e.path), QString::fromStdString(e.reason)});
+        }
+    }
+    plugins_.setRows(std::move(rows));
+    plugins_.setScan(scanner_->running(), scanner_->done(), scanner_->total());
+#endif
+}
+
+void ProjectController::addPlugin(const QString& trackId, const QString& pluginId, const QString& label) {
+    sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
+                 {"insert", {{"processorId", pluginId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""},
+                             {"label", label.left(128).toStdString()}}}});
+}
+
+void ProjectController::setInsertState(const QString& trackId, int index, const QString& state) {
+    sendCommand({{"type", "set_insert_state"}, {"trackId", trackId.toStdString()}, {"index", index}, {"state", state.toStdString()}});
+}
+
+void ProjectController::openPluginEditor(const QString& trackId, int index) {
+#ifdef JAD_HAVE_JUCE
+    const auto id = lpc::Uuid::parse(trackId.toStdString());
+    if (pluginHost_ && id && !pluginHost_->openEditor(lpc::InsertSlot{*id, index}))
+        setError(tr("This plug-in has no editor, or it is not loaded yet"));
+#else
+    Q_UNUSED(trackId)
+    Q_UNUSED(index)
+#endif
+}
+
+void ProjectController::commitPluginState(const lpc::InsertSlot& slot) {
+#ifdef JAD_HAVE_JUCE
+    if (!pluginHost_ || !host_) return;
+    const std::string state = pluginHost_->captureState(slot);  // also tells the host this is now the model's state
+    if (state.empty()) return;
+    const lpc::Uuid track = slot.track;
+    const int index = slot.index;
+    const bool changed = host_->read([track, index, &state](const lpc::Project& p) {
+        const lpc::Track* t = p.findTrack(track);
+        return t && index >= 0 && index < static_cast<int>(t->strip.inserts.size()) &&
+               t->strip.inserts[static_cast<std::size_t>(index)].state != state;
+    }).get();
+    if (changed) setInsertState(QString::fromStdString(track.toString()), index, QString::fromStdString(state));
+#else
+    Q_UNUSED(slot)
+#endif
+}
+
+void ProjectController::commitPluginStates() {
+#ifdef JAD_HAVE_JUCE
+    if (!host_ || !pluginHost_) return;
+    const std::vector<lpc::InsertSlot> pluginSlots = host_->read([](const lpc::Project& p) {
+        std::vector<lpc::InsertSlot> out;
+        for (const lpc::Track& t : p.tracks)
+            for (std::size_t i = 0; i < t.strip.inserts.size(); ++i)
+                if (lpc::isVst3Id(t.strip.inserts[i].processorId)) out.push_back({t.id, static_cast<int>(i)});
+        return out;
+    }).get();
+    for (const lpc::InsertSlot& s : pluginSlots) commitPluginState(s);
+#endif
 }
 
 void ProjectController::removeInsert(const QString& trackId, int index) {

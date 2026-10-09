@@ -96,6 +96,17 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   implemented yet). In a short window the strips become compact and the legend is hidden.
 
 ![Mixer](docs/images/mixer.png)
+- **Mixer window and size:** the Mixer can be detached into a window of its own (the Detach button in its bar, Window > Open Mixer,
+  Ctrl+2) and docked again (Dock). Docked, drag its top edge to change its height; it is never shorter than the strips with their
+  legend, and in its own window it takes all the height it is given, however large (the faders grow). A narrow Mixer drops the type
+  filters and then Single | Tracks | All from its bar and scrolls sideways.
+- **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
+  follows and the sound changes at once; the whole drag is one undo step.
+- **Editors** (`E`, the Ed button, or a double click on a region): the Piano Roll with the keyboard, the ruler, the region bar and the
+  notes of the selected MIDI region. Pointer: click selects (Shift extends), drag moves, drag the right edge resizes; Pencil draws a
+  note; Eraser deletes; Delete removes the selection. Every change is one undo step. The other tabs say they are not implemented yet.
+
+![Piano Roll](docs/images/piano-roll.png)
 ![Menus](docs/images/menus.png)
 
 - Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example

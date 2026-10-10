@@ -854,23 +854,46 @@ void ProjectController::setAutomationVisible(bool on) {
 }
 
 void ProjectController::setAutomationParam(const QString& param) {
-    if ((param != "volume" && param != "pan") || param == automationParam_) return;
+    static const QStringList known{"volume", "pan", "send1", "send2", "send3", "send4"};
+    if (!known.contains(param) || param == automationParam_) return;
     automationParam_ = param;
     emit automationViewChanged();
 }
 
-QVariantList ProjectController::automationPoints(const QString& trackId, const QString& target) const {
+// "volume", "pan" or "send1".."send4" (the first sends of the track) as the Core's target name; empty when the track has no such send
+QString ProjectController::automationTarget(const QString& trackId, const QString& param) const {
+    if (param == "volume" || param == "pan") return param;
+    if (param.startsWith(QLatin1String("send")) && param.size() == 5 && param[4] >= QLatin1Char('1') && param[4] <= QLatin1Char('4')) {
+        const int index = param[4].digitValue() - 1;
+        for (const TrackRow& t : allRows_)
+            if (t.id == trackId && index < static_cast<int>(t.sends.size())) return QStringLiteral("send:") + t.sends[static_cast<std::size_t>(index)].id;
+    }
+    return {};
+}
+
+bool ProjectController::automationAvailable(const QString& trackId, const QString& param) const { return !automationTarget(trackId, param).isEmpty(); }
+
+QVariantList ProjectController::automationPoints(const QString& trackId, const QString& param) const {
     QVariantList out;
+    const QString target = automationTarget(trackId, param);
+    if (target.isEmpty()) return out;
     for (const TrackRow& t : allRows_) {
         if (t.id != trackId) continue;
-        for (const AutoRow& p : target == "pan" ? t.panAuto : t.volumeAuto) out.append(QVariantMap{{"beats", p.beats}, {"value", p.value}});
+        const std::vector<AutoRow>* points = target == "pan" ? &t.panAuto : (target == "volume" ? &t.volumeAuto : nullptr);
+        if (!points)
+            for (const auto& lane : t.sendAuto)
+                if (QStringLiteral("send:") + lane.first == target) points = &lane.second;
+        if (!points) continue;
+        for (const AutoRow& p : *points) out.append(QVariantMap{{"beats", p.beats}, {"value", p.value}});
     }
     return out;
 }
 
-void ProjectController::setAutomationPoints(const QString& trackId, const QString& target, const QVariantList& points) {
-    if (!host_ || (target != "volume" && target != "pan")) return;
-    const double lo = target == "volume" ? -96.0 : -1.0, hi = target == "volume" ? 24.0 : 1.0;
+void ProjectController::setAutomationPoints(const QString& trackId, const QString& param, const QVariantList& points) {
+    if (!host_) return;
+    const QString target = automationTarget(trackId, param);
+    if (target.isEmpty()) return;
+    const double lo = target == "pan" ? -1.0 : -96.0, hi = target == "pan" ? 1.0 : (target == "volume" ? 24.0 : 12.0);
     nlohmann::json list = nlohmann::json::array();
     for (const QVariant& v : points) {
         const QVariantMap m = v.toMap();

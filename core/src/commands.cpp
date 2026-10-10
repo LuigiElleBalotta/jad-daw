@@ -319,9 +319,15 @@ public:
     ApplyResult apply(Project& p) const override {
         Track* t = p.findTrack(id_);
         if (!t) return fail("not_found", "no such track");
-        if (target_ != "volume" && target_ != "pan") return fail("bad_target", "automation target must be volume or pan");
+        const bool sendTarget = target_.rfind("send:", 0) == 0;
+        if (target_ != "volume" && target_ != "pan" && !sendTarget) return fail("bad_target", "automation target must be volume, pan or send:<send id>");
+        if (sendTarget) {
+            const auto id = Uuid::parse(target_.substr(5));
+            if (!id || std::none_of(t->strip.sends.begin(), t->strip.sends.end(), [&](const Send& s) { return s.id == *id; }))
+                return fail("bad_target", "the track has no such send");
+        }
         if (points_.size() > 4096) return fail("too_many", "at most 4096 automation points per lane");
-        const double lo = target_ == "volume" ? -96.0 : -1.0, hi = target_ == "volume" ? 24.0 : 1.0;
+        const double lo = target_ == "pan" ? -1.0 : -96.0, hi = target_ == "pan" ? 1.0 : (sendTarget ? 12.0 : 24.0);
         for (const AutomationPoint& pt : points_)
             if (pt.tick < 0 || pt.tick > kMaxPosition || !(pt.value >= lo && pt.value <= hi)) return fail("bad_point", "an automation point is out of range");
         std::vector<AutomationPoint> sorted = points_;

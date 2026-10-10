@@ -326,6 +326,7 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
         for (SendPlayback& s : cfg->sends) {
             TrackNode* dst = find(s.target);
             if (!dst || dst == &t) continue;
+            const float sendGain = s.levelAuto.empty() ? s.gain : autoValue(s.levelAuto, blockStart);
             const float* srcL = s.preFader ? preL_.data() : l;
             const float* srcR = s.preFader ? preR_.data() : r;
             if (s.delay.frames() > 0) {
@@ -334,8 +335,8 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
                 srcR = dlyR_.data();
             }
             for (int i = 0; i < n; ++i) {
-                dst->l[static_cast<std::size_t>(i)] += srcL[i] * s.gain;
-                dst->r[static_cast<std::size_t>(i)] += srcR[i] * s.gain;
+                dst->l[static_cast<std::size_t>(i)] += srcL[i] * sendGain;
+                dst->r[static_cast<std::size_t>(i)] += srcR[i] * sendGain;
             }
         }
     }

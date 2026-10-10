@@ -99,7 +99,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool toolbarVisible READ toolbarVisible WRITE setToolbarVisible NOTIFY barsChanged)          // View > Toolbar
     Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
     Q_PROPERTY(bool automationVisible READ automationVisible WRITE setAutomationVisible NOTIFY automationViewChanged)  // Mix > Show Automation
-    Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume" or "pan"
+    Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume", "pan", "send1".."send4"
     Q_PROPERTY(bool metronomeOn READ metronomeOn NOTIFY metronomeChanged)  // the click while playing
     Q_PROPERTY(QString clickMode READ clickMode WRITE setClickMode NOTIFY clickSettingsChanged)          // "beats", "eighths", "sixteenths" or "grouped"
     Q_PROPERTY(QString clickGrouping READ clickGrouping WRITE setClickGrouping NOTIFY clickSettingsChanged)  // "3+2+2"
@@ -333,8 +333,10 @@ public:
     void setAutomationVisible(bool on);
     QString automationParam() const { return automationParam_; }
     void setAutomationParam(const QString& param);
-    Q_INVOKABLE QVariantList automationPoints(const QString& trackId, const QString& target) const;  // {beats, value}; follows `revision`
-    Q_INVOKABLE void setAutomationPoints(const QString& trackId, const QString& target, const QVariantList& points);
+    // param: "volume", "pan" or "send1".."send4" (the first sends of the track, a send's level in dB)
+    Q_INVOKABLE QVariantList automationPoints(const QString& trackId, const QString& param) const;  // {beats, value}; follows `revision`
+    Q_INVOKABLE bool automationAvailable(const QString& trackId, const QString& param) const;      // false for a send the track does not have
+    Q_INVOKABLE void setAutomationPoints(const QString& trackId, const QString& param, const QVariantList& points);
     // Customize Control Bar and Display / Customize Toolbar: the parts of the bars that are shown ("cb.panels", "cb.transport", "cb.lcd", "cb.modes",
     // "cb.master", "tb.menus", "tb.tools", "tb.snap", "tb.heights", "tb.zoom", "tb.undo"); every part is on until the user turns it off. Kept in the settings.
     Q_PROPERTY(int barItemsRevision READ barItemsRevision NOTIFY barsChanged)
@@ -865,6 +867,7 @@ private:
         bool latched = false;                              // a latch take: it goes on after the fader is let go
     };
     QHash<QString, AutoCapture> autoCapture_;               // by track, while moves are being written
+    QString automationTarget(const QString& trackId, const QString& param) const;
     void captureAutomation(const QString& trackId, bool isPan, double value);
     void finishAutomationCapture(const QString& trackId);
     void finishAutomationCaptures(bool latchedToo);

@@ -270,3 +270,31 @@ TEST_CASE("track order: set_track_order reorders, keeps the master first and is 
     REQUIRE(p.tracks[1].id == ids[0]);
     REQUIRE(p.tracks[3].id == ids[2]);
 }
+
+TEST_CASE("automation: a send can be automated, a missing send is refused", "[automation][sends]") {
+    std::mt19937_64 rng(31);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track bus;
+    bus.id = Uuid::random(rng);
+    bus.kind = TrackKind::Bus;
+    bus.name = "Bus";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(bus)).has_value());
+    Track audio;
+    audio.id = Uuid::random(rng);
+    audio.kind = TrackKind::Audio;
+    audio.name = "A";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(audio)).has_value());
+    Send send;
+    send.id = Uuid::random(rng);
+    send.targetTrackId = bus.id;
+    REQUIRE_FALSE(s.execute(p, makeAddSend(audio.id, send)).has_value());
+    const std::string target = "send:" + send.id.toString();
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(audio.id, target, {AutomationPoint{0, -6.0}, AutomationPoint{960, 0.0}})).has_value());
+    REQUIRE(p.findTrack(audio.id)->automation.size() == 1);
+    REQUIRE(s.execute(p, makeSetAutomation(audio.id, target, {AutomationPoint{0, 20.0}})).has_value());                     // above +12 dB
+    REQUIRE(s.execute(p, makeSetAutomation(audio.id, "send:" + Uuid::random(rng).toString(), {AutomationPoint{0, 0.0}})).has_value());  // no such send
+    REQUIRE(s.execute(p, makeSetAutomation(audio.id, "send:nonsense", {AutomationPoint{0, 0.0}})).has_value());
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.findTrack(audio.id)->automation.empty());
+}

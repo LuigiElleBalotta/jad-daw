@@ -189,6 +189,21 @@ PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
     return plan;
 }
 
+// The automation lanes of the sends of a track: cfg->sends is in the order of t.strip.sends.
+void fillSendAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
+    if (t.automationMode == "off") return;
+    for (const AutomationLane& lane : t.automation) {
+        if (lane.target.rfind("send:", 0) != 0 || lane.points.empty()) continue;
+        const auto id = Uuid::parse(lane.target.substr(5));
+        if (!id) continue;
+        for (std::size_t i = 0; i < t.strip.sends.size() && i < cfg.sends.size(); ++i) {
+            if (t.strip.sends[i].id != *id) continue;
+            for (const AutomationPoint& pt : lane.points)
+                cfg.sends[i].levelAuto.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), dbToLinear(static_cast<float>(pt.value))});
+        }
+    }
+}
+
 std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
     if (t.freeze) {  // the rendered audio replaces the instrument, the regions and the inserts; the strip, the sends and the output stay live
@@ -210,7 +225,8 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
                 out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)),
                                         lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value)});
         }
-        for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}});
+        for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}, {}});
+        fillSendAutomation(p, t, *cfg);
         cfg->output = t.strip.output;
         if (pdc) {
             if (const auto it = pdc->edges.find(t.id); it != pdc->edges.end()) {
@@ -301,7 +317,8 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             cfg->inserts.push_back(std::move(effect));
         ++slotIndex;
     }
-    for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}});
+    for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}, {}});
+    fillSendAutomation(p, t, *cfg);
     cfg->output = t.strip.output;
     if (pdc) {
         if (const auto it = pdc->edges.find(t.id); it != pdc->edges.end()) {

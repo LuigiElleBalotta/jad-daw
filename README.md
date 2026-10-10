@@ -112,6 +112,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Step Sequencer and Score** (Editors area tabs for a MIDI region): the Step Sequencer is a grid of eight General MIDI drum rows by 16th-note steps (a click adds or removes a note of one 16th); the Score shows the
   notes on a grand staff (view only: no beams, rests or ties).
 - **List Editors** (View menu, Window > Open Event List / Open Signature List): tables of the notes and controller events of the selected MIDI region (pitch, velocity and length can be typed, an event deleted), the markers, the tempo changes and the time signatures.
+- **Send automation**: with Show Automation on, the button at the top of the track list cycles Volume, Pan, Send 1 and Send 2; the Send lanes automate the level of the track's first sends (-96 to +12 dB).
 - **Search and Add Plug-in** (Mix menu): type a part of a plug-in's name or manufacturer (the app's own effects, the scanned VST3 effects and, on an instrument track, the instruments); Return adds the first match to the selected track.
 - **Freeze** (Track menu): the selected audio or instrument tracks are rendered (instrument, regions, inserts and VST3 plug-ins, before the fader) to a file in the project and then play that
   file instead of making the sound again (the track name shows a snowflake; its plug-in instances are let go); Freeze again unfreezes. The fader, pan, sends and automation stay live. Editing the regions of a frozen
@@ -180,7 +181,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 
 Known limits: the app has only been run on Windows (the macOS and Linux builds are written but never run, and the CI configure step fails on macOS); several buttons use text labels because
 there are no icons for them yet; the Score is view only; there are no Flex tools, Smart Tempo, Drummer or Session Players, no folder stacks and no quick-swipe comping;
-automation targets are the fader and the pan (not sends or plug-in parameters); the Browser has no audition and there are no Apple Loops; export has no MP3. Plug-ins are VST3 effects
+automation targets are the fader, the pan and the level of the first four sends (not plug-in parameters); the Browser has no audition and there are no Apple Loops; export has no MP3. Plug-ins are VST3 effects
 and instruments with a stereo or mono output (no multi-output instruments, sidechain or MIDI effects), and a plug-in that crashes while playing takes the app down; changes made inside
 a plug-in window become one undo step when it closes. Menu entries that are not done say so when chosen (`docs/roadmap-autonomous.md` lists what was done and what was not). A project
 with a track name that is empty, longer than 64 characters or has control characters, or with an unknown track colour is rejected on load.

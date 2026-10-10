@@ -35,8 +35,9 @@ Rectangle {
             anchors.rightMargin: Theme.spacing[2]
             y: 2
             implicitHeight: 20
-            label: root.project.automationParam === "volume" ? qsTr("Volume") : qsTr("Pan")
-            onClicked: root.project.automationParam = root.project.automationParam === "volume" ? "pan" : "volume"
+            readonly property var params: ["volume", "pan", "send1", "send2"]
+            label: ({ "volume": qsTr("Volume"), "pan": qsTr("Pan"), "send1": qsTr("Send 1"), "send2": qsTr("Send 2") })[root.project.automationParam] ?? root.project.automationParam
+            onClicked: root.project.automationParam = params[(params.indexOf(root.project.automationParam) + 1) % params.length]
         }
         Repeater {  // the names of the global tracks, next to their lanes
             model: root.project.globalTracksVisible ? [qsTr("Marker"), qsTr("Tempo"), qsTr("Signature")] : []

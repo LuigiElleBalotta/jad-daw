@@ -1802,6 +1802,31 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.trackInserts(audio).size(), 0);
     }
+    void sendLevelsCanBeAutomatedThroughTheShowAutomationParameter() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QString withSend;                                              // in the demo project "Keys" sends to the reverb bus
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->nameAt(i) == "Keys") withSend = c.tracks()->trackIdAt(i);
+        QVERIFY(!withSend.isEmpty());
+        QVERIFY(c.automationAvailable(withSend, "send1"));
+        QVERIFY(!c.automationAvailable(withSend, "send2"));
+        QVERIFY(c.automationPoints(withSend, "send1").isEmpty());
+        c.setAutomationPoints(withSend, "send1", {QVariantMap{{"beats", 0.0}, {"value", -12.0}}, QVariantMap{{"beats", 4.0}, {"value", 0.0}}});
+        QTRY_COMPARE(c.automationPoints(withSend, "send1").size(), 2);
+        QCOMPARE(c.automationPoints(withSend, "volume").size(), 0);   // the fader lane is a different one
+        c.setAutomationPoints(withSend, "send2", {QVariantMap{{"beats", 0.0}, {"value", 0.0}}});   // no such send: nothing happens
+        QCOMPARE(c.automationPoints(withSend, "send2").size(), 0);
+        c.undo();
+        QTRY_COMPARE(c.automationPoints(withSend, "send1").size(), 0);
+        c.setAutomationParam("send1");
+        QCOMPARE(c.automationParam(), QString("send1"));
+        c.setAutomationParam("bogus");
+        QCOMPARE(c.automationParam(), QString("send1"));
+        c.setAutomationParam("volume");
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

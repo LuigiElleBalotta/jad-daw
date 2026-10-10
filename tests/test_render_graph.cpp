@@ -501,3 +501,25 @@ TEST_CASE("RenderGraph: a looped audio region restarts its source every loopFram
     REQUIRE(s.l[399] == Catch::Approx(0.49f));
     REQUIRE(s.l[400] == 0.0f);                                   // after the region
 }
+
+TEST_CASE("RenderGraph: the level of a send follows its automation", "[graph][automation]") {
+    Rig rig;
+    rig.addNode(1, TrackKind::Audio, rig.dcConfig(1.0f, 0, 4000));
+    // the send of track 1 goes to the bus 2 at unity; its level automation ramps from 0 to silence between frames 1000 and 2000
+    auto* cfg = rig.dcConfig(1.0f, 0, 2000);
+    cfg->output = id(99);   // not to the master: only the bus carries it
+    SendPlayback send;
+    send.target = id(2);
+    send.gain = 1.0f;
+    send.levelAuto = {AutoPoint{600, 1.0f}, AutoPoint{1200, 0.0f}};
+    cfg->sends.push_back(send);
+    rig.addNode(3, TrackKind::Audio, cfg);
+    rig.addNode(2, TrackKind::Bus, new TrackConfig);
+    rig.addMaster();
+    // only the bus and the master hear the send: track 1 also plays straight to the master, so compare the part the send adds
+    const Stereo s = rig.render(2000);
+    REQUIRE(s.l[300] > 1.9f);      // the direct signal (1.0) plus the send at unity
+    REQUIRE(s.l[900] < s.l[300]);
+    REQUIRE(s.l[900] > 1.0f);      // half way: the send is about a half
+    REQUIRE(s.l[1700] == Catch::Approx(1.0f).margin(0.01));   // the send is silent, the direct signal stays
+}

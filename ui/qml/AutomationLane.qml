@@ -7,14 +7,16 @@ Item {
     id: root
     required property ProjectController project
     required property string trackId
-    required property string param            // "volume" or "pan"
+    required property string param            // "volume", "pan" or "send1".."send4" (the level of the track's first sends)
     required property real pixelsPerBeat
     required property real scrollBeats
     property real snapBeats: 0
-    property color lineColor: param === "volume" ? Theme.accentPrimary : Theme.stateSolo
+    property color lineColor: param === "volume" ? Theme.accentPrimary : (param === "pan" ? Theme.stateSolo : Theme.statePlay)
+    property bool available: true                // false: a send the track does not have
 
     property var stored: []                      // the points in the project, read again whenever it changes
-    function refresh() { stored = project.automationPoints(trackId, param) }
+    function refresh() { available = project.automationAvailable(trackId, param); stored = project.automationPoints(trackId, param) }
+    visible: available
     onTrackIdChanged: refresh()
     onParamChanged: refresh()
     Component.onCompleted: refresh()

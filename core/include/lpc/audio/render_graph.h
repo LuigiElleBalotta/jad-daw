@@ -79,19 +79,21 @@ struct RegionPlayback {
     std::vector<ControlSpan> controls;  // MIDI regions, sorted by frame
 };
 
-struct SendPlayback {
-    Uuid target;
-    float gain = 1.0f;
-    bool preFader = false;
-    DelayLine delay;  // plug-in delay compensation
-};
-
 // Automation of the fader and the pan: a value (linear gain, or -1..1) from a frame on, linear in between; before the first
 // point the first value holds, after the last one the last.
 struct AutoPoint {
     std::int64_t frame = 0;
     float value = 0.0f;
 };
+
+struct SendPlayback {
+    Uuid target;
+    float gain = 1.0f;
+    bool preFader = false;
+    DelayLine delay;  // plug-in delay compensation
+    std::vector<AutoPoint> levelAuto;  // linear gain; when there are points they drive the send level
+};
+
 
 struct TrackConfig {
     SynthParams synthParams;            // an instrument track: how its built-in synth sounds

@@ -1674,6 +1674,35 @@ private slots:
         QVERIFY(!c.newFromTemplate("My band", url(target)));        // not an empty folder
         QVERIFY(!c.newFromTemplate("Nope", url(dir.path() / "other")));
     }
+    void pasteReplaceAndShuffleKeepTheRegionsTogether() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        const QString track = c.tracks()->trackIdAt(0);
+        c.createRegion(track, 0, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        c.createRegion(track, 8, 2);
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        QString first, second;
+        for (const jad::RegionRow& r : c.regions()->rows()) (r.startBeats < 1 ? first : second) = r.id;
+        c.selectRegion(first, "replace");
+        c.shuffleSelectedRegion(1);                                  // the 4 beat region swaps places with the 2 beat one
+        QTRY_COMPARE(c.regions()->find(second)->startBeats, 0.0);
+        QCOMPARE(c.regions()->find(first)->startBeats, 2.0);
+        c.shuffleSelectedRegion(-1);
+        QTRY_COMPARE(c.regions()->find(first)->startBeats, 0.0);
+        c.selectRegion(second, "replace");
+        c.copySelectedRegions();
+        c.selectRegion(first, "replace");
+        const int n = c.regions()->rowCount();
+        c.pasteReplace();                                            // the copy of the 2 beat region replaces the 4 beat one
+        QTRY_VERIFY(c.regions()->find(first) == nullptr);
+        QCOMPARE(c.regions()->rowCount(), n);
+        c.undo();                                                    // one undo step
+        QTRY_VERIFY(c.regions()->find(first) != nullptr);
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

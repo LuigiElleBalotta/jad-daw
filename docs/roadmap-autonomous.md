@@ -93,3 +93,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: Browsers / Loop Browser (file browser, import on double click; no audition).
 - 2026-10-10: Drag modes No Overlap and X-Fade.
 - 2026-10-10: File > Save as Template / New from Template.
+- 2026-10-10: Edit > Paste Replace and Move > Shuffle Left/Right.

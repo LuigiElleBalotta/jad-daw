@@ -85,6 +85,8 @@ void ProjectController::pasteClipboard(double offsetBeats, bool keepTrack, int c
     }
     nlohmann::json commands = nlohmann::json::array();
     QStringList created;
+    for (const QString& gone : std::as_const(replaceIds_)) commands.push_back({{"type", "remove_region"}, {"regionId", gone.toStdString()}});
+    replaceIds_.clear();
     for (int copy = 1; copy <= std::max(1, copies); ++copy)
         for (const ClipRegion& c : clipboard_) {
             const QString trackId = target.isEmpty() ? c.row.trackId : target;
@@ -104,6 +106,41 @@ void ProjectController::pasteClipboard(double offsetBeats, bool keepTrack, int c
     // the pasted regions become the selection once the project has them
     pendingRegionSelection_ = created;
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::pasteReplace() {
+    const auto rows = selectedRegionRows();
+    if (rows.empty() || clipboard_.empty()) return;
+    double firstSelected = rows.front()->startBeats, firstClip = clipboard_.front().row.startBeats;
+    for (const RegionRow* r : rows) firstSelected = std::min(firstSelected, r->startBeats);
+    for (const ClipRegion& c : clipboard_) firstClip = std::min(firstClip, c.row.startBeats);
+    for (const RegionRow* r : rows) replaceIds_ << r->id;
+    // on the track of the first selected region, at its start
+    const QString savedTrack = selectedTracks_.isEmpty() ? QString() : selectedTracks_.first();
+    selectedTracks_ = QStringList{rows.front()->trackId};
+    pasteClipboard(firstSelected - firstClip, false);
+    selectedTracks_ = savedTrack.isEmpty() ? QStringList() : QStringList{savedTrack};
+    replaceIds_.clear();
+}
+
+void ProjectController::shuffleSelectedRegion(int direction) {
+    const auto rows = selectedRegionRows();
+    if (!host_ || rows.empty() || direction == 0) return;
+    const RegionRow* r = rows.front();
+    const RegionRow* other = nullptr;
+    for (const RegionRow& o : regionRows_) {
+        if (o.trackId != r->trackId || o.id == r->id) continue;
+        if (direction > 0 && o.startBeats > r->startBeats + 1e-9 && (!other || o.startBeats < other->startBeats)) other = &o;
+        if (direction < 0 && o.startBeats < r->startBeats - 1e-9 && (!other || o.startBeats > other->startBeats)) other = &o;
+    }
+    if (!other) return;
+    const double first = std::min(r->startBeats, other->startBeats);
+    const RegionRow* a = direction > 0 ? other : r;   // the one that goes first
+    const RegionRow* b = direction > 0 ? r : other;
+    nlohmann::json commands = nlohmann::json::array();
+    commands.push_back(moveCommand(*a, first));
+    commands.push_back(moveCommand(*b, first + a->lengthBeats));
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
 }
 
 void ProjectController::pasteRegions(bool atOriginalPosition) {

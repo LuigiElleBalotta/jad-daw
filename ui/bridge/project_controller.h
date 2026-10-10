@@ -467,6 +467,8 @@ public:
     Q_INVOKABLE void pasteRegions(bool atOriginalPosition = false);
     Q_INVOKABLE void duplicateSelectedRegions();
     Q_INVOKABLE void repeatSelectedRegions(int copies);
+    Q_INVOKABLE void pasteReplace();                         // Edit > Paste Replace: the clipboard takes the place of the selected regions (one undo step)
+    Q_INVOKABLE void shuffleSelectedRegion(int direction);   // Edit > Move > Shuffle Left (-1) / Right (+1): the region swaps places with its neighbour on the track
     Q_INVOKABLE void setSelectedRegionsLength(double beats);
     Q_INVOKABLE QVariantList trackList() const;  // {id, name, kind} of the tracks listed in the Tracks area (the master not included)
     // View > Browsers / Loop Browser: the folders and audio files of a folder, {path, parent, entries: [{name, path, dir, audio, size}]}, folders first.
@@ -820,6 +822,7 @@ private:
     bool controlBarVisible_ = true, toolbarVisible_ = true;
     QSet<QString> barItemsOff_;
     QString templatesFolder_;  // empty: the default one
+    QStringList replaceIds_;   // regions that the paste in progress replaces
     std::filesystem::path templatesDir() const;
     int barItemsRevision_ = 0;
     bool automationVisible_ = false;

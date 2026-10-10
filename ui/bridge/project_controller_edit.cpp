@@ -1102,6 +1102,7 @@ void ProjectController::finishRecording() {
     const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh.mm.ss");
     for (const QString& trackId : std::as_const(recTracks_)) {
         const int input = recInputs_.value(trackId);
+        const QString takeGroup = runs.size() > 1 ? QUuid::createUuid().toString(QUuid::WithoutBraces) : QString();  // the passes of a cycle are takes of one passage
         QString trackName;
         for (const TrackRow& t : allRows_) if (t.id == trackId) trackName = t.name;
         int take = 0;
@@ -1137,7 +1138,8 @@ void ProjectController::finishRecording() {
                 continue;
             }
             const double startBeats = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(start), sampleRate_)) / lpc::kPPQ;
-            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), trackId, startBeats, true});
+            const bool lastRun = &run == &runs.back();
+            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), trackId, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun});  // the last pass plays
             seconds = std::max(seconds, static_cast<double>(data.size() / (stereo ? 2 : 1)) / sampleRate_);
             ++take;
             ++made;
@@ -2340,6 +2342,72 @@ void ProjectController::setTrackMidi(const QString& trackId, const QString& what
 void ProjectController::setTrackDelay(const QString& trackId, double milliseconds) {
     if (!host_ || !std::isfinite(milliseconds)) return;
     sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"delayMs", std::clamp(milliseconds, -1000.0, 1000.0)}});
+}
+
+QVariantList ProjectController::regionTakes(const QString& regionId) const {
+    QVariantList out;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row || row->takeGroup.isEmpty()) return out;
+    std::vector<const RegionRow*> group;
+    for (const RegionRow& r : regionRows_)
+        if (r.trackId == row->trackId && r.takeGroup == row->takeGroup) group.push_back(&r);
+    std::stable_sort(group.begin(), group.end(), [](const RegionRow* a, const RegionRow* b) { return a->startBeats < b->startBeats; });
+    int n = 0;
+    for (const RegionRow* r : group) out.append(QVariantMap{{"id", r->id}, {"active", !r->muted}, {"label", QStringLiteral("Take %1").arg(++n)}});
+    return out;
+}
+
+void ProjectController::setActiveTake(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || row->takeGroup.isEmpty()) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow& r : regionRows_) {
+        if (r.trackId != row->trackId || r.takeGroup != row->takeGroup) continue;
+        const bool shouldBeMuted = r.id != regionId;
+        if (r.muted == shouldBeMuted) continue;
+        nlohmann::json region = nlohmann::json::parse(r.json, nullptr, false);
+        if (region.is_discarded()) continue;
+        if (shouldBeMuted) region["muted"] = true;
+        else region.erase("muted");
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
+    }
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::deleteOtherTakes(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || row->takeGroup.isEmpty()) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow& r : regionRows_) {
+        if (r.trackId != row->trackId || r.takeGroup != row->takeGroup) continue;
+        if (r.id == regionId) {
+            nlohmann::json region = nlohmann::json::parse(r.json, nullptr, false);
+            if (region.is_discarded()) continue;
+            region.erase("takeGroup");
+            region.erase("muted");
+            commands.push_back({{"type", "replace_region"}, {"region", region}});
+        } else {
+            commands.push_back({{"type", "remove_region"}, {"regionId", r.id.toStdString()}});
+        }
+    }
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::unpackTakes(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || row->takeGroup.isEmpty()) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow& r : regionRows_) {
+        if (r.trackId != row->trackId || r.takeGroup != row->takeGroup) continue;
+        nlohmann::json region = nlohmann::json::parse(r.json, nullptr, false);
+        if (region.is_discarded()) continue;
+        region.erase("takeGroup");
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
+    }
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
 }  // namespace jad

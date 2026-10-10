@@ -85,6 +85,7 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (!r.controls.empty()) j["controls"] = r.controls;
     if (r.loopLength != 0) j["loopLength"] = r.loopLength;
     if (r.muted) j["muted"] = true;
+    if (!r.takeGroup.empty()) j["takeGroup"] = r.takeGroup;
     if (r.transpose != 0) j["transpose"] = r.transpose;
     if (r.velocityOffset != 0) j["velocityOffset"] = r.velocityOffset;
     if (r.quantize != 0) j["quantize"] = r.quantize;
@@ -104,6 +105,7 @@ void from_json(const nlohmann::json& j, Region& r) {
     if (j.contains("controls")) j.at("controls").get_to(r.controls);
     r.loopLength = j.value("loopLength", std::int64_t{0});
     r.muted = j.value("muted", false);
+    r.takeGroup = j.value("takeGroup", std::string());
     r.transpose = j.value("transpose", 0);
     r.velocityOffset = j.value("velocityOffset", 0);
     r.quantize = j.value("quantize", Ticks{0});

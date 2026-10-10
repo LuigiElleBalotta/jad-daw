@@ -458,6 +458,11 @@ public:
     Q_INVOKABLE void duplicateSelectedRegions();
     Q_INVOKABLE void toggleMuteSelectedRegions();
     Q_INVOKABLE void toggleLoopSelectedRegions();
+    // Takes: the regions of one take group on a track, in time order ({id, active, label}); one of them plays
+    Q_INVOKABLE QVariantList regionTakes(const QString& regionId) const;
+    Q_INVOKABLE void setActiveTake(const QString& regionId);        // this take plays, the others of its group are muted (one undo step)
+    Q_INVOKABLE void deleteOtherTakes(const QString& regionId);     // keeps this take as an ordinary region and removes the others of its group
+    Q_INVOKABLE void unpackTakes(const QString& regionId);          // the takes become ordinary regions (muted ones stay muted)
     // The Inspector's region fields for the selected MIDI regions (one undo step): what == "transpose" (semitones), "velocity" (added) or "quantize" (beats, 0 = off)
     Q_INVOKABLE void setSelectedRegionsMidi(const QString& what, double value);
     // The Inspector's track fields for an instrument track: what == "transpose", "velocity", "keyLow", "keyHigh", "velocityLow" or "velocityHigh"
@@ -667,10 +672,12 @@ private:
         QString trackId;
         double startBeats;  // NaN: right after the previous clip
         bool temporary = false;  // a file made for the import (a take): removed when it has been taken in
+        QString takeGroup;       // set for the passes of a cycle recording: the regions share it
+        bool muted = false;      // a take that does not play
     };
     void startNextImport();
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
-    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done);
+    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false);
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     QString inspectorBusId_, pinOwner_;  // the pinned bus of the right strip and the track it was pinned for
     int routingRevision_ = 0;

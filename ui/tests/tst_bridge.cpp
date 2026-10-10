@@ -1500,6 +1500,48 @@ private slots:
         QTRY_COMPARE(c.tracks()->find(track)->keyHigh, 40);
         QCOMPARE(c.tracks()->find(track)->keyLow, 40);
     }
+    void takesOfOnePassageShareAGroupAndOnePlays() {
+        TempDir dir;
+        const auto proj = dir.path() / std::filesystem::path(u8"takes.lpc");
+        std::filesystem::create_directories(proj);
+        lpc::Project project = lpc::makeDemoProject(proj);
+        lpc::Uuid trackId;
+        for (lpc::Track& t : project.tracks) {
+            if (t.kind != lpc::TrackKind::Audio || t.regions.empty()) continue;
+            trackId = t.id;
+            lpc::Region second = t.regions[0];
+            second.id = lpc::Uuid::random();
+            t.regions[0].takeGroup = second.takeGroup = "take-group-1";
+            second.muted = true;
+            t.regions.push_back(second);
+            break;
+        }
+        QVERIFY(!trackId.isNull());
+        lpc::saveProject(project, proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.regions()->rowCount() >= 3);
+        QString first, second;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow& r = c.regions()->rows()[static_cast<std::size_t>(i)];
+            if (r.takeGroup == "take-group-1") (first.isEmpty() ? first : second) = r.id;
+        }
+        QVERIFY(!first.isEmpty() && !second.isEmpty());
+        QCOMPARE(c.regionTakes(first).size(), 2);
+        QCOMPARE(c.regions()->find(first)->muted, false);
+        QCOMPARE(c.regions()->find(second)->muted, true);
+        QCOMPARE(c.regions()->data(c.regions()->index(0), c.regions()->roleNames().key("takes")).isValid(), true);
+        c.setActiveTake(second);                                      // the other take plays now
+        QTRY_VERIFY(!c.regions()->find(second)->muted);
+        QVERIFY(c.regions()->find(first)->muted);
+        c.undo();
+        QTRY_VERIFY(c.regions()->find(second)->muted);
+        const int before = c.regions()->rowCount();
+        c.deleteOtherTakes(first);
+        QTRY_COMPARE(c.regions()->rowCount(), before - 1);
+        QVERIFY(c.regions()->find(first)->takeGroup.isEmpty());
+        QVERIFY(c.regionTakes(first).isEmpty());
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

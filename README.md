@@ -102,6 +102,8 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   filters and then Single | Tracks | All from its bar and scrolls sideways.
 - **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
   follows and the sound changes at once; the whole drag is one undo step.
+- **Takes:** recording with the Cycle on makes one audio region per pass; the passes of a track are takes of one passage (a take group): the last pass plays, the others are muted and the region says "n takes".
+  Right-click a region to choose which take plays, to Delete Other Takes or to Unpack Takes (they become ordinary regions); the choice is one undo step.
 - **Regions:** Loop/Unloop Regions (`L` or the Inspector's Loop box): the first loop of the region repeats until its end, for audio (the source restarts) and for MIDI (notes and controllers), with marks where each repeat
   starts; drag the right edge to repeat more. A looped region is not split, joined or resized from its left edge (turn the loop off first). Mute Regions (`Alt+M` or the Inspector's Mute box) silences them. A MIDI region has Quantize, Transpose and Velocity in the Inspector and an instrument track has Transpose, Velocity,
   Key limit and Velocity limit: they shape the notes when they play and leave the notes themselves untouched. An audio or instrument track has a Delay in milliseconds (plus or minus one second).

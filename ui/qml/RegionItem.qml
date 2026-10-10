@@ -23,6 +23,8 @@ Item {
     property bool selected: false
     property bool muted: false
     property real loopBeats: 0             // > 0: the region repeats its first loopBeats
+    property int takes: 0                  // > 0: the region is one of that many takes of a passage
+    signal contextRequested(string id)
     property real fadeInBeats: 0           // the fades of an audio region
     property real fadeOutBeats: 0
     property real fadeInPx: -1             // live feedback while a fade handle is dragged (-1: not dragged)
@@ -266,6 +268,21 @@ Track: %3")
             if (Math.abs(d) >= 3) root.finishResize(isLeft, d)  // a smaller movement is a click
         }
         onCanceled: { root.leftEdgePx = 0; root.rightEdgePx = 0 }
+    }
+    TapHandler {  // right click: the region's shortcut menu
+        acceptedButtons: Qt.RightButton
+        onTapped: root.contextRequested(root.regionId)
+    }
+    Rectangle {  // a take folder: how many takes the passage has
+        visible: root.takes > 1 && root.width > 40
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 2
+        width: takesLabel.implicitWidth + 8
+        height: 12
+        radius: 3
+        color: root.muted ? Theme.surfaceRaised : root.solid
+        Text { id: takesLabel; anchors.centerIn: parent; text: qsTr("%1 takes").arg(root.takes); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: 9 }
     }
     Edge { isLeft: true; anchors.left: parent.left }
     Edge { isLeft: false; anchors.right: parent.right }

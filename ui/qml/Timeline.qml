@@ -1,4 +1,6 @@
 import QtQuick
+import QtQuick.Controls.Basic
+import QtQml.Models
 import Jad
 
 Item {
@@ -206,6 +208,36 @@ Item {
                 }
             }
         }
+        ThemedMenu {  // right click on a region: its takes and the usual region switches
+            id: regionContext
+            property string regionId
+            property var takeList: []
+            function open(id) {
+                regionId = id
+                takeList = root.project.regionTakes(id)
+                if (root.project.selectedRegionIds.indexOf(id) < 0) root.project.selectRegion(id, "replace")
+                popup()
+            }
+            Instantiator {
+                model: regionContext.takeList
+                delegate: ThemedMenuItem {
+                    required property var modelData
+                    text: modelData.label
+                    checkable: true
+                    checked: modelData.active
+                    onTriggered: root.project.setActiveTake(modelData.id)
+                }
+                onObjectAdded: (index, object) => regionContext.insertItem(index, object)
+                onObjectRemoved: (index, object) => regionContext.removeItem(object)
+            }
+            MenuSeparator { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0 }
+            ThemedMenuItem { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0; text: qsTr("Delete Other Takes"); onTriggered: root.project.deleteOtherTakes(regionContext.regionId) }
+            ThemedMenuItem { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0; text: qsTr("Unpack Takes"); onTriggered: root.project.unpackTakes(regionContext.regionId) }
+            MenuSeparator { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0 }
+            ThemedMenuItem { text: qsTr("Loop/Unloop Regions"); onTriggered: root.project.toggleLoopSelectedRegions() }
+            ThemedMenuItem { text: qsTr("Mute/Unmute Regions"); onTriggered: root.project.toggleMuteSelectedRegions() }
+            ThemedMenuItem { text: qsTr("Delete"); onTriggered: root.project.deleteRegions(root.project.selectedRegionIds) }
+        }
         ThemedMenu {
             id: regionMenu
             property string trackId
@@ -260,6 +292,8 @@ Item {
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 muted: model.muted
                 loopBeats: model.loopBeats
+                takes: model.takes
+                onContextRequested: (id) => { root.forceActiveFocus(); regionContext.open(id) }
                 fadeInBeats: model.fadeInBeats
                 fadeOutBeats: model.fadeOutBeats
                 x: root.beatsToX(startBeats)

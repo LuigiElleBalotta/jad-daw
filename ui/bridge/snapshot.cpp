@@ -152,6 +152,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.json = nlohmann::json(r).dump();
             rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
             rr.muted = r.muted;
+            rr.takeGroup = QString::fromStdString(r.takeGroup);
             rr.transpose = r.transpose;
             rr.velocityOffset = r.velocityOffset;
             rr.quantizeBeats = static_cast<double>(r.quantize) / lpc::kPPQ;

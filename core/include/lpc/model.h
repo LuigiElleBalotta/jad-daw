@@ -41,6 +41,7 @@ struct Region {
     float gainDb = 0.0f;
     std::int64_t fadeIn = 0, fadeOut = 0;  // audio: the ramps at the ends, in the unit of start (each at most as long as the region)
     bool muted = false;  // Mute Regions: kept in the track, not played
+    std::string takeGroup;  // regions of one track that share it are takes of the same passage: one plays (the others are muted)
     int transpose = 0;           // MIDI regions, played: semitones added to every note
     int velocityOffset = 0;      // MIDI regions, played: added to every velocity
     Ticks quantize = 0;          // MIDI regions, played: > 0 moves the start of every note to the nearest multiple of this many ticks

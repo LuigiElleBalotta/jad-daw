@@ -19,6 +19,14 @@ const RegionRow* RegionModel::find(const QString& regionId) const {
     return nullptr;
 }
 
+int RegionModel::takeCount(const RegionRow& r) const {
+    if (r.takeGroup.isEmpty()) return 0;
+    int n = 0;
+    for (const RegionRow& o : rows_)
+        if (o.trackId == r.trackId && o.takeGroup == r.takeGroup) ++n;
+    return n;
+}
+
 QVariant RegionModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(rows_.size())) return {};
     const RegionRow& r = rows_[static_cast<std::size_t>(index.row())];
@@ -36,6 +44,7 @@ QVariant RegionModel::data(const QModelIndex& index, int role) const {
         case FadeInBeats: return r.fadeInBeats;
         case FadeOutBeats: return r.fadeOutBeats;
         case LoopBeats: return r.loopBeats;
+        case Takes: return takeCount(r);
     }
     return {};
 }
@@ -43,7 +52,7 @@ QVariant RegionModel::data(const QModelIndex& index, int role) const {
 QHash<int, QByteArray> RegionModel::roleNames() const {
     return {{RegionId, "regionId"},       {TrackId, "trackId"},   {TrackIndex, "trackIndex"}, {StartBeats, "startBeats"},
             {LengthBeats, "lengthBeats"}, {IsAudio, "isAudio"},   {Missing, "missing"},       {MediaId, "mediaId"},       {Color, "trackColor"}, {Muted, "muted"},
-            {FadeInBeats, "fadeInBeats"}, {FadeOutBeats, "fadeOutBeats"}, {LoopBeats, "loopBeats"}};
+            {FadeInBeats, "fadeInBeats"}, {FadeOutBeats, "fadeOutBeats"}, {LoopBeats, "loopBeats"}, {Takes, "takes"}};
 }
 
 }  // namespace jad

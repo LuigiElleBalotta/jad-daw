@@ -960,10 +960,10 @@ void ProjectController::startNextImport() {
         if (!self) return;
         self->lastImportEnd_ = ok ? endBeats : start;  // a failed file leaves the spot free for the next one
         self->startNextImport();
-    });
+    }, next.takeGroup, next.muted);
 }
 
-void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done) {
+void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup, bool muted) {
     if (!host_) {
         done(false, startBeats);
         return;
@@ -977,7 +977,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
     const std::int64_t startMicros = std::min<std::int64_t>(std::llround(startFrames * 1e6 / projectRate), lpc::kMaxPosition);
 
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done] {
+    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done, takeGroup, muted] {
         auto fail = [&](const QString& message) {
             if (!self) return;
             QMetaObject::invokeMethod(self.data(), [self, message, done, beats] {
@@ -1060,7 +1060,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             std::filesystem::remove(target, ignore);
             return;
         }
-        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats] {
+        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats, takeGroup, muted] {
             std::error_code ignore;
             if (!self || self->dir_ != projectDir || !self->host_) {  // closed or replaced meanwhile
                 std::filesystem::remove(target, ignore);
@@ -1082,6 +1082,8 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             region.start = startMicros;
             region.length = std::max<std::int64_t>(1, std::llround(static_cast<double>(frames) * 1e6 / projectRate));
             region.mediaId = item.id;
+            region.takeGroup = takeGroup.toStdString();
+            region.muted = muted;
             nlohmann::json commands = nlohmann::json::array();
             commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
             commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"region", region}, {"index", -1}});

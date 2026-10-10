@@ -96,3 +96,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: File > Save as Template / New from Template.
 - 2026-10-10: Edit > Paste Replace and Move > Shuffle Left/Right.
 - 2026-10-10: Step Sequencer (drum grid) and a read-only Score in the Editors area.
+- 2026-10-10: MIDI Transform window.

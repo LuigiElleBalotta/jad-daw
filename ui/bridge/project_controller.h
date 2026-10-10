@@ -467,6 +467,10 @@ public:
     Q_INVOKABLE void pasteRegions(bool atOriginalPosition = false);
     Q_INVOKABLE void duplicateSelectedRegions();
     Q_INVOKABLE void repeatSelectedRegions(int copies);
+    // Window > Open MIDI Transform: changes every note of the selected MIDI regions (one undo step). op: "transpose" (a = semitones), "velocityScale" (a = percent),
+    // "velocityAdd" (a), "lengthScale" (a = percent), "humanize" (a = the largest timing change in 960ths of a beat, b = the largest velocity change; the same
+    // choice every time for the same notes), "reverse" (the notes play backwards inside their region), "invert" (pitches mirrored around the first note).
+    Q_INVOKABLE void transformNotes(const QString& op, double a, double b);
     Q_INVOKABLE void pasteReplace();                         // Edit > Paste Replace: the clipboard takes the place of the selected regions (one undo step)
     Q_INVOKABLE void shuffleSelectedRegion(int direction);   // Edit > Move > Shuffle Left (-1) / Right (+1): the region swaps places with its neighbour on the track
     Q_INVOKABLE void setSelectedRegionsLength(double beats);

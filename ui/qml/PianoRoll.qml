@@ -10,6 +10,7 @@ import Jad
 Item {
     id: root
     required property ProjectController project
+    signal transformRequested()
 
     readonly property string regionId: project.selectedRegionIds.length > 0 ? project.selectedRegionIds[0] : ""
     readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
@@ -521,7 +522,7 @@ Item {
         }
         MenuSeparator {}
         ThemedMenuItem { text: qsTr("Mute Notes On/Off"); onTriggered: root.muteNotes() }
-        ThemedMenuItem { text: qsTr("MIDI Transform"); onTriggered: root.project.announceStub(qsTr("MIDI Transform")) }
+        ThemedMenuItem { text: qsTr("MIDI Transform"); onTriggered: root.transformRequested() }
     }
     ThemedMenu {
         id: viewMenu

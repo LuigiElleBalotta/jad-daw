@@ -1703,6 +1703,37 @@ private slots:
         c.undo();                                                    // one undo step
         QTRY_VERIFY(c.regions()->find(first) != nullptr);
     }
+    void midiTransformChangesEveryNoteOfTheSelectedRegionsInOneStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        c.createRegion(c.tracks()->trackIdAt(0), 0, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString id = c.regions()->regionIdAt(0);
+        c.setRegionNotes(id, {QVariantMap{{"start", 0.0}, {"length", 1.0}, {"note", 60}, {"velocity", 100}}, QVariantMap{{"start", 2.0}, {"length", 1.0}, {"note", 64}, {"velocity", 50}}});
+        QTRY_COMPARE(c.regionNotes(id).size(), 2);
+        c.selectRegion(id, "replace");
+        c.transformNotes("transpose", 7, 0);
+        QTRY_COMPARE(c.regionNotes(id).first().toMap().value("note").toInt(), 67);
+        c.transformNotes("velocityScale", 50, 0);
+        QTRY_COMPARE(c.regionNotes(id).at(1).toMap().value("velocity").toInt(), 25);
+        c.transformNotes("reverse", 0, 0);                           // the second note (at 2, one beat) now starts at 1; the first (at 0) at 3
+        QTRY_COMPARE(c.regionNotes(id).at(1).toMap().value("start").toDouble(), 1.0);
+        QCOMPARE(c.regionNotes(id).at(0).toMap().value("start").toDouble(), 3.0);
+        c.transformNotes("invert", 0, 0);                            // mirrored around the first note (67)
+        QTRY_COMPARE(c.regionNotes(id).at(1).toMap().value("note").toInt(), 2 * 67 - 71);
+        c.transformNotes("humanize", 30, 10);
+        QTRY_VERIFY(c.regionNotes(id).at(0).toMap().value("start").toDouble() != 3.0 || c.regionNotes(id).at(1).toMap().value("start").toDouble() != 1.0);
+        c.transformNotes("bogus", 0, 0);                             // an unknown operation does nothing
+        c.undo();
+        c.undo();
+        c.undo();
+        c.undo();
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(id).first().toMap().value("note").toInt(), 60);
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -2705,4 +2705,52 @@ bool ProjectController::newFromTemplate(const QString& name, const QUrl& folder)
     return openProject(QUrl::fromLocalFile(QString::fromStdWString(target.wstring())));
 }
 
+void ProjectController::transformNotes(const QString& op, double a, double b) {
+    static const QStringList ops{"transpose", "velocityScale", "velocityAdd", "lengthScale", "humanize", "reverse", "invert"};
+    if (!host_ || !ops.contains(op) || !std::isfinite(a) || !std::isfinite(b)) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (r->audio) continue;
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded() || !region.contains("notes") || !region["notes"].is_array() || region["notes"].empty()) continue;
+        const std::int64_t regionLength = region.value("length", std::int64_t{0});
+        nlohmann::json& notes = region["notes"];
+        const int pivot = notes.front().value("note", 60);
+        std::uint32_t seed = 2166136261u;  // a fixed choice per region: the same notes give the same result
+        for (const char c : r->id.toStdString()) seed = (seed ^ static_cast<unsigned char>(c)) * 16777619u;
+        auto next = [&seed]() {  // 0..1
+            seed = seed * 1664525u + 1013904223u;
+            return static_cast<double>(seed >> 8) / 16777216.0;
+        };
+        for (auto& n : notes) {
+            int pitch = n.value("note", 60), velocity = n.value("velocity", 100);
+            std::int64_t start = n.value("start", std::int64_t{0}), length = n.value("length", std::int64_t{1});
+            if (op == "transpose") pitch += static_cast<int>(std::lround(a));
+            else if (op == "velocityScale") velocity = static_cast<int>(std::lround(velocity * a / 100.0));
+            else if (op == "velocityAdd") velocity += static_cast<int>(std::lround(a));
+            else if (op == "lengthScale") length = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::llround(static_cast<double>(length) * a / 100.0)));
+            else if (op == "humanize") {
+                start += static_cast<std::int64_t>(std::llround((next() * 2 - 1) * a));
+                velocity += static_cast<int>(std::lround((next() * 2 - 1) * b));
+            } else if (op == "reverse") {
+                start = std::max<std::int64_t>(0, regionLength - start - length);
+            } else if (op == "invert") {
+                pitch = 2 * pivot - pitch;
+            }
+            start = std::clamp<std::int64_t>(start, 0, std::max<std::int64_t>(0, regionLength - 1));
+            length = std::min<std::int64_t>(length, std::max<std::int64_t>(1, regionLength - start));
+            n["note"] = std::clamp(pitch, 0, 127);
+            n["velocity"] = std::clamp(velocity, 1, 127);
+            n["start"] = start;
+            n["length"] = length;
+        }
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
+    }
+    if (commands.empty()) {
+        emit notice("Select a MIDI region with notes");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

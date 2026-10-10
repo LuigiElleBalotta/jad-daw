@@ -256,7 +256,7 @@
  {"id":"window.openEventList","label":"Open Event List","menu":"Window","shortcut":"Ctrl+7","kind":"command","status":"ready","sep":true},
  {"id":"window.openSignatureList","label":"Open Signature List","menu":"Window","shortcut":"","kind":"command","status":"ready"},
  {"id":"window.openProjectAudio","label":"Open Project Audio","menu":"Window","shortcut":"Ctrl+8","kind":"command","status":"ready"},
- {"id":"window.openMidiTransform","label":"Open MIDI Transform","menu":"Window","shortcut":"Ctrl+9","kind":"command","status":"stub","sep":true},
+ {"id":"window.openMidiTransform","label":"Open MIDI Transform","menu":"Window","shortcut":"Ctrl+9","kind":"command","status":"ready","sep":true},
  {"id":"window.openTransportFloat","label":"Open Transport Float","menu":"Window","shortcut":"","kind":"command","status":"stub","sep":true},
  {"id":"window.showEventFloat","label":"Show Event Float","menu":"Window","shortcut":"Alt+E","kind":"command","status":"stub"},
  {"id":"window.showRegionInspectorFloat","label":"Show Region Inspector Float","menu":"Window","shortcut":"Alt+Shift+R","kind":"command","status":"stub"},

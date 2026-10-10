@@ -59,8 +59,10 @@ Rectangle {
         height: parent.height - strip.height
         visible: root.tab === 0 && !root.audioRegion
         project: root.project
+        onTransformRequested: root.transformRequested()
     }
     signal processRequested(string op)
+    signal transformRequested()
     AudioEditor {
         id: audioEditor
         y: strip.height

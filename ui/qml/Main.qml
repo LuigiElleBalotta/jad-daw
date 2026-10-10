@@ -97,6 +97,7 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    MidiTransformDialog { id: midiTransform; project: controller }
     TextPromptDialog {
         id: templateName
         heading: qsTr("Save as Template")
@@ -298,6 +299,7 @@ ApplicationWindow {
         "edit.pasteReplace": () => controller.pasteReplace(),
         "edit.moveShuffleLeft": () => controller.shuffleSelectedRegion(-1),
         "edit.moveShuffleRight": () => controller.shuffleSelectedRegion(1),
+        "window.openMidiTransform": () => midiTransform.open(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),
@@ -570,6 +572,7 @@ ApplicationWindow {
             Layout.preferredHeight: implicitHeight
             visible: root.editorsVisible
             project: controller
+            onTransformRequested: midiTransform.open()
             onProcessRequested: (op) => {
                 if (op === "normalize") audioDialog.show("normalize", qsTr("Normalize"), qsTr("Peak level"), "dBFS", -0.3, -24, 0)
                 else if (op === "reverse") controller.processSelectedRegions("reverse", 0)

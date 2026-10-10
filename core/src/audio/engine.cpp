@@ -191,6 +191,8 @@ void AudioEngine::drainMidi() noexcept {
             if (!liveTarget_.isNull()) graph_.liveNote(liveTarget_, on, e.data1, e.data2);
         } else if (type == 0xB0 && (e.data1 == 123 || e.data1 == 120)) {  // all notes off
             if (!liveTarget_.isNull()) graph_.allNotesOff();
+        } else if (type == 0xB0 || type == 0xD0 || type == 0xE0) {  // controllers, aftertouch and the pitch wheel go to a plug-in instrument
+            if (!liveTarget_.isNull()) graph_.liveControl(liveTarget_, type, e.data1, e.data2);
         }
         if (recording_ && playing_ && (on || off || type == 0xB0 || type == 0xE0)) midiRec_.push(MidiRecEvent{position_, e});
     };

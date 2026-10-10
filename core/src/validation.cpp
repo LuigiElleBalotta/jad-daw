@@ -33,12 +33,19 @@ MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r) {
     if (kind == TrackKind::Audio) {
         if (r.mediaId.isNull() || !p.findMedia(r.mediaId))
             return CommandError{"bad_region", "audio region needs a mediaId present in the media pool"};
-        if (!r.notes.empty()) return CommandError{"bad_region", "audio regions cannot contain notes"};
+        if (!r.notes.empty() || !r.controls.empty()) return CommandError{"bad_region", "audio regions cannot contain notes"};
         if (r.sourceOffsetFrames < 0 || r.sourceOffsetFrames > kMaxPosition)
             return CommandError{"bad_region", "sourceOffsetFrames must be in [0, 2^40]"};
     } else if (kind == TrackKind::Midi || kind == TrackKind::Instrument) {
         if (!r.mediaId.isNull()) return CommandError{"bad_region", "MIDI regions cannot reference media"};
         if (r.timeBase != TimeBase::Musical) return CommandError{"bad_region", "MIDI regions must be musical"};
+        if (r.controls.size() > 16384) return CommandError{"bad_region", "a region holds at most 16384 controller events"};
+        for (std::size_t i = 0; i < r.controls.size(); ++i) {
+            const MidiControl& c = r.controls[i];
+            const bool kind = c.status == 0xB0 || c.status == 0xD0 || c.status == 0xE0;
+            if (!kind || c.tick < 0 || c.tick > r.length || c.data1 > 127 || c.data2 > 127 || (i > 0 && c.tick < r.controls[i - 1].tick))
+                return CommandError{"bad_region", "invalid MIDI controller event (kinds 0xB0, 0xD0, 0xE0; data 0..127; sorted; inside the region)"};
+        }
         for (const MidiNote& n : r.notes) {
             if (n.start < 0 || n.length <= 0 || n.start > kMaxPosition || n.length > kMaxPosition || n.note > 127 || n.velocity < 1 ||
                 n.velocity > 127)

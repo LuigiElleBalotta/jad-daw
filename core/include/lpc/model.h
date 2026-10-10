@@ -23,6 +23,14 @@ struct MidiNote {
     bool operator==(const MidiNote&) const = default;
 };
 
+// A MIDI message that is not a note, in a region: a control change (status 0xB0: data1 = controller, data2 = value), channel aftertouch
+// (0xD0: data1 = pressure) or a pitch bend (0xE0: data1 = low 7 bits, data2 = high 7 bits; 0x2000 is the centre).
+struct MidiControl {
+    Ticks tick = 0;  // relative to the region start
+    std::uint8_t status = 0xB0, data1 = 0, data2 = 0;
+    bool operator==(const MidiControl&) const = default;
+};
+
 struct Region {
     Uuid id;
     TimeBase timeBase = TimeBase::Musical;
@@ -33,6 +41,7 @@ struct Region {
     float gainDb = 0.0f;
     std::int64_t fadeIn = 0, fadeOut = 0;  // audio: the ramps at the ends, in the unit of start (each at most as long as the region)
     std::vector<MidiNote> notes;
+    std::vector<MidiControl> controls;  // MIDI regions: sorted by tick
     bool operator==(const Region&) const = default;
 };
 

@@ -82,6 +82,7 @@ void to_json(nlohmann::json& j, const Region& r) {
          {"sourceOffsetFrames", r.sourceOffsetFrames}, {"gainDb", r.gainDb}, {"notes", r.notes}};
     if (r.fadeIn != 0) j["fadeIn"] = r.fadeIn;  // written only when set: older projects and files stay as they were
     if (r.fadeOut != 0) j["fadeOut"] = r.fadeOut;
+    if (!r.controls.empty()) j["controls"] = r.controls;
 }
 
 void from_json(const nlohmann::json& j, Region& r) {
@@ -95,6 +96,18 @@ void from_json(const nlohmann::json& j, Region& r) {
     j.at("notes").get_to(r.notes);
     r.fadeIn = j.value("fadeIn", std::int64_t{0});
     r.fadeOut = j.value("fadeOut", std::int64_t{0});
+    if (j.contains("controls")) j.at("controls").get_to(r.controls);
+}
+
+void to_json(nlohmann::json& j, const MidiControl& c) { j = {{"tick", c.tick}, {"status", c.status}, {"data1", c.data1}, {"data2", c.data2}}; }
+
+void from_json(const nlohmann::json& j, MidiControl& c) {
+    const int status = j.at("status").get<int>(), d1 = j.at("data1").get<int>(), d2 = j.at("data2").get<int>();
+    if (status < 0 || status > 255 || d1 < 0 || d1 > 255 || d2 < 0 || d2 > 255) throw std::runtime_error("MIDI control out of range");
+    j.at("tick").get_to(c.tick);
+    c.status = static_cast<std::uint8_t>(status);
+    c.data1 = static_cast<std::uint8_t>(d1);
+    c.data2 = static_cast<std::uint8_t>(d2);
 }
 
 void to_json(nlohmann::json& j, const MidiNote& n) {

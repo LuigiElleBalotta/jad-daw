@@ -514,6 +514,10 @@ public:
     // Piano Roll: the notes of a MIDI region, in beats from the region start: [{start, length, note, velocity}]
     Q_INVOKABLE QVariantList regionNotes(const QString& regionId) const;
     Q_INVOKABLE void setRegionNotes(const QString& regionId, const QVariantList& notes);  // one undo step
+    // Controller lanes of a MIDI region: lane is "cc<n>" (control change n, value 0..127), "bend" (pitch bend, -8192..8191) or "touch" (aftertouch,
+    // 0..127). regionControls lists {beats, value}; setRegionControls replaces that lane's points (the other lanes stay), one undo step.
+    Q_INVOKABLE QVariantList regionControls(const QString& regionId, const QString& lane) const;
+    Q_INVOKABLE void setRegionControls(const QString& regionId, const QString& lane, const QVariantList& points);
     Q_INVOKABLE QVariantMap regionInfo(const QString& regionId) const;  // {trackName, trackId, startBeats, lengthBeats, audio, found}
     Q_PROPERTY(int revision READ revision NOTIFY projectChanged)  // grows with every snapshot: bindings on regionNotes() follow it
     int revision() const { return static_cast<int>(snapshots_ & 0x7fffffff); }  // counts the snapshots applied, so that it changes even when the host's revision does not (a project just opened)

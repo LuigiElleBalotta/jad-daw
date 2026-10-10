@@ -12,6 +12,7 @@ struct MidiFileTrack {
     std::string name;
     int channel = 0;              // 0..15
     std::vector<MidiNote> notes;  // sorted by start; note.start is absolute
+    std::vector<MidiControl> controls;  // control changes, channel aftertouch and pitch bends; tick is absolute
 };
 
 struct MidiFileData {

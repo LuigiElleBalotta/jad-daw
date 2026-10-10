@@ -71,3 +71,37 @@ TEST_CASE("midi file: a note-on left open ends with the track and one chunk with
     REQUIRE(d.tracks[1].channel == 1);
     REQUIRE(d.tracks[0].notes[0].length == 960);
 }
+
+TEST_CASE("midi file: controllers, aftertouch and pitch bend are written and read", "[midi][file][controls]") {
+    MidiFileData d;
+    MidiFileTrack t;
+    t.name = "Keys";
+    t.notes = {MidiNote{0, 960, 60, 100, false}};
+    t.controls = {MidiControl{0, 0xB0, 64, 127}, MidiControl{480, 0xE0, 0x00, 0x60}, MidiControl{480, 0xD0, 50, 0}, MidiControl{960, 0xB0, 64, 0}};
+    d.tracks.push_back(t);
+    const MidiFileData back = parseMidiFile(writeMidiFile(d));
+    REQUIRE(back.tracks.size() == 1);
+    REQUIRE(back.tracks[0].notes.size() == 1);
+    REQUIRE(back.tracks[0].controls.size() == 4);
+    REQUIRE(back.tracks[0].controls[0] == MidiControl{0, 0xB0, 64, 127});
+    bool bend = false, touch = false;
+    for (const MidiControl& c : back.tracks[0].controls) {
+        if (c.status == 0xE0 && c.data2 == 0x60) bend = true;
+        if (c.status == 0xD0 && c.data1 == 50) touch = true;
+    }
+    REQUIRE(bend);
+    REQUIRE(touch);
+    REQUIRE(back.tracks[0].controls.back() == MidiControl{960, 0xB0, 64, 0});
+}
+
+TEST_CASE("midi file: all-notes-off and the other channel mode messages are not controllers", "[midi][file][controls]") {
+    const std::vector<std::uint8_t> f = {'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0x03, 0xC0, 'M', 'T', 'r', 'k', 0, 0, 0, 17,
+                                         0x00, 0x90, 60, 100,
+                                         0x00, 0xB0, 123, 0,   // all notes off: not kept
+                                         0x00, 0xB0, 1, 64,    // modulation: kept
+                                         0x83, 0x60, 0x80, 60, 0};
+    const MidiFileData d = parseMidiFile(f);
+    REQUIRE(d.tracks.size() == 1);
+    REQUIRE(d.tracks[0].controls.size() == 1);
+    REQUIRE(d.tracks[0].controls[0].data1 == 1);
+}

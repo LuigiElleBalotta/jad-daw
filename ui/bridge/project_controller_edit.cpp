@@ -1385,6 +1385,7 @@ void ProjectController::finishMidiRecording(std::int64_t startFrame, std::int64_
     struct Open { std::int64_t tick; int velocity; };
     std::map<int, Open> held;
     nlohmann::json notes = nlohmann::json::array();
+    nlohmann::json controls = nlohmann::json::array();
     std::int64_t lastTick = startTick;
     auto close = [&](int note, std::int64_t offTick) {
         const auto it = held.find(note);
@@ -1404,11 +1405,14 @@ void ProjectController::finishMidiRecording(std::int64_t startFrame, std::int64_
             held[e.event.data1] = {tick, e.event.data2};
         } else if (off) {
             close(e.event.data1, tick);
+        } else if ((type == 0xB0 && e.event.data1 < 120) || type == 0xD0 || type == 0xE0) {  // the pedal, the wheels and aftertouch of the take
+            controls.push_back({{"tick", tick - startTick}, {"status", type}, {"data1", e.event.data1 & 0x7f}, {"data2", type == 0xD0 ? 0 : (e.event.data2 & 0x7f)}});
+            lastTick = std::max(lastTick, tick);
         }
     }
     const std::int64_t endTick = std::max(toTicks(endFrame), lastTick);
     for (const auto& [note, o] : std::map<int, Open>(held)) close(note, endTick);  // notes still held when the take stops
-    if (notes.empty()) return;
+    if (notes.empty() && controls.empty()) return;
     const std::int64_t length = std::max<std::int64_t>(barTicks, ((endTick - startTick + barTicks - 1) / barTicks) * barTicks);
     nlohmann::json commands = nlohmann::json::array();
     const std::string nullId = "00000000-0000-0000-0000-000000000000";
@@ -1416,7 +1420,7 @@ void ProjectController::finishMidiRecording(std::int64_t startFrame, std::int64_
         commands.push_back({{"type", "add_region"}, {"trackId", id.toStdString()}, {"index", -1},
                             {"region", {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"},
                                         {"start", startTick}, {"length", length}, {"mediaId", nullId}, {"sourceOffsetFrames", 0},
-                                        {"gainDb", 0}, {"notes", notes}}}});
+                                        {"gainDb", 0}, {"notes", notes}, {"controls", controls}}}});
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
     emit notice(QString("Recorded %1 note%2").arg(static_cast<int>(notes.size())).arg(notes.size() == 1 ? "" : "s"));
 }
@@ -2050,15 +2054,17 @@ void ProjectController::importMidiFile(const QUrl& file) {
     nlohmann::json commands = nlohmann::json::array();
     for (std::size_t i = 0; i < data.tracks.size(); ++i) {
         const lpc::MidiFileTrack& t = data.tracks[i];
-        if (t.notes.empty()) continue;
+        if (t.notes.empty() && t.controls.empty()) continue;
         lpc::Ticks end = 0;
         for (const lpc::MidiNote& n : t.notes) end = std::max(end, n.start + n.length);
+        for (const lpc::MidiControl& c : t.controls) end = std::max(end, c.tick);
         lpc::Region region;
         region.id = lpc::Uuid::random();
         region.timeBase = lpc::TimeBase::Musical;
         region.start = base;
         region.length = (end + bar - 1) / bar * bar;
         region.notes = t.notes;
+        region.controls = t.controls;
         nlohmann::json regionJson = region;
         std::string name = t.name.empty() ? (data.tracks.size() == 1 ? baseName.toStdString() : baseName.toStdString() + " " + std::to_string(i + 1)) : t.name;
         nlohmann::json track = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()},
@@ -2103,8 +2109,13 @@ void ProjectController::exportMidiFile(const QUrl& file) {
                 m.start += r.start;
                 out.notes.push_back(m);
             }
+            for (const lpc::MidiControl& c : r.controls) {
+                lpc::MidiControl m = c;
+                m.tick += r.start;
+                out.controls.push_back(m);
+            }
         }
-        if (!out.notes.empty()) data.tracks.push_back(std::move(out));
+        if (!out.notes.empty() || !out.controls.empty()) data.tracks.push_back(std::move(out));
     }
     if (data.tracks.empty()) {
         setError("There are no MIDI notes to export");
@@ -2178,6 +2189,78 @@ void ProjectController::setProjectNotes(const QString& text) {
         return;
     }
     f.write(text.toUtf8());
+}
+
+namespace {
+// The lanes of a controller editor: "cc<n>" (control change n), "bend" (pitch bend) and "touch" (channel aftertouch).
+struct ControlLane {
+    std::uint8_t status = 0xB0, controller = 0;
+    bool valid = false;
+};
+ControlLane parseLane(const QString& lane) {
+    ControlLane out;
+    if (lane == QLatin1String("bend")) return {0xE0, 0, true};
+    if (lane == QLatin1String("touch")) return {0xD0, 0, true};
+    if (lane.startsWith(QLatin1String("cc"))) {
+        bool ok = false;
+        const int n = lane.mid(2).toInt(&ok);
+        if (ok && n >= 0 && n < 120) return {0xB0, static_cast<std::uint8_t>(n), true};
+    }
+    return out;
+}
+}  // namespace
+
+QVariantList ProjectController::regionControls(const QString& regionId, const QString& lane) const {
+    QVariantList out;
+    const RegionRow* row = regions_.find(regionId);
+    const ControlLane l = parseLane(lane);
+    if (!row || row->audio || !l.valid) return out;
+    const nlohmann::json j = nlohmann::json::parse(row->json, nullptr, false);
+    if (j.is_discarded() || !j.contains("controls") || !j["controls"].is_array()) return out;
+    for (const auto& c : j["controls"]) {
+        const int status = c.value("status", 0), d1 = c.value("data1", 0), d2 = c.value("data2", 0);
+        if (status != l.status || (status == 0xB0 && d1 != l.controller)) continue;
+        // control change: the value 0..127; aftertouch: 0..127; pitch bend: -8192..8191 around the centre
+        const int value = status == 0xB0 ? d2 : (status == 0xD0 ? d1 : (d1 | (d2 << 7)) - 8192);
+        out.append(QVariantMap{{"beats", c.value("tick", 0) / static_cast<double>(lpc::kPPQ)}, {"value", value}});
+    }
+    return out;
+}
+
+void ProjectController::setRegionControls(const QString& regionId, const QString& lane, const QVariantList& points) {
+    if (!host_) return;
+    const RegionRow* row = regions_.find(regionId);
+    const ControlLane l = parseLane(lane);
+    if (!row || row->audio || !l.valid) return;
+    nlohmann::json region = nlohmann::json::parse(row->json, nullptr, false);
+    if (region.is_discarded()) return;
+    const std::int64_t length = region.value("length", std::int64_t{0});
+    std::vector<nlohmann::json> list;
+    if (region.contains("controls") && region["controls"].is_array())
+        for (const auto& c : region["controls"]) {  // the other lanes stay as they are
+            const int status = c.value("status", 0), d1 = c.value("data1", 0);
+            if (status == l.status && (status != 0xB0 || d1 == l.controller)) continue;
+            list.push_back(c);
+        }
+    for (const QVariant& v : points) {
+        const QVariantMap m = v.toMap();
+        const double beats = m.value("beats").toDouble();
+        const double value = m.value("value").toDouble();
+        if (!std::isfinite(beats) || !std::isfinite(value)) continue;
+        const std::int64_t tick = std::clamp<std::int64_t>(static_cast<std::int64_t>(std::llround(beats * lpc::kPPQ)), 0, length);
+        if (l.status == 0xE0) {
+            const int bend = std::clamp(static_cast<int>(std::lround(value)), -8192, 8191) + 8192;
+            list.push_back({{"tick", tick}, {"status", 0xE0}, {"data1", bend & 0x7f}, {"data2", bend >> 7}});
+        } else if (l.status == 0xD0) {
+            list.push_back({{"tick", tick}, {"status", 0xD0}, {"data1", std::clamp(static_cast<int>(std::lround(value)), 0, 127)}, {"data2", 0}});
+        } else {
+            list.push_back({{"tick", tick}, {"status", 0xB0}, {"data1", static_cast<int>(l.controller)}, {"data2", std::clamp(static_cast<int>(std::lround(value)), 0, 127)}});
+        }
+    }
+    std::stable_sort(list.begin(), list.end(), [](const nlohmann::json& a, const nlohmann::json& b) { return a.value("tick", 0) < b.value("tick", 0); });
+    if (list.empty()) region.erase("controls");
+    else region["controls"] = list;
+    sendCommand({{"type", "replace_region"}, {"region", region}});
 }
 
 }  // namespace jad

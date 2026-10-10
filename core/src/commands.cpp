@@ -605,6 +605,11 @@ public:
                 if (n.start + n.length > length_) n.length = length_ - n.start;  // crossing the new right edge
                 r.notes.push_back(n);
             }
+            r.controls.clear();
+            for (MidiControl c : old.controls) {
+                c.tick -= moved;
+                if (c.tick >= 0 && c.tick <= length_) r.controls.push_back(c);
+            }
         }
         if (auto e = checkRegion(p, t->kind, r)) return fail(*e);
         t->regions[idx] = std::move(r);
@@ -649,6 +654,16 @@ public:
                 } else {
                     n.start -= cut;
                     right.notes.push_back(n);
+                }
+            }
+            left.controls.clear();
+            right.controls.clear();
+            for (MidiControl c : old.controls) {
+                if (c.tick < cut) {
+                    left.controls.push_back(c);
+                } else {
+                    c.tick -= cut;
+                    right.controls.push_back(c);
                 }
             }
         }
@@ -711,6 +726,10 @@ public:
                 for (MidiNote n : r.notes) {
                     n.start += r.start - first.start;
                     joined.notes.push_back(n);
+                }
+                for (MidiControl c : r.controls) {
+                    c.tick += r.start - first.start;
+                    joined.controls.push_back(c);
                 }
             }
         }

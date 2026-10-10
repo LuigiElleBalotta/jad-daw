@@ -26,6 +26,8 @@ void from_json(const nlohmann::json& j, Track& t);
 
 void to_json(nlohmann::json& j, const MidiNote& n);
 void from_json(const nlohmann::json& j, MidiNote& n);  // note and velocity must be in 0..255 before the model checks them
+void to_json(nlohmann::json& j, const MidiControl& c);
+void from_json(const nlohmann::json& j, MidiControl& c);
 void to_json(nlohmann::json& j, const Region& r);
 void from_json(const nlohmann::json& j, Region& r);
 void to_json(nlohmann::json& j, const ProcessorRef& r);

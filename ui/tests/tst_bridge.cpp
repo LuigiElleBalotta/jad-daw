@@ -1428,6 +1428,30 @@ private slots:
         QCOMPARE(c.controlBarVisible(), !bar);
         c.setControlBarVisible(bar);
     }
+    void controllerLanesOfAMidiRegionAreEditedPerLaneInOneStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3 && c.regions()->rowCount() >= 2);
+        QString midiRegion;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const auto idx = c.regions()->index(i);
+            if (!c.regions()->data(idx, c.regions()->roleNames().key("isAudio")).toBool()) midiRegion = c.regions()->data(idx, c.regions()->roleNames().key("regionId")).toString();
+        }
+        QVERIFY(!midiRegion.isEmpty());
+        QVERIFY(c.regionControls(midiRegion, "cc64").isEmpty());
+        c.setRegionControls(midiRegion, "cc64", {QVariantMap{{"beats", 0.0}, {"value", 127}}, QVariantMap{{"beats", 1.0}, {"value", 0}}});
+        QTRY_COMPARE(c.regionControls(midiRegion, "cc64").size(), 2);
+        c.setRegionControls(midiRegion, "bend", {QVariantMap{{"beats", 0.5}, {"value", -4096}}});
+        QTRY_COMPARE(c.regionControls(midiRegion, "bend").size(), 1);
+        QCOMPARE(c.regionControls(midiRegion, "bend").first().toMap().value("value").toInt(), -4096);
+        QCOMPARE(c.regionControls(midiRegion, "cc64").size(), 2);          // the other lane stays
+        c.setRegionControls(midiRegion, "cc64", {});
+        QTRY_COMPARE(c.regionControls(midiRegion, "cc64").size(), 0);
+        c.undo();
+        QTRY_COMPARE(c.regionControls(midiRegion, "cc64").size(), 2);
+        QVERIFY(c.regionControls(midiRegion, "nonsense").isEmpty());
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

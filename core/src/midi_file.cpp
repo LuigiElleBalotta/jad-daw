@@ -97,6 +97,7 @@ MidiFileData parseMidiFile(const std::vector<std::uint8_t>& bytes) {
         };
         std::map<std::pair<int, int>, Open> open;  // (channel, note) -> the note-on
         std::map<int, std::vector<MidiNote>> byChannel;
+        std::map<int, std::vector<MidiControl>> controlsByChannel;
         const auto toTicks = [&](std::uint64_t t) { return static_cast<Ticks>(std::llround(static_cast<double>(t) * kPPQ / division)); };
         const auto close = [&](int ch, int note, std::uint64_t at) {
             const auto it = open.find({ch, note});
@@ -150,16 +151,20 @@ MidiFileData parseMidiFile(const std::vector<std::uint8_t>& bytes) {
                 open[{ch, data1}] = Open{toTicks(tick), static_cast<std::uint8_t>(data2)};
             } else if (kind == 0x8 || kind == 0x9) {
                 close(ch, data1, tick);
+            } else if ((kind == 0xb && data1 < 120) || kind == 0xd || kind == 0xe) {  // not the channel mode messages (120 and up)
+                controlsByChannel[ch].push_back(MidiControl{toTicks(tick), static_cast<std::uint8_t>(kind << 4), static_cast<std::uint8_t>(data1), static_cast<std::uint8_t>(data2)});
             }
         }
         const auto stillOpen = open;
         for (const auto& entry : stillOpen) close(entry.first.first, entry.first.second, tick);  // notes left open end with the track
+        for (const auto& entry : controlsByChannel) byChannel[entry.first];  // a channel with only controllers still makes a track
         for (auto& [ch, notes] : byChannel) {
             std::stable_sort(notes.begin(), notes.end(), [](const MidiNote& a, const MidiNote& b) { return a.start < b.start; });
             MidiFileTrack t;
             t.name = trackName;
             t.channel = ch;
             t.notes = std::move(notes);
+            t.controls = std::move(controlsByChannel[ch]);
             out.tracks.push_back(std::move(t));
         }
     }
@@ -191,15 +196,17 @@ std::vector<std::uint8_t> writeMidiFile(const MidiFileData& data) {
     for (const MidiFileTrack& track : data.tracks) {
         struct Ev {
             Ticks at;
-            int order;
+            int order;  // 0: note-off, 1: controller, 2: note-on at the same tick
             std::uint8_t note, velocity;
             bool on;
+            std::uint8_t status = 0;  // != 0: a controller event (status, note = data1, velocity = data2)
         };
         std::vector<Ev> events;
         for (const MidiNote& n : track.notes) {
-            events.push_back({n.start, 1, n.note, n.velocity, true});
+            events.push_back({n.start, 2, n.note, n.velocity, true});
             events.push_back({n.start + std::max<Ticks>(1, n.length), 0, n.note, 0, false});  // an off sorts before an on at the same tick
         }
+        for (const MidiControl& c : track.controls) events.push_back({c.tick, 1, c.data1, c.data2, false, c.status});
         std::stable_sort(events.begin(), events.end(), [](const Ev& a, const Ev& b) { return a.at != b.at ? a.at < b.at : a.order < b.order; });
         std::vector<std::uint8_t> body;
         putMeta(body, 0, 0x03, std::vector<std::uint8_t>(track.name.begin(), track.name.end()));
@@ -208,6 +215,12 @@ std::vector<std::uint8_t> writeMidiFile(const MidiFileData& data) {
         for (const Ev& e : events) {
             putVar(body, static_cast<std::uint32_t>(e.at - last));
             last = e.at;
+            if (e.status) {
+                body.push_back(static_cast<std::uint8_t>((e.status & 0xf0) | ch));
+                body.push_back(e.note & 0x7f);
+                if ((e.status & 0xf0) != 0xd0) body.push_back(e.velocity & 0x7f);
+                continue;
+            }
             body.push_back(static_cast<std::uint8_t>((e.on ? 0x90 : 0x80) | ch));
             body.push_back(e.note & 0x7f);
             body.push_back(e.on ? static_cast<std::uint8_t>(std::max<int>(1, e.velocity) & 0x7f) : 0);

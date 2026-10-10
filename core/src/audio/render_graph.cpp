@@ -150,6 +150,9 @@ void RenderGraph::renderPluginInstrument(TrackNode& t, const TrackConfig& cfg, s
                 if (s.onFrame >= blockStart && s.onFrame < blockEnd) push(static_cast<int>(s.onFrame - blockStart), 0x90, s.note, s.velocity);
                 if (s.offFrame >= blockStart && s.offFrame < blockEnd) push(static_cast<int>(s.offFrame - blockStart), 0x80, s.note, 0);
             }
+        for (const RegionPlayback& reg : cfg.regions)
+            for (const ControlSpan& c : reg.controls)
+                if (c.frame >= blockStart && c.frame < blockEnd) push(static_cast<int>(c.frame - blockStart), c.status, c.data1, c.data2);
         for (int i = fixed + 1; i < count; ++i) {  // stable insertion sort by offset: the few region events behind the ones at offset 0
             const MidiEvent key = events[i];
             int j = i - 1;
@@ -350,6 +353,14 @@ bool RenderGraph::liveNote(const Uuid& track, bool on, std::uint8_t note, std::u
     }
     if (on) n->synth.noteOn(note, velocity);
     else n->synth.noteOff(note);
+    return true;
+}
+
+bool RenderGraph::liveControl(const Uuid& track, std::uint8_t status, std::uint8_t data1, std::uint8_t data2) noexcept {
+    TrackNode* n = find(track);
+    if (!n || n->kind != TrackKind::Instrument || !n->config || !n->config->instrument) return false;
+    if (n->liveCount < 64) n->live[n->liveCount++] = MidiEvent{0, status, data1, data2};
+    n->tailFrames = n->tailMax;
     return true;
 }
 

@@ -221,6 +221,9 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
                 rp.notes.push_back(NoteSpan{on, std::max(on, off), n.note, n.velocity});
             }
             std::stable_sort(rp.notes.begin(), rp.notes.end(), [](const NoteSpan& a, const NoteSpan& b) { return a.onFrame < b.onFrame; });
+            for (const MidiControl& c : r.controls)
+                rp.controls.push_back(ControlSpan{toFrames(p.tempoMap.ticksToSamples(r.start + c.tick, p.sampleRate)), c.status, c.data1, c.data2});
+            std::stable_sort(rp.controls.begin(), rp.controls.end(), [](const ControlSpan& a, const ControlSpan& b) { return a.frame < b.frame; });
         }
         cfg->regions.push_back(std::move(rp));
     }

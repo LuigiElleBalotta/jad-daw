@@ -54,6 +54,11 @@ private:
     std::size_t pos_ = 0;
 };
 
+struct ControlSpan {
+    std::int64_t frame = 0;
+    std::uint8_t status = 0xB0, data1 = 0, data2 = 0;
+};
+
 struct NoteSpan {
     std::int64_t onFrame = 0;
     std::int64_t offFrame = 0;
@@ -70,6 +75,7 @@ struct RegionPlayback {
     float gain = 1.0f;
     std::int64_t fadeInFrames = 0, fadeOutFrames = 0;  // ramps (a quarter of a sine) at the start and the end
     std::vector<NoteSpan> notes;  // MIDI regions, sorted by onFrame
+    std::vector<ControlSpan> controls;  // MIDI regions, sorted by frame
 };
 
 struct SendPlayback {
@@ -142,6 +148,8 @@ public:
     void render(std::int64_t blockStart, int frames, float* outL, float* outR, bool withRegions = true) noexcept;
     // A note played live on an instrument track (the synth keeps it until the note-off); false when there is no such track.
     bool liveNote(const Uuid& track, bool on, std::uint8_t note, std::uint8_t velocity) noexcept;
+    // A controller, aftertouch or pitch bend message played live: a plug-in instrument gets it, the built-in synth ignores it.
+    bool liveControl(const Uuid& track, std::uint8_t status, std::uint8_t data1, std::uint8_t data2) noexcept;
     // true while something needs the graph with the transport stopped: a sounding voice or a monitored input
     bool liveNeeded() const noexcept;
     void allNotesOff() noexcept;

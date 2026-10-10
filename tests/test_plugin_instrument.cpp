@@ -161,3 +161,63 @@ TEST_CASE("plug-in instruments: the plug-in latency is part of the track's delay
     const PdcPlan plan = computePdc(f.project, &host);
     REQUIRE(plan.totalLatency == 120);
 }
+
+TEST_CASE("regions: controller events are validated and follow split, resize and join", "[controls][commands]") {
+    Fixture f;
+    Region* region = &f.project.findTrack(f.track.id)->regions[0];
+    Region withControls = *region;
+    withControls.controls = {MidiControl{0, 0xB0, 64, 127}, MidiControl{kPPQ, 0xE0, 0, 0x40}, MidiControl{3 * kPPQ, 0xB0, 64, 0}};
+    REQUIRE(makeReplaceRegion(withControls)->apply(f.project).ok());
+
+    Region bad = withControls;
+    bad.controls.push_back(MidiControl{kPPQ, 0xB0, 1, 5});         // out of order
+    REQUIRE_FALSE(makeReplaceRegion(bad)->apply(f.project).ok());
+    bad = withControls;
+    bad.controls = {MidiControl{0, 0x90, 60, 100}};                // a note is not a controller event
+    REQUIRE_FALSE(makeReplaceRegion(bad)->apply(f.project).ok());
+    bad = withControls;
+    bad.controls = {MidiControl{0, 0xB0, 200, 1}};                 // data above 127
+    REQUIRE_FALSE(makeReplaceRegion(bad)->apply(f.project).ok());
+    bad = withControls;
+    bad.controls = {MidiControl{10 * kPPQ, 0xB0, 1, 1}};           // outside the region
+    REQUIRE_FALSE(makeReplaceRegion(bad)->apply(f.project).ok());
+
+    std::mt19937_64 rng(5);
+    const Uuid right = Uuid::random(rng);
+    auto split = makeSplitRegion(withControls.id, 2 * kPPQ, right)->apply(f.project);
+    REQUIRE(split.ok());
+    const auto& regions = f.project.findTrack(f.track.id)->regions;
+    REQUIRE(regions.size() == 2);
+    REQUIRE(regions[0].controls.size() == 2);                      // before the cut
+    REQUIRE(regions[1].controls.size() == 1);
+    REQUIRE(regions[1].controls[0].tick == kPPQ);                  // 3 quarters - 2 quarters
+    auto joined = makeJoinRegions({withControls.id, right})->apply(f.project);
+    REQUIRE(joined.ok());
+    REQUIRE(f.project.findTrack(f.track.id)->regions.size() == 1);
+    REQUIRE(f.project.findTrack(f.track.id)->regions[0].controls == withControls.controls);
+    REQUIRE(joined.inverse->apply(f.project).ok());
+    REQUIRE(f.project.findTrack(f.track.id)->regions.size() == 2);
+}
+
+TEST_CASE("regions: controller events reach a plug-in instrument at their frames", "[controls][plugin][instrument][graph]") {
+    Fixture f;
+    Region withControls = f.project.findTrack(f.track.id)->regions[0];
+    withControls.controls = {MidiControl{kPPQ / 2, 0xB0, 64, 127}, MidiControl{kPPQ, 0xE0, 0, 0x50}};
+    REQUIRE(makeReplaceRegion(withControls)->apply(f.project).ok());
+    FakePluginHost host;
+    host.instruments[kInst] = 0;
+    RenderGraph graph(48000.0);
+    for (const AudioMsg& m : initialMessages(f.project, f.media, &host)) graph.apply(m);
+    std::vector<float> l(256), r(256);
+    for (std::int64_t at = 0; at < Fixture::kQuarter + 512; at += 256) graph.render(at, 256, l.data(), r.data());
+    bool pedal = false, bend = false;
+    for (const auto& s : host.lastInstrument->seen) {
+        if (s.event.status == 0xb0 && s.event.data1 == 64 && s.event.data2 == 127 && s.frame == Fixture::kQuarter / 2) pedal = true;
+        if (s.event.status == 0xe0 && s.event.data2 == 0x50 && s.frame == Fixture::kQuarter) bend = true;
+    }
+    REQUIRE(pedal);
+    REQUIRE(bend);
+    REQUIRE(graph.liveControl(f.track.id, 0xb0, 1, 99));           // live controller messages are queued for the next block
+    graph.render(0, 256, l.data(), r.data(), false);
+    REQUIRE(host.lastInstrument->seen.back().event.data1 == 1);
+}

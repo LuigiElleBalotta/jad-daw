@@ -97,6 +97,32 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    // Changes that are not saved: anything that would close or replace the project asks first (guard), as does closing the window
+    property var pendingAction: null
+    property bool forceClose: false
+    function guard(action) {
+        if (controller.hasProject && controller.dirty) { pendingAction = action; unsavedDialog.projectName = controller.projectName; unsavedDialog.open() }
+        else action()
+    }
+    UnsavedDialog {
+        id: unsavedDialog
+        onSaveChosen: { if (controller.saveProject()) { const a = root.pendingAction; root.pendingAction = null; if (a) a() } }
+        onDiscardChosen: { controller.discardAutosave(); const a = root.pendingAction; root.pendingAction = null; if (a) a() }
+    }
+    ConfirmDialog {
+        id: autosaveDialog
+        heading: qsTr("Restore the autosave?")
+        message: qsTr("A newer autosave of this project was found: the app stopped before the changes were saved. Restore it? If you cancel it is kept until the next save.")
+        acceptLabel: qsTr("Restore")
+        onConfirmed: controller.restoreAutosave()
+    }
+    Connections { target: controller; function onAutosaveFound() { autosaveDialog.open() } }
+    onClosing: (close) => {
+        if (!forceClose && controller.hasProject && controller.dirty) {
+            close.accepted = false
+            guard(() => { forceClose = true; Qt.quit() })
+        }
+    }
     AutomationParamDialog { id: automationParamDialog; project: controller }
     SearchPluginDialog { id: searchPluginDialog; project: controller }
     MidiTransformDialog { id: midiTransform; project: controller }
@@ -191,8 +217,8 @@ ApplicationWindow {
     // what each real action does; every other id in the table is a stub (see actions/actions.json)
     readonly property var handlers: ({
         "help.about": () => aboutDialog.open(),
-        "file.new": () => newDialog.open(),
-        "file.open": () => openDialog.open(),
+        "file.new": () => root.guard(() => newDialog.open()),
+        "file.open": () => root.guard(() => openDialog.open()),
         "file.save": () => controller.saveProject(),
         "file.saveAs": () => { saveAsDialog.openCopy = true; saveAsDialog.open() },
         "file.saveACopyAs": () => { saveAsDialog.openCopy = false; saveAsDialog.open() },
@@ -317,9 +343,9 @@ ApplicationWindow {
         "edit.undoHistory": () => undoHistoryDialog.open(),
         "edit.deleteUndoHistory": () => confirm.ask(qsTr("Delete Undo History"), qsTr("The steps can no longer be undone."), qsTr("Delete"), () => controller.clearUndoHistory()),
         "help.keyCommands": () => { keyCommands.visible = true; keyCommands.raise() },
-        "file.openRecent": () => recentDialog.open(),
-        "file.close": () => controller.closeProject(),
-        "file.closeProject": () => controller.closeProject(),
+        "file.openRecent": () => root.guard(() => recentDialog.open()),
+        "file.close": () => root.guard(() => controller.closeProject()),
+        "file.closeProject": () => root.guard(() => controller.closeProject()),
         "file.revert": () => confirm.ask(qsTr("Revert to Saved"), qsTr("Every change since the last save is lost."), qsTr("Revert"), () => controller.revertToSaved()),
         "file.projectSettings": () => projectSettings.open(),
         "track.createTrackStack": () => controller.createSummingStack(),

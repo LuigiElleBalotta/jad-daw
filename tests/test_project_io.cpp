@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <chrono>
 #include <fstream>
+#include <thread>
 #include <sstream>
 #include "lpc/model_json.h"
 #include "lpc/project_io.h"
@@ -132,4 +134,34 @@ TEST_CASE("io: migration chain upgrades old documents step by step", "[io]") {
     REQUIRE_THROWS(migrateToCurrent({{"old", 1}}, chain, 3));                      // no schemaVersion
     REQUIRE_THROWS(migrateToCurrent({{"schemaVersion", 0}}, chain, 3));            // below 1
     REQUIRE_THROWS(migrateToCurrent({{"schemaVersion", 1}}, {chain[0]}, 3));      // chain too short
+}
+
+TEST_CASE("io: an autosave is newer than the saved file until the next save, and can be restored", "[io][autosave]") {
+    test::TempDir dir;
+    Project saved = smallProject();
+    saveProject(saved, dir.path);
+    REQUIRE_FALSE(hasNewerAutosave(dir.path));
+    Project changed = saved;
+    changed.name = "Changed after the save";
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));   // the file times must differ
+    saveAutosave(changed, dir.path);
+    REQUIRE(fs::exists(dir.path / "project.autosave.json"));
+    REQUIRE(hasNewerAutosave(dir.path));
+    REQUIRE(loadProject(dir.path).name == "Small");                // the saved file is untouched
+    restoreAutosave(dir.path);
+    REQUIRE_FALSE(fs::exists(dir.path / "project.autosave.json"));
+    REQUIRE(loadProject(dir.path).name == "Changed after the save");
+    REQUIRE(fs::exists(dir.path / "project.json.bak"));            // what was saved is kept
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    saveAutosave(saved, dir.path);
+    saveProject(changed, dir.path);                                // a normal save removes the autosave
+    REQUIRE_FALSE(fs::exists(dir.path / "project.autosave.json"));
+    REQUIRE_FALSE(hasNewerAutosave(dir.path));
+
+    std::ofstream(dir.path / "project.autosave.json") << "{ not json";   // a damaged autosave never replaces a good project
+    REQUIRE_THROWS(restoreAutosave(dir.path));
+    REQUIRE(loadProject(dir.path).name == "Changed after the save");
+    discardAutosave(dir.path);
+    REQUIRE_FALSE(fs::exists(dir.path / "project.autosave.json"));
 }

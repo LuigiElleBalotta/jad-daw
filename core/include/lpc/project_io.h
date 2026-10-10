@@ -20,4 +20,12 @@ nlohmann::json migrateToCurrent(nlohmann::json doc, const std::vector<Migration>
 void saveProject(const Project& project, const std::filesystem::path& dir);
 Project loadProject(const std::filesystem::path& dir);
 
+// Autosave: a copy of the project in `project.autosave.json` next to project.json, written between saves so that a crash loses little.
+// A normal save removes it. hasNewerAutosave is true when it exists and is newer than project.json (the app stopped without saving).
+void saveAutosave(const Project& project, const std::filesystem::path& dir);
+bool hasNewerAutosave(const std::filesystem::path& dir);
+void discardAutosave(const std::filesystem::path& dir);
+// Puts the autosave in place of project.json (the saved file is kept as project.json.bak) and removes the autosave. Throws on a damaged autosave.
+void restoreAutosave(const std::filesystem::path& dir);
+
 }  // namespace lpc

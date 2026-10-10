@@ -31,6 +31,7 @@
 #include "lpc/offline_render.h"
 #include "lpc/audio/effects.h"
 #include "lpc/aiff.h"
+#include "lpc/project_io.h"
 #include "lpc/plugin_catalogue.h"
 #include "lpc/flac.h"
 #include "lpc/midi_file.h"
@@ -3028,6 +3029,32 @@ QVariantList ProjectController::automationChoices(const QString& trackId) const 
     }
 #endif
     return out;
+}
+
+void ProjectController::autosaveNow() {
+    if (!host_ || dir_.empty() || !dirty() || recording_ || bouncing_->load()) return;
+    try {
+        const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+        lpc::saveAutosave(project, dir_);
+    } catch (const std::exception& e) {
+        qWarning().noquote() << "autosave failed:" << e.what();  // not worth a message: the next try is soon
+    }
+}
+
+bool ProjectController::restoreAutosave() {
+    if (dir_.empty()) return false;
+    const std::filesystem::path dir = dir_;
+    try {
+        lpc::restoreAutosave(dir);
+    } catch (const std::exception& e) {
+        setError(QString("Cannot restore the autosave: ") + QString::fromUtf8(e.what()));
+        return false;
+    }
+    return openProject(QUrl::fromLocalFile(QString::fromStdWString(dir.wstring())));
+}
+
+void ProjectController::discardAutosave() {
+    if (!dir_.empty()) lpc::discardAutosave(dir_);
 }
 
 }  // namespace jad

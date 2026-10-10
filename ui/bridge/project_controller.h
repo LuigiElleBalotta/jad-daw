@@ -94,6 +94,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool audioEnabled READ audioEnabled WRITE setAudioEnabled NOTIFY audioEnabledChanged)
     Q_PROPERTY(double masterPeak READ masterPeak NOTIFY peakChanged)
+    Q_PROPERTY(bool dirty READ dirty NOTIFY projectChanged)  // the project has changes that are not saved
     Q_PROPERTY(bool quickHelpVisible READ quickHelpVisible WRITE setQuickHelpVisible NOTIFY barsChanged)  // View > Quick Help
     Q_PROPERTY(bool controlBarVisible READ controlBarVisible WRITE setControlBarVisible NOTIFY barsChanged)  // View > Control Bar
     Q_PROPERTY(bool toolbarVisible READ toolbarVisible WRITE setToolbarVisible NOTIFY barsChanged)          // View > Toolbar
@@ -353,6 +354,13 @@ public:
     Q_INVOKABLE void setBarItem(const QString& key, bool shown);
     Q_INVOKABLE void resetBarItems();
     bool quickHelpVisible() const { return quickHelp_; }
+    bool dirty() const;
+    // Autosave: every two minutes a project with unsaved changes is copied to project.autosave.json (not while recording or bouncing). A project that is opened
+    // with a newer autosave beside it (the app stopped without saving) says so with autosaveFound; restoreAutosave puts it in place and opens the project again.
+    Q_INVOKABLE void autosaveNow();
+    Q_INVOKABLE bool restoreAutosave();
+    Q_INVOKABLE void discardAutosave();   // the changes are not wanted (Don't Save): the autosave goes too
+    void setAutosaveIntervalForTest(int ms) { autosaveTimer_.setInterval(ms); }
     void setQuickHelpVisible(bool on) { if (on == quickHelp_) return; quickHelp_ = on; QSettings().setValue("panels/quickHelp", on); ++barItemsRevision_; emit barsChanged(); }
     bool controlBarVisible() const { return controlBarVisible_; }
     void setControlBarVisible(bool on);
@@ -722,6 +730,7 @@ signals:
     void toolChanged();
     void snapChanged();
     void dragModeChanged();
+    void autosaveFound();  // the project that was just opened has an autosave newer than its saved file
     void followPlayheadChanged();
     void trackHeightChanged();
     // The loader refused a folder; the message is the loader's. The previous project stays open.
@@ -858,6 +867,8 @@ private:
     bool controlBarVisible_ = true, toolbarVisible_ = true, quickHelp_ = false;
     QSet<QString> barItemsOff_;
     QString templatesFolder_;  // empty: the default one
+    std::uint64_t savedRevision_ = 0;  // the revision of the project when it was opened or last saved
+    QTimer autosaveTimer_;
     QStringList replaceIds_;   // regions that the paste in progress replaces
     std::filesystem::path templatesDir() const;
     int barItemsRevision_ = 0;

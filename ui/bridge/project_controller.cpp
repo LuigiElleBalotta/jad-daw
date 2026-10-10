@@ -124,6 +124,9 @@ ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QO
     connect(this, &ProjectController::selectionChanged, this, [this] { applyLiveTarget(); });
     connect(this, &ProjectController::projectChanged, this, &ProjectController::trackFlagsChanged);
     timer_.setInterval(33);
+    autosaveTimer_.setInterval(120000);
+    connect(&autosaveTimer_, &QTimer::timeout, this, &ProjectController::autosaveNow);
+    autosaveTimer_.start();
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackTogglesChanged);
     patches_ = loadPatchCatalogue();
@@ -249,7 +252,9 @@ bool ProjectController::openProject(const QUrl& folder) {
     refresh(host_->revision());
     timer_.start();
     addRecent();
+    savedRevision_ = host_->revision();  // as it is on disk
     emit projectChanged();
+    if (lpc::hasNewerAutosave(dir_)) QMetaObject::invokeMethod(this, [this] { emit autosaveFound(); }, Qt::QueuedConnection);
     return true;
 }
 
@@ -269,6 +274,8 @@ bool ProjectController::newProject(const QUrl& folder) {
     return openProject(folder);
 }
 
+bool ProjectController::dirty() const { return host_ && host_->revision() != savedRevision_; }
+
 bool ProjectController::saveProject() {
     if (!host_) return false;
     commitPluginStates();                                        // what an editor changed is part of the project
@@ -276,6 +283,8 @@ bool ProjectController::saveProject() {
     try {
         const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
         lpc::saveProject(project, dir_);
+        savedRevision_ = host_->revision();
+        emit projectChanged();  // dirty is false now
         return true;
     } catch (const std::exception& e) {
         setError(QString("Cannot save project: ") + QString::fromUtf8(e.what()));

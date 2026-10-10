@@ -1840,6 +1840,42 @@ private slots:
         QCOMPARE(c.automationParam(), QString("send1"));
         c.setAutomationParam("volume");
     }
+    void unsavedChangesAreTrackedAutosavedAndRestored() {
+        TempDir dir;
+        const auto proj = makeDemo(dir);
+        int expected = 0;
+        {
+            jad::ProjectController c(false);
+            QVERIFY(c.openProject(url(proj)));
+            QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+            QVERIFY(!c.dirty());
+            c.autosaveNow();                                         // nothing to keep
+            QVERIFY(!std::filesystem::exists(proj / "project.autosave.json"));
+            c.addTrack("audio");
+            QTRY_VERIFY(c.dirty());
+            c.autosaveNow();
+            QVERIFY(std::filesystem::exists(proj / "project.autosave.json"));
+            QVERIFY(c.saveProject());                                // saving makes it clean and removes the autosave
+            QVERIFY(!c.dirty());
+            QVERIFY(!std::filesystem::exists(proj / "project.autosave.json"));
+            const int saved = c.tracks()->rowCount();
+            c.addTrack("bus");
+            QTRY_COMPARE(c.tracks()->rowCount(), saved + 1);
+            expected = saved + 1;
+            QVERIFY(c.dirty());
+            c.autosaveNow();                                         // then the app "crashes": the change is only in the autosave
+            QVERIFY(std::filesystem::exists(proj / "project.autosave.json"));
+        }
+        jad::ProjectController again(false);
+        QSignalSpy found(&again, &jad::ProjectController::autosaveFound);
+        QVERIFY(again.openProject(url(proj)));
+        QTRY_COMPARE(found.count(), 1);                              // a newer autosave is offered
+        QTRY_COMPARE(again.tracks()->rowCount(), expected - 1);        // the saved file has one track fewer
+        QVERIFY(again.restoreAutosave());
+        QTRY_COMPARE(again.tracks()->rowCount(), expected);
+        QVERIFY(!std::filesystem::exists(proj / "project.autosave.json"));
+        QVERIFY(!again.dirty());
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

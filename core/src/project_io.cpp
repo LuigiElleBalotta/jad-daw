@@ -58,10 +58,10 @@ void saveProject(const Project& project, const fs::path& dir) {
     }
     if (fs::exists(target)) fs::copy_file(target, bak, fs::copy_options::overwrite_existing);
     fs::rename(tmp, target);  // replaces the target atomically on Windows and POSIX
+    discardAutosave(dir);
 }
 
-Project loadProject(const fs::path& dir) {
-    const fs::path file = dir / "project.json";
+static Project loadProjectFile(const fs::path& file) {
     std::ifstream in(file, std::ios::binary);
     if (!in) throw std::runtime_error("cannot open " + pathText(file));
 
@@ -69,14 +69,55 @@ Project loadProject(const fs::path& dir) {
     try {
         doc = nlohmann::json::parse(in);
     } catch (const nlohmann::json::exception& e) {
-        throw std::runtime_error(std::string("project.json is not valid JSON: ") + e.what());
+        throw std::runtime_error(pathText(file.filename()) + " is not valid JSON: " + e.what());
     }
     doc = migrateToCurrent(std::move(doc), builtinMigrations(), kCurrentSchemaVersion);
     try {
         return projectFromJson(doc.at("project"));
     } catch (const std::exception& e) {
-        throw std::runtime_error(std::string("project.json is invalid: ") + e.what());
+        throw std::runtime_error(pathText(file.filename()) + " is invalid: " + e.what());
     }
+}
+
+Project loadProject(const fs::path& dir) { return loadProjectFile(dir / "project.json"); }
+
+void saveAutosave(const Project& project, const fs::path& dir) {
+    fs::create_directories(dir);
+    const fs::path target = dir / "project.autosave.json";
+    const fs::path tmp = dir / "project.autosave.json.tmp";
+    const nlohmann::json doc = {{"schemaVersion", kCurrentSchemaVersion}, {"project", toJson(project)}};
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out) throw std::runtime_error("cannot write " + pathText(tmp));
+        out << doc.dump(1);
+        out.flush();
+        if (!out) throw std::runtime_error("write failed for " + pathText(tmp));
+    }
+    fs::rename(tmp, target);
+}
+
+bool hasNewerAutosave(const fs::path& dir) {
+    std::error_code ec;
+    const fs::path autosave = dir / "project.autosave.json";
+    if (!fs::exists(autosave, ec)) return false;
+    const fs::path saved = dir / "project.json";
+    if (!fs::exists(saved, ec)) return true;
+    return fs::last_write_time(autosave, ec) > fs::last_write_time(saved, ec);
+}
+
+void discardAutosave(const fs::path& dir) {
+    std::error_code ec;
+    fs::remove(dir / "project.autosave.json", ec);
+    fs::remove(dir / "project.autosave.json.tmp", ec);
+}
+
+void restoreAutosave(const fs::path& dir) {
+    const fs::path autosave = dir / "project.autosave.json";
+    (void)loadProjectFile(autosave);  // a damaged autosave must not replace a good project
+    const fs::path target = dir / "project.json";
+    if (fs::exists(target)) fs::copy_file(target, dir / "project.json.bak", fs::copy_options::overwrite_existing);
+    fs::copy_file(autosave, target, fs::copy_options::overwrite_existing);
+    discardAutosave(dir);
 }
 
 }  // namespace lpc

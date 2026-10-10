@@ -27,6 +27,7 @@ Item {
     signal automationParameterRequested(string trackId)
     signal editRequested(string id)
     signal renameRequested(string id)
+    signal addAudioRequested(string trackId, real beats)
 
     focus: true
     activeFocusOnTab: true
@@ -147,17 +148,19 @@ Item {
             property string trackId
             property bool band: false  // a rectangle selection is being dragged
             property bool zooming: false  // the same rectangle with the Zoom tool
+            property bool marqueeing: false  // and with the Marquee tool: a range of time over some tracks
             property real bx0: 0
             property real by0: 0
             property real bx1: 0
             property real by1: 0
             onPressed: (m) => {
                 root.forceActiveFocus()
-                if (!(m.modifiers & Qt.ShiftModifier)) root.project.clearSelection()
+                if (!(m.modifiers & Qt.ShiftModifier) && root.project.tool !== "marquee") root.project.clearSelection()
                 pencil = root.project.tool === "pencil"
                 if (!pencil) {
                     zooming = root.project.tool === "zoom"
-                    band = root.project.tool === "pointer" || zooming
+                    marqueeing = root.project.tool === "marquee"
+                    band = root.project.tool === "pointer" || zooming || marqueeing
                     bx0 = bx1 = m.x
                     by0 = by1 = m.y
                     return
@@ -174,6 +177,16 @@ Item {
             onReleased: (m) => {
                 if (band) {
                     band = false
+                    if (marqueeing) {
+                        marqueeing = false
+                        const row = (y) => Math.floor((y + root.scrollY) / root.rowHeight)
+                        if (Math.abs(bx1 - bx0) > 3) {
+                            root.project.setMarquee(root.snapBeat(root.xToBeats(Math.min(bx0, bx1))), root.snapBeat(root.xToBeats(Math.max(bx0, bx1))), row(Math.min(by0, by1)), row(Math.max(by0, by1)))
+                        } else {
+                            root.project.clearMarquee()
+                        }
+                        return
+                    }
                     if (zooming) {  // a drag zooms to the rectangle, a click zooms in (Option-click: out)
                         zooming = false
                         if (Math.abs(bx1 - bx0) > 6) {
@@ -200,7 +213,7 @@ Item {
                 if (length < 1 / 16) length = root.project.barBeats  // a click draws one bar
                 root.project.createRegion(trackId, Math.min(startBeats, endBeats), length)
             }
-            onCanceled: { pencil = false; band = false; zooming = false }
+            onCanceled: { pencil = false; band = false; zooming = false; marqueeing = false }
             // Control-click (right click) on an empty part of a track: the regions that track can hold (Logic's shortcut menu)
             TapHandler {
                 acceptedButtons: Qt.RightButton
@@ -256,7 +269,18 @@ Item {
             ThemedMenuItem { visible: regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Create MIDI Region"); onTriggered: root.project.createRegion(regionMenu.trackId, regionMenu.beats, root.project.barBeats) }
             ThemedMenuItem { visible: regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Create Session Player Region"); onTriggered: root.project.announceStub(text) }
             ThemedMenuItem { visible: regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Create Pattern Region"); onTriggered: root.project.announceStub(text) }
-            ThemedMenuItem { visible: !regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Add Audio File…"); onTriggered: root.project.announceStub(text) }
+            ThemedMenuItem { visible: !regionMenu.midi; height: visible ? implicitHeight : 0; text: qsTr("Add Audio File…"); onTriggered: root.addAudioRequested(regionMenu.trackId, regionMenu.beats) }
+        }
+        Rectangle {  // the marquee that is set
+            objectName: "marqueeRect"
+            visible: root.project.hasMarquee && !emptyArea.marqueeing
+            x: root.beatsToX(root.project.marquee.from)
+            y: root.project.marquee.row0 * root.rowHeight - root.scrollY
+            width: root.beatsToX(root.project.marquee.to) - x
+            height: (root.project.marquee.row1 - root.project.marquee.row0 + 1) * root.rowHeight
+            color: "#33ffffff"
+            border.color: Theme.textPrimary
+            z: 20
         }
         Rectangle {  // the rectangle selection being dragged
             visible: emptyArea.band

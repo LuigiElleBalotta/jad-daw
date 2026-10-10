@@ -77,6 +77,15 @@ ApplicationWindow {
         nameFilters: [qsTr("WAV audio (*.wav)")]
         onAccepted: controller.bounceProject(selectedFile)
     }
+    FileDialog {  // Add Audio File… in the shortcut menu of an empty part of an audio track
+        id: addAudioDialog
+        property string trackId
+        property real beats: 0
+        title: qsTr("Add audio files")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [qsTr("Audio files (*.wav *.mp3 *.flac *.aif *.aiff)"), qsTr("All files (*)")]
+        onAccepted: controller.importAudioFilesAt(selectedFiles, trackId, beats)
+    }
     FileDialog {
         id: importDialog
         title: qsTr("Import audio files")
@@ -291,9 +300,9 @@ ApplicationWindow {
         "file.quit": () => Qt.quit(),
         "edit.undo": () => controller.undo(),
         "edit.redo": () => controller.redo(),
-        "edit.delete": () => editorArea.pianoFocused ? editorArea.piano.deleteSelected() : timeline.deleteSelected(),
-        "edit.cut": () => editorArea.pianoFocused ? editorArea.piano.cut() : controller.cutSelectedRegions(),
-        "edit.copy": () => editorArea.pianoFocused ? editorArea.piano.copy() : controller.copySelectedRegions(),
+        "edit.delete": () => editorArea.pianoFocused ? editorArea.piano.deleteSelected() : (controller.hasMarquee ? controller.marqueeAction("delete") : timeline.deleteSelected()),
+        "edit.cut": () => editorArea.pianoFocused ? editorArea.piano.cut() : (controller.hasMarquee ? controller.marqueeAction("cut") : controller.cutSelectedRegions()),
+        "edit.copy": () => editorArea.pianoFocused ? editorArea.piano.copy() : (controller.hasMarquee ? controller.marqueeAction("copy") : controller.copySelectedRegions()),
         "edit.paste": () => editorArea.pianoFocused ? editorArea.piano.paste() : controller.pasteRegions(false),
         "edit.pasteAtOriginalPosition": () => controller.pasteRegions(true),
         "edit.duplicate": () => editorArea.pianoFocused ? editorArea.piano.duplicate() : controller.duplicateSelectedRegions(),
@@ -534,6 +543,7 @@ ApplicationWindow {
         "tool.fade": () => { controller.tool = "fade" },
         "tool.solo": () => { controller.tool = "solo" },
         "tool.text": () => { controller.tool = "text" },
+        "tool.marquee": () => { controller.tool = "marquee" },
         "tool.autoCurve": () => { controller.tool = "autoCurve" },
         "tool.autoSelect": () => { controller.tool = "autoSelect" },
         "tool.slip": () => { controller.tool = "slip" },
@@ -614,6 +624,7 @@ ApplicationWindow {
         "tool.fade": controller.tool === "fade",
         "tool.solo": controller.tool === "solo",
         "tool.text": controller.tool === "text",
+        "tool.marquee": controller.tool === "marquee",
         "tool.autoCurve": controller.tool === "autoCurve",
         "tool.autoSelect": controller.tool === "autoSelect",
         "tool.slip": controller.tool === "slip",
@@ -767,6 +778,7 @@ ApplicationWindow {
             Timeline {
                 id: timeline
                 onEditRequested: { if (!root.editorsVisible) root.showLowerPane("editors") }
+                onAddAudioRequested: (id, beats) => { addAudioDialog.trackId = id; addAudioDialog.beats = beats; addAudioDialog.open() }
                 onRenameRequested: (id) => { regionNameDialog.regionId = id; regionNameDialog.text = controller.regionName(id); regionNameDialog.open() }
                 onAutomationParameterRequested: (id) => { automationParamDialog.trackId = id; automationParamDialog.open() }
                 Layout.fillWidth: true

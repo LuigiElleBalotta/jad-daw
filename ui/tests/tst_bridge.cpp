@@ -2168,6 +2168,50 @@ private slots:
         c.cleanUpProject();
         QTRY_COMPARE(c.unusedMedia().value("count").toInt(), 0);
     }
+    void theMarqueeCutsRegionsAtItsEdgesAndCopiesCutsAndDeletesThePiecesInside() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 2);
+        const QString t0 = c.tracks()->trackIdAt(0), t1 = c.tracks()->trackIdAt(1);
+        c.createRegion(t0, 0, 8);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        c.createRegion(t1, 0, 8);
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        c.marqueeAction("delete");                                   // no marquee yet
+        QVERIFY(!c.hasMarquee());
+        c.setMarquee(6, 2, 0, 0);                                    // [2, 6) on the first row only (the corners in any order)
+        QVERIFY(c.hasMarquee());
+        QCOMPARE(c.marquee().value("from").toDouble(), 2.0);
+        QCOMPARE(c.marquee().value("to").toDouble(), 6.0);
+        c.marqueeAction("delete");                                   // the middle piece goes, [0, 2) and [6, 8) stay
+        QTRY_COMPARE(c.regions()->rowCount(), 3);
+        QVERIFY(!c.hasMarquee());
+        int onFirst = 0;
+        double inside = 0;
+        for (const jad::RegionRow& r : c.regions()->rows()) {
+            if (r.trackId == t0) { ++onFirst; if (r.startBeats < 6 - 1e-6 && r.startBeats + r.lengthBeats > 2 + 1e-6) inside += r.lengthBeats; }  // anything left in [2, 6)
+        }
+        QCOMPARE(onFirst, 2);
+        QCOMPARE(inside, 0.0);
+        c.undo();                                                    // the cuts and the delete are one undo step
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        c.setMarquee(2, 6, 0, 1);                                    // both rows
+        c.marqueeAction("copy");                                     // cut at the edges, the pieces inside are selected and copied
+        QTRY_COMPARE(c.regions()->rowCount(), 6);
+        QTRY_COMPARE(c.selectedRegionIds().size(), 2);
+        for (const QString& id : c.selectedRegionIds()) {
+            QCOMPARE(c.regions()->find(id)->startBeats, 2.0);
+            QCOMPARE(c.regions()->find(id)->lengthBeats, 4.0);
+        }
+        c.setTool("marquee");
+        c.setMarquee(1, 3, 0, 0);
+        QVERIFY(c.hasMarquee());
+        c.setTool("pointer");                                        // leaving the tool drops the marquee
+        QVERIFY(!c.hasMarquee());
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

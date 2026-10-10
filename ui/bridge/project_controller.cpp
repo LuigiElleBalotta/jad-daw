@@ -656,9 +656,10 @@ bool ProjectController::selectedToggle(const QString& actionId) const {
 }
 
 void ProjectController::setTool(const QString& tool) {
-    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom", "mute", "gain", "fade", "solo", "text", "slip", "rotate", "autoCurve", "autoSelect"};
+    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom", "mute", "gain", "fade", "solo", "text", "slip", "rotate", "autoCurve", "autoSelect", "marquee"};
     if (!known.contains(tool) || tool == tool_) return;
     tool_ = tool;
+    if (tool != "marquee") clearMarquee();  // the range belongs to the tool
     emit toolChanged();
 }
 

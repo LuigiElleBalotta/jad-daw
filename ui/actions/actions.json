@@ -68,7 +68,7 @@
  {"id":"tool.fade","label":"Fade Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"ready","group":"tool"},
  {"id":"tool.autoSelect","label":"Automation Select Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"ready","group":"tool"},
  {"id":"tool.autoCurve","label":"Automation Curve Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"ready","group":"tool"},
- {"id":"tool.marquee","label":"Marquee Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"stub","group":"tool"},
+ {"id":"tool.marquee","label":"Marquee Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"ready","group":"tool"},
  {"id":"tool.flex","label":"Flex Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"stub","group":"tool"},
  {"id":"tool.gain","label":"Gain Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"ready","group":"tool"},
  {"id":"tool.slip","label":"Slip Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"ready","group":"tool"},

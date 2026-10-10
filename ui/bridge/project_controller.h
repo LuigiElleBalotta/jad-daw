@@ -74,6 +74,10 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool automationQuickAccess READ automationQuickAccess WRITE setAutomationQuickAccess NOTIFY automationSettingsChanged)
     Q_PROPERTY(int quickAccessController READ quickAccessController NOTIFY automationSettingsChanged)  // the CC number; -1 none, -2 waiting for a move
     Q_PROPERTY(bool autoselectAutomationParam READ autoselectAutomationParam WRITE setAutoselectAutomationParam NOTIFY automationSettingsChanged)
+    // The Marquee tool: a range of time over a few tracks. Edit > Cut, Copy and Delete (and marqueeAction) act on that range: the regions are cut at its edges
+    // and the pieces inside are what the command works on.
+    Q_PROPERTY(bool hasMarquee READ hasMarquee NOTIFY marqueeChanged)
+    Q_PROPERTY(QVariantMap marquee READ marquee NOTIFY marqueeChanged)  // {from, to (beats), row0, row1}
     Q_PROPERTY(bool automationFollowsRegions READ automationFollowsRegions WRITE setAutomationFollowsRegions NOTIFY dragModeChanged)  // Mix > Move Track Automation with Regions
     Q_PROPERTY(QString dragMode READ dragMode WRITE setDragMode NOTIFY dragModeChanged)  // "overlap", "noOverlap" or "xfade"
     Q_PROPERTY(double snapBeats READ snapBeats NOTIFY snapChanged)
@@ -361,6 +365,12 @@ public:
     bool automationVisible() const { return automationVisible_; }
     void setAutomationVisible(bool on);
     QString automationParam() const { return automationParam_; }
+    bool hasMarquee() const { return marqueeTo_ > marqueeFrom_; }
+    QVariantMap marquee() const { return {{"from", marqueeFrom_}, {"to", marqueeTo_}, {"row0", marqueeRow0_}, {"row1", marqueeRow1_}}; }
+    Q_INVOKABLE void setMarquee(double fromBeats, double toBeats, int row0, int row1);
+    Q_INVOKABLE void clearMarquee();
+    // what: "select" (cut at the edges, select the pieces inside), "split", "copy", "cut" or "delete"
+    Q_INVOKABLE void marqueeAction(const QString& what);
     bool automationQuickAccess() const { return aqa_; }
     void setAutomationQuickAccess(bool on);
     int quickAccessController() const { return aqa_ && aqaCc_ < 0 ? -2 : aqaCc_; }
@@ -820,6 +830,7 @@ signals:
     void snapChanged();
     void dragModeChanged();
     void automationSettingsChanged();
+    void marqueeChanged();
     void trackIconDialogRequested();
     void autosaveFound();  // the project that was just opened has an autosave newer than its saved file
     void followPlayheadChanged();
@@ -1054,6 +1065,9 @@ private:
     std::uint64_t snapshots_ = 0;
     QString automationParam_ = QStringLiteral("volume");
     bool aqa_ = false, autoselect_ = false, aqaGesture_ = false;
+    double marqueeFrom_ = 0, marqueeTo_ = 0;
+    int marqueeRow0_ = 0, marqueeRow1_ = 0;
+    void whenRegionsExist(const QStringList& ids, std::function<void()> then, int tries = 100);
     int aqaCc_ = -1;
     std::atomic<int> aqaWatch_{-1};  // read by the MIDI thread: -1 off, -2 any controller, else the one
     QTimer aqaRelease_;

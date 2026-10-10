@@ -211,6 +211,7 @@ Track: %3")
     MouseArea {
         id: area
         anchors.fill: parent
+        enabled: root.tool !== "marquee"  // the Marquee tool works on the lane under the regions
         preventStealing: true
         property real pressSceneX: 0
         property bool moving: false

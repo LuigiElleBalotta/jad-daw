@@ -3993,4 +3993,94 @@ void ProjectController::cleanUpProject() {
 }
 
 
+void ProjectController::setMarquee(double fromBeats, double toBeats, int row0, int row1) {
+    if (!std::isfinite(fromBeats) || !std::isfinite(toBeats)) return;
+    marqueeFrom_ = std::max(0.0, std::min(fromBeats, toBeats));
+    marqueeTo_ = std::max(0.0, std::max(fromBeats, toBeats));
+    marqueeRow0_ = std::min(row0, row1);
+    marqueeRow1_ = std::max(row0, row1);
+    emit marqueeChanged();
+}
+
+void ProjectController::clearMarquee() {
+    if (marqueeTo_ <= marqueeFrom_) return;
+    marqueeFrom_ = marqueeTo_ = 0;
+    emit marqueeChanged();
+}
+
+// Runs `then` once every one of `ids` is a region of the model (the snapshot of a command arrives a moment after the command is accepted).
+void ProjectController::whenRegionsExist(const QStringList& ids, std::function<void()> then, int tries) {
+    bool all = true;
+    for (const QString& id : ids) all = all && regions_.find(id) != nullptr;
+    if (all || tries <= 0) {
+        then();
+        return;
+    }
+    QPointer<ProjectController> self(this);
+    QTimer::singleShot(10, this, [self, ids, then = std::move(then), tries]() mutable {
+        if (self) self->whenRegionsExist(ids, std::move(then), tries - 1);
+    });
+}
+
+void ProjectController::marqueeAction(const QString& what) {
+    static const QStringList known{"select", "split", "copy", "cut", "delete"};
+    if (!host_ || !known.contains(what) || !hasMarquee()) return;
+    const double from = marqueeFrom_, to = marqueeTo_;
+    constexpr double e = 1e-6;
+    nlohmann::json commands = nlohmann::json::array();
+    QStringList inner, untouched;  // the pieces inside the marquee
+    for (const RegionRow& r : regionRows_) {
+        if (r.trackIndex < marqueeRow0_ || r.trackIndex > marqueeRow1_) continue;
+        const double s = r.startBeats, end = s + r.lengthBeats;
+        if (end <= from + e || s >= to - e) continue;  // outside
+        const auto split = [&](const QString& id, const RegionRow& row, double at, const QString& right) {
+            commands.push_back({{"type", "split_region"}, {"regionId", id.toStdString()}, {"at", regionPosition(row, at)}, {"newRegionId", right.toStdString()}});
+        };
+        if (s < from - e && end > to + e) {  // it spans the marquee: three pieces
+            const QString mid = QUuid::createUuid().toString(QUuid::WithoutBraces), last = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            split(r.id, r, from, mid);
+            RegionRow part = r;
+            part.id = mid;
+            part.startBeats = from;
+            part.lengthBeats = end - from;
+            split(mid, part, to, last);
+            inner << mid;
+        } else if (s < from - e) {           // it starts before: the piece from the left edge on is inside
+            const QString mid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            split(r.id, r, from, mid);
+            inner << mid;
+        } else if (end > to + e) {           // it ends after: the first piece is inside
+            split(r.id, r, to, QUuid::createUuid().toString(QUuid::WithoutBraces));
+            inner << r.id;
+        } else {
+            inner << r.id;                    // entirely inside
+        }
+    }
+    if (inner.isEmpty()) {
+        emit notice("No region lies in the marquee");
+        return;
+    }
+    if (what == "delete") {
+        for (const QString& id : inner) commands.push_back({{"type", "remove_region"}, {"regionId", id.toStdString()}});
+        sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+        clearMarquee();
+        return;
+    }
+    const auto next = [this, what, inner] {
+        selectRegions(inner, "replace");
+        if (what == "copy") copySelectedRegions();
+        else if (what == "cut") cutSelectedRegions();
+    };
+    if (commands.empty()) {  // nothing has to be cut: the regions are inside already
+        next();
+        return;
+    }
+    QPointer<ProjectController> self(this);
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}}, [self, inner, next](bool accepted) {
+        if (!accepted || !self) return;
+        self->whenRegionsExist(inner, next);
+    });
+}
+
+
 }  // namespace jad

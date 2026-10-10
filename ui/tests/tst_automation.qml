@@ -84,6 +84,27 @@ TestCase {
         c.tool = "pointer"
     }
 
+    function test_the_marquee_tool_drags_a_range_over_rows_and_a_click_clears_it() {
+        const c = setup()
+        c.addTrack("audio")
+        tryVerify(function () { return c.tracks.rowCount() === 2 })
+        const t = createTemporaryObject(tlC, this, { project: c })
+        c.tool = "marquee"
+        const y0 = t.rulerHeight + t.rowHeight * 0.5, y1 = t.rulerHeight + t.rowHeight * 1.5
+        mousePress(t, t.beatsToX(2), y0)
+        mouseMove(t, t.beatsToX(4), y1)
+        mouseMove(t, t.beatsToX(6), y1)
+        mouseRelease(t, t.beatsToX(6), y1)
+        verify(c.hasMarquee)
+        compare(c.marquee.from, 2)
+        compare(c.marquee.to, 6)
+        compare(c.marquee.row0, 0)
+        compare(c.marquee.row1, 1)
+        mouseClick(t, t.beatsToX(10), y0)                 // a click without a drag drops it
+        verify(!c.hasMarquee)
+        c.tool = "pointer"
+    }
+
     function test_the_lane_follows_changes_made_elsewhere() {
         const c = setup()
         const id = c.tracks.trackIdAt(0)

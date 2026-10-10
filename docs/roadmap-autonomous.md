@@ -42,7 +42,8 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - [x] Fades (in, out) on audio regions: quarter-sine ramps, handles at the top corners of a selected region, `set_region_fades` with undo. Not covered:
       crossfade curves other than that, automatic crossfades of overlapping regions, region gain handles (the Inspector has the gain).
 - [ ] Waveform zoom, Audio Track Editor (region waveform in the Editors area), Audio File Editor basics (trim, normalize, reverse).
-- [ ] Time stretch / pitch shift for regions (offline), Strip Silence, region mute/loop.
+- [x] Edit > Audio: Normalize, Reverse, Change Gain, Time Stretch (WSOLA, pitch kept), Pitch Shift (length kept) make a new file in the project and replace the
+      region media in one undo step; Strip Silence cuts a region at its silences. (Region looping is not done.)
 
 ## 6. Mixer and automation
 - [ ] Groups (Group Settings window, Groups Active), I/O labels, pre-fader metering, track stacks (summing).

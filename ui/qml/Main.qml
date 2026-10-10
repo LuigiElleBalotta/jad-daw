@@ -76,6 +76,7 @@ ApplicationWindow {
 
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
+    AudioProcessDialog { id: audioDialog; project: controller }
     PreferencesDialog { id: preferencesDialog; project: controller }
     EffectEditorWindow { id: effectEditor; project: controller }
     MusicalTypingWindow { id: musicalTyping; project: controller; visible: false }
@@ -199,6 +200,12 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "audio.normalize": () => audioDialog.show("normalize", qsTr("Normalize"), qsTr("Peak level"), "dBFS", -0.3, -24, 0),
+        "audio.reverse": () => controller.processSelectedRegions("reverse", 0),
+        "audio.changeGain": () => audioDialog.show("gain", qsTr("Change Gain"), qsTr("Gain"), "dB", 0, -48, 24),
+        "audio.pitchShift": () => audioDialog.show("pitch", qsTr("Pitch Shift"), qsTr("Semitones"), "st", 0, -24, 24),
+        "audio.stripSilence": () => audioDialog.show("strip", qsTr("Strip Silence"), qsTr("Threshold"), "dB", -50, -80, 0),
+        "edit.timeStretch": () => audioDialog.show("stretch", qsTr("Time Stretch"), qsTr("New length"), "%", 100, 25, 400),
         "window.showMusicalTyping": () => { musicalTyping.visible = !musicalTyping.visible },
         "file.preferences": () => preferencesDialog.open(),
         "transport.record": () => controller.toggleRecording(),

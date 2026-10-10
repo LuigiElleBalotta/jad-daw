@@ -1076,6 +1076,57 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.regions()->find(audio)->fadeInBeats, 0.0);
     }
+    void normalizeMakesANewFileWithTheTargetPeakAndOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio, media;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio) { audio = r->id; media = r->mediaId; }
+        }
+        QVERIFY(!audio.isEmpty());
+        c.selectRegion(audio, "replace");
+        c.processSelectedRegions("normalize", -6.0);
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(audio) && c.regions()->find(audio)->mediaId != media, 15000);
+        // the new file holds the region's part at -6 dBFS
+        const QString relative = c.property("mediaPathForTest").toString();
+        Q_UNUSED(relative);
+        const auto files = countFiles(dir.path() / "d.lpc" / "audio");
+        QVERIFY(files >= 2);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(audio)->mediaId, media);
+    }
+    void stripSilenceCutsARegionAtItsSilencesAndUndoRestoresIt() {
+        TempDir dir;
+        TempDir other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        std::vector<float> samples(48000 * 3 * 2, 0.0f);   // 3 s stereo: sound at 0.2-0.7 s and at 1.8-2.4 s
+        auto burst = [&](double from, double to) {
+            for (int i = static_cast<int>(from * 48000); i < static_cast<int>(to * 48000); ++i) { samples[static_cast<size_t>(i) * 2] = samples[static_cast<size_t>(i) * 2 + 1] = 0.5f * std::sin(0.2f * static_cast<float>(i)); }
+        };
+        burst(0.2, 0.7);
+        burst(1.8, 2.4);
+        lpc::writeWav(other.path() / "bursts.wav", 48000, 2, samples, lpc::WavFormat::Float32);
+        const QString audioTrack = firstAudioTrackId(c);
+        const int before = c.regions()->rowCount();
+        c.importAudio(url(other.path() / "bursts.wav"), audioTrack, 100.0);
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 15000);
+        QString id;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio && r->startBeats > 99.0) id = r->id;
+        }
+        QVERIFY(!id.isEmpty());
+        c.selectRegion(id, "replace");
+        c.stripSilence(-30.0, 200.0);
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 2, 15000);   // the region became two sounds
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), before + 1);
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -401,6 +401,12 @@ public:
     Q_INVOKABLE void addTracks(const QString& kind, int count, const QString& name);  // Track > New Tracks: one undo step; names get a number
     // The fades of an audio region (beats from its start / to its end; 0 = none), one undo step
     Q_INVOKABLE void setRegionFades(const QString& regionId, double fadeInBeats, double fadeOutBeats);
+    // Audio processing of the selected audio regions (the file is not changed: the result is a new file in the project, one undo step):
+    // op = "normalize" (value: target dBFS), "reverse", "gain" (dB), "stretch" (value: the new length in percent, the pitch stays),
+    // "pitch" (value: semitones, the length stays)
+    Q_INVOKABLE void processSelectedRegions(const QString& op, double value);
+    // Strip Silence: the selected audio regions are cut at the silences (below thresholdDb for at least minSilenceMs) and the silences go
+    Q_INVOKABLE void stripSilence(double thresholdDb, double minSilenceMs);
     Q_INVOKABLE void deleteUnusedTracks();     // audio and instrument tracks without regions
     Q_INVOKABLE void deselectOutsideLocators();
     Q_INVOKABLE void selectSimilarRegions();   // the same audio file, or MIDI of the same length, as a selected region

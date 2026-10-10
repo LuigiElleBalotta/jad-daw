@@ -2,6 +2,8 @@
 // Each change is one command (or one transaction) and so one undo step, like the Core's own commands.
 #include <QSettings>
 #include <QDateTime>
+#include <QFile>
+#include <QCryptographicHash>
 #include <QFileInfo>
 #include <QTimer>
 #include <QtConcurrent>
@@ -24,6 +26,7 @@
 #include "lpc/wav.h"
 #include "lpc/offline_render.h"
 #include "lpc/audio/effects.h"
+#include "lpc/audio_ops.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
 #include "lpc/project_host.h"
@@ -1380,6 +1383,174 @@ void ProjectController::setRegionFades(const QString& regionId, double fadeInBea
     };
     sendCommand({{"type", "set_region_fades"}, {"regionId", regionId.toStdString()}, {"fadeIn", unit(r->startBeats, in)},
                  {"fadeOut", unit(r->startBeats + len - out, out)}});
+}
+
+namespace {
+
+std::filesystem::path mediaFile(const std::filesystem::path& dir, const QString& relative) {
+    const QByteArray rel = relative.toUtf8();
+    return dir / std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(rel.constData()), static_cast<std::size_t>(rel.size())));
+}
+
+// The part of a media file a region plays, as audio the operations can work on.
+lpc::WavData readRegionAudio(const std::filesystem::path& file, std::int64_t offset, std::int64_t frames) {
+    lpc::WavFile wav(file);
+    lpc::WavData d;
+    d.sampleRate = wav.sampleRate();
+    d.channels = wav.channels();
+    d.samples.resize(static_cast<std::size_t>(frames) * static_cast<std::size_t>(d.channels));
+    wav.readFrames(offset, frames, d.samples.data());
+    return d;
+}
+
+QString sha256Of(const std::filesystem::path& file) {
+    QFile f(QString::fromStdU16String(file.u16string()));
+    QCryptographicHash h(QCryptographicHash::Sha256);
+    if (f.open(QIODevice::ReadOnly) && h.addData(&f)) return QString::fromLatin1(h.result().toHex());
+    return {};
+}
+
+}  // namespace
+
+void ProjectController::processSelectedRegions(const QString& op, double value) {
+    if (!host_ || !std::isfinite(value)) return;
+    if (op != "normalize" && op != "reverse" && op != "gain" && op != "stretch" && op != "pitch") return;
+    std::vector<RegionRow> rows;
+    for (const RegionRow* r : selectedRegionRows())
+        if (r->audio && !r->missing && r->lengthFrames > 0) rows.push_back(*r);
+    if (rows.empty()) {
+        emit notice("Select an audio region first");
+        return;
+    }
+    emit notice(QString("Processing %1 region%2…").arg(rows.size()).arg(rows.size() == 1 ? "" : "s"));
+    const std::filesystem::path projectDir = dir_;
+    const int rate = sampleRate_;
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    for (const RegionRow& row : rows) {
+        const std::filesystem::path source = mediaFile(projectDir, mediaPaths_.value(row.mediaId));
+        (void)QtConcurrent::run([self, row, source, projectDir, rate, op, value, generation] {
+            auto fail = [&](const QString& message) {
+                if (self) QMetaObject::invokeMethod(self.data(), [self, message] { if (self) self->setError(message); }, Qt::QueuedConnection);
+            };
+            std::filesystem::path target;
+            std::int64_t frames = 0;
+            int channels = 0;
+            try {
+                lpc::WavData d = readRegionAudio(source, row.sourceOffsetFrames, row.lengthFrames);
+                if (op == "normalize") lpc::normalize(d, value);
+                else if (op == "reverse") lpc::reverse(d);
+                else if (op == "gain") lpc::applyGain(d, value);
+                else if (op == "stretch") d = lpc::timeStretch(d, value / 100.0);
+                else if (op == "pitch") d = lpc::pitchShift(d, value);
+                frames = d.frames();
+                channels = d.channels;
+                const std::filesystem::path audioDir = projectDir / "audio";
+                std::filesystem::create_directories(audioDir);
+                const std::filesystem::path stem = source.stem();
+                for (int n = 1;; ++n) {
+                    target = audioDir / (stem.u16string() + u" (" + QString(op).toStdU16String() + (n > 1 ? u" " + QString::number(n).toStdU16String() : std::u16string()) + u").wav");
+                    if (!std::filesystem::exists(target)) break;
+                }
+                lpc::writeWav(target, rate, channels, d.samples, lpc::WavFormat::Pcm24);
+            } catch (const std::exception& e) {
+                fail(QString("Cannot process the region: ") + QString::fromUtf8(e.what()));
+                return;
+            }
+            const QString hash = sha256Of(target);
+            if (!self) return;
+            QMetaObject::invokeMethod(self.data(), [self, row, target, hash, frames, channels, rate, projectDir, generation] {
+                std::error_code ignore;
+                if (!self || generation != self->generation_ || !self->host_ || self->dir_ != projectDir) {
+                    std::filesystem::remove(target, ignore);
+                    return;
+                }
+                lpc::MediaItem item;
+                item.id = lpc::Uuid::random();
+                const std::u8string rel = (std::filesystem::path("audio") / target.filename()).generic_u8string();
+                item.path.assign(rel.begin(), rel.end());
+                item.hash = hash.toStdString();
+                item.sampleRate = rate;
+                item.channels = channels;
+                item.frames = frames;
+                nlohmann::json region = nlohmann::json::parse(row.json, nullptr, false);
+                if (region.is_discarded()) return;
+                region["mediaId"] = item.id.toString();
+                region["sourceOffsetFrames"] = 0;
+                // the length in the unit of the region: microseconds, or ticks of the tempo map
+                const std::int64_t startUnit = region["start"].get<std::int64_t>();
+                const std::int64_t newLength = row.absolute
+                    ? static_cast<std::int64_t>(std::llround(static_cast<double>(frames) * 1e6 / rate))
+                    : static_cast<std::int64_t>(self->tempoMap_.samplesToTicks(self->tempoMap_.ticksToSamples(startUnit, rate) + static_cast<double>(frames), rate)) - startUnit;
+                region["length"] = std::max<std::int64_t>(1, newLength);
+                const double fadeLimit = region["length"].get<double>();
+                if (region.value("fadeIn", 0) > fadeLimit) region["fadeIn"] = 0;
+                if (region.value("fadeOut", 0) > fadeLimit) region["fadeOut"] = 0;
+                nlohmann::json commands = nlohmann::json::array();
+                commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
+                commands.push_back({{"type", "replace_region"}, {"region", region}});
+                self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [target](bool accepted) {
+                    if (!accepted) { std::error_code ec; std::filesystem::remove(target, ec); }
+                });
+            }, Qt::QueuedConnection);
+        });
+    }
+}
+
+void ProjectController::stripSilence(double thresholdDb, double minSilenceMs) {
+    if (!host_ || !std::isfinite(thresholdDb) || !std::isfinite(minSilenceMs)) return;
+    std::vector<RegionRow> rows;
+    for (const RegionRow* r : selectedRegionRows())
+        if (r->audio && !r->missing && r->lengthFrames > 0) rows.push_back(*r);
+    if (rows.empty()) {
+        emit notice("Select an audio region first");
+        return;
+    }
+    const std::filesystem::path projectDir = dir_;
+    const int rate = sampleRate_;
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    for (const RegionRow& row : rows) {
+        const std::filesystem::path source = mediaFile(projectDir, mediaPaths_.value(row.mediaId));
+        (void)QtConcurrent::run([self, row, source, projectDir, rate, thresholdDb, minSilenceMs, generation] {
+            std::vector<std::pair<std::int64_t, std::int64_t>> sounds;
+            try {
+                sounds = lpc::findSounds(readRegionAudio(source, row.sourceOffsetFrames, row.lengthFrames), thresholdDb, minSilenceMs);
+            } catch (const std::exception& e) {
+                const QString message = QString("Cannot read the region: ") + QString::fromUtf8(e.what());
+                if (self) QMetaObject::invokeMethod(self.data(), [self, message] { if (self) self->setError(message); }, Qt::QueuedConnection);
+                return;
+            }
+            if (!self) return;
+            QMetaObject::invokeMethod(self.data(), [self, row, sounds, rate, projectDir, generation] {
+                if (!self || generation != self->generation_ || !self->host_ || self->dir_ != projectDir) return;
+                if (sounds.empty()) { emit self->notice("No sound above the threshold: nothing was changed"); return; }
+                if (sounds.size() == 1 && sounds[0].first <= 0 && sounds[0].second >= row.lengthFrames) { emit self->notice("The region has no silence to strip"); return; }
+                nlohmann::json original = nlohmann::json::parse(row.json, nullptr, false);
+                if (original.is_discarded()) return;
+                const std::int64_t startMicros = original["start"].get<std::int64_t>();
+                // frames after the start of the region, in its own unit (microseconds, or ticks of the tempo map)
+                auto micros = [self, rate, startMicros, absolute = row.absolute](std::int64_t frames) {
+                    if (absolute) return static_cast<std::int64_t>(std::llround(static_cast<double>(frames) * 1e6 / rate));
+                    return static_cast<std::int64_t>(self->tempoMap_.samplesToTicks(self->tempoMap_.ticksToSamples(startMicros, rate) + static_cast<double>(frames), rate)) - startMicros;
+                };
+                nlohmann::json commands = nlohmann::json::array();
+                commands.push_back({{"type", "remove_region"}, {"regionId", row.id.toStdString()}});
+                for (std::size_t k = 0; k < sounds.size(); ++k) {
+                    nlohmann::json part = original;
+                    part["id"] = lpc::Uuid::random().toString();
+                    part["sourceOffsetFrames"] = row.sourceOffsetFrames + sounds[k].first;
+                    part["start"] = startMicros + micros(sounds[k].first);
+                    part["length"] = std::max<std::int64_t>(1, micros(sounds[k].second) - micros(sounds[k].first));
+                    if (k > 0) part.erase("fadeIn");
+                    if (k + 1 < sounds.size()) part.erase("fadeOut");
+                    commands.push_back({{"type", "add_region"}, {"trackId", row.trackId.toStdString()}, {"region", part}, {"index", -1}});
+                }
+                self->sendCommand({{"type", "transaction"}, {"commands", commands}});
+                emit self->notice(QString("Strip Silence: %1 part%2").arg(static_cast<int>(sounds.size())).arg(sounds.size() == 1 ? "" : "s"));
+            }, Qt::QueuedConnection);
+        });
+    }
 }
 
 }  // namespace jad

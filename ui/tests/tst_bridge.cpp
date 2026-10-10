@@ -1563,6 +1563,28 @@ private slots:
         QVERIFY(tracks.size() >= 3);
         QVERIFY(!tracks.first().toMap().value("name").toString().isEmpty());
     }
+    void bounceInPlaceRendersAnInstrumentTrackToANewAudioTrack() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3 && c.regions()->rowCount() >= 2);
+        const int tracks = c.tracks()->rowCount(), regions = c.regions()->rowCount();
+        QString instrument;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "instrument") instrument = c.tracks()->trackIdAt(i);
+        QVERIFY(!instrument.isEmpty());
+        c.bounceInPlace();                                           // nothing selected: a notice, no work
+        QCOMPARE(c.tracks()->rowCount(), tracks);
+        c.selectTrack(instrument, "replace");
+        c.bounceInPlace();
+        QTRY_COMPARE_WITH_TIMEOUT(c.tracks()->rowCount(), tracks + 1, 20000);
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), regions + 1, 20000);
+        bool found = false;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "audio" && c.tracks()->nameAt(i).endsWith(" Bounce")) found = true;
+        QVERIFY(found);
+        QVERIFY(std::filesystem::exists(dir.path() / "d.lpc" / "audio"));
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

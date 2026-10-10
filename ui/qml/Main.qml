@@ -269,6 +269,7 @@ ApplicationWindow {
         "mix.pluginWindow": () => controller.openAllPluginWindows(),
         "window.showKeyboard": () => { musicalTyping.visible = !musicalTyping.visible },
         "track.searchAndSelectTrack": () => searchTrackDialog.open(),
+        "mix.bounceInPlace": () => controller.bounceInPlace(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

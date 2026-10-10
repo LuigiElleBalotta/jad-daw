@@ -102,6 +102,8 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   filters and then Single | Tracks | All from its bar and scrolls sideways.
 - **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
   follows and the sound changes at once; the whole drag is one undo step.
+- **Bounce in Place** (Track menu): each selected audio or instrument track is rendered offline, with its inserts, VST3 plug-ins, sends and the buses it feeds, to a new audio track "<name> Bounce"
+  starting where its first region starts, with two seconds of tail; the original track is left as it is.
 - **Takes:** recording with the Cycle on makes one audio region per pass; the passes of a track are takes of one passage (a take group): the last pass plays, the others are muted and the region says "n takes".
   Right-click a region to choose which take plays, to Delete Other Takes or to Unpack Takes (they become ordinary regions); the choice is one undo step.
 - **Regions:** Loop/Unloop Regions (`L` or the Inspector's Loop box): the first loop of the region repeats until its end, for audio (the source restarts) and for MIDI (notes and controllers), with marks where each repeat

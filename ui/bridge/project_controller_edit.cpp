@@ -2451,4 +2451,96 @@ QVariantList ProjectController::trackList() const {
     return out;
 }
 
+void ProjectController::bounceInPlace() {
+    if (!host_) return;
+    std::vector<QString> ids;
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && (t->kind == QLatin1String("audio") || t->kind == QLatin1String("instrument")) && t->regionCount > 0) ids.push_back(id);
+    if (ids.empty()) {
+        emit notice("Select audio or instrument tracks that have regions");
+        return;
+    }
+    if (bouncing_->exchange(true)) {
+        setError("A bounce is already running");
+        return;
+    }
+    if (playing_) stop();
+    const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+    lpc::IPluginHost* plugins = nullptr;
+#ifdef JAD_HAVE_JUCE
+    plugins = pluginHost_.get();
+#endif
+    std::vector<QString> names;
+    for (const QString& id : ids) names.push_back(trackName(id));
+    emit notice("Bouncing in place…");
+    const std::filesystem::path root = dir_;
+    const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
+    QPointer<ProjectController> self(this);
+    (void)QtConcurrent::run([self, flag, project, plugins, root, ids, names] {
+        struct Done {
+            QString name;
+            QString file;
+            std::int64_t startFrame = 0;
+        };
+        std::vector<Done> done;
+        QString failure;
+        try {
+            for (std::size_t k = 0; k < ids.size(); ++k) {
+                const auto trackId = lpc::Uuid::parse(ids[k].toStdString()).value_or(lpc::Uuid{});
+                lpc::Project copy = project;
+                std::int64_t first = std::numeric_limits<std::int64_t>::max(), last = 0;
+                for (lpc::Track& t : copy.tracks) {
+                    const bool source = t.kind == lpc::TrackKind::Audio || t.kind == lpc::TrackKind::Instrument;
+                    if (t.id == trackId) {
+                        for (const lpc::Region& r : t.regions) {
+                            auto frame = [&](std::int64_t v) {
+                                return r.timeBase == lpc::TimeBase::Musical ? static_cast<std::int64_t>(std::llround(copy.tempoMap.ticksToSamples(v, copy.sampleRate)))
+                                                                            : static_cast<std::int64_t>(std::llround(static_cast<double>(v) * copy.sampleRate / 1e6));
+                            };
+                            first = std::min(first, frame(r.start));
+                            last = std::max(last, frame(r.start + r.length));
+                        }
+                    } else if (source) {
+                        t.strip.mute = true;  // the other sources are silent; the buses stay, so the effects the track feeds are in the result
+                    }
+                }
+                if (last <= first) continue;
+                lpc::RenderOptions options;
+                options.startFrame = first;
+                options.frames = last - first + static_cast<std::int64_t>(2.0 * copy.sampleRate);  // two seconds for the tails of reverbs and delays
+                options.plugins = plugins;
+                lpc::MediaStore media(root, /*streaming=*/false);
+                const lpc::RenderResult r = lpc::renderOffline(copy, media, options);
+                QString safe;
+                for (const QChar ch : names[k]) safe.append(QStringLiteral("\\/:*?\"<>|").contains(ch) ? QLatin1Char('_') : ch);
+                const std::filesystem::path tmp = std::filesystem::temp_directory_path() / (safe + QStringLiteral(" Bounce.wav")).toStdU16String();
+                lpc::writeWav(tmp, r.sampleRate, 2, r.interleaved, lpc::WavFormat::Pcm24);
+                done.push_back({names[k], QString::fromStdU16String(tmp.u16string()), first});
+            }
+        } catch (const std::exception& e) {
+            failure = QString::fromUtf8(e.what());
+        }
+        flag->store(false);
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self, done, failure] {
+            if (!self) return;
+            if (!failure.isEmpty()) {
+                self->setError("Bounce in place failed: " + failure);
+                return;
+            }
+            for (const Done& d : done) {
+                const QString id = self->addAudioTrackNamed(d.name + QStringLiteral(" Bounce"));
+                const double startBeats = static_cast<double>(self->tempoMap_.samplesToTicks(static_cast<double>(d.startFrame), self->sampleRate_)) / lpc::kPPQ;
+                self->importQueue_.push_back({QUrl::fromLocalFile(d.file), id, startBeats, true});
+            }
+            if (done.empty()) {
+                emit self->notice("Nothing to bounce");
+                return;
+            }
+            emit self->notice(QString("Bounced %1 track%2 in place").arg(static_cast<int>(done.size())).arg(done.size() == 1 ? "" : "s"));
+            if (!self->importRunning_) self->startNextImport();
+        }, Qt::QueuedConnection);
+    });
+}
+
 }  // namespace jad

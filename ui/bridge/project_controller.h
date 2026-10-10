@@ -459,7 +459,10 @@ public:
     Q_INVOKABLE void repeatSelectedRegions(int copies);
     Q_INVOKABLE void setSelectedRegionsLength(double beats);
     Q_INVOKABLE QVariantList trackList() const;  // {id, name, kind} of the tracks listed in the Tracks area (the master not included)
-    Q_INVOKABLE void openAllPluginWindows();  // Mix > Show All Plug-in Windows
+    Q_INVOKABLE void openAllPluginWindows();
+    // Bounce in Place: each selected audio or instrument track (with its inserts, sends and the buses it feeds) is rendered to a new audio track
+    // named after it, from its first region to its last plus a tail. The original stays as it is.
+    Q_INVOKABLE void bounceInPlace();  // Mix > Show All Plug-in Windows
     Q_INVOKABLE void toggleMuteSelectedRegions();
     Q_INVOKABLE void toggleLoopSelectedRegions();
     // Takes: the regions of one take group on a track, in time order ({id, active, label}); one of them plays

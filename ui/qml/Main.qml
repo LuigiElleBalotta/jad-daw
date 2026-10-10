@@ -14,7 +14,7 @@ ApplicationWindow {
     // the docked Mixer is never shorter than its strips with their legend: the window leaves room for it and for the rest
     minimumHeight: 200 + (controller.mixerVisible && !controller.mixerDetached ? 584 : 0)
     visible: true
-    title: "JAD Daw"
+    title: (controller.hasProject ? controller.projectName + (controller.dirty ? " •" : "") + " — " : "") + "JAD Daw"  // the project, a dot while it has changes that are not saved
     color: Theme.surfaceApp
 
     property alias project: controller

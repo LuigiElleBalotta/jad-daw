@@ -174,10 +174,11 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - Screenshots (used above) are taken by the app itself:
   `jad-daw --project demo.lpc --no-audio --screenshot out.png --size 1280x800 [--tool scissors] [--select-track 2] [--select-region 1] [--open-menu 2] [--panels library,inspector,smart,mixer,editors,global,automation] [--apply-patch audio.bright-vocal]`.
 
-Known limits: the macOS bundle has no icon yet, several
-buttons use text labels because there are no icons for them yet, and the panels behind Quick Help, Editors and Loops do
-not exist yet. The engine has one effect (gain) and one synth (sine), so the built-in patches and Smart Controls are
-small; plug-ins are VST3 effects and instruments with a stereo or mono output (no multi-output, sidechain or automation of plug-in parameters), stereo in and out, Windows only, and a plug-in that crashes while playing takes the app down; changes made inside a plug-in window become one undo step when it closes. A project with a track name that is empty, longer than 64 characters or has
-control characters, or with an unknown track colour is rejected on load.
+Known limits: the app has only been run on Windows (the macOS and Linux builds are written but never run, and the CI configure step fails on macOS); several buttons use text labels because
+there are no icons for them yet; the Score is view only; there are no Flex tools, Smart Tempo, Drummer or Session Players, no Freeze, no folder stacks and no quick-swipe comping;
+automation targets are the fader and the pan (not sends or plug-in parameters); the Browser has no audition and there are no Apple Loops; export has no MP3. Plug-ins are VST3 effects
+and instruments with a stereo or mono output (no multi-output instruments, sidechain or MIDI effects), and a plug-in that crashes while playing takes the app down; changes made inside
+a plug-in window become one undo step when it closes. Menu entries that are not done say so when chosen (`docs/roadmap-autonomous.md` lists what was done and what was not). A project
+with a track name that is empty, longer than 64 characters or has control characters, or with an unknown track colour is rejected on load.
 
 Design: `docs/superpowers/specs/2026-10-07-core-engine-design.md`, UI: `docs/superpowers/specs/2026-10-07-ui-shell-design.md` `docs/superpowers/specs/2026-10-08-ui-a-frame-design.md` and `docs/superpowers/specs/2026-10-08-ui-b-panels-design.md`. Third-party licences: `THIRD_PARTY.md`.

@@ -162,10 +162,13 @@ TestCase {
         compare(chosen, [["t", "g1"], ["t", "new"]])
         s.info = { trackId: "t", name: "Keys", color: "purple", kind: "instrument", master: false, groupId: "g1", gainDb: 0, pan: 0, mute: false, solo: false, outputName: "Stereo Out", inserts: [], sends: [] }
         compare(s.groupSlot.text, "Drums")                 // in a group: its name
-        var got = []
-        s.stubUsed.connect(function (label) { got.push(label) })
-        mouseClick(s.automationSlot)
-        compare(got, ["Automation"])
+        var modes = []
+        s.automationModeChosen.connect(function (id, m) { modes.push([id, m]) })
+        s.automationModeChosen("t", "touch")
+        compare(modes, [["t", "touch"]])
+        compare(s.automationSlot.text, "Read")             // the default mode
+        s.info = { trackId: "t", name: "Keys", color: "purple", kind: "instrument", master: false, automationMode: "latch", gainDb: 0, pan: 0, mute: false, solo: false, outputName: "Stereo Out", inserts: [], sends: [] }
+        compare(s.automationSlot.text, "Latch")
     }
     function test_changing_track_mid_drag_sends_nothing() {
         var s = createTemporaryObject(stripC, this)

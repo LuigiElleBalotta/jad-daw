@@ -119,6 +119,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(int waveformZoom READ waveformZoom WRITE setWaveformZoom NOTIFY waveformZoomChanged)  // vertical zoom of the waveforms: 1, 2, 4 or 8
     Q_PROPERTY(bool groupsActive READ groupsActive WRITE setGroupsActive NOTIFY groupsChanged)  // Mix > Groups Active (Shift-G)
     Q_PROPERTY(int groupsRevision READ groupsRevision NOTIFY groupsChanged)
+    Q_PROPERTY(bool preFaderMetering READ preFaderMetering WRITE setPreFaderMetering NOTIFY meteringChanged)  // the meters read before the fader
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -196,6 +197,8 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    bool preFaderMetering() const { return preFader_; }
+    void setPreFaderMetering(bool on) { if (on != preFader_) { preFader_ = on; emit meteringChanged(); } }
     bool groupsActive() const { return groupsActive_; }
     void setGroupsActive(bool on) { if (on != groupsActive_) { groupsActive_ = on; ++groupsRevision_; emit groupsChanged(); } }
     int groupsRevision() const { return groupsRevision_; }
@@ -207,6 +210,11 @@ public:
     Q_INVOKABLE void setTrackGroup(const QString& trackId, const QString& groupId);  // "" takes it out; "new" starts a group with it
     Q_INVOKABLE void setGroupField(const QString& groupId, const QString& field, const QVariant& value);  // name, volume, pan, mute, solo, selection
     Q_INVOKABLE void deleteGroup(const QString& groupId);
+    // Automation modes: "off" (the lanes are ignored), "read", and "touch" (fader moves are written while the fader is held), "latch" (from the
+    // first touch until the transport stops), "write" (the fader is written all the time the project plays). Written moves replace the
+    // lane between their first and last point and are one undo step.
+    Q_INVOKABLE void setAutomationMode(const QString& trackId, const QString& mode);
+    Q_INVOKABLE QString automationMode(const QString& trackId) const;
     // Group Settings window: for the group of this track ("" closes it)
     Q_PROPERTY(QString groupSettingsTrack READ groupSettingsTrack NOTIFY groupSettingsChanged)
     QString groupSettingsTrack() const { return groupSettingsTrack_; }
@@ -221,6 +229,8 @@ public:
     Q_INVOKABLE void playNote(int note, int velocity, bool on);
     Q_INVOKABLE QString liveTargetTrack() const { return liveTarget_; }  // the instrument track that sounds the live MIDI
     void loadMidiSettings(QSettings& s);
+    void loadIoSettings(QSettings& s);
+    void saveIoSettings(QSettings& s) const;
     void saveMidiSettings(QSettings& s) const;
     QString effectEditorTrack() const { return effectEditorTrack_; }
     int effectEditorIndex() const { return effectEditorIndex_; }
@@ -429,6 +439,13 @@ public:
     Q_INVOKABLE void stripSilence(double thresholdDb, double minSilenceMs);
     // The audio editor's Trim to Selection: the region keeps only frames [from, to) of its own part (a command)
     Q_INVOKABLE void trimRegionToFrames(const QString& regionId, double fromFrame, double toFrame);
+    // Track > Create Track Stack: a new aux track that sums the selected tracks (their output goes to it), one undo step
+    Q_INVOKABLE void createSummingStack(const QString& name = QString());
+    // Mix > I/O Labels: your own names for the inputs of the interface ("Vocal mic" instead of "Input 3")
+    Q_INVOKABLE QString inputLabel(int input) const;                 // input 1..; the name, or "Input n"
+    Q_INVOKABLE void setInputLabel(int input, const QString& label);
+    Q_PROPERTY(int inputLabelsRevision READ inputLabelsRevision NOTIFY inputLabelsChanged)
+    int inputLabelsRevision() const { return inputLabelsRevision_; }
     Q_INVOKABLE void deleteUnusedTracks();     // audio and instrument tracks without regions
     Q_INVOKABLE void deselectOutsideLocators();
     Q_INVOKABLE void selectSimilarRegions();   // the same audio file, or MIDI of the same length, as a selected region
@@ -549,7 +566,9 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void meteringChanged();
     void groupsChanged();
+    void inputLabelsChanged();
     void groupSettingsChanged();
     void waveformZoomChanged();
     void midiChanged();
@@ -697,7 +716,19 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    bool preFader_ = false;
     bool groupsActive_ = true;
+    QStringList inputLabels_;
+    int inputLabelsRevision_ = 0;
+    struct AutoCapture {
+        std::vector<std::pair<double, double>> gain, pan;  // (beats, value)
+        bool latched = false;                              // a latch take: it goes on after the fader is let go
+    };
+    QHash<QString, AutoCapture> autoCapture_;               // by track, while moves are being written
+    void captureAutomation(const QString& trackId, bool isPan, double value);
+    void finishAutomationCapture(const QString& trackId);
+    void finishAutomationCaptures(bool latchedToo);
+    void tickAutomationWrite();
     QString groupSettingsTrack_;
     int groupsRevision_ = 0;
     std::vector<GroupRow> groupRows_;

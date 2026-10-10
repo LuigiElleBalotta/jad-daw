@@ -81,7 +81,7 @@ bool stripChanged(const Track& a, const Track& b) {
 }
 
 bool configChanged(const Track& a, const Track& b) {
-    return a.kind != b.kind || a.automation != b.automation || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
+    return a.kind != b.kind || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
            a.strip.sends != b.strip.sends || a.strip.output != b.strip.output;
 }
 
@@ -223,6 +223,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
     }
     if (t.instrument) cfg->synthParams = synthParamsOf(*t.instrument);
     for (const AutomationLane& lane : t.automation) {
+        if (t.automationMode == "off") break;  // the fader and the pan stay where the strip has them
         std::vector<AutoPoint>& out = lane.target == "volume" ? cfg->volumeAuto : cfg->panAuto;
         if (lane.target != "volume" && lane.target != "pan") continue;
         for (const AutomationPoint& pt : lane.points)

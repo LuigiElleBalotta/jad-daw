@@ -45,6 +45,7 @@ struct TrackRow {
     double gainDb = 0.0, pan = 0.0;
     int input = 0;  // the recording input: 0 stereo 1+2, n mono input n
     QString groupId;  // the group the track is in (empty: none)
+    QString automationMode = QStringLiteral("read");  // off, read, touch, latch or write
     int regionCount = 0;
     bool showInTracks = true;  // false: a bus or aux that is listed in the Mixer only
     QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)

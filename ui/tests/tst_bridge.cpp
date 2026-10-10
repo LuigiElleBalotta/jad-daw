@@ -343,13 +343,16 @@ private slots:
         c.applySnapshotForTest(older);
         QCOMPARE(c.projectName(), QStringLiteral("Newer"));
     }
-    void playWithoutDeviceReportsAnError() {
+    void aProjectWithAudioDisabledPlaysOnTheEngineDriver() {
         TempDir dir;
         jad::ProjectController c(false);
         QVERIFY(c.openProject(url(makeDemo(dir))));
+        QVERIFY(!c.deviceError().isEmpty());       // there is no device ("audio output disabled")
         c.play();
-        QVERIFY(c.lastError().startsWith("No audio output"));
-        QVERIFY(!c.deviceError().isEmpty());
+        QTRY_VERIFY(c.playing());                  // the driver runs the engine in real time instead
+        QVERIFY(c.lastError().isEmpty());
+        c.stop();
+        QTRY_VERIFY(!c.playing());
     }
     void saveWritesTheProjectBack() {
         TempDir dir;
@@ -1193,6 +1196,75 @@ private slots:
         QVERIFY(!c.trackGroup(keys).isEmpty());
         c.setTrackGroup(keys, "");
         QTRY_COMPARE(c.groups().size(), 0);                                   // an empty group goes
+    }
+    void touchModeWritesTheFaderDragIntoTheLaneWhilePlayingAndOffIgnoresIt() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = firstAudioTrackId(c);
+        QCOMPARE(c.automationMode(audio), QString("read"));
+        c.setAutomationMode(audio, "touch");
+        QTRY_COMPARE(c.automationMode(audio), QString("touch"));
+        c.setAutomationMode(audio, "bogus");                         // refused
+        QCOMPARE(c.automationMode(audio), QString("touch"));
+        c.play();
+        QTRY_VERIFY(c.playing());
+        c.beginGesture();
+        for (int i = 1; i <= 6; ++i) { c.setGainLive(audio, -2.0 * i); QTest::qWait(60); }
+        c.setGain(audio, -12.0);
+        c.endGesture();                                              // touch: the take ends when the fader is let go
+        QTRY_VERIFY(c.automationPoints(audio, "volume").size() >= 2);
+        const QVariantList pts = c.automationPoints(audio, "volume");
+        QVERIFY(std::abs(pts.last().toMap().value("value").toDouble() + 12.0) < 0.01);
+        QVERIFY(pts.first().toMap().value("beats").toDouble() <= pts.last().toMap().value("beats").toDouble());
+        c.stop();
+        c.undo();                                                    // the take is one undo step
+        QTRY_VERIFY(c.automationPoints(audio, "volume").size() < pts.size());
+    }
+    void aSummingStackRoutesTheSelectedTracksToANewAux() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.createSummingStack();                                  // nothing selected
+        QVERIFY(notices.count() >= 1);
+        const QString audio = firstAudioTrackId(c);
+        c.selectTrack(audio, "replace");
+        const int before = c.tracks()->totalCount();
+        c.createSummingStack("Drum Stack");
+        QTRY_COMPARE(c.tracks()->totalCount(), before + 1);
+        QString bus;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->nameAt(i) == "Drum Stack") bus = c.tracks()->trackIdAt(i);
+        QVERIFY(!bus.isEmpty());
+        const jad::TrackRow* row = nullptr;
+        for (int i = 0; i < c.mixer()->rowCount(); ++i) {
+            const auto m = c.mixer()->data(c.mixer()->index(i), c.mixer()->roleNames().key("info")).toMap();
+            if (m.value("trackId").toString() == audio) QTRY_COMPARE(m.value("outputName").toString(), QString("Drum Stack"));
+        }
+        Q_UNUSED(row);
+        c.undo();                                                // the stack and the routing go in one step
+        QTRY_COMPARE(c.tracks()->totalCount(), before);
+    }
+    void inputLabelsNameTheInputs() {
+        jad::ProjectController c(false);
+        QCOMPARE(c.inputLabel(3), QString("Input 3"));
+        c.setInputLabel(3, "  Vocal mic ");
+        QCOMPARE(c.inputLabel(3), QString("Vocal mic"));
+        QCOMPARE(c.inputLabel(1), QString("Input 1"));
+        c.setInputLabel(2, "Vocal mic");
+        QCOMPARE(c.inputChoices().at(2), QString("Vocal mic"));     // listed in the Input menu (stereo, 1, 2...)
+        QVERIFY(c.inputChoices().first().contains("Vocal mic"));    // and in the stereo entry
+        c.setInputLabel(3, "");
+        QCOMPARE(c.inputLabel(3), QString("Input 3"));
+        QSettings s(QDir(QDir::tempPath()).filePath("jad-io-test.ini"), QSettings::IniFormat);
+        c.setInputLabel(2, "Guitar");
+        c.saveIoSettings(s);
+        jad::ProjectController d(false);
+        d.loadIoSettings(s);
+        QCOMPARE(d.inputLabel(2), QString("Guitar"));
     }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;

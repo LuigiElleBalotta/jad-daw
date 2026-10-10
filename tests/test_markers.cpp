@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <random>
 #include "lpc/commands.h"
+#include "lpc/graph_builder.h"
 #include "lpc/model_json.h"
 #include "lpc/undo_stack.h"
 
@@ -172,4 +173,36 @@ TEST_CASE("groups: set_groups is validated, undone and kept through JSON; removi
     REQUIRE(p.groups[0].members.size() == 2);                                            // and is back with its place in the group
     REQUIRE_FALSE(s.undo(p).has_value());
     REQUIRE(p.groups.empty());
+}
+
+TEST_CASE("automation modes: set_track_props carries the mode, the JSON omits the default, off leaves the lanes out of the engine", "[automation][mode]") {
+    std::mt19937_64 rng(14);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Audio;
+    t.name = "A";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume", {{0, -6.0}})).has_value());
+    TrackPatch patch;
+    patch.automationMode = "touch";
+    REQUIRE_FALSE(s.execute(p, makeSetTrackProps(t.id, patch)).has_value());
+    REQUIRE(p.findTrack(t.id)->automationMode == "touch");
+    nlohmann::json j = p.findTrack(t.id)->automationMode == "touch" ? nlohmann::json(*p.findTrack(t.id)) : nlohmann::json();
+    REQUIRE(j.at("automationMode") == "touch");
+    REQUIRE(j.get<Track>().automationMode == "touch");
+    patch.automationMode = "sideways";
+    REQUIRE(s.execute(p, makeSetTrackProps(t.id, patch)).has_value());                  // not a mode
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.findTrack(t.id)->automationMode == "read");
+    nlohmann::json plain = *p.findTrack(t.id);
+    REQUIRE_FALSE(plain.contains("automationMode"));
+    MediaStore media;
+    auto withLane = buildConfig(p, *p.findTrack(t.id), media, nullptr, nullptr);
+    REQUIRE(withLane->volumeAuto.size() == 1);                                           // read: the lane plays
+    patch.automationMode = "off";
+    REQUIRE_FALSE(s.execute(p, makeSetTrackProps(t.id, patch)).has_value());
+    auto withoutLane = buildConfig(p, *p.findTrack(t.id), media, nullptr, nullptr);
+    REQUIRE(withoutLane->volumeAuto.empty());                                            // off: ignored
 }

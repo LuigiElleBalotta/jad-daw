@@ -206,6 +206,8 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
 
     std::copy_n(l, n, preL_.data());  // pre-fader tap for sends
     std::copy_n(r, n, preR_.data());
+    t.blockPeakPre = 0.0f;
+    for (int i = 0; i < n; ++i) t.blockPeakPre = std::max({t.blockPeakPre, std::abs(l[i]), std::abs(r[i])});
 
     const bool muted = t.strip.mute || (anySolo && !t.strip.solo && isSource(t.kind));
     // with automation the lane drives the fader and the pan (the position is the start of this block)
@@ -314,8 +316,21 @@ void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float
         peakLo_[k].store(t.id.lo, std::memory_order_relaxed);
         peakVal_[k].store(std::max(peakVal_[k].load(std::memory_order_relaxed), t.blockPeak), std::memory_order_relaxed);
         reductionVal_[k].store(std::max(reductionVal_[k].load(std::memory_order_relaxed), t.blockReduction), std::memory_order_relaxed);
+        peakValPre_[k].store(std::max(peakValPre_[k].load(std::memory_order_relaxed), t.blockPeakPre), std::memory_order_relaxed);
     }
     peakCount_.store(count_, std::memory_order_release);
+}
+
+void RenderGraph::takeTrackPeaksPre(std::vector<std::pair<Uuid, float>>& out) noexcept {
+    const int n = peakCount_.load(std::memory_order_acquire);
+    out.clear();
+    for (int i = 0; i < n; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        Uuid id;
+        id.hi = peakHi_[k].load(std::memory_order_relaxed);
+        id.lo = peakLo_[k].load(std::memory_order_relaxed);
+        out.emplace_back(id, peakValPre_[k].exchange(0.0f, std::memory_order_relaxed));
+    }
 }
 
 void RenderGraph::takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) noexcept {

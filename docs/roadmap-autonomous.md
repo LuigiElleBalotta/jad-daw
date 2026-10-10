@@ -47,8 +47,11 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
       region media in one undo step; Strip Silence cuts a region at its silences. (Region looping is not done.)
 
 ## 6. Mixer and automation
-- [ ] Groups (Group Settings window, Groups Active), I/O labels, pre-fader metering, track stacks (summing).
-- [ ] Automation modes (Read, Touch, Latch, Write), more targets (sends, plug-in parameters), curves.
+- [x] Groups (set_groups; volume, pan, mute, solo and selection shared; Group slot menu, Group Settings window, Mix > Groups Active), I/O Labels (names of
+      the interface inputs), Pre-Fader Metering, summing stacks (Track > Create Track Stack: a new aux that sums the selected tracks). Not covered: folder stacks,
+      I/O Assignments.
+- [x] Automation modes per track (Off, Read, Touch, Latch, Write; the strip's Automation slot) that write fader and pan moves into the lanes while the project
+      plays (one undo step per take). Not covered: sends and plug-in parameters as targets, curve shapes between points.
 
 ## 7. Export
 - [ ] Bounce dialog: format (WAV 16/24/32, AIFF, FLAC, MP3), normalize, range (cycle / whole), include plug-ins and the effects above.

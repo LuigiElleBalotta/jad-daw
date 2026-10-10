@@ -309,6 +309,7 @@ public:
         if (patch_.name) j["name"] = *patch_.name;
         if (patch_.color) j["color"] = *patch_.color;
         if (patch_.showInTracks) j["showInTracks"] = *patch_.showInTracks;
+        if (patch_.automationMode) j["automationMode"] = *patch_.automationMode;
         return j;
     }
     ApplyResult apply(Project& p) const override {
@@ -318,7 +319,15 @@ public:
         if (auto e = checkTrackProps(patch_.name.value_or(t->name), patch_.color.value_or(t->color))) return fail(*e);
         if (patch_.showInTracks)
             if (auto e = checkShowInTracks(t->kind, *patch_.showInTracks)) return fail(*e);
+        if (patch_.automationMode) {
+            const std::string& m = *patch_.automationMode;
+            if (m != "off" && m != "read" && m != "touch" && m != "latch" && m != "write") return fail("bad_value", "the automation mode is off, read, touch, latch or write");
+        }
         TrackPatch previous;
+        if (patch_.automationMode) {
+            previous.automationMode = t->automationMode;
+            t->automationMode = *patch_.automationMode;
+        }
         if (patch_.name) {
             previous.name = t->name;
             t->name = *patch_.name;
@@ -857,6 +866,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("name")) patch.name = j["name"].get<std::string>();
             if (j.contains("color")) patch.color = j["color"].get<std::string>();
             if (j.contains("showInTracks")) patch.showInTracks = j["showInTracks"].get<bool>();
+            if (j.contains("automationMode")) patch.automationMode = j["automationMode"].get<std::string>();
             return makeSetTrackProps(j.at("trackId").get<Uuid>(), patch);
         }
         if (type == "set_signature") return makeSetSignature(j.at("tick").get<Ticks>(), j.at("numerator").get<int>(), j.at("denominator").get<int>());

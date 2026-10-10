@@ -18,6 +18,7 @@ struct TrackPatch {
     std::optional<std::string> name;
     std::optional<std::string> color;
     std::optional<bool> showInTracks;
+    std::optional<std::string> automationMode;  // off, read, touch, latch or write
 };
 
 CommandPtr makeAddTrack(Track track, int index = -1);  // index -1 appends

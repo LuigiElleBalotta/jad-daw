@@ -354,11 +354,13 @@ void ProjectController::endGesture() {
     gestureActive_ = false;
     groupBase_.clear();
     if (host_) host_->endGesture();
+    finishAutomationCaptures(false);  // a touch take ends when the fader is let go
 }
 
 void ProjectController::setGainLive(const QString& trackId, double db) {
     if (!host_ || !std::isfinite(db)) return;
     liveGain_[trackId] = db;
+    captureAutomation(trackId, false, std::clamp(db, -96.0, 24.0));
     if (!liveTimer_.isActive()) {
         flushLive();
         liveTimer_.start();
@@ -368,6 +370,7 @@ void ProjectController::setGainLive(const QString& trackId, double db) {
 void ProjectController::setPanLive(const QString& trackId, double pan) {
     if (!host_ || !std::isfinite(pan)) return;
     livePan_[trackId] = pan;
+    captureAutomation(trackId, true, std::clamp(pan, -1.0, 1.0));
     if (!liveTimer_.isActive()) {
         flushLive();
         liveTimer_.start();
@@ -893,9 +896,10 @@ void ProjectController::setTrackInput(const QString& trackId, int input) {
 }
 
 QStringList ProjectController::inputChoices() const {
-    QStringList out{QStringLiteral("Input 1 + 2 (stereo)")};
+    const bool defaults = inputLabel(1) == QStringLiteral("Input 1") && inputLabel(2) == QStringLiteral("Input 2");
+    QStringList out{defaults ? QStringLiteral("Input 1 + 2 (stereo)") : QStringLiteral("%1 + %2 (stereo)").arg(inputLabel(1), inputLabel(2))};
     const int n = std::max(inputChannels(), 2);
-    for (int i = 1; i <= n; ++i) out << QStringLiteral("Input %1").arg(i);
+    for (int i = 1; i <= n; ++i) out << inputLabel(i);
     return out;
 }
 
@@ -1662,6 +1666,139 @@ void ProjectController::deleteGroup(const QString& groupId) {
     auto rows = groupRows_;
     rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const GroupRow& g) { return g.id == groupId; }), rows.end());
     sendGroups(rows);
+}
+
+void ProjectController::setAutomationMode(const QString& trackId, const QString& mode) {
+    if (!host_ || (mode != "off" && mode != "read" && mode != "touch" && mode != "latch" && mode != "write")) return;
+    finishAutomationCapture(trackId);
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"automationMode", mode.toStdString()}});
+}
+
+QString ProjectController::automationMode(const QString& trackId) const {
+    for (const TrackRow& t : allRows_)
+        if (t.id == trackId) return t.automationMode;
+    return QStringLiteral("read");
+}
+
+namespace {
+const TrackRow* findTrackRow(const std::vector<TrackRow>& rows, const QString& id) {
+    for (const TrackRow& t : rows)
+        if (t.id == id) return &t;
+    return nullptr;
+}
+}  // namespace
+
+// A fader or pan move while the project plays and the track is in a writing mode: keep it with its position.
+void ProjectController::captureAutomation(const QString& trackId, bool isPan, double value) {
+    if (!playing_) return;
+    const TrackRow* t = findTrackRow(allRows_, trackId);
+    if (!t || t->master) return;
+    const bool touch = t->automationMode == "touch", latch = t->automationMode == "latch", write = t->automationMode == "write";
+    if (!touch && !latch && !write) return;
+    if (touch && !gestureActive_) return;  // touch writes only while the fader is held
+    AutoCapture& c = autoCapture_[trackId];
+    if (latch) c.latched = true;
+    auto& list = isPan ? c.pan : c.gain;
+    if (!list.empty() && std::abs(list.back().first - positionBeats_) < 1e-9) list.back().second = value;
+    else list.emplace_back(positionBeats_, value);
+}
+
+// While the project plays, a track in write mode (or in a latch take) is written with the position and the value of its fader.
+void ProjectController::tickAutomationWrite() {
+    for (const TrackRow& t : allRows_) {
+        if (t.master) continue;
+        const bool write = t.automationMode == "write";
+        const bool latched = t.automationMode == "latch" && autoCapture_.contains(t.id) && autoCapture_[t.id].latched;
+        if (!write && !latched) continue;
+        if (gestureActive_) continue;  // the drag itself is captured move by move
+        AutoCapture& c = autoCapture_[t.id];
+        if (c.gain.empty() || std::abs(c.gain.back().first - positionBeats_) > 1e-9) c.gain.emplace_back(positionBeats_, t.gainDb);
+        if (c.pan.empty() || std::abs(c.pan.back().first - positionBeats_) > 1e-9) c.pan.emplace_back(positionBeats_, t.pan);
+    }
+}
+
+void ProjectController::finishAutomationCaptures(bool latchedToo) {
+    const QStringList ids = autoCapture_.keys();
+    for (const QString& id : ids) {
+        const TrackRow* t = findTrackRow(allRows_, id);
+        const bool keepGoing = !latchedToo && t && (t->automationMode == "latch" || t->automationMode == "write");
+        if (!keepGoing) finishAutomationCapture(id);
+    }
+}
+
+// The written moves replace the lane between their first and last point (the points of the lane outside stay), thinned out.
+void ProjectController::finishAutomationCapture(const QString& trackId) {
+    const auto it = autoCapture_.find(trackId);
+    if (it == autoCapture_.end()) return;
+    const AutoCapture c = it.value();
+    autoCapture_.erase(it);
+    const TrackRow* t = findTrackRow(allRows_, trackId);
+    if (!t || !host_) return;
+    auto merge = [&](const std::vector<std::pair<double, double>>& moves, const std::vector<AutoRow>& old, const char* target, double eps) {
+        if (moves.size() < 1) return;
+        std::vector<std::pair<double, double>> kept;  // thinned: a point stays when it differs from the last kept one or ends the take
+        for (std::size_t i = 0; i < moves.size(); ++i)
+            if (kept.empty() || i + 1 == moves.size() || std::abs(moves[i].second - kept.back().second) > eps) kept.push_back(moves[i]);
+        const double from = moves.front().first, to = moves.back().first;
+        QVariantList points;
+        for (const AutoRow& p : old)
+            if (p.beats < from - 1e-9 || p.beats > to + 1e-9) points.append(QVariantMap{{"beats", p.beats}, {"value", p.value}});
+        for (const auto& [b, v] : kept) points.append(QVariantMap{{"beats", b}, {"value", v}});
+        setAutomationPoints(trackId, QString::fromLatin1(target), points);
+    };
+    merge(c.gain, t->volumeAuto, "volume", 0.05);
+    merge(c.pan, t->panAuto, "pan", 0.01);
+}
+
+QString ProjectController::inputLabel(int input) const {
+    const QString label = input >= 1 && input <= inputLabels_.size() ? inputLabels_.at(input - 1).trimmed() : QString();
+    return label.isEmpty() ? QStringLiteral("Input %1").arg(input) : label;
+}
+
+void ProjectController::setInputLabel(int input, const QString& label) {
+    if (input < 1 || input > 64) return;
+    while (inputLabels_.size() < input) inputLabels_ << QString();
+    const QString clean = label.trimmed().left(32);
+    if (inputLabels_[input - 1] == clean) return;
+    inputLabels_[input - 1] = clean;
+    ++inputLabelsRevision_;
+    emit inputLabelsChanged();
+    emit audioSettingsChanged();  // the Input menus list the labels
+}
+
+void ProjectController::loadIoSettings(QSettings& s) {
+    inputLabels_ = s.value("io/inputLabels").toStringList();
+    ++inputLabelsRevision_;
+    emit inputLabelsChanged();
+}
+
+void ProjectController::saveIoSettings(QSettings& s) const { s.setValue("io/inputLabels", inputLabels_); }
+
+void ProjectController::createSummingStack(const QString& name) {
+    if (!host_) return;
+    QStringList members;
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && (t->kind == "audio" || t->kind == "instrument")) members << id;
+    if (members.isEmpty()) {
+        emit notice("Select the tracks of the stack first");
+        return;
+    }
+    int stacks = 0;
+    for (const TrackRow& t : allRows_)
+        if (t.kind == "bus") ++stacks;
+    const QString label = name.trimmed().isEmpty() ? QStringLiteral("Stack %1").arg(stacks + 1) : name.trimmed().left(60);
+    const QString busId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    nlohmann::json commands = nlohmann::json::array();
+    commands.push_back({{"type", "add_track"}, {"index", -1},
+                        {"track", {{"id", busId.toStdString()}, {"kind", "bus"}, {"name", label.toStdString()}, {"color", ""},
+                                   {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()},
+                                              {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                                   {"regions", nlohmann::json::array()}, {"automation", nlohmann::json::array()}, {"instrument", nullptr}}}});
+    for (const QString& id : members)
+        commands.push_back({{"type", "set_output"}, {"trackId", id.toStdString()}, {"output", busId.toStdString()}});
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+    emit notice(QString("Created %1 for %2 track%3").arg(label).arg(members.size()).arg(members.size() == 1 ? "" : "s"));
 }
 
 }  // namespace jad

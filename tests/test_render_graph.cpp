@@ -460,3 +460,16 @@ TEST_CASE("graph: region fades ramp the ends with a quarter sine and leave the m
     REQUIRE(s.l[2000 - 200] == Catch::Approx(std::sin(1.5707963 * 199.5 / 400.0)).margin(0.02));
     REQUIRE(s.l[2010] == 0.0f);                                      // after the region
 }
+
+TEST_CASE("graph: the peak is read after the fader or, for pre-fader metering, before it", "[graph][peak]") {
+    Rig rig;
+    rig.addNode(1, TrackKind::Audio, rig.dcConfig(0.5f, 0, 2000), strip(0.25f));
+    rig.addMaster();
+    rig.render(512);
+    std::vector<std::pair<Uuid, float>> post, pre;
+    rig.g.takeTrackPeaks(post);
+    rig.g.takeTrackPeaksPre(pre);
+    auto of = [](const std::vector<std::pair<Uuid, float>>& v, std::uint64_t n) { for (const auto& [u, p] : v) if (u == id(n)) return p; return -1.0f; };
+    REQUIRE(of(post, 1) == Catch::Approx(0.125f));    // 0.5 * fader 0.25
+    REQUIRE(of(pre, 1) == Catch::Approx(0.5f));       // before the fader
+}

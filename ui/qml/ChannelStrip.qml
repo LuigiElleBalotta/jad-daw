@@ -101,6 +101,7 @@ Panel {
     signal instrumentEditorRequested(string id)                 // a double click on the instrument slot
     signal groupChosen(string id, string groupId)             // the Group slot's menu: "" none, "new" a new group, else a group
     signal groupSettingsRequested(string id)
+    signal automationModeChosen(string id, string mode)      // the Automation slot's menu: off, read, touch, latch, write
     signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
@@ -190,6 +191,23 @@ Panel {
         }
     }
     readonly property string groupName: { for (const g of groupChoices) if (g.id === (info.groupId ?? "")) return g.name; return "" }
+    function modeLabel(m) { return ({ off: qsTr("Off"), read: qsTr("Read"), touch: qsTr("Touch"), latch: qsTr("Latch"), write: qsTr("Write") })[m] ?? m }
+    function modeColor(m) { return m === "off" ? Theme.textSecondary : (m === "read" ? Theme.statePlay : Theme.stateRecord) }
+    ThemedMenu {  // the automation mode of a track
+        id: automationMenu
+        Instantiator {
+            model: ["off", "read", "touch", "latch", "write"]
+            delegate: ThemedMenuItem {
+                required property string modelData
+                text: root.modeLabel(modelData)
+                checkable: true
+                checked: (root.info.automationMode ?? "read") === modelData
+                onTriggered: root.automationModeChosen(root.trackId, modelData)
+            }
+            onObjectAdded: (index, object) => automationMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => automationMenu.removeItem(object)
+        }
+    }
     ThemedMenu {  // the group of a track
         id: groupMenu
         ThemedMenuItem { text: qsTr("No Group"); onTriggered: root.groupChosen(root.trackId, "") }
@@ -563,10 +581,10 @@ Panel {
             StripSlot {
                 id: automationSlot
                 anchors.fill: parent
-                text: qsTr("Read")
+                text: root.master ? qsTr("Read") : root.modeLabel(root.info.automationMode ?? "read")
                 dim: true
-                textColor: root.master ? Theme.textPrimary : Theme.statePlay  // Logic: green on tracks, white on the master
-                onClicked: root.stubUsed("Automation")
+                textColor: root.master ? Theme.textPrimary : root.modeColor(root.info.automationMode ?? "read")  // Logic: green on tracks, white on the master
+                onClicked: { if (root.master) root.stubUsed("Automation"); else automationMenu.popup(automationSlot, 0, automationSlot.height) }
             }
         }
         FixedRow {  // the track icon tile, in the colour of the strip type

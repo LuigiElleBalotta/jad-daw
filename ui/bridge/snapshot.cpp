@@ -78,6 +78,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.gainDb = t.strip.gainDb;
         tr.pan = t.strip.pan;
         tr.input = t.strip.input;
+        tr.automationMode = QString::fromStdString(t.automationMode);
         for (const lpc::Group& g : p.groups)
             if (std::find(g.members.begin(), g.members.end(), t.id) != g.members.end()) tr.groupId = QString::fromStdString(g.id.toString());
         tr.regionCount = static_cast<int>(t.regions.size());

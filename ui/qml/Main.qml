@@ -76,6 +76,7 @@ ApplicationWindow {
 
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
+    IoLabelsDialog { id: ioLabelsDialog; project: controller }
     GroupSettingsWindow { id: groupSettings; project: controller }
     AudioProcessDialog { id: audioDialog; project: controller }
     PreferencesDialog { id: preferencesDialog; project: controller }
@@ -201,6 +202,9 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "track.createTrackStack": () => controller.createSummingStack(),
+        "mix.iOLabels": () => ioLabelsDialog.open(),
+        "mix.preFaderMetering": () => { controller.preFaderMetering = !controller.preFaderMetering },
         "mix.createGroup": () => controller.createGroupFromSelection(),
         "mix.groupsActive": () => { controller.groupsActive = !controller.groupsActive },
         "mix.groupSettings": () => { if (controller.selectedTrackIds.length > 0) controller.openGroupSettings(controller.selectedTrackIds[0]) },
@@ -279,6 +283,7 @@ ApplicationWindow {
         "view.editors": root.editorsVisible,
         "view.library": controller.libraryVisible,
         "track.globalTracks": controller.globalTracksVisible,
+        "mix.preFaderMetering": controller.preFaderMetering,
         "mix.groupsActive": controller.groupsActive,
         "transport.metronome": controller.metronomeOn,
         "transport.record": controller.recording,

@@ -11,6 +11,7 @@ ChannelStrip {
     pluginGroups: project.plugins.menu
     knownPluginIds: project.plugins.knownIds
 
+    onAutomationModeChosen: (id, mode) => project.setAutomationMode(id, mode)
     groupChoices: { project.groupsRevision; return project.groups().map(g => ({ id: g.id, name: g.name })) }
     onGroupChosen: (id, groupId) => project.setTrackGroup(id, groupId)
     onGroupSettingsRequested: (id) => project.openGroupSettings(id)

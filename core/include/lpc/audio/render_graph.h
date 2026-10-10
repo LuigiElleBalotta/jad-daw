@@ -113,6 +113,7 @@ struct TrackNode {
     int monitorL = -1, monitorR = -1;  // the input channels heard on this track (-1: none)
     float smoothL = 1.0f;
     float blockPeak = 0.0f;  // after the fader, this block
+    float blockPeakPre = 0.0f;  // before the fader (after the inserts), this block
     float blockReduction = 0.0f;  // the deepest gain reduction of the inserts, this block (dB)
     float smoothR = 1.0f;
     bool smoothInit = false;
@@ -142,6 +143,8 @@ public:
     void setInput(const float* const* channels, int numChannels) noexcept { input_ = channels; inputChannels_ = numChannels; }
     // The post-fader peak of every track since the last call (linear), for the meters; any thread. Reading resets them.
     void takeTrackPeaks(std::vector<std::pair<Uuid, float>>& out) noexcept;
+    // The same before the fader (Pre-Fader Metering).
+    void takeTrackPeaksPre(std::vector<std::pair<Uuid, float>>& out) noexcept;
     // The deepest gain reduction (dB) of each track's inserts since the last call; reading resets it.
     void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) noexcept;
     int trackCount() const noexcept { return count_; }
@@ -168,6 +171,7 @@ private:
     std::array<std::atomic<std::uint64_t>, kMaxTracks> peakHi_{}, peakLo_{};
     std::array<std::atomic<float>, kMaxTracks> peakVal_{};
     std::array<std::atomic<float>, kMaxTracks> reductionVal_{};
+    std::array<std::atomic<float>, kMaxTracks> peakValPre_{};
     std::atomic<int> peakCount_{0};
 };
 

@@ -460,11 +460,13 @@ QStringList ProjectController::groupPeers(const QString& trackId, const char* fi
 
 void ProjectController::setGain(const QString& trackId, double db) {
     if (!std::isfinite(db)) return;
+    captureAutomation(trackId, false, std::clamp(db, -96.0, 24.0));
     setStripField(trackId, "gainDb", std::clamp(db, -96.0, 24.0));
 }
 
 void ProjectController::setPan(const QString& trackId, double pan) {
     if (!std::isfinite(pan)) return;
+    captureAutomation(trackId, true, std::clamp(pan, -1.0, 1.0));
     setStripField(trackId, "pan", std::clamp(pan, -1.0, 1.0));
 }
 
@@ -1180,7 +1182,7 @@ void ProjectController::play() {
         setError("Audio engine not running: playback is unavailable until it recovers");
         return;
     }
-    if (!device_) {
+    if (openAudioDevice_ && !device_) {  // without a device the engine driver plays in real time (tests, no hardware)
         setError(QString("No audio output: ") + (deviceError_.isEmpty() ? QString("no device") : deviceError_));
         return;
     }
@@ -1255,8 +1257,10 @@ void ProjectController::tick() {
     const bool playing = engine_->playing();
     if (playing != playing_) {
         playing_ = playing;
+        if (!playing) finishAutomationCaptures(true);  // stopped: what was written (latch and write too) goes into the lanes
         emit playingChanged();
     }
+    if (playing_) tickAutomationWrite();
     const std::int64_t frames = engine_->positionFrames();
     const double seconds = static_cast<double>(frames) / sampleRate_;
     if (seconds != positionSeconds_) {
@@ -1265,8 +1269,10 @@ void ProjectController::tick() {
         emit positionChanged();
     }
     {
-        std::vector<std::pair<lpc::Uuid, float>> raw;
+        std::vector<std::pair<lpc::Uuid, float>> raw, pre;
         engine_->takeTrackPeaks(raw);
+        engine_->takeTrackPeaksPre(pre);
+        if (preFader_) raw = pre;  // Pre-Fader Metering
         bool moved = false;
         for (const auto& [id, value] : raw) {
             const QString key = QString::fromStdString(id.toString());
@@ -1338,6 +1344,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     loadClickSettings(s);
     loadAudioSettings(s);
     loadMidiSettings(s);
+    loadIoSettings(s);
 }
 
 void ProjectController::savePanelState(QSettings& s) const {
@@ -1351,6 +1358,7 @@ void ProjectController::savePanelState(QSettings& s) const {
     saveClickSettings(s);
     saveAudioSettings(s);
     saveMidiSettings(s);
+    saveIoSettings(s);
 }
 
 void ProjectController::setLeftColumnWidth(double width) {

@@ -856,7 +856,7 @@ Item {
                     width: parent.width - 6
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
-                    text: { for (const c of root.laneChoices) if (c.key === root.laneKey) return c.label; return "" }
+                    text: { for (const c of root.laneChoices) if (c.key === root.laneKey) return c.label.split(" (")[0]; return "" }
                     color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize
                 }
                 MouseArea { objectName: "laneSelector"; anchors.fill: parent; onClicked: laneMenu.popup(parent, 0, parent.height) }
@@ -889,7 +889,7 @@ Item {
                 function yOf(v) { return height - 3 - (v - root.laneMin) / (root.laneMax - root.laneMin) * (height - 6) }
                 onPaint: {
                     const ctx = getContext("2d")
-                    ctx.reset()
+                    ctx.clearRect(0, 0, width, height)
                     const list = pts
                     ctx.strokeStyle = "#5aa8ff"
                     ctx.fillStyle = "#5aa8ff"

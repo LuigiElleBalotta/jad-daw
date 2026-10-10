@@ -40,6 +40,7 @@ Item {
         project.setRegionNotes(regionId, kept)
     }
 
+    Rectangle { anchors.fill: parent; color: Theme.surfaceCanvas }
     Text {
         anchors.centerIn: parent
         visible: !root.hasMidi

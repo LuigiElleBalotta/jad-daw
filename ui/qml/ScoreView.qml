@@ -18,6 +18,7 @@ Item {
     readonly property var sharp: [false, true, false, true, false, false, true, false, true, false, true, false]
     function diatonic(n) { return (Math.floor(n / 12) - 1) * 7 + steps[n % 12] }
 
+    Rectangle { anchors.fill: parent; color: Theme.surfaceCanvas }
     Text {
         anchors.centerIn: parent
         visible: !root.hasMidi
@@ -27,6 +28,7 @@ Item {
         font.pixelSize: Theme.fontTypeBodySize
     }
     Flickable {
+        id: flick
         visible: root.hasMidi
         anchors.fill: parent
         contentWidth: root.leftMargin + (root.hasMidi ? root.info.lengthBeats : 0) * root.pixelsPerBeat + 40
@@ -37,16 +39,16 @@ Item {
         Canvas {
             id: canvas
             objectName: "scoreCanvas"
-            width: parent.contentWidth
-            height: parent.height
-            property var data: root.notes
-            onDataChanged: requestPaint()
+            width: flick.contentWidth
+            height: flick.height
+            property var shownNotes: root.notes
+            onShownNotesChanged: requestPaint()
             Connections { target: root; function onHasMidiChanged() { canvas.requestPaint() } }
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             onPaint: {
                 const ctx = getContext("2d")
-                ctx.reset()
+                ctx.clearRect(0, 0, width, height)
                 if (!root.hasMidi) return
                 const sp = root.lineGap
                 const trebleBottom = Math.max(70, height / 2 - 30)              // the bottom line of the treble staff
@@ -91,9 +93,14 @@ Item {
                     // the note head
                     ctx.fillStyle = "#e8e8e8"
                     ctx.strokeStyle = "#e8e8e8"
+                    ctx.save()
+                    ctx.translate(x, y)
+                    ctx.rotate(-0.35)
+                    ctx.scale(1, 0.7)
                     ctx.beginPath()
-                    ctx.ellipse(x - 5, y - 3.5, 10, 7)
+                    ctx.arc(0, 0, 5.5, 0, Math.PI * 2)
                     if (n.length >= 2) ctx.stroke(); else ctx.fill()
+                    ctx.restore()
                     if (root.sharp[n.note % 12]) { ctx.font = "12px sans-serif"; ctx.fillText("♯", x - 17, y + 4) }
                     // the stem: up on the lower half of the staff, down on the upper half
                     if (n.length < 4) {

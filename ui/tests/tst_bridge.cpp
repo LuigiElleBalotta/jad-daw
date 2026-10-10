@@ -877,6 +877,14 @@ private slots:
         }
         QVERIFY(take);                        // at the position where recording started
         QVERIFY(take->lengthBeats > 0.5);     // about 0.6 s at 120 bpm is 1.2 beats
+        const QString takeId = take->id;
+        c.moveRegion(takeId, 20);                                    // away from where it was recorded ...
+        QTRY_VERIFY(std::abs(c.regions()->find(takeId)->startBeats - 20.0) < 0.01);
+        c.selectRegions({takeId}, "replace");
+        c.moveSelectedToRecordedPosition();                          // ... and back
+        QTRY_VERIFY(std::abs(c.regions()->find(takeId)->startBeats - 8.0) < 0.02);
+        c.undo();
+        c.undo();
         c.undo();
         QTRY_COMPARE(c.regions()->rowCount(), before);
     }
@@ -1909,6 +1917,31 @@ private slots:
         c.selectRegions({c.regions()->regionIdAt(0), c.regions()->regionIdAt(1)}, "replace");
         c.joinPerTracks();
         QTRY_COMPARE(c.regions()->rowCount(), 1);
+    }
+    void firstTransientMovesOntoTheNearestBeatAndExternalEditorNeedsAnAudioRegion() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio) audio = r->id;
+        }
+        QVERIFY(!audio.isEmpty());
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.selectRegions({}, "replace");
+        c.openSelectedInExternalEditor();
+        QVERIFY(notices.count() >= 1 && notices.last().at(0).toString().contains("Select an audio region"));
+        c.moveRegion(audio, 40.3);                                   // a little off the beat
+        QTRY_VERIFY(std::abs(c.regions()->find(audio)->startBeats - 40.3) < 0.01);
+        c.selectRegions({audio}, "replace");
+        c.moveFirstTransientToNearestBeat();
+        QTRY_VERIFY_WITH_TIMEOUT(std::abs(c.regions()->find(audio)->startBeats - 40.3) > 0.05, 10000);  // it moved: the tone starts right away, so onto the beat
+        const double start = c.regions()->find(audio)->startBeats;
+        QVERIFY(start > 39.5 && start < 40.05);
+        c.undo();
+        QTRY_VERIFY(std::abs(c.regions()->find(audio)->startBeats - 40.3) < 0.01);
     }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;

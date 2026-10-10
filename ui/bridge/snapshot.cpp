@@ -180,6 +180,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
                 const lpc::MediaItem* item = p.findMedia(r.mediaId);
                 rr.missing = !item || !mediaPresent(*item);
                 rr.mediaFrames = item ? item->frames : 0;
+                if (item && item->recordedAt >= 0 && item->sampleRate > 0)
+                    rr.recordedMicros = item->recordedAt + static_cast<std::int64_t>(std::llround(static_cast<double>(r.sourceOffsetFrames) * 1e6 / item->sampleRate));
             }
             s.regions.push_back(rr);
         }

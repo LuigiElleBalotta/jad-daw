@@ -490,7 +490,12 @@ public:
     // Edit > Separate MIDI Events > by Note Pitch: each pitch of the selected MIDI regions goes to a region of its own on a new track made like the first.
     Q_INVOKABLE void separateMidiByPitch();
     Q_INVOKABLE void moveSelectedToFocusedTrack();  // Edit > Move > To Focused Track: the selected track; the regions keep their time
-    Q_INVOKABLE void joinPerTracks();               // Edit > Bounce and Join > Join per Tracks
+    Q_INVOKABLE void joinPerTracks();
+    // Edit > Move > To Recorded Position: audio regions recorded in this project go back to where they were recorded.
+    Q_INVOKABLE void moveSelectedToRecordedPosition();
+    // Edit > Move > To Beat / First Transient to Nearest Beat: the first attack in each selected audio region is moved onto the nearest beat of the grid.
+    Q_INVOKABLE void moveFirstTransientToNearestBeat();
+    Q_INVOKABLE void openSelectedInExternalEditor();   // Edit > Open in External Sample Editor: the audio file in the program the system opens it with               // Edit > Bounce and Join > Join per Tracks
     Q_INVOKABLE void selectAllTracks();  // Edit > Select Tracks
     Q_INVOKABLE void moveLocators(int direction);
     Q_INVOKABLE void deleteMarkerAtPlayhead();
@@ -785,10 +790,11 @@ private:
         QString takeGroup;       // set for the passes of a cycle recording: the regions share it
         bool muted = false;      // a take that does not play
         bool musical = false;    // the region follows the tempo (Use Musical Grid)
+        bool recorded = false;   // a take: the file remembers when it was recorded (Move > To Recorded Position)
     };
     void startNextImport();
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
-    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false, bool musical = false);
+    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false, bool musical = false, bool recorded = false);
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     QString inspectorBusId_, pinOwner_;  // the pinned bus of the right strip and the track it was pinned for
     int routingRevision_ = 0;

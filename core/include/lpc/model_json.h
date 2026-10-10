@@ -39,7 +39,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationPoint, tick, value)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationLane, id, target, points)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Marker, id, tick, name)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Group, id, name, members, volume, pan, mute, solo, selection)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MediaItem, id, path, hash, sampleRate, channels, frames)
+void to_json(nlohmann::json& j, const MediaItem& m);
+void from_json(const nlohmann::json& j, MediaItem& m);  // `recordedAt` is optional
 
 nlohmann::json toJson(const Project& p);
 Project projectFromJson(const nlohmann::json& j);  // throws on any invalid or incomplete document

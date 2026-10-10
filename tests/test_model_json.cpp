@@ -16,6 +16,7 @@ Project makeRichProject() {
     p.markers.push_back({Uuid::random(rng), 2 * kPPQ, "Verse"});
 
     MediaItem media{Uuid::random(rng), "audio/tone.wav", "abc123", 44100, 2, 88200};
+    media.recordedAt = 1500000;  // a take
     p.mediaPool.push_back(media);
 
     Track bus;
@@ -90,6 +91,17 @@ TEST_CASE("model json: round trip keeps every field", "[model][json]") {
     REQUIRE(projectFromJson(j) == p);
     // and through text, as it would be on disk
     REQUIRE(projectFromJson(nlohmann::json::parse(j.dump())) == p);
+}
+
+TEST_CASE("model json: recordedAt is written only for a take and defaults to -1", "[model][json]") {
+    MediaItem item{Uuid::random(), "audio/a.wav", "h", 48000, 1, 10};
+    nlohmann::json j = item;
+    REQUIRE_FALSE(j.contains("recordedAt"));
+    REQUIRE(j.get<MediaItem>().recordedAt == -1);
+    item.recordedAt = 42;
+    j = item;
+    REQUIRE(j["recordedAt"] == 42);
+    REQUIRE(j.get<MediaItem>() == item);
 }
 
 TEST_CASE("model json: ids are uuid strings and enums are readable", "[model][json]") {

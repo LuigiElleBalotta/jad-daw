@@ -150,6 +150,7 @@ struct MediaItem {
     int sampleRate = 0;
     int channels = 0;
     std::int64_t frames = 0;
+    std::int64_t recordedAt = -1;  // for a take: the absolute time (microseconds) at which its first frame was recorded; -1 for an imported file
     bool operator==(const MediaItem&) const = default;
 };
 

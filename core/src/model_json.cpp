@@ -77,6 +77,21 @@ void from_json(const nlohmann::json& j, Strip& s) {
     s.input = j.value("input", 0);
 }
 
+void to_json(nlohmann::json& j, const MediaItem& m) {
+    j = {{"id", m.id}, {"path", m.path}, {"hash", m.hash}, {"sampleRate", m.sampleRate}, {"channels", m.channels}, {"frames", m.frames}};
+    if (m.recordedAt >= 0) j["recordedAt"] = m.recordedAt;  // written only for a take: older projects and files stay as they were
+}
+
+void from_json(const nlohmann::json& j, MediaItem& m) {
+    j.at("id").get_to(m.id);
+    j.at("path").get_to(m.path);
+    j.at("hash").get_to(m.hash);
+    j.at("sampleRate").get_to(m.sampleRate);
+    j.at("channels").get_to(m.channels);
+    j.at("frames").get_to(m.frames);
+    m.recordedAt = j.value("recordedAt", std::int64_t{-1});
+}
+
 void to_json(nlohmann::json& j, const Region& r) {
     j = {{"id", r.id}, {"timeBase", r.timeBase}, {"start", r.start}, {"length", r.length}, {"mediaId", r.mediaId},
          {"sourceOffsetFrames", r.sourceOffsetFrames}, {"gainDb", r.gainDb}, {"notes", r.notes}};

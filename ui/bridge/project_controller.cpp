@@ -1150,10 +1150,10 @@ void ProjectController::startNextImport() {
         if (!self) return;
         self->lastImportEnd_ = ok ? endBeats : start;  // a failed file leaves the spot free for the next one
         self->startNextImport();
-    }, next.takeGroup, next.muted, next.musical);
+    }, next.takeGroup, next.muted, next.musical, next.recorded);
 }
 
-void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup, bool muted, bool musical) {
+void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup, bool muted, bool musical, bool recorded) {
     if (!host_) {
         done(false, startBeats);
         return;
@@ -1167,7 +1167,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
     const std::int64_t startMicros = std::min<std::int64_t>(std::llround(startFrames * 1e6 / projectRate), lpc::kMaxPosition);
 
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done, takeGroup, muted, musical] {
+    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done, takeGroup, muted, musical, recorded] {
         auto fail = [&](const QString& message) {
             if (!self) return;
             QMetaObject::invokeMethod(self.data(), [self, message, done, beats] {
@@ -1250,7 +1250,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             std::filesystem::remove(target, ignore);
             return;
         }
-        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats, takeGroup, muted, musical] {
+        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats, takeGroup, muted, musical, recorded] {
             std::error_code ignore;
             if (!self || self->dir_ != projectDir || !self->host_) {  // closed or replaced meanwhile
                 std::filesystem::remove(target, ignore);
@@ -1266,6 +1266,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             item.sampleRate = projectRate;
             item.channels = channels;
             item.frames = frames;
+            if (recorded) item.recordedAt = startMicros;
             lpc::Region region;
             region.id = lpc::Uuid::random();
             region.timeBase = lpc::TimeBase::Absolute;

@@ -1,6 +1,7 @@
 // The Edit menu of the Tracks area on regions: copy, cut, paste, duplicate, mute, the Select, Trim, Length and Move commands.
 // Each change is one command (or one transaction) and so one undo step, like the Core's own commands.
 #include <QSettings>
+#include <QDesktopServices>
 #include <QDateTime>
 #include <QFile>
 #include <QRegularExpression>
@@ -1272,7 +1273,7 @@ void ProjectController::finishRecording() {
             const double startBeats = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(start), sampleRate_)) / lpc::kPPQ;
             const bool lastRun = &run == &runs.back();
             const QString target = newTracks ? trackForPass(trackId, take, madeTracks, trackCommands) : trackId;
-            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), target, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun, musicalGrid_});  // the last pass plays
+            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), target, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun, musicalGrid_, true});  // the last pass plays
             seconds = std::max(seconds, static_cast<double>(data.size() / (stereo ? 2 : 1)) / sampleRate_);
             ++take;
             ++made;
@@ -3386,6 +3387,123 @@ void ProjectController::joinPerTracks() {
         return;
     }
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+
+namespace {
+
+// The frame of the first attack in `d` (the first window that reaches a quarter of the loudest window's level), or -1 when there is none.
+std::int64_t firstTransientFrame(const lpc::WavData& d) {
+    const std::int64_t frames = d.frames();
+    const int window = std::max(32, d.sampleRate / 400);
+    if (frames < window || d.channels < 1) return -1;
+    auto sample = [&](std::int64_t i) {
+        double sum = 0;
+        for (int c = 0; c < d.channels; ++c) sum += d.samples[static_cast<std::size_t>(i * d.channels + c)];
+        return sum / d.channels;
+    };
+    std::vector<double> level;
+    double peak = 0;
+    for (std::int64_t at = 0; at + window <= frames; at += window / 2) {
+        double energy = 0;
+        for (int i = 0; i < window; ++i) energy += sample(at + i) * sample(at + i);
+        level.push_back(std::sqrt(energy / window));
+        peak = std::max(peak, level.back());
+    }
+    if (peak < 1e-4) return -1;
+    for (std::size_t w = 0; w < level.size(); ++w) {
+        if (level[w] < peak * 0.25) continue;
+        const std::int64_t at = static_cast<std::int64_t>(w) * (window / 2);
+        for (int i = 0; i < window; ++i)  // the sample where it starts within the window
+            if (std::abs(sample(at + i)) >= peak * 0.25 * 0.7) return at + i;
+        return at;
+    }
+    return -1;
+}
+
+}  // namespace
+
+void ProjectController::moveSelectedToRecordedPosition() {
+    if (!host_) return;
+    nlohmann::json commands = nlohmann::json::array();
+    bool anyAudio = false;
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (!r->audio) continue;
+        anyAudio = true;
+        if (r->recordedMicros < 0) continue;
+        // in the unit of the region: microseconds, or ticks for a region in musical time
+        std::int64_t start = r->recordedMicros;
+        if (!r->absolute) start = static_cast<std::int64_t>(tempoMap_.samplesToTicks(static_cast<double>(r->recordedMicros) * sampleRate_ / 1e6, sampleRate_));
+        commands.push_back({{"type", "move_region"}, {"regionId", r->id.toStdString()}, {"start", start}});
+    }
+    if (commands.empty()) {
+        emit notice(anyAudio ? "These regions were not recorded in this project" : "Select an audio region first");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::moveFirstTransientToNearestBeat() {
+    if (!host_) return;
+    struct Job { RegionRow row; std::filesystem::path source; };
+    std::vector<Job> jobs;
+    for (const RegionRow* r : selectedRegionRows())
+        if (r->audio && !r->missing && r->lengthFrames > 0) jobs.push_back({*r, mediaFile(dir_, mediaPaths_.value(r->mediaId))});
+    if (jobs.empty()) {
+        emit notice("Select an audio region first");
+        return;
+    }
+    const int rate = sampleRate_;
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    (void)QtConcurrent::run([self, jobs, rate, generation] {
+        std::vector<std::pair<QString, std::int64_t>> found;  // region, the frame of its first attack counted from the region's start
+        for (const Job& job : jobs) {
+            try {
+                const lpc::WavData d = readRegionAudio(job.source, job.row.sourceOffsetFrames, std::min<std::int64_t>(job.row.lengthFrames, static_cast<std::int64_t>(rate) * 4));
+                const std::int64_t at = firstTransientFrame(d);
+                if (at >= 0) found.emplace_back(job.row.id, at);
+            } catch (const std::exception&) {
+                // an unreadable file has nothing to align
+            }
+        }
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self, found, generation] {
+            if (!self || generation != self->generation_ || !self->host_) return;
+            nlohmann::json commands = nlohmann::json::array();
+            const double beatTicks = lpc::kPPQ * 4.0 / self->beatUnit_;
+            for (const auto& [id, at] : found) {
+                const RegionRow* row = self->regions_.find(id);
+                if (!row) continue;
+                const double startFrames = self->tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(row->startBeats * lpc::kPPQ)), self->sampleRate_);
+                const double attackTick = self->tempoMap_.samplesToTicks(startFrames + static_cast<double>(at), self->sampleRate_);
+                const double nearestTick = std::round(attackTick / beatTicks) * beatTicks;
+                const double newStartFrames = startFrames + (self->tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(nearestTick)), self->sampleRate_) - (startFrames + static_cast<double>(at)));
+                if (std::abs(newStartFrames - startFrames) < 1.0 || newStartFrames < 0) continue;
+                if (row->absolute) {
+                    commands.push_back({{"type", "move_region"}, {"regionId", id.toStdString()}, {"start", static_cast<std::int64_t>(std::llround(newStartFrames * 1e6 / self->sampleRate_))}});
+                } else {
+                    commands.push_back({{"type", "move_region"}, {"regionId", id.toStdString()}, {"start", static_cast<std::int64_t>(self->tempoMap_.samplesToTicks(newStartFrames, self->sampleRate_))}});
+                }
+            }
+            if (commands.empty()) {
+                emit self->notice("The first attacks are on the beat already");
+                return;
+            }
+            self->sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+        }, Qt::QueuedConnection);
+    });
+}
+
+void ProjectController::openSelectedInExternalEditor() {
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (!r->audio || r->missing) continue;
+        const std::filesystem::path file = mediaFile(dir_, mediaPaths_.value(r->mediaId));
+        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdU16String(file.u16string()))))
+            emit notice("The system could not open the audio file");
+        return;
+    }
+    emit notice("Select an audio region first");
 }
 
 

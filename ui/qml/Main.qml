@@ -97,6 +97,7 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    AutomationParamDialog { id: automationParamDialog; project: controller }
     SearchPluginDialog { id: searchPluginDialog; project: controller }
     MidiTransformDialog { id: midiTransform; project: controller }
     TextPromptDialog {
@@ -591,6 +592,7 @@ ApplicationWindow {
             Timeline {
                 id: timeline
                 onEditRequested: { if (!root.editorsVisible) root.showLowerPane("editors") }
+                onAutomationParameterRequested: (id) => { automationParamDialog.trackId = id; automationParamDialog.open() }
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 project: controller

@@ -18,6 +18,7 @@ Item {
     readonly property real contentHeight: project.tracks.rowCount() * rowHeight
 
     signal regionMoved(string id, real beats)
+    signal automationParameterRequested(string trackId)
     signal editRequested(string id)
 
     focus: true
@@ -320,7 +321,8 @@ Item {
             delegate: AutomationLane {
                 required property int index
                 project: root.project
-                param: root.project.automationParam
+                param: { root.project.automationRevision; return root.project.automationParamFor(trackId) }
+                onParameterRequested: (id) => root.automationParameterRequested(id)
                 pixelsPerBeat: root.pixelsPerBeat
                 scrollBeats: root.scrollBeats
                 snapBeats: root.snapBeats

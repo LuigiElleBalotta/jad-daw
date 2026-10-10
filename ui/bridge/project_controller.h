@@ -99,6 +99,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool toolbarVisible READ toolbarVisible WRITE setToolbarVisible NOTIFY barsChanged)          // View > Toolbar
     Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
     Q_PROPERTY(bool automationVisible READ automationVisible WRITE setAutomationVisible NOTIFY automationViewChanged)  // Mix > Show Automation
+    Q_PROPERTY(int automationRevision READ automationRevision NOTIFY automationViewChanged)  // follows the per-track choices of the lanes
     Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume", "pan", "send1".."send4"
     Q_PROPERTY(bool metronomeOn READ metronomeOn NOTIFY metronomeChanged)  // the click while playing
     Q_PROPERTY(QString clickMode READ clickMode WRITE setClickMode NOTIFY clickSettingsChanged)          // "beats", "eighths", "sixteenths" or "grouped"
@@ -335,7 +336,14 @@ public:
     void setAutomationParam(const QString& param);
     // param: "volume", "pan" or "send1".."send4" (the first sends of the track, a send's level in dB)
     Q_INVOKABLE QVariantList automationPoints(const QString& trackId, const QString& param) const;  // {beats, value}; follows `revision`
-    Q_INVOKABLE bool automationAvailable(const QString& trackId, const QString& param) const;      // false for a send the track does not have
+    Q_INVOKABLE bool automationAvailable(const QString& trackId, const QString& param) const;
+    int automationRevision() const { return automationRevision_; }
+    // The lane a track shows: its own choice (a plug-in parameter, a send) or the one of the whole view
+    Q_INVOKABLE QString automationParamFor(const QString& trackId) const;
+    Q_INVOKABLE void setTrackAutomationParam(const QString& trackId, const QString& param);
+    Q_INVOKABLE QString automationLabel(const QString& trackId, const QString& param) const;   // "Volume", "Send 1", "EQ: Gain" ...
+    // What a track's lane can show: [{param, label}]: Volume, Pan, its sends and the automatable parameters of its VST3 inserts that are loaded
+    Q_INVOKABLE QVariantList automationChoices(const QString& trackId) const;      // false for a send the track does not have
     Q_INVOKABLE void setAutomationPoints(const QString& trackId, const QString& param, const QVariantList& points);
     // Customize Control Bar and Display / Customize Toolbar: the parts of the bars that are shown ("cb.panels", "cb.transport", "cb.lcd", "cb.modes",
     // "cb.master", "tb.menus", "tb.tools", "tb.snap", "tb.heights", "tb.zoom", "tb.undo"); every part is on until the user turns it off. Kept in the settings.
@@ -869,6 +877,9 @@ private:
     };
     QHash<QString, AutoCapture> autoCapture_;               // by track, while moves are being written
     QString automationTarget(const QString& trackId, const QString& param) const;
+    QHash<QString, QString> trackAutomationParams_;   // track id -> its lane's parameter
+    mutable QHash<QString, QString> paramLabels_;     // plug-in parameter target -> label, filled when the choices are listed
+    int automationRevision_ = 0;
     void captureAutomation(const QString& trackId, bool isPan, double value);
     void finishAutomationCapture(const QString& trackId);
     void finishAutomationCaptures(bool latchedToo);

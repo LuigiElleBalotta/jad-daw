@@ -396,3 +396,23 @@ TEST_CASE("juce host: an offline render (the bounce) plays a VST3 instrument", "
     REQUIRE(during > 0.05f);
     REQUIRE(after == 0.0f);
 }
+
+TEST_CASE("juce host: parameters are listed and an automated value reaches the plug-in", "[juce][plugin][automation]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testPlugin();
+    host.setCatalogue({d});
+    const InsertSlot slot{Uuid{4, 1}, 0};
+    auto proc = host.acquire(slot, refOf(d), 48000.0, 512);
+    REQUIRE(proc);
+    const auto params = host.parameters(slot);
+    int gain = -1;                                                    // the VST3 wrapper adds a Bypass parameter of its own
+    for (const auto& [index, name] : params)
+        if (name == "Gain") gain = index;
+    REQUIRE(gain >= 0);
+    proc->setParameter(gain, 0.25f);                                     // normalised: the range is 0..2, so this is a gain of 0.5
+    std::vector<float> l(64, 0.0f), r(64, 0.0f);
+    l[0] = r[0] = 1.0f;
+    proc->process(l.data(), r.data(), 64);
+    REQUIRE(l[32] == Catch::Approx(0.5f).margin(0.01));
+    REQUIRE(host.parameters(InsertSlot{Uuid{4, 2}, 0}).empty());     // nothing loaded in another slot
+}

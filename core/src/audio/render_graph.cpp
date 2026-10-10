@@ -283,6 +283,14 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
                 r[i] += inR[i];
             }
         }
+        for (ParamAuto& pa : cfg->paramAuto) {  // the automated parameters of plug-ins, once per block
+            if (pa.points.empty() || pa.insert < 0 || pa.insert >= static_cast<int>(cfg->inserts.size())) continue;
+            const float v = autoValue(pa.points, blockStart);
+            if (v != pa.last) {
+                cfg->inserts[static_cast<std::size_t>(pa.insert)]->setParameter(pa.param, v);
+                pa.last = v;
+            }
+        }
         t.blockReduction = 0.0f;
         for (const auto& insert : cfg->inserts) {
             insert->process(l, r, n);

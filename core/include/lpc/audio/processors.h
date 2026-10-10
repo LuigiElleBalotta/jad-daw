@@ -20,6 +20,8 @@ public:
     virtual void process(float* l, float* r, int frames) noexcept = 0;
     // The gain reduction (dB, 0 or more) of the last block, for the strip's meter; read on the audio thread after process().
     virtual float reductionDb() const noexcept { return 0.0f; }
+    // Audio thread, before process(): the automated value (0..1) of parameter `index`. Built-in effects and missing plug-ins ignore it.
+    virtual void setParameter(int /*index*/, float /*normalized*/) noexcept {}
     virtual nlohmann::json describe() const = 0;  // not real-time; used by tests
 };
 
@@ -80,6 +82,7 @@ public:
     explicit SharedProcessor(std::shared_ptr<IProcessor> inner) : inner_(std::move(inner)) {}
     void process(float* l, float* r, int frames) noexcept override { inner_->process(l, r, frames); }
     int latencySamples() const override { return inner_->latencySamples(); }
+    void setParameter(int index, float normalized) noexcept override { inner_->setParameter(index, normalized); }
     nlohmann::json describe() const override { return inner_->describe(); }
 
 private:

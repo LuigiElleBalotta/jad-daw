@@ -11,7 +11,9 @@ Item {
     required property real pixelsPerBeat
     required property real scrollBeats
     property real snapBeats: 0
-    property color lineColor: param === "volume" ? Theme.accentPrimary : (param === "pan" ? Theme.stateSolo : Theme.statePlay)
+    readonly property bool normalised: param.startsWith("param/")   // a plug-in parameter: 0..1
+    signal parameterRequested(string trackId)
+    property color lineColor: param === "volume" ? Theme.accentPrimary : (param === "pan" ? Theme.stateSolo : (normalised ? Theme.stateMute : Theme.statePlay))
     property bool available: true                // false: a send the track does not have
 
     property var stored: []                      // the points in the project, read again whenever it changes
@@ -31,11 +33,13 @@ Item {
     function xToBeats(x) { return Math.max(0, x / pixelsPerBeat + scrollBeats) }
     function snapBeat(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
     function valueToY(v) {
+        if (normalised) return (1 - Math.max(0, Math.min(1, v))) * (height - 2) + 1
         if (param === "pan") return (1 - v) / 2 * height
         return (maxDb - Math.max(minDb, Math.min(maxDb, v))) / (maxDb - minDb) * height
     }
     function yToValue(y) {
         const f = Math.max(0, Math.min(1, y / height))
+        if (normalised) return Math.round((1 - f) * 1000) / 1000
         return param === "pan" ? Math.round((1 - 2 * f) * 100) / 100 : Math.round((maxDb - f * (maxDb - minDb)) * 10) / 10
     }
     function pointAt(x, y) {
@@ -45,7 +49,7 @@ Item {
     }
     function sorted(list) { return list.slice().sort((a, b) => a.beats - b.beats) }
     function commit(list) { working = null; project.setAutomationPoints(trackId, param, sorted(list)) }
-    function label(v) { return param === "pan" ? (v === 0 ? "C" : (v < 0 ? "L" : "R") + Math.round(Math.abs(v) * 64)) : v.toFixed(1) + " dB" }
+    function label(v) { return normalised ? Math.round(v * 100) + " %" : param === "pan" ? (v === 0 ? "C" : (v < 0 ? "L" : "R") + Math.round(Math.abs(v) * 64)) : v.toFixed(1) + " dB" }
 
     onPointsChanged: canvas.requestPaint()
     onPixelsPerBeatChanged: canvas.requestPaint()
@@ -133,5 +137,14 @@ Item {
             root.commit(list)
         }
         onCanceled: { root.working = null; root.dragIndex = -1 }
+    }
+
+    IconButton {  // the parameter this lane shows: a click chooses another (a send, a plug-in parameter)
+        objectName: "laneParam"
+        x: 6
+        y: 2
+        implicitHeight: 16
+        label: { root.project.automationRevision; return root.project.automationLabel(root.trackId, root.param) }
+        onClicked: root.parameterRequested(root.trackId)
     }
 }

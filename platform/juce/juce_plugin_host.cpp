@@ -280,6 +280,17 @@ bool JucePluginHost::openEditor(const InsertSlot& slot) {
     return true;
 }
 
+std::vector<std::pair<int, std::string>> JucePluginHost::parameters(const InsertSlot& slot) const {
+    std::shared_ptr<PluginProcessor> proc;
+    {
+        std::lock_guard lock(impl_->mutex);
+        const auto it = impl_->entries.find(keyOf(slot));
+        if (it == impl_->entries.end() || !it->second.proc) return {};
+        proc = it->second.proc;
+    }
+    return proc->automatableParameters();
+}
+
 bool JucePluginHost::editorOpen(const InsertSlot& slot) const { return impl_->editors.count(keyOf(slot)) > 0; }
 
 void JucePluginHost::closeAllEditors() { impl_->editors.clear(); }

@@ -312,11 +312,29 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
                                     lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value)});
     }
     int slotIndex = 0;
+    std::vector<int> builtAt(t.strip.inserts.size(), -1);  // where each insert of the model ended up in the config
     for (const ProcessorRef& ref : t.strip.inserts) {
-        if (auto effect = makeInsert(ref, plugins, InsertSlot{t.id, slotIndex}, static_cast<double>(p.sampleRate), kMaxBlock))
+        if (auto effect = makeInsert(ref, plugins, InsertSlot{t.id, slotIndex}, static_cast<double>(p.sampleRate), kMaxBlock)) {
+            builtAt[static_cast<std::size_t>(slotIndex)] = static_cast<int>(cfg->inserts.size());
             cfg->inserts.push_back(std::move(effect));
+        }
         ++slotIndex;
     }
+    if (t.automationMode != "off")  // the lanes that drive a parameter of a plug-in insert
+        for (const AutomationLane& lane : t.automation) {
+            const auto target = parseParamTarget(lane.target);
+            if (!target || lane.points.empty()) continue;
+            int seen = 0, built = -1;
+            for (std::size_t i = 0; i < t.strip.inserts.size(); ++i)
+                if (t.strip.inserts[i].processorId == target->processorId && seen++ == target->ordinal) built = builtAt[i];
+            if (built < 0) continue;
+            ParamAuto pa;
+            pa.insert = built;
+            pa.param = target->index;
+            for (const AutomationPoint& pt : lane.points)
+                pa.points.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), std::clamp(static_cast<float>(pt.value), 0.0f, 1.0f)});
+            cfg->paramAuto.push_back(std::move(pa));
+        }
     for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}, {}});
     fillSendAutomation(p, t, *cfg);
     cfg->output = t.strip.output;

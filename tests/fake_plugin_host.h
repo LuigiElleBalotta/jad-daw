@@ -37,6 +37,8 @@ public:
         }
     }
     int latencySamples() const override { return spec_.latency; }
+    void setParameter(int index, float normalized) noexcept override { given.emplace_back(index, normalized); }
+    std::vector<std::pair<int, float>> given;   // every (parameter, value) the graph set
     nlohmann::json describe() const override { return {{"fake", true}, {"latency", spec_.latency}, {"state", state_}}; }
     const std::string& state() const { return state_; }
 
@@ -100,6 +102,7 @@ public:
     std::map<std::string, FakeSpec> known;  // ids this host can load; any other id is "missing"
     bool deferLoads = false;                // true: acquire returns nullptr until finishLoads()
     int created = 0;
+    std::shared_ptr<FakeProcessor> lastFake;   // the plug-in made last
 
     std::vector<PluginDescriptor> catalogue() const override {
         std::vector<PluginDescriptor> out;
@@ -175,6 +178,7 @@ private:
     std::shared_ptr<audio::IProcessor> create(const InsertSlot& slot, const ProcessorRef& ref) {
         ++created;
         auto proc = std::make_shared<FakeProcessor>(known.at(ref.processorId), ref.state);
+        lastFake = proc;
         live_[keyOf(slot)] = Live{ref.processorId, ref.state, proc};
         return proc;
     }

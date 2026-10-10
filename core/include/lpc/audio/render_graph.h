@@ -95,6 +95,14 @@ struct SendPlayback {
 };
 
 
+// The automation of one parameter of a plug-in insert: the value (0..1) from a frame on, as the other lanes.
+struct ParamAuto {
+    int insert = 0;  // index in TrackConfig::inserts
+    int param = 0;
+    std::vector<AutoPoint> points;
+    float last = -1.0f;  // the value last given to the plug-in
+};
+
 struct TrackConfig {
     SynthParams synthParams;            // an instrument track: how its built-in synth sounds
     std::shared_ptr<IInstrument> instrument;  // a plug-in instrument (the notes go to it); null: the built-in synth sounds
@@ -103,6 +111,7 @@ struct TrackConfig {
     std::vector<AutoPoint> panAuto;
     std::vector<RegionPlayback> regions;
     std::vector<std::unique_ptr<IProcessor>> inserts;
+    std::vector<ParamAuto> paramAuto;
     std::vector<SendPlayback> sends;
     Uuid output;  // null = master
     DelayLine outputDelay;  // plug-in delay compensation of the output edge

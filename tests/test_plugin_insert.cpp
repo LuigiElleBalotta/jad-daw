@@ -5,6 +5,7 @@
 #include "lpc/audio/render_graph.h"
 #include "lpc/commands.h"
 #include "lpc/graph_builder.h"
+#include "lpc/processor_ids.h"
 
 using namespace lpc;
 using namespace lpc::audio;
@@ -95,4 +96,41 @@ TEST_CASE("buildConfig: plug-in inserts keep their position and ask the host by 
 
     auto again = buildConfig(project, *project.findTrack(t.id), media, &host);  // reuses the live instance
     REQUIRE(host.created == 1);
+}
+
+TEST_CASE("automation: a lane drives a parameter of a plug-in insert, a lane for a missing insert is refused", "[plugin][automation]") {
+    std::mt19937_64 rng(41);
+    Project project;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Audio;
+    t.name = "A";
+    REQUIRE(makeAddTrack(t)->apply(project).ok());
+    REQUIRE(makeAddInsert(t.id, plugin())->apply(project).ok());
+    const std::string target = makeParamTarget(kId, 0, 3);
+    REQUIRE(parseParamTarget(target).has_value());
+    REQUIRE(parseParamTarget(target)->index == 3);
+    REQUIRE_FALSE(parseParamTarget("param/vst3:short/0/3").has_value());
+    REQUIRE_FALSE(parseParamTarget("param/" + std::string(kId) + "/x/3").has_value());
+
+    REQUIRE_FALSE(makeSetAutomation(t.id, makeParamTarget(kId, 1, 3), {AutomationPoint{0, 0.5}})->apply(project).ok());           // only one insert of it
+    REQUIRE_FALSE(makeSetAutomation(t.id, makeParamTarget("vst3:ffffffffffffffffffffffffffffffff", 0, 3), {AutomationPoint{0, 0.5}})->apply(project).ok());
+    REQUIRE_FALSE(makeSetAutomation(t.id, target, {AutomationPoint{0, 1.5}})->apply(project).ok());                                // normalised: 0..1
+    auto set = makeSetAutomation(t.id, target, {AutomationPoint{0, 0.25}, AutomationPoint{kPPQ * 2, 0.75}})->apply(project);
+    REQUIRE(set.ok());
+
+    FakePluginHost host;
+    host.known[kId] = FakeSpec{0, 1.0f};
+    RenderGraph graph(48000.0);
+    MediaStore media;
+    for (const AudioMsg& m : initialMessages(project, media, &host)) graph.apply(m);
+    REQUIRE(host.lastFake);
+    std::vector<float> l(256), r(256);
+    for (std::int64_t at = 0; at < 24000 + 512; at += 256) graph.render(at, 256, l.data(), r.data());   // one beat at 120 bpm: half of the ramp
+    REQUIRE_FALSE(host.lastFake->given.empty());
+    REQUIRE(host.lastFake->given.front().first == 3);
+    REQUIRE(host.lastFake->given.front().second == Catch::Approx(0.25f).margin(0.01));
+    REQUIRE(host.lastFake->given.back().second == Catch::Approx(0.5f).margin(0.02));
+    REQUIRE(set.inverse->apply(project).ok());
+    REQUIRE(project.findTrack(t.id)->automation.empty());
 }

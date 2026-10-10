@@ -14,6 +14,7 @@ TestCase {
     Component { id: promptC; NumberPromptDialog { parent: Overlay.overlay; heading: "Repeat"; prompt: "Copies"; value: 4; from: 1; to: 64 } }
     Component { id: searchC; SearchTrackDialog { parent: Overlay.overlay } }
     Component { id: listC; ListEditorsWindow { parent: Overlay.overlay } }
+    Component { id: paramC; AutomationParamDialog { parent: Overlay.overlay } }
     Component { id: stepC; StepSequencer { width: 900; height: 300 } }
     Component { id: scoreC; ScoreView { width: 900; height: 300 } }
 
@@ -108,5 +109,28 @@ TestCase {
         verify(canvas)
         canvas.requestPaint()
         wait(50)                                                // painting a staff with a note must not fail
+    }
+
+    function test_the_automation_parameter_dialog_lists_volume_pan_and_sends() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("audio")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        const track = c.tracks.trackIdAt(0)
+        const d = createTemporaryObject(paramC, this, { project: c, trackId: track })
+        d.open()
+        tryCompare(d, "visible", true)
+        compare(d.all.length, 2)                                // Volume and Pan: no sends, no plug-ins
+        compare(d.all[0].param, "volume")
+        compare(c.automationParamFor(track), "volume")
+        c.setTrackAutomationParam(track, "pan")                 // this track alone shows the pan
+        compare(c.automationParamFor(track), "pan")
+        compare(c.automationLabel(track, "pan"), "Pan")
+        c.automationParam = "pan"                               // the whole view changing puts every track back in line
+        compare(c.automationParamFor(track), "pan")
+        c.setTrackAutomationParam(track, "param/vst3:00000000000000000000000000000001/0/5")   // no such insert: refused
+        compare(c.automationParamFor(track), "pan")
+        c.automationParam = "volume"
+        d.close()
     }
 }

@@ -25,6 +25,9 @@ public:
     std::optional<std::string> captureState(const InsertSlot& slot) override;
     void setReadyListener(std::function<void(const InsertSlot&)> listener) override;
 
+    // Message thread: the automatable parameters of the live plug-in in a slot, {index, name}; empty while it is not loaded.
+    std::vector<std::pair<int, std::string>> parameters(const InsertSlot& slot) const;
+
     // Message thread only.
     bool openEditor(const InsertSlot& slot);
     bool editorOpen(const InsertSlot& slot) const;

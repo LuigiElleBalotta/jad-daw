@@ -98,6 +98,19 @@ void PluginProcessor::render(float* l, float* r, int frames, const audio::MidiEv
     }
 }
 
+void PluginProcessor::setParameter(int index, float normalized) noexcept {
+    const auto& params = instance_->getParameters();
+    if (index >= 0 && index < params.size()) params[index]->setValue(juce::jlimit(0.0f, 1.0f, normalized));
+}
+
+std::vector<std::pair<int, std::string>> PluginProcessor::automatableParameters() const {
+    std::vector<std::pair<int, std::string>> out;
+    const auto& params = instance_->getParameters();
+    for (int i = 0; i < params.size() && out.size() < 1024; ++i)
+        if (params[i]->isAutomatable() && !params[i]->isMetaParameter()) out.emplace_back(i, params[i]->getName(64).toStdString());
+    return out;
+}
+
 std::string PluginProcessor::encodeState(const juce::MemoryBlock& block) {
     return juce::Base64::toBase64(block.getData(), block.getSize()).toStdString();
 }

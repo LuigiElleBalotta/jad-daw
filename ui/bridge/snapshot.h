@@ -60,6 +60,7 @@ struct TrackRow {
     std::vector<SmartRow> smart;  // the Smart Controls of the track's patch, with their current values
     std::vector<AutoRow> volumeAuto, panAuto;  // the automation lanes
     std::vector<std::pair<QString, std::vector<AutoRow>>> sendAuto;  // the lanes of the sends: (send id, points in dB)
+    std::vector<std::pair<QString, std::vector<AutoRow>>> paramAuto;  // the lanes of plug-in parameters: (target name, points 0..1)
 };
 
 struct GroupRow {

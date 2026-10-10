@@ -856,6 +856,8 @@ void ProjectController::setAutomationVisible(bool on) {
 void ProjectController::setAutomationParam(const QString& param) {
     static const QStringList known{"volume", "pan", "send1", "send2", "send3", "send4"};
     if (!known.contains(param) || param == automationParam_) return;
+    trackAutomationParams_.clear();  // the whole view changes: every lane follows it again
+    ++automationRevision_;
     automationParam_ = param;
     emit automationViewChanged();
 }
@@ -863,6 +865,17 @@ void ProjectController::setAutomationParam(const QString& param) {
 // "volume", "pan" or "send1".."send4" (the first sends of the track) as the Core's target name; empty when the track has no such send
 QString ProjectController::automationTarget(const QString& trackId, const QString& param) const {
     if (param == "volume" || param == "pan") return param;
+    if (param.startsWith(QLatin1String("param/"))) {
+        const auto target = lpc::parseParamTarget(param.toStdString());
+        if (!target) return {};
+        for (const TrackRow& t : allRows_) {
+            if (t.id != trackId) continue;
+            int seen = 0;
+            for (const InsertRow& i : t.inserts)
+                if (i.processorId == QString::fromStdString(target->processorId) && seen++ == target->ordinal) return param;
+        }
+        return {};
+    }
     if (param.startsWith(QLatin1String("send")) && param.size() == 5 && param[4] >= QLatin1Char('1') && param[4] <= QLatin1Char('4')) {
         const int index = param[4].digitValue() - 1;
         for (const TrackRow& t : allRows_)
@@ -883,6 +896,9 @@ QVariantList ProjectController::automationPoints(const QString& trackId, const Q
         if (!points)
             for (const auto& lane : t.sendAuto)
                 if (QStringLiteral("send:") + lane.first == target) points = &lane.second;
+        if (!points)
+            for (const auto& lane : t.paramAuto)
+                if (lane.first == target) points = &lane.second;
         if (!points) continue;
         for (const AutoRow& p : *points) out.append(QVariantMap{{"beats", p.beats}, {"value", p.value}});
     }
@@ -893,7 +909,8 @@ void ProjectController::setAutomationPoints(const QString& trackId, const QStrin
     if (!host_) return;
     const QString target = automationTarget(trackId, param);
     if (target.isEmpty()) return;
-    const double lo = target == "pan" ? -1.0 : -96.0, hi = target == "pan" ? 1.0 : (target == "volume" ? 24.0 : 12.0);
+    const bool normalised = target.startsWith(QLatin1String("param/"));
+    const double lo = normalised ? 0.0 : (target == "pan" ? -1.0 : -96.0), hi = normalised ? 1.0 : (target == "pan" ? 1.0 : (target == "volume" ? 24.0 : 12.0));
     nlohmann::json list = nlohmann::json::array();
     for (const QVariant& v : points) {
         const QVariantMap m = v.toMap();
@@ -2958,6 +2975,59 @@ void ProjectController::splitTakesAtPlayhead(const QString& regionId) {
         return;
     }
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+QString ProjectController::automationParamFor(const QString& trackId) const {
+    const auto it = trackAutomationParams_.constFind(trackId);
+    return it == trackAutomationParams_.constEnd() ? automationParam_ : it.value();
+}
+
+void ProjectController::setTrackAutomationParam(const QString& trackId, const QString& param) {
+    if (automationTarget(trackId, param).isEmpty() && !param.startsWith(QLatin1String("send"))) return;
+    if (param == automationParam_) trackAutomationParams_.remove(trackId);
+    else trackAutomationParams_[trackId] = param;
+    ++automationRevision_;
+    emit automationViewChanged();
+}
+
+QString ProjectController::automationLabel(const QString& trackId, const QString& param) const {
+    if (param == "volume") return QStringLiteral("Volume");
+    if (param == "pan") return QStringLiteral("Pan");
+    if (param.startsWith(QLatin1String("send"))) return QStringLiteral("Send ") + param.mid(4);
+    if (paramLabels_.contains(param)) return paramLabels_.value(param);
+    Q_UNUSED(trackId)
+    return QStringLiteral("Plug-in parameter");
+}
+
+QVariantList ProjectController::automationChoices(const QString& trackId) const {
+    QVariantList out;
+    const TrackRow* t = nullptr;
+    for (const TrackRow& r : allRows_)
+        if (r.id == trackId) t = &r;
+    if (!t || t->master) return out;
+    out.append(QVariantMap{{"param", "volume"}, {"label", "Volume"}});
+    out.append(QVariantMap{{"param", "pan"}, {"label", "Pan"}});
+    for (std::size_t i = 0; i < t->sends.size() && i < 4; ++i) out.append(QVariantMap{{"param", QStringLiteral("send%1").arg(i + 1)}, {"label", QStringLiteral("Send %1: %2").arg(i + 1).arg(t->sends[i].targetName)}});
+#ifdef JAD_HAVE_JUCE
+    if (pluginHost_) {
+        QHash<QString, int> ordinal;
+        for (std::size_t i = 0; i < t->inserts.size(); ++i) {
+            const InsertRow& ins = t->inserts[i];
+            if (!ins.plugin) continue;
+            const int n = ordinal[ins.processorId]++;
+            const auto id = lpc::Uuid::parse(trackId.toStdString());
+            if (!id) continue;
+            const QString name = ins.label.isEmpty() ? ins.processorId : ins.label;
+            for (const auto& [index, pname] : pluginHost_->parameters(lpc::InsertSlot{*id, static_cast<int>(i)})) {
+                const QString target = QString::fromStdString(lpc::makeParamTarget(ins.processorId.toStdString(), n, index));
+                const QString label = name + QStringLiteral(": ") + QString::fromStdString(pname);
+                paramLabels_[target] = label;
+                out.append(QVariantMap{{"param", target}, {"label", label}});
+            }
+        }
+    }
+#endif
+    return out;
 }
 
 }  // namespace jad

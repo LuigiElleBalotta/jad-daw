@@ -22,7 +22,10 @@ public:
     // The instrument form: the events go into the plug-in at their offsets and its first output bus is copied to l and r.
     void render(float* l, float* r, int frames, const audio::MidiEvent* events, int count) noexcept override;
     int latencySamples() const override { return latency_; }
+    void setParameter(int index, float normalized) noexcept override;  // audio thread: the automated value of a parameter
     nlohmann::json describe() const override { return {{"plugin", name_}, {"latency", latency_}, {"instrument", instrument_}}; }
+    // Message thread: the automatable parameters, {index, name}; the index is what setParameter takes.
+    std::vector<std::pair<int, std::string>> automatableParameters() const;
 
     // The model keeps plug-in state as standard base64 (padded); JUCE's own MemoryBlock encoding is a different alphabet.
     static std::string encodeState(const juce::MemoryBlock& block);

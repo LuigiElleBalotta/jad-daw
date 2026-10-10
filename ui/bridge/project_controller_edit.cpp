@@ -26,6 +26,7 @@
 #include "lpc/wav.h"
 #include "lpc/offline_render.h"
 #include "lpc/audio/effects.h"
+#include "lpc/aiff.h"
 #include "lpc/audio_ops.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
@@ -690,25 +691,54 @@ void ProjectController::importAudioFilesHere(const QList<QUrl>& files) {
     importAudioFilesAt(files, target, positionBeats_);  // no audio track selected: new tracks named after the files
 }
 
-void ProjectController::bounceProject(const QUrl& file) {
+void ProjectController::bounceProject(const QUrl& file) { bounceProjectAs(file, {}); }
+
+void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& options) {
     if (!host_) return;
+    const QString format = options.value("format", "wav24").toString();
+    const QString range = options.value("range", "project").toString();
+    const bool normalizeOn = options.value("normalize", false).toBool();
+    const double tail = std::clamp(options.value("tail", 0.5).toDouble(), 0.0, 30.0);
+    const bool aiff = format.startsWith("aiff");
+    const int bits = format.endsWith("16") ? 16 : (format.endsWith("32") ? 32 : 24);
+    const bool dither = options.value("dither", bits == 16).toBool() && bits == 16;
     std::filesystem::path out = file.toLocalFile().toStdWString();
-    if (out.extension().empty()) out += ".wav";
+    if (out.extension().empty()) out += aiff ? ".aif" : ".wav";
     if (!saveProject()) return;
     const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
     if (lpc::projectEndFrame(project) == 0) {
         setError("Nothing to bounce: the project has no regions");
         return;
     }
+    lpc::RenderOptions render;
+    render.tailSeconds = tail;
+    if (range == "cycle") {
+        if (loopEndBeats_ <= loopStartBeats_) {
+            setError("Set the cycle area first (drag in the top strip of the ruler)");
+            return;
+        }
+        const auto toFrames = [this](double beats) {
+            return static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(beats * lpc::kPPQ)), sampleRate_)));
+        };
+        render.startFrame = toFrames(loopStartBeats_);
+        render.frames = toFrames(loopEndBeats_) - render.startFrame;
+    }
     emit notice("Bouncing…");
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, project, root, out] {
+    (void)QtConcurrent::run([self, project, root, out, render, aiff, bits, normalizeOn, dither] {
         QString message;
         try {
             lpc::MediaStore media(root, /*streaming=*/false);
-            const lpc::RenderResult r = lpc::renderOffline(project, media);
-            lpc::writeWav(out, r.sampleRate, 2, r.interleaved, lpc::WavFormat::Pcm24);
+            const lpc::RenderResult r = lpc::renderOffline(project, media, render);
+            lpc::WavData data;
+            data.sampleRate = r.sampleRate;
+            data.channels = 2;
+            data.samples = r.interleaved;
+            if (normalizeOn) lpc::normalize(data, -0.3);
+            if (dither) lpc::ditherTpdf(data, bits);
+            if (aiff) lpc::writeAiff(out, r.sampleRate, 2, data.samples, bits);
+            else lpc::writeWav(out, r.sampleRate, 2, data.samples, bits == 16 ? lpc::WavFormat::Pcm16 : (bits == 32 ? lpc::WavFormat::Float32 : lpc::WavFormat::Pcm24));
             message = QString("Bounced %1 s to %2").arg(static_cast<double>(r.frames) / r.sampleRate, 0, 'f', 1).arg(QString::fromStdWString(out.filename().wstring()));
         } catch (const std::exception& e) {
             message = QString("Bounce failed: ") + QString::fromUtf8(e.what());

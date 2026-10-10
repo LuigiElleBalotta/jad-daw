@@ -54,7 +54,8 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
       plays (one undo step per take). Not covered: sends and plug-in parameters as targets, curve shapes between points.
 
 ## 7. Export
-- [ ] Bounce dialog: format (WAV 16/24/32, AIFF, FLAC, MP3), normalize, range (cycle / whole), include plug-ins and the effects above.
+- [x] Bounce dialog: WAV 16/24/32-bit float, AIFF 16/24, normalize to -0.3 dBFS, range (whole project / cycle area), tail, TPDF dither on 16-bit; the built-in effects
+      are rendered. Not covered: FLAC and MP3 encoders (no encoder library yet), VST3 plug-ins in the offline render.
 
 ## 8. Windows and dialogs of the menus (all of them)
 - [ ] Project Settings (Audio, Metronome, Recording, Sync, General), Preferences (General, Audio, Display, MIDI, Advanced).

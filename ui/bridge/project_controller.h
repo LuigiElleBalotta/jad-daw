@@ -369,6 +369,9 @@ public:
     // File > Import Audio File: into the selected audio track (else the first one) at the playhead
     // File > Bounce: the whole project is rendered offline, without the audio device, to a 24-bit WAV file (plug-in inserts are skipped)
     Q_INVOKABLE void bounceProject(const QUrl& file);
+    // options: format "wav16" | "wav24" | "wav32" (float) | "aiff16" | "aiff24"; range "project" | "cycle"; normalize (bool, to -0.3 dBFS);
+    // tail (seconds of tail after the last region, 0..30); dither (bool, for 16-bit)
+    Q_INVOKABLE void bounceProjectAs(const QUrl& file, const QVariantMap& options);
     // Audio files dropped (or chosen) at a position: onto an audio track they go on that track, back to back; anywhere else each file
     // makes a new audio track named after the file. WAV, MP3, FLAC and AIFF; other rates are converted to the project's.
     Q_INVOKABLE void importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats);

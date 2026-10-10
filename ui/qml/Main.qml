@@ -77,6 +77,7 @@ ApplicationWindow {
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
     IoLabelsDialog { id: ioLabelsDialog; project: controller }
+    BounceDialog { id: bounceOptions; project: controller }
     GroupSettingsWindow { id: groupSettings; project: controller }
     AudioProcessDialog { id: audioDialog; project: controller }
     PreferencesDialog { id: preferencesDialog; project: controller }
@@ -132,7 +133,7 @@ ApplicationWindow {
         "file.saveAs": () => { saveAsDialog.openCopy = true; saveAsDialog.open() },
         "file.saveACopyAs": () => { saveAsDialog.openCopy = false; saveAsDialog.open() },
         "file.importAudio": () => importDialog.open(),
-        "file.bounce": () => bounceDialog.open(),
+        "file.bounce": () => bounceOptions.open(),
         "file.quit": () => Qt.quit(),
         "edit.undo": () => controller.undo(),
         "edit.redo": () => controller.redo(),

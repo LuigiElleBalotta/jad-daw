@@ -9,6 +9,8 @@
 #include "lpc/audio/engine.h"
 #include "lpc/demo_project.h"
 #include "lpc/project_io.h"
+#include "lpc/audio_decode.h"
+#include "lpc/audio_ops.h"
 #include "lpc/wav.h"
 #include "tests_temp.h"
 
@@ -1265,6 +1267,29 @@ private slots:
         jad::ProjectController d(false);
         d.loadIoSettings(s);
         QCOMPARE(d.inputLabel(2), QString("Guitar"));
+    }
+    void bounceCanWriteAiffNormalizedAndOnlyTheCycleArea() {
+        TempDir dir;
+        TempDir other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const auto aiff = other.path() / "mix.aif";
+        c.bounceProjectAs(url(aiff), {{"format", "aiff16"}, {"normalize", true}, {"tail", 0.0}});
+        QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(aiff) && std::filesystem::file_size(aiff) > 1000, 20000);
+        const lpc::WavData d = lpc::decodeAudioFile(aiff);
+        QCOMPARE(d.channels, 2);
+        QVERIFY(std::abs(lpc::peakOf(d) - std::pow(10.0f, -0.3f / 20.0f)) < 0.01f);   // normalized to -0.3 dBFS
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.bounceProjectAs(url(other.path() / "cycle.wav"), {{"range", "cycle"}});
+        QVERIFY(!c.lastError().isEmpty());                                              // no cycle area set
+        c.setLoopBeats(0, 2);
+        c.setLoopBeats(0, 0);                                                           // the area stays when the cycle is off
+        c.clearError();
+        c.bounceProjectAs(url(other.path() / "cycle.wav"), {{"range", "cycle"}, {"tail", 0.0}});
+        QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(other.path() / "cycle.wav"), 20000);
+        const lpc::WavData cycle = lpc::decodeAudioFile(other.path() / "cycle.wav");
+        QVERIFY(std::abs(cycle.frames() - 2 * 24000) < 600);                            // 2 beats at 120 bpm = 1 s
     }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;

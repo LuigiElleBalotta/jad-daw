@@ -56,6 +56,19 @@ void silence(WavData& d, std::int64_t from, std::int64_t to) {
     std::fill(d.samples.begin() + static_cast<std::ptrdiff_t>(static_cast<std::size_t>(from) * ch), d.samples.begin() + static_cast<std::ptrdiff_t>(static_cast<std::size_t>(to) * ch), 0.0f);
 }
 
+void ditherTpdf(WavData& d, int bits) {
+    if (bits < 1 || bits > 24) return;
+    const double lsb = 1.0 / static_cast<double>((1u << (bits - 1)) - 1);
+    std::uint32_t state = 0x9E3779B9u;
+    auto uniform = [&state] {  // xorshift: a repeatable noise
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return static_cast<double>(state) / 4294967296.0;
+    };
+    for (float& v : d.samples) v = static_cast<float>(v + (uniform() - uniform()) * lsb);
+}
+
 WavData timeStretch(const WavData& d, double ratio) {
     ratio = std::clamp(ratio, 0.25, 4.0);
     WavData out;

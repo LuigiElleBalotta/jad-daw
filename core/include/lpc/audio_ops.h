@@ -23,6 +23,9 @@ void fade(WavData& d, bool in, std::int64_t frames);
 // Zeroes frames [from, to).
 void silence(WavData& d, std::int64_t from, std::int64_t to);
 
+// Adds triangular-PDF noise of one least significant bit of a `bits`-bit file (the usual dither before a 16-bit bounce); deterministic.
+void ditherTpdf(WavData& d, int bits);
+
 // The same sound `ratio` times as long (2 = twice as long, half as fast) at the same pitch (WSOLA: overlapped windows joined where they
 // match best). ratio is kept between 0.25 and 4.
 WavData timeStretch(const WavData& d, double ratio);

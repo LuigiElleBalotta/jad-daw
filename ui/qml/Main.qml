@@ -97,6 +97,8 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    ProjectAudioWindow { id: projectAudioWindow; project: controller }
+    NotePadWindow { id: notePadWindow; project: controller }
     MarkerListWindow { id: markerList; project: controller }
     ProjectSettingsDialog { id: projectSettings; project: controller; onMetronomeRequested: metronomeDialog.open(); onPreferencesRequested: preferencesDialog.open() }
     IoLabelsDialog { id: ioLabelsDialog; project: controller }
@@ -235,6 +237,10 @@ ApplicationWindow {
         "mix.deleteAutomation": () => controller.deleteAutomationOfSelected(),
         "record.autoInputMonitoring": () => { controller.autoInputMonitoring = !controller.autoInputMonitoring },
         "record.recordingSettings": () => projectSettings.open(),
+        "view.notePads": () => notePadWindow.open(),
+        "window.openProjectAudio": () => projectAudioWindow.open(),
+        "view.controlBar": () => { controller.controlBarVisible = !controller.controlBarVisible },
+        "view.toolbar": () => { controller.toolbarVisible = !controller.toolbarVisible },
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),
@@ -333,6 +339,8 @@ ApplicationWindow {
         "view.library": controller.libraryVisible,
         "track.globalTracks": controller.globalTracksVisible,
         "track.toggleHideView": controller.showHiddenTracks,
+        "view.controlBar": controller.controlBarVisible,
+        "view.toolbar": controller.toolbarVisible,
         "record.autoInputMonitoring": controller.autoInputMonitoring,
         "mix.preFaderMetering": controller.preFaderMetering,
         "mix.groupsActive": controller.groupsActive,
@@ -443,11 +451,13 @@ ApplicationWindow {
         ControlBar {
             id: controlBar
             Layout.fillWidth: true
+            visible: controller.controlBarVisible
             project: controller
             onMessage: (text) => toast.show(text)
         }
         ToolBar {
             Layout.fillWidth: true
+            visible: controller.toolbarVisible
             project: controller
         }
         RowLayout {

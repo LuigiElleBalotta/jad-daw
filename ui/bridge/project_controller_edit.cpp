@@ -2121,4 +2121,63 @@ void ProjectController::exportMidiFile(const QUrl& file) {
     emit notice(QString("Exported %1 MIDI track(s)").arg(data.tracks.size()));
 }
 
+void ProjectController::setControlBarVisible(bool on) {
+    if (on == controlBarVisible_) return;
+    controlBarVisible_ = on;
+    QSettings().setValue("panels/controlBar", on);
+    emit barsChanged();
+}
+
+void ProjectController::setToolbarVisible(bool on) {
+    if (on == toolbarVisible_) return;
+    toolbarVisible_ = on;
+    QSettings().setValue("panels/toolbar", on);
+    emit barsChanged();
+}
+
+QVariantList ProjectController::projectAudio() const {
+    QVariantList out;
+    if (!host_) return out;
+    struct Item {
+        lpc::MediaItem media;
+        int used = 0;
+    };
+    const std::vector<Item> items = host_->read([](const lpc::Project& p) {
+        std::vector<Item> v;
+        for (const lpc::MediaItem& m : p.mediaPool) v.push_back({m, 0});
+        for (const lpc::Track& t : p.tracks)
+            for (const lpc::Region& r : t.regions)
+                for (Item& it : v)
+                    if (it.media.id == r.mediaId) ++it.used;
+        return v;
+    }).get();
+    for (const Item& it : items) {
+        const QString path = QString::fromStdString(it.media.path);
+        out.push_back(QVariantMap{{"name", QFileInfo(path).fileName()},
+                                  {"path", path},
+                                  {"seconds", it.media.sampleRate > 0 ? static_cast<double>(it.media.frames) / it.media.sampleRate : 0.0},
+                                  {"sampleRate", it.media.sampleRate},
+                                  {"channels", it.media.channels},
+                                  {"used", it.used}});
+    }
+    return out;
+}
+
+QString ProjectController::projectNotes() const {
+    if (dir_.empty()) return {};
+    QFile f(QString::fromStdWString((dir_ / "notes.txt").wstring()));
+    if (!f.open(QIODevice::ReadOnly)) return {};
+    return QString::fromUtf8(f.readAll());
+}
+
+void ProjectController::setProjectNotes(const QString& text) {
+    if (dir_.empty() || text == projectNotes()) return;
+    QFile f(QString::fromStdWString((dir_ / "notes.txt").wstring()));
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        setError("Cannot save the notes");
+        return;
+    }
+    f.write(text.toUtf8());
+}
+
 }  // namespace jad

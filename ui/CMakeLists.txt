@@ -64,6 +64,8 @@ qt_add_qml_module(jad_ui_lib
         qml/RecentProjectsDialog.qml
         qml/ColorsDialog.qml
         qml/MarkerListWindow.qml
+        qml/ProjectAudioWindow.qml
+        qml/NotePadWindow.qml
         qml/ProjectSettingsDialog.qml
         qml/MusicalTypingWindow.qml
         qml/EffectEditorWindow.qml

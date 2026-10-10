@@ -1411,6 +1411,23 @@ private slots:
         QCOMPARE(spy.count(), 1);                                    // no change, no signal
         c.setAutoInputMonitoring(before);                            // put the stored choice back for the other tests
     }
+    void projectAudioListsTheMediaAndTheNotesAreKeptWithTheProject() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QVariantList audio = c.projectAudio();
+        QVERIFY(!audio.isEmpty());
+        QVERIFY(audio.first().toMap().value("used").toInt() >= 1);
+        QVERIFY(audio.first().toMap().value("seconds").toDouble() > 0);
+        QCOMPARE(c.projectNotes(), QString());
+        c.setProjectNotes("Verse 2: lower the guitars\nÀ demain");
+        QCOMPARE(c.projectNotes(), QString("Verse 2: lower the guitars\nÀ demain"));
+        const bool bar = c.controlBarVisible();
+        c.setControlBarVisible(!bar);
+        QCOMPARE(c.controlBarVisible(), !bar);
+        c.setControlBarVisible(bar);
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -1344,6 +1344,8 @@ void ProjectController::loadPanelState(QSettings& s) {
     setSmartControlsHeight(s.value("panels/smartControlsHeight", smartControlsHeight_).toDouble());
     setMixerHeight(s.value("panels/mixerHeight", mixerHeight_).toDouble());
     mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
+    controlBarVisible_ = s.value("panels/controlBar", true).toBool();
+    toolbarVisible_ = s.value("panels/toolbar", true).toBool();
     autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();
     loadClickSettings(s);
     loadAudioSettings(s);

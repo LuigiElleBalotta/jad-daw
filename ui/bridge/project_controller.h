@@ -91,6 +91,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool audioEnabled READ audioEnabled WRITE setAudioEnabled NOTIFY audioEnabledChanged)
     Q_PROPERTY(double masterPeak READ masterPeak NOTIFY peakChanged)
+    Q_PROPERTY(bool controlBarVisible READ controlBarVisible WRITE setControlBarVisible NOTIFY barsChanged)  // View > Control Bar
+    Q_PROPERTY(bool toolbarVisible READ toolbarVisible WRITE setToolbarVisible NOTIFY barsChanged)          // View > Toolbar
     Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
     Q_PROPERTY(bool automationVisible READ automationVisible WRITE setAutomationVisible NOTIFY automationViewChanged)  // Mix > Show Automation
     Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume" or "pan"
@@ -319,6 +321,15 @@ public:
     void setAutomationParam(const QString& param);
     Q_INVOKABLE QVariantList automationPoints(const QString& trackId, const QString& target) const;  // {beats, value}; follows `revision`
     Q_INVOKABLE void setAutomationPoints(const QString& trackId, const QString& target, const QVariantList& points);
+    bool controlBarVisible() const { return controlBarVisible_; }
+    void setControlBarVisible(bool on);
+    bool toolbarVisible() const { return toolbarVisible_; }
+    void setToolbarVisible(bool on);
+    // Window > Open Project Audio: the audio files of the project, {name, path, seconds, sampleRate, channels, used (regions that play it)}
+    Q_INVOKABLE QVariantList projectAudio() const;
+    // View > Note Pads: free text kept with the project in notes.txt
+    Q_INVOKABLE QString projectNotes() const;
+    Q_INVOKABLE void setProjectNotes(const QString& text);
     bool globalTracksVisible() const { return globalTracksVisible_; }
     void setGlobalTracksVisible(bool on);
     // the global tracks; every list follows `revision`
@@ -602,6 +613,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void barsChanged();
     void showHiddenTracksChanged();
     void meteringChanged();
     void groupsChanged();
@@ -752,6 +764,7 @@ private:
     double peak_ = 0.0;
     int peaksRevision_ = 0;
     bool globalTracksVisible_ = false;
+    bool controlBarVisible_ = true, toolbarVisible_ = true;
     bool automationVisible_ = false;
     bool metronome_ = false;
     bool autoInput_ = true;

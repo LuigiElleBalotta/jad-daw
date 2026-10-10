@@ -466,6 +466,11 @@ public:
     Q_INVOKABLE void repeatSelectedRegions(int copies);
     Q_INVOKABLE void setSelectedRegionsLength(double beats);
     Q_INVOKABLE QVariantList trackList() const;  // {id, name, kind} of the tracks listed in the Tracks area (the master not included)
+    // View > Browsers / Loop Browser: the folders and audio files of a folder, {path, parent, entries: [{name, path, dir, audio, size}]}, folders first.
+    // An empty path is the user's home. standardLocations() is [{name, path}] for the sidebar (Home, Music, Desktop, Documents, the project, the project's audio).
+    Q_INVOKABLE QVariantMap browseFolder(const QString& path) const;
+    Q_INVOKABLE QVariantList standardLocations() const;
+    Q_INVOKABLE void importAudioPath(const QString& path) { importAudioFilesHere({QUrl::fromLocalFile(path)}); }
     Q_INVOKABLE void openAllPluginWindows();
     // Bounce in Place: each selected audio or instrument track (with its inserts, sends and the buses it feeds) is rendered to a new audio track
     // named after it, from its first region to its last plus a tail. The original stays as it is.

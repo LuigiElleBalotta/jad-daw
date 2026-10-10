@@ -3,6 +3,7 @@
 #include <QSignalSpy>
 #include <QtTest>
 #include <cmath>
+#include <fstream>
 #include <limits>
 
 #include "bridge/project_controller.h"
@@ -1599,6 +1600,23 @@ private slots:
         QCOMPARE(spy.count(), 1);
         c.resetBarItems();
         QVERIFY(c.barItem("cb.lcd"));
+    }
+    void theBrowserListsFoldersFirstAndAudioFilesOnly() {
+        TempDir dir;
+        const auto root = dir.path();
+        std::filesystem::create_directories(root / "Drums");
+        std::filesystem::create_directories(root / ".hidden");
+        { std::ofstream(root / "a.wav") << "x"; std::ofstream(root / "b.txt") << "x"; std::ofstream(root / "c.MP3") << "x"; }
+        jad::ProjectController c(false);
+        const QVariantMap listing = c.browseFolder(QString::fromStdU16String(root.u16string()));
+        const QVariantList entries = listing.value("entries").toList();
+        QCOMPARE(entries.size(), 3);                                  // Drums, a.wav, c.MP3: no hidden folder, no text file
+        QVERIFY(entries[0].toMap().value("dir").toBool());
+        QCOMPARE(entries[0].toMap().value("name").toString(), QString("Drums"));
+        QVERIFY(entries[1].toMap().value("audio").toBool());
+        QVERIFY(!listing.value("parent").toString().isEmpty());
+        QVERIFY(!c.standardLocations().isEmpty());
+        QVERIFY(c.browseFolder("/this/does/not/exist").value("entries").isValid());   // a missing folder shows the home folder instead
     }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;

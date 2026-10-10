@@ -3,6 +3,8 @@
 #include <QSettings>
 #include <QDateTime>
 #include <QFile>
+#include <QDir>
+#include <QStandardPaths>
 #include <QCryptographicHash>
 #include <QFileInfo>
 #include <QTimer>
@@ -2569,6 +2571,39 @@ void ProjectController::resetBarItems() {
     QSettings().setValue("panels/barItemsOff", QStringList());
     ++barItemsRevision_;
     emit barsChanged();
+}
+
+QVariantMap ProjectController::browseFolder(const QString& path) const {
+    QDir dir(path.isEmpty() ? QDir::homePath() : path);
+    if (!dir.exists()) dir = QDir(QDir::homePath());
+    static const QStringList audio{"*.wav", "*.mp3", "*.flac", "*.aif", "*.aiff", "*.ogg"};
+    QVariantList entries;
+    const QFileInfoList folders = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable, QDir::Name | QDir::IgnoreCase);
+    for (const QFileInfo& f : folders)
+        if (!f.fileName().startsWith('.')) entries.append(QVariantMap{{"name", f.fileName()}, {"path", f.absoluteFilePath()}, {"dir", true}, {"audio", false}, {"size", 0}});
+    const QFileInfoList files = dir.entryInfoList(audio, QDir::Files | QDir::Readable, QDir::Name | QDir::IgnoreCase);
+    for (const QFileInfo& f : files)
+        entries.append(QVariantMap{{"name", f.fileName()}, {"path", f.absoluteFilePath()}, {"dir", false}, {"audio", true}, {"size", static_cast<double>(f.size())}});
+    QString parent;
+    if (QDir up = dir; up.cdUp()) parent = up.absolutePath();
+    return {{"path", dir.absolutePath()}, {"parent", parent}, {"entries", entries}};
+}
+
+QVariantList ProjectController::standardLocations() const {
+    QVariantList out;
+    auto add = [&](const QString& name, const QString& path) {
+        if (!path.isEmpty() && QDir(path).exists()) out.append(QVariantMap{{"name", name}, {"path", QDir(path).absolutePath()}});
+    };
+    if (!dir_.empty()) {
+        add(QStringLiteral("Project"), QString::fromStdWString(dir_.wstring()));
+        add(QStringLiteral("Project Audio"), QString::fromStdWString((dir_ / "audio").wstring()));
+    }
+    add(QStringLiteral("Home"), QDir::homePath());
+    add(QStringLiteral("Music"), QStandardPaths::writableLocation(QStandardPaths::MusicLocation));
+    add(QStringLiteral("Desktop"), QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
+    add(QStringLiteral("Documents"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    add(QStringLiteral("Downloads"), QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+    return out;
 }
 
 }  // namespace jad

@@ -1150,10 +1150,10 @@ void ProjectController::startNextImport() {
         if (!self) return;
         self->lastImportEnd_ = ok ? endBeats : start;  // a failed file leaves the spot free for the next one
         self->startNextImport();
-    }, next.takeGroup, next.muted);
+    }, next.takeGroup, next.muted, next.musical);
 }
 
-void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup, bool muted) {
+void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup, bool muted, bool musical) {
     if (!host_) {
         done(false, startBeats);
         return;
@@ -1167,7 +1167,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
     const std::int64_t startMicros = std::min<std::int64_t>(std::llround(startFrames * 1e6 / projectRate), lpc::kMaxPosition);
 
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done, takeGroup, muted] {
+    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done, takeGroup, muted, musical] {
         auto fail = [&](const QString& message) {
             if (!self) return;
             QMetaObject::invokeMethod(self.data(), [self, message, done, beats] {
@@ -1250,7 +1250,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             std::filesystem::remove(target, ignore);
             return;
         }
-        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats, takeGroup, muted] {
+        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats, takeGroup, muted, musical] {
             std::error_code ignore;
             if (!self || self->dir_ != projectDir || !self->host_) {  // closed or replaced meanwhile
                 std::filesystem::remove(target, ignore);
@@ -1277,8 +1277,18 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             nlohmann::json commands = nlohmann::json::array();
             commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
             commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"region", region}, {"index", -1}});
-            const double endFrames = static_cast<double>(startMicros + region.length) * projectRate / 1e6;
-            const double endBeats = static_cast<double>(self->tempoMap_.samplesToTicks(endFrames, projectRate)) / lpc::kPPQ;
+            if (musical) {  // Use Musical Grid: the region lies on the bars and stays there when the tempo changes
+                const lpc::Ticks startTick = static_cast<lpc::Ticks>(std::llround(beats * lpc::kPPQ));
+                const double startFrames = self->tempoMap_.ticksToSamples(startTick, projectRate);
+                const lpc::Ticks endTick = static_cast<lpc::Ticks>(self->tempoMap_.samplesToTicks(startFrames + static_cast<double>(frames), projectRate));
+                region.timeBase = lpc::TimeBase::Musical;
+                region.start = startTick;
+                region.length = std::max<lpc::Ticks>(1, endTick - startTick);
+                commands.back()["region"] = region;
+            }
+            const double endFrames = musical ? 0.0 : static_cast<double>(startMicros + region.length) * projectRate / 1e6;
+            const double endBeats = musical ? static_cast<double>(region.start + region.length) / lpc::kPPQ
+                                            : static_cast<double>(self->tempoMap_.samplesToTicks(endFrames, projectRate)) / lpc::kPPQ;
             self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [target, done, endBeats, beats](bool accepted) {
                 if (!accepted) {
                     std::error_code ec;
@@ -1384,6 +1394,39 @@ void ProjectController::play() {
         return;
     }
     host_->play();
+}
+
+void ProjectController::setUseMusicalGrid(bool on) {
+    if (on == musicalGrid_) return;
+    musicalGrid_ = on;
+    QSettings().setValue("record/musicalGrid", on);
+    emit recordingChanged();
+}
+
+void ProjectController::setRecordButtonMode(const QString& mode) {
+    if ((mode != "toggle" && mode != "repeat") || mode == recordButtonMode_) return;
+    recordButtonMode_ = mode;
+    QSettings().setValue("record/buttonMode", mode);
+    emit recordingChanged();
+}
+
+void ProjectController::discardRecording() {
+    if (!recording_) return;
+    discardOnFinish_ = true;
+    stop();
+}
+
+// After the take is made (or dropped): Discard goes back to where the recording began; Record Repeat begins again from there.
+void ProjectController::afterRecording() {
+    const bool discard = discardOnFinish_, repeat = repeatOnFinish_;
+    discardOnFinish_ = repeatOnFinish_ = false;
+    if (!discard && !repeat) return;
+    locateBeats(recStartBeats_);
+    if (repeat) {
+        positionBeats_ = recStartBeats_;  // the mirror catches up with the snapshot a moment later: start from here, not from where it stopped
+        playing_ = false;
+        startRecording();
+    }
 }
 
 void ProjectController::stop() {
@@ -1501,7 +1544,10 @@ void ProjectController::tick() {
             punchStopSent_ = true;
             sendRecordingStop();
         }
-        if (recFinishing_ && !engine_->recording()) finishRecording();
+        if (recFinishing_ && !engine_->recording()) {
+            finishRecording();
+            afterRecording();
+        }
     }
     {   // an armed track shows the level of its input on its meter
         const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
@@ -1543,6 +1589,8 @@ void ProjectController::loadPanelState(QSettings& s) {
     toolbarVisible_ = s.value("panels/toolbar", true).toBool();
     quickHelp_ = s.value("panels/quickHelp", false).toBool();
     dragMode_ = s.value("edit/dragMode", "overlap").toString();
+    musicalGrid_ = s.value("record/musicalGrid", false).toBool();
+    recordButtonMode_ = s.value("record/buttonMode", "toggle").toString() == "repeat" ? QStringLiteral("repeat") : QStringLiteral("toggle");
     automationFollows_ = s.value("edit/automationFollows", false).toBool();
     for (const QString& k : s.value("panels/barItemsOff").toStringList()) barItemsOff_.insert(k);
     autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();

@@ -116,6 +116,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(int audioBufferSize READ audioBufferSize NOTIFY audioSettingsChanged)
     Q_PROPERTY(int inputChannels READ inputChannels NOTIFY audioSettingsChanged)    // of the open device
     Q_PROPERTY(double deviceRate READ deviceRate NOTIFY audioSettingsChanged)       // 0 when no device is open
+    Q_PROPERTY(bool useMusicalGrid READ useMusicalGrid WRITE setUseMusicalGrid NOTIFY recordingChanged)  // Record > Use Musical Grid: new audio takes follow the tempo (musical time)
+    Q_PROPERTY(QString recordButtonMode READ recordButtonMode WRITE setRecordButtonMode NOTIFY recordingChanged)  // "toggle" (Record/Record Toggle) or "repeat" (Record/Record Repeat)
     Q_PROPERTY(bool allowQuickPunch READ allowQuickPunch WRITE setAllowQuickPunch NOTIFY punchChanged)  // Record while playing starts a take
     Q_PROPERTY(bool punchEnabled READ punchEnabled WRITE setPunchEnabled NOTIFY punchChanged)  // Autopunch: only the range is kept
     Q_PROPERTY(double punchStartBeats READ punchStartBeats NOTIFY punchChanged)
@@ -293,6 +295,12 @@ public:
     bool recording() const { return recording_; }
     bool punchEnabled() const { return punchEnabled_; }
     bool allowQuickPunch() const { return allowQuickPunch_; }
+    bool useMusicalGrid() const { return musicalGrid_; }
+    void setUseMusicalGrid(bool on);
+    QString recordButtonMode() const { return recordButtonMode_; }
+    void setRecordButtonMode(const QString& mode);
+    // Record > Record Button Options > Discard Recording and Return to Last Play Position: the take in progress is thrown away, the transport stops.
+    Q_INVOKABLE void discardRecording();
     void setAllowQuickPunch(bool on) { if (on != allowQuickPunch_) { allowQuickPunch_ = on; emit punchChanged(); } }
     void setPunchEnabled(bool on);
     double punchStartBeats() const { return punchStartBeats_; }
@@ -755,10 +763,11 @@ private:
         bool temporary = false;  // a file made for the import (a take): removed when it has been taken in
         QString takeGroup;       // set for the passes of a cycle recording: the regions share it
         bool muted = false;      // a take that does not play
+        bool musical = false;    // the region follows the tempo (Use Musical Grid)
     };
     void startNextImport();
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
-    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false);
+    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false, bool musical = false);
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     QString inspectorBusId_, pinOwner_;  // the pinned bus of the right strip and the track it was pinned for
     int routingRevision_ = 0;
@@ -942,6 +951,11 @@ private:
     bool punchStopSent_ = false;
     bool punchEnabled_ = false;
     bool allowQuickPunch_ = true;
+    bool musicalGrid_ = false;
+    QString recordButtonMode_ = QStringLiteral("toggle");
+    bool discardOnFinish_ = false, repeatOnFinish_ = false;  // how the recording in progress ends
+    double recStartBeats_ = 0;                               // where it started
+    void afterRecording();
     double punchStartBeats_ = 0.0, punchEndBeats_ = 0.0;
     int recordingDelay_ = 0;              // samples: added to the device's own latency when a take is placed
     void applyMonitoring();

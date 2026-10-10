@@ -1041,8 +1041,11 @@ void ProjectController::setCountInChoice(int choice) {
 }
 
 void ProjectController::toggleRecording() {
-    if (recording_) sendRecordingStop();  // the transport keeps playing: Record/Record Toggle
-    else startRecording();
+    if (!recording_) startRecording();
+    else if (recordButtonMode_ == "repeat") {  // Record/Record Repeat: this take ends and another begins where it began
+        repeatOnFinish_ = true;
+        stop();
+    } else sendRecordingStop();  // the transport keeps playing: Record/Record Toggle
 }
 
 void ProjectController::sendRecordingStop() {
@@ -1149,6 +1152,8 @@ void ProjectController::startRecording() {
     recChannels_.clear();
     recChunks_.clear();
     punchStopSent_ = false;
+    recStartBeats_ = positionBeats_;
+    discardOnFinish_ = repeatOnFinish_ = false;
     recording_ = true;
     recFinishing_ = false;
     host_->startRecording(startFrame, countFrames, std::move(count), !quickPunch);
@@ -1183,6 +1188,14 @@ void ProjectController::finishRecording() {
     recFinishing_ = false;
     applyMonitoring();
     emit recordingChanged();
+    if (discardOnFinish_) {  // Discard Recording: nothing of the take is kept
+        recChannels_.clear();
+        recChunks_.clear();
+        recMidiTracks_.clear();
+        recMidi_.clear();
+        emit notice("Recording discarded");
+        return;
+    }
     if (!recChunks_.empty()) finishMidiRecording(recChunks_.front().position, recChunks_.back().position + recChunks_.back().frames);
     else { recMidiTracks_.clear(); recMidi_.clear(); }
     if (recTracks_.isEmpty()) {  // only instrument tracks were armed: the notes are the take
@@ -1248,7 +1261,7 @@ void ProjectController::finishRecording() {
             }
             const double startBeats = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(start), sampleRate_)) / lpc::kPPQ;
             const bool lastRun = &run == &runs.back();
-            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), trackId, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun});  // the last pass plays
+            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), trackId, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun, musicalGrid_});  // the last pass plays
             seconds = std::max(seconds, static_cast<double>(data.size() / (stereo ? 2 : 1)) / sampleRate_);
             ++take;
             ++made;

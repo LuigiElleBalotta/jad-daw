@@ -880,6 +880,44 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.regions()->rowCount(), before);
     }
+    void aTakeIsInMusicalTimeWithUseMusicalGridAndDiscardRecordingKeepsNothing() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "audio") audio = c.tracks()->trackIdAt(i);
+        c.setTrackToggle("track.recordArm", audio, true);
+        QCOMPARE(c.recordButtonMode(), QString("toggle"));
+        c.setRecordButtonMode("bogus");
+        QCOMPARE(c.recordButtonMode(), QString("toggle"));
+        const int before = c.regions()->rowCount();
+        c.locateBeats(8.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 8.0) < 0.01);
+        c.startRecording();                                        // Discard: nothing is kept and the playhead goes back
+        QVERIFY(c.recording());
+        QTest::qWait(400);
+        c.discardRecording();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.recording(), 15000);
+        QTest::qWait(300);
+        QCOMPARE(c.regions()->rowCount(), before);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 8.0) < 0.01);
+        c.setUseMusicalGrid(true);
+        c.startRecording();
+        QVERIFY(c.recording());
+        QTest::qWait(500);
+        c.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 15000);
+        const jad::RegionRow* take = nullptr;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->trackId == audio && std::abs(r->startBeats - 8.0) < 0.01) take = r;
+        }
+        QVERIFY(take);
+        QVERIFY(!take->absolute);                                  // musical time: it follows the tempo
+        c.setUseMusicalGrid(false);
+    }
     void countInChoiceAcceptsBarsAndBeatsOnly() {
         jad::ProjectController c(false);
         QCOMPARE(c.countInChoice(), 1);

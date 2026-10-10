@@ -106,3 +106,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: comping: Split Takes at Playhead (each side a passage of its own, pick a take per part).
 - 2026-10-10: plug-in parameter automation (lane target param/<vst3 id>/<n>/<index>, per-track lane parameter chooser).
 - 2026-10-10: unsaved-changes prompt (save, don't save, cancel) and autosave with recovery.
+- 2026-10-10: Gain, Fade and Solo tools.

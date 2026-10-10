@@ -170,4 +170,55 @@ TestCase {
         verify(Math.abs(got[0][1] - 2) < 0.2)
         compare(got[0][2], 0)
     }
+
+    Component { id: audioC; RegionItem {
+        width: 160; height: 56
+        regionId: "a1"; trackId: "t1"; startBeats: 0; lengthBeats: 4; isAudio: true; missing: false
+        pixelsPerBeat: 40
+        fadeInBeats: 0; fadeOutBeats: 0; gainDb: 0
+    } }
+
+    function test_gain_tool_drags_the_gain_and_asks_once_on_release() {
+        var r = createTemporaryObject(audioC, this)
+        r.tool = "gain"
+        var asked = []
+        r.gainRequested.connect(function (id, db) { asked.push([id, db]) })
+        mousePress(r, 40, 40)
+        mouseMove(r, 40, 30)                                    // 10 px up: +2.5 dB
+        compare(r.gainDragDb, 2.5)
+        compare(asked.length, 0)
+        mouseRelease(r, 40, 30)
+        compare(asked.length, 1)
+        compare(asked[0][0], "a1")
+        compare(asked[0][1], 2.5)
+        verify(isNaN(r.gainDragDb))
+    }
+
+    function test_fade_tool_sets_the_fade_of_the_side_that_was_pressed() {
+        var r = createTemporaryObject(audioC, this)
+        r.tool = "fade"
+        var fades = []
+        r.fadesRequested.connect(function (id, fin, fout) { fades.push([id, fin, fout]) })
+        mousePress(r, 10, 20)                                   // the left half: the fade in
+        mouseMove(r, 50, 20)                                    // 40 px = one beat
+        mouseRelease(r, 50, 20)
+        compare(fades.length, 1)
+        compare(fades[0][1], 1)
+        compare(fades[0][2], 0)
+        mousePress(r, 150, 20)                                  // the right half: the fade out
+        mouseMove(r, 110, 20)
+        mouseRelease(r, 110, 20)
+        compare(fades.length, 2)
+        compare(fades[1][2], 1)
+    }
+
+    function test_solo_tool_asks_for_the_solo_of_the_track() {
+        var r = createTemporaryObject(audioC, this)
+        r.tool = "solo"
+        var asked = []
+        r.soloRequested.connect(function (id) { asked.push(id) })
+        mouseClick(r, 40, 20)
+        compare(asked.length, 1)
+        compare(asked[0], "a1")
+    }
 }

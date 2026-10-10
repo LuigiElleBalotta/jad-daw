@@ -648,7 +648,7 @@ bool ProjectController::selectedToggle(const QString& actionId) const {
 }
 
 void ProjectController::setTool(const QString& tool) {
-    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom", "mute"};
+    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom", "mute", "gain", "fade", "solo"};
     if (!known.contains(tool) || tool == tool_) return;
     tool_ = tool;
     emit toolChanged();

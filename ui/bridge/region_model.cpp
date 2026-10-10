@@ -45,6 +45,7 @@ QVariant RegionModel::data(const QModelIndex& index, int role) const {
         case FadeOutBeats: return r.fadeOutBeats;
         case LoopBeats: return r.loopBeats;
         case Takes: return takeCount(r);
+        case GainDb: return r.gainDb;
     }
     return {};
 }
@@ -52,7 +53,7 @@ QVariant RegionModel::data(const QModelIndex& index, int role) const {
 QHash<int, QByteArray> RegionModel::roleNames() const {
     return {{RegionId, "regionId"},       {TrackId, "trackId"},   {TrackIndex, "trackIndex"}, {StartBeats, "startBeats"},
             {LengthBeats, "lengthBeats"}, {IsAudio, "isAudio"},   {Missing, "missing"},       {MediaId, "mediaId"},       {Color, "trackColor"}, {Muted, "muted"},
-            {FadeInBeats, "fadeInBeats"}, {FadeOutBeats, "fadeOutBeats"}, {LoopBeats, "loopBeats"}, {Takes, "takes"}};
+            {FadeInBeats, "fadeInBeats"}, {FadeOutBeats, "fadeOutBeats"}, {LoopBeats, "loopBeats"}, {Takes, "takes"}, {GainDb, "gainDb"}};
 }
 
 }  // namespace jad

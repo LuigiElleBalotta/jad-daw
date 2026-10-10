@@ -294,6 +294,9 @@ Item {
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 muted: model.muted
                 loopBeats: model.loopBeats
+                gainDb: model.gainDb
+                onGainRequested: (id, db) => root.project.setRegionGain(id, db)
+                onSoloRequested: (id) => root.project.toggleSolo(model.trackId)
                 takes: model.takes
                 onContextRequested: (id) => { root.forceActiveFocus(); regionContext.open(id) }
                 fadeInBeats: model.fadeInBeats

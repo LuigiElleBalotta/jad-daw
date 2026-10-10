@@ -24,6 +24,10 @@ Item {
     property bool muted: false
     property real loopBeats: 0             // > 0: the region repeats its first loopBeats
     property int takes: 0                  // > 0: the region is one of that many takes of a passage
+    property real gainDb: 0                // the Gain tool drags it
+    property real gainDragDb: NaN          // live feedback while the Gain tool drags
+    signal gainRequested(string id, real db)
+    signal soloRequested(string id)
     signal contextRequested(string id)
     property real fadeInBeats: 0           // the fades of an audio region
     property real fadeOutBeats: 0
@@ -208,6 +212,11 @@ Track: %3")
         property real pressSceneX: 0
         property bool moving: false
         property bool toolAction: false  // the press did something with a tool: no select, no drag
+        property string toolDrag: ""     // "gain", "fadeIn" or "fadeOut" while that tool is dragged
+        property real toolPressX: 0
+        property real toolPressY: 0
+        property real toolStartDb: 0
+        property real toolStartPx: 0
 
         function sceneX(m) { return mapToItem(null, m.x, m.y).x }
 
@@ -218,6 +227,16 @@ Track: %3")
             if (root.tool === "glue") { root.glueRequested(root.regionId); return }
             if (root.tool === "mute") { root.muteRequested(root.regionId); return }
             if (root.tool === "zoom") return  // the Zoom tool acts on the lane (Timeline), not on a region
+            if (root.tool === "solo") { root.soloRequested(root.regionId); return }
+            if (root.tool === "gain" && root.isAudio) { toolPressY = m.y; toolPressX = m.x; toolStartDb = root.gainDb; root.gainDragDb = root.gainDb; toolAction = false; toolDrag = "gain"; root.selectRequested(root.regionId, false); return }
+            if (root.tool === "fade" && root.isAudio) {
+                toolDrag = m.x < root.width / 2 ? "fadeIn" : "fadeOut"
+                toolPressX = m.x
+                toolStartPx = toolDrag === "fadeIn" ? root.fadeInBeats * root.pixelsPerBeat : root.fadeOutBeats * root.pixelsPerBeat
+                if (toolDrag === "fadeIn") root.fadeInPx = toolStartPx; else root.fadeOutPx = toolStartPx
+                toolAction = false
+                return
+            }
             toolAction = false
             pressSceneX = sceneX(m)
             moving = false
@@ -225,6 +244,13 @@ Track: %3")
             root.selectRequested(root.regionId, (m.modifiers & Qt.ShiftModifier) !== 0)
         }
         onPositionChanged: (m) => {
+            if (pressed && toolDrag === "gain") { root.gainDragDb = Math.max(-96, Math.min(24, Math.round((toolStartDb + (toolPressY - m.y) * 0.25) * 10) / 10)); return }
+            if (pressed && (toolDrag === "fadeIn" || toolDrag === "fadeOut")) {
+                const d = m.x - toolPressX
+                const px = Math.max(0, Math.min(root.width, toolStartPx + (toolDrag === "fadeIn" ? d : -d)))
+                if (toolDrag === "fadeIn") root.fadeInPx = px; else root.fadeOutPx = px
+                return
+            }
             if (!pressed || toolAction) return
             const d = sceneX(m) - pressSceneX
             if (!moving && Math.abs(d) < 3) return  // a click, not a drag
@@ -232,6 +258,22 @@ Track: %3")
             root.dragDeltaPx = d
         }
         onReleased: (m) => {
+            if (toolDrag === "gain") {
+                const db = root.gainDragDb
+                root.gainDragDb = NaN
+                toolDrag = ""
+                if (!isNaN(db) && Math.abs(db - root.gainDb) > 1e-6) root.gainRequested(root.regionId, db)
+                return
+            }
+            if (toolDrag === "fadeIn" || toolDrag === "fadeOut") {
+                const fin = root.fadeInPx >= 0 ? root.fadeInPx / root.pixelsPerBeat : root.fadeInBeats
+                const fout = root.fadeOutPx >= 0 ? root.fadeOutPx / root.pixelsPerBeat : root.fadeOutBeats
+                root.fadeInPx = -1
+                root.fadeOutPx = -1
+                toolDrag = ""
+                root.fadesRequested(root.regionId, fin, fout)
+                return
+            }
             if (toolAction) { toolAction = false; return }
             const wasMoving = moving
             const d = root.dragDeltaPx
@@ -331,4 +373,16 @@ Track: %3")
     }
     FadeHandle { isIn: true }
     FadeHandle { isIn: false }
+
+    Rectangle {  // the gain while the Gain tool drags it
+        visible: !isNaN(root.gainDragDb)
+        anchors.centerIn: parent
+        width: gainLabel.implicitWidth + 12
+        height: 18
+        radius: 4
+        color: Theme.surfaceRaised
+        border.color: Theme.borderStrong
+        z: 30
+        Text { id: gainLabel; anchors.centerIn: parent; text: root.gainDragDb.toFixed(1) + " dB"; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize }
+    }
 }

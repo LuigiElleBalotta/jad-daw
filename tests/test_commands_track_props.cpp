@@ -151,22 +151,24 @@ TEST_CASE("set_track_props: showInTracks hides a bus and undo restores it", "[co
     REQUIRE(p.findTrack(bus.id)->showInTracks);
 }
 
-TEST_CASE("set_track_props: only buses and auxes can be hidden", "[commands][props][visibility]") {
+TEST_CASE("set_track_props: any track but the master can be hidden", "[commands][props][visibility]") {
     Project p{Uuid::random(gRng)};
     const Track audio = track(TrackKind::Audio, "Audio");
     REQUIRE(makeAddTrack(audio)->apply(p).ok());
-    const Project before = p;
     TrackPatch patch;
     patch.showInTracks = false;
-    for (const Uuid& id : {audio.id, p.master()->id}) {
-        auto r = makeSetTrackProps(id, patch)->apply(p);
-        REQUIRE_FALSE(r.ok());
-        REQUIRE(p == before);
-    }
-    REQUIRE(makeSetTrackProps(audio.id, patch)->apply(p).error->code == "bad_value");
+    auto hidden = makeSetTrackProps(audio.id, patch)->apply(p);
+    REQUIRE(hidden.ok());
+    REQUIRE_FALSE(p.findTrack(audio.id)->showInTracks);
+    REQUIRE(hidden.inverse->apply(p).ok());
+    REQUIRE(p.findTrack(audio.id)->showInTracks);
+    const Project before = p;
+    auto r = makeSetTrackProps(p.master()->id, patch)->apply(p);   // the master is never listed in the Tracks area anyway
+    REQUIRE_FALSE(r.ok());
+    REQUIRE(p == before);
 }
 
-TEST_CASE("add_track: a hidden bus is accepted, a hidden audio track is not", "[commands][visibility]") {
+TEST_CASE("add_track: a hidden track is accepted, the master is not hidden", "[commands][visibility]") {
     Project p{Uuid::random(gRng)};
     Track bus = track(TrackKind::Bus, "Bus 1");
     bus.showInTracks = false;
@@ -177,9 +179,7 @@ TEST_CASE("add_track: a hidden bus is accepted, a hidden audio track is not", "[
 
     Track audio = track(TrackKind::Audio, "Audio");
     audio.showInTracks = false;
-    auto r = makeAddTrack(audio)->apply(p);
-    REQUIRE_FALSE(r.ok());
-    REQUIRE(r.error->code == "bad_value");
+    REQUIRE(makeAddTrack(audio)->apply(p).ok());
 }
 
 TEST_CASE("set_track_props: the JSON command carries showInTracks", "[commands][json][visibility]") {

@@ -136,7 +136,7 @@ TEST_CASE("model json: showInTracks is written only when false and read back", "
     REQUIRE(projectFromJson(j) == p);
 }
 
-TEST_CASE("model json: showInTracks must be a boolean on a bus or aux", "[model][json][visibility]") {
+TEST_CASE("model json: showInTracks must be a boolean", "[model][json][visibility]") {
     Project p;
     Track bus;
     bus.id = Uuid{9, 9};
@@ -147,6 +147,7 @@ TEST_CASE("model json: showInTracks must be a boolean on a bus or aux", "[model]
     j["tracks"][1]["showInTracks"] = "no";
     REQUIRE_THROWS_AS(projectFromJson(j), std::runtime_error);
     j["tracks"][1]["showInTracks"] = false;
-    j["tracks"][1]["kind"] = "audio";
-    REQUIRE_THROWS_AS(projectFromJson(j), std::runtime_error);
+    REQUIRE_FALSE(projectFromJson(j).tracks[1].showInTracks);
+    j["tracks"][1]["kind"] = "audio";   // any track can be hidden now
+    REQUIRE_FALSE(projectFromJson(j).tracks[1].showInTracks);
 }

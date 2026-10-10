@@ -1917,4 +1917,41 @@ void ProjectController::clearUndoHistory() {
     emit notice("The undo history was deleted");
 }
 
+void ProjectController::setShowHiddenTracks(bool on) {
+    if (on == showHidden_) return;
+    showHidden_ = on;
+    emit showHiddenTracksChanged();
+    if (host_) refresh(host_->revision());
+}
+
+void ProjectController::hideSelectedTracks() {
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && !t->master && !t->hidden)
+            commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"showInTracks", false}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::hideUnselectedTracks() {
+    if (selectedTracks_.isEmpty()) {
+        emit notice("Select the tracks to keep first");
+        return;
+    }
+    nlohmann::json commands = nlohmann::json::array();
+    for (const TrackRow& t : allRows_)
+        if (!t.master && !t.hidden && t.showInTracks && !selectedTracks_.contains(t.id))
+            commands.push_back({{"type", "set_track_props"}, {"trackId", t.id.toStdString()}, {"showInTracks", false}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::unhideAllTracks() {
+    nlohmann::json commands = nlohmann::json::array();
+    for (const TrackRow& t : allRows_)
+        if (!t.master && t.hidden) commands.push_back({{"type", "set_track_props"}, {"trackId", t.id.toStdString()}, {"showInTracks", true}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

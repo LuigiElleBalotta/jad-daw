@@ -120,7 +120,7 @@ MaybeError checkTrackProps(const std::string& name, const std::string& color) {
 }
 
 MaybeError checkShowInTracks(TrackKind kind, bool show) {
-    if (!show && !isBusLike(kind)) return CommandError{"bad_value", "only buses and auxes can be hidden from the Tracks area"};
+    if (!show && kind == TrackKind::Master) return CommandError{"bad_value", "the master track cannot be hidden from the Tracks area"};
     return std::nullopt;
 }
 

@@ -13,7 +13,7 @@ class TrackListModel : public QAbstractListModel {
     Q_OBJECT
     QML_ANONYMOUS
 public:
-    enum Role { TrackId = Qt::UserRole + 1, Name, Kind, Color, IsMaster, RegionCount, Mute, Solo, GainDb, Pan, RecordArm, InputMonitor };
+    enum Role { TrackId = Qt::UserRole + 1, Name, Kind, Color, IsMaster, RegionCount, Mute, Solo, GainDb, Pan, RecordArm, InputMonitor, Hidden };
     explicit TrackListModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
     void reset(const std::vector<TrackRow>& rows);
     void setToggle(const QString& trackId, Role role, bool on);  // RecordArm or InputMonitor: one row, one dataChanged

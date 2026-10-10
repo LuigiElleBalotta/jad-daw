@@ -47,7 +47,8 @@ struct TrackRow {
     QString groupId;  // the group the track is in (empty: none)
     QString automationMode = QStringLiteral("read");  // off, read, touch, latch or write
     int regionCount = 0;
-    bool showInTracks = true;  // false: a bus or aux that is listed in the Mixer only
+    bool showInTracks = true;  // false: hidden from the Tracks area (listed in the Mixer only)
+    bool hidden = false;       // the track is hidden but shown anyway (Track > Toggle Hide View): drawn dimmed
     QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
     std::vector<InsertRow> inserts;
@@ -108,7 +109,8 @@ struct Snapshot {
     QHash<QString, QString> mediaPaths;  // media id -> path relative to the project folder
 };
 
+// showHidden: the tracks hidden from the Tracks area are listed anyway (flagged `hidden`), with their regions
 Snapshot makeSnapshot(const lpc::Project& project, std::uint64_t revision,
-                      const std::function<bool(const lpc::MediaItem&)>& mediaPresent, const lpc::PatchLibrary* patches = nullptr);
+                      const std::function<bool(const lpc::MediaItem&)>& mediaPresent, const lpc::PatchLibrary* patches = nullptr, bool showHidden = false);
 
 }  // namespace jad

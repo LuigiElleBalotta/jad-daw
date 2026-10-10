@@ -70,3 +70,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 ## Log
 - 2026-10-10: roadmap written. Done before it: metronome with counting modes and user samples, audio recording with count-in,
   automation (volume/pan), global tracks, markers, cycle area, Save As/Import/Bounce, MP3/FLAC/AIFF import and drop-to-new-track.
+- 2026-10-10: Track > Hide Selected Track / Hide Unselected Tracks / Unhide All Tracks / Toggle Hide View (any track but the master can be hidden; hidden tracks keep playing and stay in the Mixer).

@@ -42,7 +42,7 @@ double toBeats(const lpc::Project& p, const lpc::Region& r, std::int64_t value) 
 }  // namespace
 
 Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::function<bool(const lpc::MediaItem&)>& mediaPresent,
-                      const lpc::PatchLibrary* patches) {
+                      const lpc::PatchLibrary* patches, bool showHidden) {
     Snapshot s;
     s.revision = revision;
     s.name = QString::fromStdString(p.name);
@@ -82,7 +82,9 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         for (const lpc::Group& g : p.groups)
             if (std::find(g.members.begin(), g.members.end(), t.id) != g.members.end()) tr.groupId = QString::fromStdString(g.id.toString());
         tr.regionCount = static_cast<int>(t.regions.size());
-        tr.showInTracks = t.showInTracks;
+        const bool shown = t.showInTracks || showHidden;
+        tr.showInTracks = shown;
+        tr.hidden = !t.showInTracks;
         tr.patchId = QString::fromStdString(t.patchId);
         tr.instrument = t.instrument ? QString::fromStdString(t.instrument->processorId) : QString();
         if (t.instrument)
@@ -131,6 +133,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         }
         s.tracks.push_back(tr);
         if (master) continue;
+        if (shown)
         for (const lpc::Region& r : t.regions) {
             RegionRow rr;
             rr.id = QString::fromStdString(r.id.toString());
@@ -158,7 +161,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             s.regions.push_back(rr);
         }
         ++row;
-        if (t.showInTracks) ++shownRow;
+        if (shown) ++shownRow;
     }
     return s;
 }

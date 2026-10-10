@@ -1344,6 +1344,32 @@ private slots:
         QVERIFY(c.undoHistory().value("undo").toStringList().isEmpty());
         QVERIFY(c.undoHistory().value("redo").toStringList().isEmpty());
     }
+    void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3 && c.regions()->rowCount() >= 2);
+        const int tracks = c.tracks()->rowCount(), regions = c.regions()->rowCount();
+        const QString audio = firstAudioTrackId(c);
+        c.selectTrack(audio, "replace");
+        c.hideSelectedTracks();
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks - 1);
+        QVERIFY(c.regions()->rowCount() < regions);                 // its region is not drawn on another row
+        c.setShowHiddenTracks(true);                                 // Toggle Hide View
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks);
+        QTRY_COMPARE(c.regions()->rowCount(), regions);
+        QVERIFY(c.tracks()->data(c.tracks()->index(0), c.tracks()->roleNames().key("hidden")).isValid());
+        c.setShowHiddenTracks(false);
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks - 1);
+        c.unhideAllTracks();
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks);
+        QTRY_COMPARE(c.regions()->rowCount(), regions);
+        c.selectTrack(audio, "replace");
+        c.hideUnselectedTracks();                                    // only the selected one stays
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks);                // one undo step
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);
@@ -1706,7 +1732,7 @@ private slots:
         QVERIFY(c.openProject(url(makeDemo(dir))));
         QTRY_VERIFY(c.tracks()->rowCount() >= 3);
         c.selectTrack(trackIdOfKind(c, "audio"), "replace");
-        QVERIFY(!c.selectedCanHide());
+        QVERIFY(c.selectedCanHide());   // any track but the master
         QVERIFY(c.selectedShowInTracks());
         const QString bus = trackIdOfKind(c, "bus");
         c.selectTrack(bus, "replace");

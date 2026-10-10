@@ -78,6 +78,7 @@ Rectangle {
             required property int index
             required property string name
             required property string color
+            required property bool hidden
             required trackId
             required kind
             required mute
@@ -88,6 +89,7 @@ Rectangle {
             required pan
             width: ListView.view.width
             height: root.rowHeight
+            opacity: hidden ? 0.45 : 1  // a hidden track shown by Toggle Hide View
             trackName: name
             trackColor: color
             number: index + 1

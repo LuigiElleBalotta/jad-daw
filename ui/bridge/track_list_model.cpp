@@ -55,12 +55,13 @@ QVariant TrackListModel::data(const QModelIndex& index, int role) const {
         case Pan: return r.pan;
         case RecordArm: return r.recordArm;
         case InputMonitor: return r.inputMonitor;
+        case Hidden: return r.hidden;
     }
     return {};
 }
 
 QHash<int, QByteArray> TrackListModel::roleNames() const {
-    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {RecordArm, "recordArm"}, {InputMonitor, "inputMonitor"}};
+    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {RecordArm, "recordArm"}, {InputMonitor, "inputMonitor"}, {Hidden, "hidden"}};
 }
 
 }  // namespace jad

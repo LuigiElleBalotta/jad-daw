@@ -120,6 +120,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool groupsActive READ groupsActive WRITE setGroupsActive NOTIFY groupsChanged)  // Mix > Groups Active (Shift-G)
     Q_PROPERTY(int groupsRevision READ groupsRevision NOTIFY groupsChanged)
     Q_PROPERTY(bool preFaderMetering READ preFaderMetering WRITE setPreFaderMetering NOTIFY meteringChanged)  // the meters read before the fader
+    Q_PROPERTY(bool showHiddenTracks READ showHiddenTracks WRITE setShowHiddenTracks NOTIFY showHiddenTracksChanged)  // Track > Toggle Hide View
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -149,9 +150,9 @@ public:
         const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
         return !t || t->showInTracks;
     }
-    bool selectedCanHide() const {
+    bool selectedCanHide() const {  // any track but the master
         const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
-        return t && (t->kind == QLatin1String("bus") || t->kind == QLatin1String("aux"));
+        return t && !t->master;
     }
     QString projectName() const { return name_; }
     double bpm() const { return bpm_; }
@@ -197,6 +198,12 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    bool showHiddenTracks() const { return showHidden_; }
+    void setShowHiddenTracks(bool on);
+    // Track > Hide Selected Track, Hide Unselected Tracks, Unhide All Tracks (one undo step each); hidden tracks still play and stay in the Mixer
+    Q_INVOKABLE void hideSelectedTracks();
+    Q_INVOKABLE void hideUnselectedTracks();
+    Q_INVOKABLE void unhideAllTracks();
     bool preFaderMetering() const { return preFader_; }
     void setPreFaderMetering(bool on) { if (on != preFader_) { preFader_ = on; emit meteringChanged(); } }
     bool groupsActive() const { return groupsActive_; }
@@ -583,6 +590,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void showHiddenTracksChanged();
     void meteringChanged();
     void groupsChanged();
     void recentChanged();
@@ -734,6 +742,7 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    bool showHidden_ = false;
     bool preFader_ = false;
     bool groupsActive_ = true;
     QStringList recent_;

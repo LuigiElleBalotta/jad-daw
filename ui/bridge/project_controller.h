@@ -523,6 +523,7 @@ public:
     // Track > Assign Track Icon: the picture in the header of the selected tracks ("" removes it). The keys are those of trackIconChoices().
     Q_INVOKABLE void setSelectedTracksIcon(const QString& icon);
     Q_INVOKABLE QStringList trackIconChoices() const;
+    Q_INVOKABLE void requestTrackIconDialog() { emit trackIconDialogRequested(); }  // the Inspector's icon button asks Main to show the dialog
     // Track > Show Output Track: the track the selected one plays into (a bus or aux that lives in the Mixer only is shown first) is selected.
     Q_INVOKABLE void showOutputTrack();
     // Window > Show Step Input Keyboard: a note is put at the playhead, `stepBeats` long, in the selected MIDI region that holds the playhead (a new one-bar region
@@ -819,6 +820,7 @@ signals:
     void snapChanged();
     void dragModeChanged();
     void automationSettingsChanged();
+    void trackIconDialogRequested();
     void autosaveFound();  // the project that was just opened has an autosave newer than its saved file
     void followPlayheadChanged();
     void trackHeightChanged();

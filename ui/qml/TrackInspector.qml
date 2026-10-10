@@ -59,10 +59,12 @@ Column {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 24
                 height: 24
-                onClicked: root.project.announceStub(qsTr("Track Icon"))
+                objectName: "trackIconButton"
+                onClicked: root.project.requestTrackIconDialog()
                 TrackIcon {
                     anchors.centerIn: parent
                     kind: root.track.kind ?? "audio"
+                    icon: root.track.icon ?? ""
                     tint: Theme["track" + root.colorName.charAt(0).toUpperCase() + root.colorName.slice(1) + "Solid"]
                 }
             }

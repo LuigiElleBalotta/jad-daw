@@ -6,10 +6,12 @@ import Jad
 Item {
     id: root
     property string kind: "audio"
+    property string icon: ""            // Track > Assign Track Icon: a picture of its own instead of the one of the kind
     property color tint: Theme.textPrimary
     property real size: Theme.sizeIcon
-    readonly property string file: ({ "audio": "track-audio", "instrument": "track-instrument", "aux": "track-aux",
-                                      "bus": "track-bus", "master": "track-bus" })[kind] ?? "track-audio"
+    readonly property string file: icon !== "" ? (icon === "audio" || icon === "instrument" ? "icon-" + icon : "track-" + icon)
+                                              : (({ "audio": "track-audio", "instrument": "track-instrument", "aux": "track-aux",
+                                                    "bus": "track-bus", "master": "track-bus" })[kind] ?? "track-audio")
     implicitWidth: size
     implicitHeight: size
     width: size

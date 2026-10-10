@@ -27,6 +27,17 @@ ApplicationWindow {
     function setSelectedToggle(actionId, on) { controller.setTrackToggle(actionId, controller.selectedTrackIds[0], on) }
     // for screenshots: opens the menu at `index` of the menu bar
     function showMenu(index) { const m = menuBar.menuAt(index); if (m) m.open() }
+    // for screenshots: opens a dialog or window by name and returns it (a window is pictured on its own, a dialog over the main window)
+    function showWindow(name) {
+        const all = ({ transport: transportFloat, event: eventFloat, regionInspector: regionInspectorFloat, stepInput: stepInput, musicalTyping: musicalTyping,
+                       trackIcon: trackIconDialog, automationSettings: automationSettings, alternatives: alternativesDialog, copyMidi: copyMidiEvents, midiTransform: midiTransform,
+                       header: customizeBars })
+        const w = all[name]
+        if (!w) return null
+        if (name === "header") customizeBars.section = "th"
+        if (w.open) w.open(); else w.visible = true
+        return w
+    }
     // Smart Controls, the Mixer and the Editors share the lower area of the window, as in Logic: showing one hides the others
     // (a Mixer in its own window is not part of it). Choosing the one that is shown hides it.
     function showLowerPane(which) {
@@ -706,6 +717,7 @@ ApplicationWindow {
     Connections {
         target: controller
         function onNotice(message) { toast.show(message) }
+        function onTrackIconDialogRequested() { trackIconDialog.open() }
     }
 
     menuBar: ActionMenuBar {

@@ -44,10 +44,10 @@ Dialog {
             SelectField {
                 objectName: "copyDest"
                 Layout.fillWidth: true
-                choices: [""].concat(root.tracksList.map(t => t.id))
-                value: root.dest
-                format: (id) => id === "" ? qsTr("Selected track") : root.tracksList.find(t => t.id === id).name
-                onChosen: (c) => root.dest = c
+                choices: ["selected"].concat(root.tracksList.map(t => t.id))   // "selected": the selected track (an empty choice would show nothing)
+                value: root.dest === "" ? "selected" : root.dest
+                format: (id) => id === "selected" ? qsTr("Selected track") : root.tracksList.find(t => t.id === id).name
+                onChosen: (c) => root.dest = c === "selected" ? "" : c
             }
         }
         RowLayout {

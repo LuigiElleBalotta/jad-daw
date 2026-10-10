@@ -620,7 +620,7 @@ Panel {
                 height: StripMetrics.icon
                 radius: Theme.radiusControl - 2
                 color: root.typeColor
-                TrackIcon { anchors.centerIn: parent; size: 16; kind: root.master ? "master" : root.kind; tint: Theme.textPrimary }
+                TrackIcon { anchors.centerIn: parent; size: 16; kind: root.master ? "master" : root.kind; icon: root.master ? "" : (root.info.icon ?? ""); tint: Theme.textPrimary }
             }
         }
         FixedRow {

@@ -41,6 +41,7 @@ int main(int argc, char** argv) {
     QCommandLineOption applyPatchOption("apply-patch", "Apply the patch <id> to the selected track for --screenshot.", "id");
     QCommandLineOption softwareOption("software", "Render without a GPU (icons are missing).");
     QCommandLineOption sizeOption("size", "Window size for --screenshot, for example 1280x800.", "WxH", "1280x800");
+    QCommandLineOption windowOption("window", "Open the dialog or window <name> for --screenshot (a window is pictured on its own).", "name");
     QCommandLineOption delayOption("delay", "Milliseconds to wait before the screenshot.", "ms", "1500");
     parser.addOption(projectOption);
     parser.addOption(noAudioOption);
@@ -54,6 +55,7 @@ int main(int argc, char** argv) {
     parser.addOption(menuOption);
     parser.addOption(sizeOption);
     parser.addOption(delayOption);
+    parser.addOption(windowOption);
     parser.process(app);
 
     QQmlApplicationEngine engine;
@@ -85,7 +87,7 @@ int main(int argc, char** argv) {
         const QString file = parser.value(screenshotOption);
         const int delay = parser.value(delayOption).toInt();
         // the state for the picture is set shortly before it is taken, once the project has been shown
-        QTimer::singleShot(delay, &app, [&parser, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &applyPatchOption, &menuOption, controller, window, file, &app] {
+        QTimer::singleShot(delay, &app, [&parser, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &applyPatchOption, &menuOption, &windowOption, controller, window, file, &app] {
             if (controller && parser.isSet(toolOption)) controller->setTool(parser.value(toolOption));
             if (controller && parser.isSet(selectTrackOption))
                 controller->selectTrack(controller->tracks()->trackIdAt(parser.value(selectTrackOption).toInt() - 1), "replace");
@@ -103,8 +105,14 @@ int main(int argc, char** argv) {
             if (controller && parser.isSet(selectRegionOption))
                 controller->selectRegion(controller->regions()->regionIdAt(parser.value(selectRegionOption).toInt() - 1), "replace");
             if (parser.isSet(menuOption)) QMetaObject::invokeMethod(window, "showMenu", Q_ARG(QVariant, parser.value(menuOption).toInt()));
-            QTimer::singleShot(400, &app, [window, file] {
-                const QImage image = window->grabWindow();
+            QQuickWindow* shot = window;
+            if (parser.isSet(windowOption)) {
+                QVariant opened;
+                QMetaObject::invokeMethod(window, "showWindow", Q_RETURN_ARG(QVariant, opened), Q_ARG(QVariant, parser.value(windowOption)));
+                if (auto* other = qobject_cast<QQuickWindow*>(opened.value<QObject*>())) shot = other;  // a window of its own
+            }
+            QTimer::singleShot(600, &app, [shot, file] {
+                const QImage image = shot->grabWindow();
                 QCoreApplication::exit(!image.isNull() && image.save(file) ? 0 : 2);
             });
         });

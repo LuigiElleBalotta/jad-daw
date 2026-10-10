@@ -179,6 +179,7 @@ void to_json(nlohmann::json& j, const Track& t) {
          {"strip", t.strip},     {"regions", t.regions}, {"automation", t.automation}};
     j["instrument"] = t.instrument ? nlohmann::json(*t.instrument) : nlohmann::json(nullptr);
     if (!t.patchId.empty()) j["patchId"] = t.patchId;
+    if (!t.icon.empty()) j["icon"] = t.icon;
     if (!t.showInTracks) j["showInTracks"] = false;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
     if (t.delayMs != 0.0) j["delayMs"] = t.delayMs;
@@ -214,6 +215,8 @@ void from_json(const nlohmann::json& j, Track& t) {
         t.midi.velocityLow = m.value("velocityLow", 1);
         t.midi.velocityHigh = m.value("velocityHigh", 127);
     }
+    t.icon = j.value("icon", std::string());
+    if (t.icon.size() > 40) throw std::runtime_error("a track icon has at most 40 characters");
     if (j.contains("showInTracks")) {
         if (!j["showInTracks"].is_boolean()) throw std::runtime_error("showInTracks must be a boolean");
         t.showInTracks = j["showInTracks"].get<bool>();

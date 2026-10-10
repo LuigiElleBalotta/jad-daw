@@ -370,6 +370,7 @@ public:
         json j = {{"type", type()}, {"trackId", id_}};
         if (patch_.name) j["name"] = *patch_.name;
         if (patch_.color) j["color"] = *patch_.color;
+        if (patch_.icon) j["icon"] = *patch_.icon;
         if (patch_.showInTracks) j["showInTracks"] = *patch_.showInTracks;
         if (patch_.automationMode) j["automationMode"] = *patch_.automationMode;
         if (patch_.delayMs) j["delayMs"] = *patch_.delayMs;
@@ -385,6 +386,11 @@ public:
         if (auto e = checkTrackProps(patch_.name.value_or(t->name), patch_.color.value_or(t->color))) return fail(*e);
         if (patch_.showInTracks)
             if (auto e = checkShowInTracks(t->kind, *patch_.showInTracks)) return fail(*e);
+        if (patch_.icon) {
+            const std::string& k = *patch_.icon;
+            const bool plain = std::all_of(k.begin(), k.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-'; });
+            if (k.size() > 40 || !plain) return fail("bad_value", "a track icon is a key of at most 40 lowercase letters, digits and dashes");
+        }
         if (patch_.automationMode) {
             const std::string& m = *patch_.automationMode;
             if (m != "off" && m != "read" && m != "touch" && m != "latch" && m != "write") return fail("bad_value", "the automation mode is off, read, touch, latch or write");
@@ -417,6 +423,10 @@ public:
         if (patch_.color) {
             previous.color = t->color;
             t->color = *patch_.color;
+        }
+        if (patch_.icon) {
+            previous.icon = t->icon;
+            t->icon = *patch_.icon;
         }
         if (patch_.showInTracks) {
             previous.showInTracks = t->showInTracks;
@@ -981,6 +991,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("name")) patch.name = j["name"].get<std::string>();
             if (j.contains("color")) patch.color = j["color"].get<std::string>();
             if (j.contains("showInTracks")) patch.showInTracks = j["showInTracks"].get<bool>();
+            if (j.contains("icon")) patch.icon = j["icon"].get<std::string>();
             if (j.contains("automationMode")) patch.automationMode = j["automationMode"].get<std::string>();
             if (j.contains("delayMs")) patch.delayMs = j["delayMs"].get<double>();
             if (j.contains("midi")) {

@@ -68,6 +68,7 @@ qt_add_qml_module(jad_ui_lib
         qml/SearchPluginDialog.qml
         qml/TextEntry.qml
         qml/MidiTransformDialog.qml
+        qml/TrackIconDialog.qml
         qml/TransportFloatWindow.qml
         qml/EventFloatWindow.qml
         qml/RegionInspectorFloatWindow.qml
@@ -145,6 +146,18 @@ qt_add_qml_module(jad_ui_lib
         qml/icons/zoom-out.svg
         qml/icons/chevron-right.svg
         qml/icons/track-audio.svg
+        qml/icons/track-guitar.svg
+        qml/icons/track-bass.svg
+        qml/icons/track-drums.svg
+        qml/icons/track-keys.svg
+        qml/icons/track-synth.svg
+        qml/icons/track-mic.svg
+        qml/icons/track-strings.svg
+        qml/icons/track-brass.svg
+        qml/icons/track-fx.svg
+        qml/icons/track-speaker.svg
+        qml/icons/icon-audio.svg
+        qml/icons/icon-instrument.svg
         qml/icons/track-instrument.svg
         qml/icons/track-aux.svg
         qml/icons/track-bus.svg

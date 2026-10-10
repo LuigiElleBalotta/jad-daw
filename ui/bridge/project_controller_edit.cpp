@@ -3757,4 +3757,39 @@ void ProjectController::stepInputMove(double stepBeats) {
 }
 
 
+QStringList ProjectController::trackIconChoices() const {
+    return {"guitar", "bass", "drums", "keys", "synth", "mic", "strings", "brass", "fx", "speaker", "audio", "instrument"};
+}
+
+void ProjectController::setSelectedTracksIcon(const QString& icon) {
+    if (!host_ || (!icon.isEmpty() && !trackIconChoices().contains(icon))) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : selectedTracks_)
+        for (const TrackRow& t : allRows_)
+            if (t.id == id && !t.master && t.icon != icon) commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"icon", icon.toStdString()}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::showOutputTrack() {
+    if (!host_ || selectedTracks_.isEmpty()) return;
+    QString output;
+    for (const TrackRow& t : allRows_)
+        if (t.id == selectedTracks_.first()) output = t.outputId;
+    const TrackRow* target = nullptr;
+    for (const TrackRow& t : allRows_)
+        if (t.id == output) target = &t;
+    if (!target || output.isEmpty()) {
+        emit notice("This track plays into the master");
+        return;
+    }
+    if (target->hidden) {
+        selectWhenListed_ = target->id;  // selected as soon as the snapshot lists it
+        sendCommand({{"type", "set_track_props"}, {"trackId", target->id.toStdString()}, {"showInTracks", true}});
+        return;
+    }
+    selectTrack(target->id, "replace");
+}
+
+
 }  // namespace jad

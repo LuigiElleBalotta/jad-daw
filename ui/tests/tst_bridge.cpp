@@ -2058,6 +2058,33 @@ private slots:
         QTRY_COMPARE(c.regionNotes(r).size(), 3);
         QCOMPARE(c.regions()->find(r)->lengthBeats, 8.0);
     }
+    void trackIconsAreAssignedToTheSelectedTracksAndShowOutputTrackSelectsTheBus() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 2);
+        QVERIFY(c.trackIconChoices().contains("guitar"));
+        const QString first = c.tracks()->trackIdAt(0);
+        c.selectTrack(first, "replace");
+        c.setSelectedTracksIcon("bogus");                            // not one of the pictures
+        QTest::qWait(100);
+        QVERIFY(c.tracks()->find(first)->icon.isEmpty());
+        c.setSelectedTracksIcon("guitar");
+        QTRY_COMPARE(c.tracks()->find(first)->icon, QString("guitar"));
+        c.undo();
+        QTRY_VERIFY(c.tracks()->find(first)->icon.isEmpty());
+        // a track that plays into a bus: the bus is selected
+        QString routed, bus;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i) {
+            const jad::TrackRow* t = c.tracks()->find(c.tracks()->trackIdAt(i));
+            if (t && !t->outputId.isEmpty() && c.tracks()->find(t->outputId) && c.tracks()->find(t->outputId)->kind != "master") { routed = t->id; bus = t->outputId; }
+        }
+        if (!routed.isEmpty()) {
+            c.selectTrack(routed, "replace");
+            c.showOutputTrack();
+            QTRY_COMPARE(c.selectedTrackIds(), QStringList({bus}));
+        }
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

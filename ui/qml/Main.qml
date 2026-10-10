@@ -137,6 +137,7 @@ ApplicationWindow {
     }
     MidiTransformDialog { id: midiTransform; project: controller }
     CopyMidiEventsDialog { id: copyMidiEvents; project: controller }
+    TrackIconDialog { id: trackIconDialog; project: controller }
     TextPromptDialog {
         id: regionNameDialog
         property string regionId
@@ -299,6 +300,9 @@ ApplicationWindow {
         "edit.separateMidiEventsByPitch": () => controller.separateMidiByPitch(),
         "edit.moveToFocusedTrack": () => controller.moveSelectedToFocusedTrack(),
         "edit.copyMidiEvents": () => copyMidiEvents.open(),
+        "track.assignTrackIcon": () => trackIconDialog.open(),
+        "track.configureTrackHeader": () => { customizeBars.section = "th"; customizeBars.open() },
+        "track.showOutputTrack": () => controller.showOutputTrack(),
         "edit.moveToRecordedPosition": () => controller.moveSelectedToRecordedPosition(),
         "edit.moveToBeat": () => controller.moveFirstTransientToNearestBeat(),
         "edit.moveFirstTransientToNearestBeat": () => controller.moveFirstTransientToNearestBeat(),

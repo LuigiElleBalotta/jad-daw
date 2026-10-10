@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Effects
 import Jad
 
 // The header of one track: colour chip, kind, number, name (double click renames), R and I (not implemented yet),
@@ -18,9 +19,18 @@ Item {
     property bool recordArm: false
     property bool inputMonitor: false
     property bool frozen: false          // plays its rendered audio
+    property string icon: ""             // Track > Assign Track Icon
+    // Track > Configure Track Header: which parts of the header are shown
+    property bool showIcon: true
+    property bool showArm: true
+    property bool showMonitor: true
+    property bool showMute: true
+    property bool showSolo: true
+    property bool showSliders: true
     property bool selected: false
 
-    readonly property bool slidersVisible: height >= 56
+    readonly property bool slidersVisible: height >= 56 && showSliders
+    readonly property url iconSource: icon === "" ? "" : (icon === "audio" || icon === "instrument" ? "icons/icon-" + icon + ".svg" : "icons/track-" + icon + ".svg")
     property bool editing: false
     readonly property alias muteButton: muteButton
     readonly property alias soloButton: soloButton
@@ -88,8 +98,20 @@ Item {
         y: root.slidersVisible ? Theme.spacing[3] : (root.height - height) / 2
         height: 22
 
+        Item {
+            id: iconSlot
+            objectName: "headerIcon"
+            visible: root.showIcon && root.icon !== ""
+            width: visible ? 20 : 0
+            height: 20
+            anchors.verticalCenter: parent.verticalCenter
+            Image { id: iconImage; anchors.fill: parent; source: root.iconSource; sourceSize: Qt.size(20, 20); visible: false }
+            MultiEffect { anchors.fill: iconImage; source: iconImage; brightness: 1.0; colorization: 1.0; colorizationColor: Theme["track" + root.capitalColor + "Solid"] }
+        }
         Text {
             id: kindText
+            anchors.left: iconSlot.right
+            anchors.leftMargin: iconSlot.visible ? Theme.spacing[1] : 0
             anchors.verticalCenter: parent.verticalCenter
             width: 28
             text: root.kindLabel
@@ -161,6 +183,7 @@ Item {
             spacing: Theme.spacing[1]
             IconButton {
                 id: armButton
+                visible: root.showArm
                 implicitWidth: 20; implicitHeight: 20
                 label: "R"
                 active: root.recordArm
@@ -168,6 +191,7 @@ Item {
             }
             IconButton {
                 id: monitorButton
+                visible: root.showMonitor
                 implicitWidth: 20; implicitHeight: 20
                 label: "I"
                 active: root.inputMonitor
@@ -175,6 +199,7 @@ Item {
             }
             IconButton {
                 id: muteButton
+                visible: root.showMute
                 implicitWidth: 20; implicitHeight: 20
                 label: "M"
                 active: root.mute
@@ -182,6 +207,7 @@ Item {
             }
             IconButton {
                 id: soloButton
+                visible: root.showSolo
                 implicitWidth: 20; implicitHeight: 20
                 label: "S"
                 active: root.solo

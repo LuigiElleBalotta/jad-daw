@@ -491,6 +491,11 @@ public:
     Q_INVOKABLE void separateMidiByPitch();
     Q_INVOKABLE void moveSelectedToFocusedTrack();  // Edit > Move > To Focused Track: the selected track; the regions keep their time
     Q_INVOKABLE void joinPerTracks();
+    // Track > Assign Track Icon: the picture in the header of the selected tracks ("" removes it). The keys are those of trackIconChoices().
+    Q_INVOKABLE void setSelectedTracksIcon(const QString& icon);
+    Q_INVOKABLE QStringList trackIconChoices() const;
+    // Track > Show Output Track: the track the selected one plays into (a bus or aux that lives in the Mixer only is shown first) is selected.
+    Q_INVOKABLE void showOutputTrack();
     // Window > Show Step Input Keyboard: a note is put at the playhead, `stepBeats` long, in the selected MIDI region that holds the playhead (a new one-bar region
     // on the selected or armed instrument track when none does); the playhead then moves on by the step unless `chord` (the next note joins this one).
     Q_INVOKABLE void stepInputNote(int note, int velocity, double stepBeats, bool chord);

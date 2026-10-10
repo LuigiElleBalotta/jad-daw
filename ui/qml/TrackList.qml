@@ -87,12 +87,19 @@ Rectangle {
             required recordArm
             required inputMonitor
             required frozen
+            required icon
             required gainDb
             required pan
             width: ListView.view.width
             height: root.rowHeight
             opacity: hidden ? 0.45 : 1  // a hidden track shown by Toggle Hide View
             trackName: name
+            showIcon: { root.project.barItemsRevision; return root.project.barItem("th.icon") }
+            showArm: { root.project.barItemsRevision; return root.project.barItem("th.arm") }
+            showMonitor: { root.project.barItemsRevision; return root.project.barItem("th.monitor") }
+            showMute: { root.project.barItemsRevision; return root.project.barItem("th.mute") }
+            showSolo: { root.project.barItemsRevision; return root.project.barItem("th.solo") }
+            showSliders: { root.project.barItemsRevision; return root.project.barItem("th.sliders") }
             trackColor: color
             number: index + 1
             selected: root.project.selectedTrackIds.indexOf(trackId) >= 0

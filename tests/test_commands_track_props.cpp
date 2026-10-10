@@ -191,3 +191,25 @@ TEST_CASE("set_track_props: the JSON command carries showInTracks", "[commands][
     const auto back = commandFromJson(j);
     REQUIRE(back->toJson() == j);
 }
+
+TEST_CASE("set_track_props: an icon is a short plain key, undo restores, json keeps it", "[commands][props]") {
+    Project p{Uuid::random(gRng)};
+    const Track a = track(TrackKind::Audio, "Audio");
+    REQUIRE(makeAddTrack(a)->apply(p).ok());
+    const Project before = p;
+    TrackPatch bad;
+    bad.icon = "Guitar!";
+    REQUIRE_FALSE(makeSetTrackProps(a.id, bad)->apply(p).ok());
+    bad.icon = std::string(41, 'a');
+    REQUIRE_FALSE(makeSetTrackProps(a.id, bad)->apply(p).ok());
+    REQUIRE(p == before);
+    TrackPatch patch;
+    patch.icon = "guitar";
+    auto res = makeSetTrackProps(a.id, patch)->apply(p);
+    REQUIRE(res.ok());
+    REQUIRE(p.findTrack(a.id)->icon == "guitar");
+    REQUIRE(projectFromJson(toJson(p)) == p);
+    REQUIRE(toJson(before)["tracks"][1].contains("icon") == false);
+    REQUIRE(res.inverse->apply(p).ok());
+    REQUIRE(p == before);
+}

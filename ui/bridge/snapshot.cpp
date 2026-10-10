@@ -92,6 +92,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.regionCount = static_cast<int>(t.regions.size());
         const bool shown = t.showInTracks || showHidden;
         tr.showInTracks = shown;
+        tr.icon = QString::fromStdString(t.icon);
         tr.hidden = !t.showInTracks;
         tr.patchId = QString::fromStdString(t.patchId);
         tr.instrument = t.instrument ? QString::fromStdString(t.instrument->processorId) : QString();

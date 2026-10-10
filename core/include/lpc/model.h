@@ -118,6 +118,7 @@ struct Track {
     Strip strip;
     std::optional<ProcessorRef> instrument;
     std::string patchId;  // the built-in patch applied to the track; empty when none
+    std::string icon;     // the key of the picture shown in the track header (Track > Assign Track Icon); empty: none
     bool showInTracks = true;  // false: a bus or aux that lives in the Mixer only, not in the Tracks area
     MidiShaping midi;  // instrument tracks
     std::optional<Freeze> freeze;  // audio and instrument tracks

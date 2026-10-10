@@ -200,8 +200,8 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         rp.gain = dbToLinear(r.gainDb);
         if (r.fadeIn > 0 || r.fadeOut > 0) {  // the fades in frames, together at most as long as the region
             const std::int64_t length = rp.endFrame - rp.startFrame;
-            rp.fadeInFrames = r.fadeIn > 0 ? regionFrame(p, r, r.start + r.fadeIn) - rp.startFrame : 0;
-            rp.fadeOutFrames = r.fadeOut > 0 ? rp.endFrame - regionFrame(p, r, r.start + r.length - r.fadeOut) : 0;
+            rp.fadeInFrames = r.fadeIn > 0 ? regionFrame(p, r, r.start + r.fadeIn) - regionFrame(p, r, r.start) : 0;  // the track delay moves the region, not its fades
+            rp.fadeOutFrames = r.fadeOut > 0 ? regionFrame(p, r, r.start + r.length) - regionFrame(p, r, r.start + r.length - r.fadeOut) : 0;
             if (rp.fadeInFrames + rp.fadeOutFrames > length && length > 0) {
                 const double k = static_cast<double>(length) / static_cast<double>(rp.fadeInFrames + rp.fadeOutFrames);
                 rp.fadeInFrames = static_cast<std::int64_t>(static_cast<double>(rp.fadeInFrames) * k);
@@ -218,7 +218,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
                 rp.sourceOffsetFrames += -rp.startFrame;
                 rp.startFrame = 0;
             }
-            if (r.loopLength > 0) rp.loopFrames = std::max<std::int64_t>(1, regionFrame(p, r, r.start + r.loopLength) - rp.startFrame);
+            if (r.loopLength > 0) rp.loopFrames = std::max<std::int64_t>(1, regionFrame(p, r, r.start + r.loopLength) - regionFrame(p, r, r.start));
             cfg->keepAlive.push_back(std::move(src));
         } else {
             const std::int64_t loop = r.loopLength > 0 ? r.loopLength : r.length;  // one pass is the whole region when it does not loop

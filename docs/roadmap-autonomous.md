@@ -62,11 +62,11 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - [x] Project Settings (name, rate, tempo, count-in, recording), Preferences (Audio, MIDI; the other tabs say what is not done).
 - [x] Undo History, Customize Control Bar and Display, Customize Toolbar, Key Commands editor, Colors. Not done: Quick Help.
 - [x] Loop Browser and Browsers (a file browser, no audition), List Editors (Event, Marker, Tempo, Signature), Note Pad, Project Audio.
-- [ ] Score editor, Step Sequencer, Session Players, MIDI Transform, Group Settings, I/O Labels/Assignments, Automation Settings.
-- [ ] Every remaining `stub` in `ui/actions/actions.json` becomes real or gets a window that is honest about what it does.
+- [x] Score (view only), Step Sequencer, MIDI Transform, Group Settings, I/O Labels/Assignments are done. Not done: Session Players, Automation Settings.
+- [x] The remaining `stub`s (about 74: Flex, Smart Tempo, Session Players, folder stacks, movie, printing, Mac window sets, ...) say "not implemented yet" when chosen; each is listed in `ui/actions/actions.json` with status `stub`.
 
 ## 9. Platform
-- [ ] macOS build run for real (never done), the CI Configure failure (only when the owner says), signed bundle, app icon.
+- [ ] (waits for the owner: macOS run and the CI Configure fix; the app icon exists) macOS build run for real (never done), the CI Configure failure (only when the owner says), signed bundle, app icon.
 
 ## Log
 - 2026-10-10: roadmap written. Done before it: metronome with counting modes and user samples, audio recording with count-in,

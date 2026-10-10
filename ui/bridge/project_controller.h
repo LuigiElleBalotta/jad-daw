@@ -497,6 +497,10 @@ public:
     Q_INVOKABLE bool saveAsTemplate(const QString& name);
     Q_INVOKABLE bool newFromTemplate(const QString& name, const QUrl& folder);
     void setTemplatesFolderForTest(const QString& folder) { templatesFolder_ = folder; }
+    // Mix > Search and Add Plug-in: what can go on the first selected track, {id, name, vendor, kind}: kind is "builtin" (an effect of the app), "effect" or
+    // "instrument" (VST3). addSearchedPlugin puts it there: an effect at the end of the inserts, an instrument in the instrument slot of an instrument track.
+    Q_INVOKABLE QVariantList searchablePlugins() const;
+    Q_INVOKABLE void addSearchedPlugin(const QString& id, const QString& kind, const QString& name);
     Q_INVOKABLE void openAllPluginWindows();
     // Bounce in Place: each selected audio or instrument track (with its inserts, sends and the buses it feeds) is rendered to a new audio track
     // named after it, from its first region to its last plus a tail. The original stays as it is.

@@ -63,6 +63,7 @@ qt_add_qml_module(jad_ui_lib
         qml/UndoHistoryDialog.qml
         qml/RecentProjectsDialog.qml
         qml/ColorsDialog.qml
+        qml/SearchPluginDialog.qml
         qml/TextEntry.qml
         qml/MidiTransformDialog.qml
         qml/StepSequencer.qml

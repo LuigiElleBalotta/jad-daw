@@ -193,7 +193,7 @@
  {"id":"mix.iOLabels","label":"I/O Labels…","menu":"Mix","shortcut":"","kind":"command","status":"ready"},
  {"id":"mix.iOAssignments","label":"I/O Assignments…","menu":"Mix","shortcut":"","kind":"command","status":"ready"},
  {"id":"mix.preFaderMetering","label":"Pre-Fader Metering","menu":"Mix","shortcut":"","kind":"toggle","status":"ready"},
- {"id":"mix.searchAndAddPlugIn","label":"Search and Add Plug-in…","menu":"Mix","shortcut":"","kind":"command","status":"stub","sep":true},
+ {"id":"mix.searchAndAddPlugIn","label":"Search and Add Plug-in…","menu":"Mix","shortcut":"","kind":"command","status":"ready","sep":true},
  {"id":"mix.masteringAssistant","label":"Mastering Assistant…","menu":"Mix","shortcut":"","kind":"command","status":"stub"},
  {"id":"mix.dolbyAtmos","label":"Dolby Atmos…","menu":"Mix","shortcut":"","kind":"command","status":"stub","sep":true},
  {"id":"view.library","label":"Library","menu":"View","shortcut":"Y","kind":"toggle","status":"ready"},

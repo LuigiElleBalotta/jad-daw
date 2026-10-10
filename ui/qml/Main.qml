@@ -97,6 +97,7 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    SearchPluginDialog { id: searchPluginDialog; project: controller }
     MidiTransformDialog { id: midiTransform; project: controller }
     TextPromptDialog {
         id: templateName
@@ -303,6 +304,7 @@ ApplicationWindow {
         "view.quickHelp": () => { controller.quickHelpVisible = !controller.quickHelpVisible },
         "mix.moveTrackAutomationWithRegions": () => { controller.automationFollowsRegions = !controller.automationFollowsRegions },
         "track.freeze": () => controller.toggleFreezeSelected(),
+        "mix.searchAndAddPlugIn": () => searchPluginDialog.open(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

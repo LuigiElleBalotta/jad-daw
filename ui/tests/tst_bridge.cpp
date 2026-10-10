@@ -1783,6 +1783,25 @@ private slots:
         c.undo();
         QTRY_VERIFY(!trackFlag(c, instrument, "frozen"));
     }
+    void searchAndAddPlugInListsWhatFitsTheSelectedTrackAndAddsIt() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QVERIFY(c.searchablePlugins().isEmpty());                    // no track selected
+        QString audio = firstAudioTrackId(c);
+        c.selectTrack(audio, "replace");
+        const QVariantList list = c.searchablePlugins();
+        QVERIFY(!list.isEmpty());
+        QString eq;
+        for (const QVariant& v : list) if (v.toMap().value("id").toString() == "builtin.eq") eq = v.toMap().value("id").toString();
+        QVERIFY(!eq.isEmpty());
+        c.addSearchedPlugin("builtin.eq", "builtin", "Channel EQ");
+        QTRY_VERIFY(c.trackInserts(audio).size() >= 1);
+        QCOMPARE(c.trackInserts(audio).last().toMap().value("processorId").toString(), QString("builtin.eq"));
+        c.undo();
+        QTRY_COMPARE(c.trackInserts(audio).size(), 0);
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

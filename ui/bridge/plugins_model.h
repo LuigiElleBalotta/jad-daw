@@ -37,6 +37,7 @@ public:
     bool supported() const { return supported_; }
 
     void setRows(std::vector<PluginRow> rows);
+    const std::vector<PluginRow>& allRows() const { return rows_; }
     void setScan(bool running, int done, int total);
     void setSupported(bool supported);
 

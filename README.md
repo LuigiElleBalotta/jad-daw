@@ -112,6 +112,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Step Sequencer and Score** (Editors area tabs for a MIDI region): the Step Sequencer is a grid of eight General MIDI drum rows by 16th-note steps (a click adds or removes a note of one 16th); the Score shows the
   notes on a grand staff (view only: no beams, rests or ties).
 - **List Editors** (View menu, Window > Open Event List / Open Signature List): tables of the notes and controller events of the selected MIDI region (pitch, velocity and length can be typed, an event deleted), the markers, the tempo changes and the time signatures.
+- **Search and Add Plug-in** (Mix menu): type a part of a plug-in's name or manufacturer (the app's own effects, the scanned VST3 effects and, on an instrument track, the instruments); Return adds the first match to the selected track.
 - **Freeze** (Track menu): the selected audio or instrument tracks are rendered (instrument, regions, inserts and VST3 plug-ins, before the fader) to a file in the project and then play that
   file instead of making the sound again (the track name shows a snowflake; its plug-in instances are let go); Freeze again unfreezes. The fader, pan, sends and automation stay live. Editing the regions of a frozen
   track does not change what plays: unfreeze first.

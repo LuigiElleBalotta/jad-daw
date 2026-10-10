@@ -2884,4 +2884,38 @@ void ProjectController::toggleFreezeSelected() {
     });
 }
 
+QVariantList ProjectController::searchablePlugins() const {
+    QVariantList out;
+    const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
+    if (!t || t->master) return out;
+    const bool instrumentTrack = t->kind == QLatin1String("instrument");
+    if (!instrumentTrack) {
+        for (const QVariant& v : effectSpecs()) {
+            const QVariantMap m = v.toMap();
+            if (m.value("id").toString() == QLatin1String("builtin.gain")) continue;
+            out.append(QVariantMap{{"id", m.value("id")}, {"name", m.value("name")}, {"vendor", QStringLiteral("JAD")}, {"kind", "builtin"}});
+        }
+    }
+    for (const PluginRow& r : plugins_.allRows()) {
+        if (r.status != QLatin1String("ok") || r.id.isEmpty()) continue;
+        if (r.instrument && !instrumentTrack) continue;     // an instrument has no place on an audio track
+        out.append(QVariantMap{{"id", r.id}, {"name", r.name}, {"vendor", r.vendor}, {"kind", r.instrument ? "instrument" : "effect"}});
+    }
+    if (instrumentTrack)  // the effects of a VST3 kind go after the instruments in the list on an instrument track too
+        for (const QVariant& v : effectSpecs()) {
+            const QVariantMap m = v.toMap();
+            if (m.value("id").toString() == QLatin1String("builtin.gain")) continue;
+            out.append(QVariantMap{{"id", m.value("id")}, {"name", m.value("name")}, {"vendor", QStringLiteral("JAD")}, {"kind", "builtin"}});
+        }
+    return out;
+}
+
+void ProjectController::addSearchedPlugin(const QString& id, const QString& kind, const QString& name) {
+    if (selectedTracks_.isEmpty()) return;
+    const QString track = selectedTracks_.first();
+    if (kind == QLatin1String("builtin")) addInsert(track, id);
+    else if (kind == QLatin1String("effect")) addPlugin(track, id, name);
+    else if (kind == QLatin1String("instrument")) setInstrumentPlugin(track, id, name);
+}
+
 }  // namespace jad

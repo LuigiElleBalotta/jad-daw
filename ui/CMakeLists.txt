@@ -62,6 +62,7 @@ qt_add_qml_module(jad_ui_lib
         qml/KeyCommandsWindow.qml
         qml/UndoHistoryDialog.qml
         qml/RecentProjectsDialog.qml
+        qml/ColorsDialog.qml
         qml/ProjectSettingsDialog.qml
         qml/MusicalTypingWindow.qml
         qml/EffectEditorWindow.qml

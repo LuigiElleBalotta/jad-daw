@@ -245,3 +245,28 @@ TEST_CASE("undo history: the steps are listed in words, oldest first, and the re
     REQUIRE(s.undoLabels().size() == 2);
     REQUIRE(s.redoLabels() == std::vector<std::string>({"Project name", "Project name (2)"}));   // the next redo first
 }
+
+TEST_CASE("track order: set_track_order reorders, keeps the master first and is undone", "[project][order]") {
+    std::mt19937_64 rng(16);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    std::vector<Uuid> ids;
+    for (const char* name : {"A", "B", "C"}) {
+        Track t;
+        t.id = Uuid::random(rng);
+        t.kind = TrackKind::Audio;
+        t.name = name;
+        ids.push_back(t.id);
+        REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    }
+    REQUIRE_FALSE(s.execute(p, makeSetTrackOrder({ids[2], ids[0], ids[1]})).has_value());
+    REQUIRE(p.tracks.front().kind == TrackKind::Master);
+    REQUIRE(p.tracks[1].id == ids[2]);
+    REQUIRE(p.tracks[3].id == ids[1]);
+    REQUIRE(s.execute(p, makeSetTrackOrder({ids[0], ids[1]})).has_value());          // a track missing
+    REQUIRE(s.execute(p, makeSetTrackOrder({ids[0], ids[0], ids[1]})).has_value());  // twice
+    REQUIRE(s.execute(p, makeSetTrackOrder({ids[0], ids[1], p.master()->id})).has_value());  // the master
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.tracks[1].id == ids[0]);
+    REQUIRE(p.tracks[3].id == ids[2]);
+}

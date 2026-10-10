@@ -237,6 +237,37 @@ private:
     std::vector<Group> groups_;
 };
 
+class SetTrackOrderCmd final : public Command {
+public:
+    explicit SetTrackOrderCmd(std::vector<Uuid> order) : order_(std::move(order)) {}
+    std::string type() const override { return "set_track_order"; }
+    json toJson() const override { return {{"type", type()}, {"order", order_}}; }
+    ApplyResult apply(Project& p) const override {
+        // order lists every track but the master exactly once; the master stays first
+        std::vector<Track> sorted;
+        std::vector<Uuid> previous;
+        for (const Track& t : p.tracks)
+            if (t.kind != TrackKind::Master) previous.push_back(t.id);
+        if (order_.size() != previous.size()) return fail("bad_value", "the order must list every track but the master once");
+        for (const Uuid& id : order_) {
+            const Track* t = p.findTrack(id);
+            if (!t || t->kind == TrackKind::Master) return fail("not_found", "unknown track in the order");
+            for (const Track& done : sorted)
+                if (done.id == id) return fail("bad_value", "a track is listed twice");
+            sorted.push_back(*t);
+        }
+        std::vector<Track> next;
+        for (const Track& t : p.tracks)
+            if (t.kind == TrackKind::Master) next.push_back(t);
+        for (Track& t : sorted) next.push_back(std::move(t));
+        p.tracks = std::move(next);
+        return success(makeSetTrackOrder(std::move(previous)));
+    }
+
+private:
+    std::vector<Uuid> order_;
+};
+
 class SetProjectNameCmd final : public Command {
 public:
     explicit SetProjectNameCmd(std::string name) : name_(std::move(name)) {}
@@ -839,6 +870,7 @@ CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_uniqu
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
+CommandPtr makeSetTrackOrder(std::vector<Uuid> order) { return std::make_unique<SetTrackOrderCmd>(std::move(order)); }
 CommandPtr makeSetProjectName(std::string name) { return std::make_unique<SetProjectNameCmd>(std::move(name)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
@@ -878,6 +910,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());
         if (type == "set_groups") return makeSetGroups(j.at("groups").get<std::vector<Group>>());
+        if (type == "set_track_order") return makeSetTrackOrder(j.at("order").get<std::vector<Uuid>>());
         if (type == "set_project_name") return makeSetProjectName(j.at("name").get<std::string>());
         if (type == "set_markers") return makeSetMarkers(j.at("markers").get<std::vector<Marker>>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());

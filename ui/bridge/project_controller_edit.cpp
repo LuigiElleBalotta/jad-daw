@@ -1954,4 +1954,37 @@ void ProjectController::unhideAllTracks() {
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
+void ProjectController::sortTracks(const QString& by) {
+    static const QStringList kinds{"audio", "instrument", "aux", "bus"};
+    std::vector<const TrackRow*> rows;
+    for (const TrackRow& t : allRows_)
+        if (!t.master) rows.push_back(&t);
+    auto key = [&](const TrackRow* t) {
+        if (by == "type") return QString::number(kinds.indexOf(t->kind) + 1).rightJustified(2, '0') + t->name.toLower();
+        if (by == "color") return t->color + QLatin1Char('') + t->name.toLower();
+        return t->name.toLower();
+    };
+    std::stable_sort(rows.begin(), rows.end(), [&](const TrackRow* a, const TrackRow* b) { return QString::localeAwareCompare(key(a), key(b)) < 0; });
+    nlohmann::json order = nlohmann::json::array();
+    bool changed = false;
+    std::size_t i = 0;
+    for (const TrackRow& t : allRows_) {
+        if (t.master) continue;
+        if (rows[i]->id != t.id) changed = true;
+        ++i;
+    }
+    for (const TrackRow* t : rows) order.push_back(t->id.toStdString());
+    if (!changed) return;
+    sendCommand({{"type", "set_track_order"}, {"order", order}});
+}
+
+void ProjectController::setSelectedTracksColor(const QString& color) {
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && !t->master && t->color != color)
+            commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"color", color.toStdString()}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

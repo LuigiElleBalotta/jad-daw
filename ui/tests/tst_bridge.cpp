@@ -1344,6 +1344,29 @@ private slots:
         QVERIFY(c.undoHistory().value("undo").toStringList().isEmpty());
         QVERIFY(c.undoHistory().value("redo").toStringList().isEmpty());
     }
+    void sortTracksByNameIsOneUndoStepAndColorsApplyToTheSelection() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        auto names = [&] {
+            QStringList n;
+            for (int i = 0; i < c.tracks()->rowCount(); ++i) n << c.tracks()->data(c.tracks()->index(i), c.tracks()->roleNames().key("name")).toString();
+            return n;
+        };
+        const QStringList before = names();
+        c.sortTracks("name");
+        QStringList expected = before;
+        std::stable_sort(expected.begin(), expected.end(), [](const QString& a, const QString& b) { return QString::localeAwareCompare(a.toLower(), b.toLower()) < 0; });
+        if (expected != before) {
+            QTRY_COMPARE(names(), expected);
+            c.undo();
+            QTRY_COMPARE(names(), before);
+        }
+        c.selectTrack(firstAudioTrackId(c), "replace");
+        c.setSelectedTracksColor("red");
+        QTRY_COMPARE(c.tracks()->find(firstAudioTrackId(c))->color, QString("red"));
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -56,7 +56,7 @@ std::string humanize(const std::string& type) {
         {"add_insert", "Add insert"}, {"remove_insert", "Remove insert"}, {"set_insert_param", "Insert parameter"}, {"set_insert_state", "Plug-in state"},
         {"move_insert", "Move insert"}, {"set_insert_bypass", "Bypass insert"}, {"set_patch_id", "Patch"}, {"set_instrument", "Instrument"},
         {"set_output", "Output"}, {"set_region_gain", "Region gain"}, {"set_region_fades", "Region fades"}, {"set_markers", "Markers"},
-        {"set_groups", "Groups"}, {"set_automation", "Automation"}, {"set_project_name", "Project name"}};
+        {"set_groups", "Groups"}, {"set_automation", "Automation"}, {"set_project_name", "Project name"}, {"set_track_order", "Track order"}};
     for (const auto& [id, label] : names)
         if (type == id) return label;
     std::string out = type;

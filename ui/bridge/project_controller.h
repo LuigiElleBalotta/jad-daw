@@ -204,6 +204,8 @@ public:
     Q_INVOKABLE void hideSelectedTracks();
     Q_INVOKABLE void hideUnselectedTracks();
     Q_INVOKABLE void unhideAllTracks();
+    Q_INVOKABLE void sortTracks(const QString& by);  // "name", "type" or "color": every track but the master is put in that order (one step)
+    Q_INVOKABLE void setSelectedTracksColor(const QString& color);  // Track > Assign Track Color (one step)
     bool preFaderMetering() const { return preFader_; }
     void setPreFaderMetering(bool on) { if (on != preFader_) { preFader_ = on; emit meteringChanged(); } }
     bool groupsActive() const { return groupsActive_; }

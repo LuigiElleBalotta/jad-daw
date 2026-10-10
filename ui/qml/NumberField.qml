@@ -6,6 +6,7 @@ Rectangle {
     id: root
     property real value: 0
     property string suffix: ""
+    property int decimals: 1
     property real from: -96
     property real to: 24
     signal committed(real value)
@@ -20,7 +21,7 @@ Rectangle {
         anchors.leftMargin: Theme.spacing[2]
         anchors.rightMargin: Theme.spacing[2]
         verticalAlignment: TextInput.AlignVCenter
-        text: root.value.toFixed(1) + root.suffix
+        text: root.value.toFixed(root.decimals) + root.suffix
         color: Theme.textValue
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontTypeLabelSize
@@ -29,7 +30,7 @@ Rectangle {
         onEditingFinished: {
             const parsed = parseFloat(text.replace(root.suffix, "").replace(",", "."))
             if (isFinite(parsed)) root.committed(Math.max(root.from, Math.min(root.to, parsed)))
-            else text = Qt.binding(function () { return root.value.toFixed(1) + root.suffix })
+            else text = Qt.binding(function () { return root.value.toFixed(root.decimals) + root.suffix })
         }
     }
 }

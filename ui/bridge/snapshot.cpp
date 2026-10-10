@@ -79,6 +79,12 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.pan = t.strip.pan;
         tr.input = t.strip.input;
         tr.automationMode = QString::fromStdString(t.automationMode);
+        tr.transpose = t.midi.transpose;
+        tr.velocity = t.midi.velocity;
+        tr.keyLow = t.midi.keyLow;
+        tr.keyHigh = t.midi.keyHigh;
+        tr.velocityLow = t.midi.velocityLow;
+        tr.velocityHigh = t.midi.velocityHigh;
         for (const lpc::Group& g : p.groups)
             if (std::find(g.members.begin(), g.members.end(), t.id) != g.members.end()) tr.groupId = QString::fromStdString(g.id.toString());
         tr.regionCount = static_cast<int>(t.regions.size());
@@ -145,6 +151,9 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.json = nlohmann::json(r).dump();
             rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
             rr.muted = r.muted;
+            rr.transpose = r.transpose;
+            rr.velocityOffset = r.velocityOffset;
+            rr.quantizeBeats = static_cast<double>(r.quantize) / lpc::kPPQ;
             rr.loopBeats = r.loopLength > 0 ? toBeats(p, r, r.start + r.loopLength) - toBeats(p, r, r.start) : 0.0;
             rr.startBeats = toBeats(p, r, r.start);
             rr.lengthBeats = toBeats(p, r, r.start + r.length) - rr.startBeats;

@@ -30,6 +30,8 @@ MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r) {
     if (r.start < 0 || r.length <= 0) return CommandError{"bad_region", "region needs start >= 0 and length > 0"};
     if (r.start > kMaxPosition || r.length > kMaxPosition) return CommandError{"bad_region", "region start and length must be at most 2^40"};
     if (!inRange(r.gainDb, -96.0f, 24.0f)) return CommandError{"bad_value", "region gainDb must be in [-96, 24]"};
+    if (r.transpose < -48 || r.transpose > 48 || r.velocityOffset < -127 || r.velocityOffset > 127 || r.quantize < 0 || r.quantize > 4 * kPPQ)
+        return CommandError{"bad_value", "region transpose is -48..48, velocity -127..127 and quantize 0 to a whole note"};
     if (r.loopLength < 0 || r.loopLength > r.length) return CommandError{"bad_region", "a region loop is between 0 and the length of the region"};
     if (kind == TrackKind::Audio) {
         if (r.mediaId.isNull() || !p.findMedia(r.mediaId))
@@ -108,6 +110,14 @@ MaybeError checkInstrument(const ProcessorRef& instrument) {
     if (isVst3Id(instrument.processorId)) return checkInsert(instrument);
     if (instrument.processorId.rfind("vst3:", 0) == 0) return CommandError{"bad_value", "malformed plug-in id: " + instrument.processorId};
     if (!isKnownInstrument(instrument.processorId)) return CommandError{"bad_value", "unknown instrument: " + instrument.processorId};
+    return std::nullopt;
+}
+
+MaybeError checkMidiShaping(const MidiShaping& m) {
+    if (m.transpose < -48 || m.transpose > 48 || m.velocity < -127 || m.velocity > 127)
+        return CommandError{"bad_value", "track transpose is -48..48 and velocity -127..127"};
+    if (m.keyLow < 0 || m.keyHigh > 127 || m.keyLow > m.keyHigh) return CommandError{"bad_value", "the key limit is 0..127 with low <= high"};
+    if (m.velocityLow < 1 || m.velocityHigh > 127 || m.velocityLow > m.velocityHigh) return CommandError{"bad_value", "the velocity limit is 1..127 with low <= high"};
     return std::nullopt;
 }
 
@@ -212,6 +222,7 @@ MaybeError checkProject(const Project& p) {
         if (auto e = checkTrackProps(t.name, t.color)) return e;
         if (auto e = checkPatchId(t.patchId)) return e;
         if (auto e = checkShowInTracks(t.kind, t.showInTracks)) return e;
+        if (auto e = checkMidiShaping(t.midi)) return e;
         if (auto e = checkStripValues(t.strip.gainDb, t.strip.pan)) return e;
         const bool wantsInstrument = t.kind == TrackKind::Instrument;
         if (wantsInstrument != t.instrument.has_value()) return CommandError{"invalid_kind", "exactly instrument tracks need an instrument"};

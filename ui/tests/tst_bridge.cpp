@@ -1471,6 +1471,35 @@ private slots:
         QTRY_COMPARE(c.regionControls(midiRegion, "cc64").size(), 2);
         QVERIFY(c.regionControls(midiRegion, "nonsense").isEmpty());
     }
+    void transposeVelocityAndQuantizeAreSetFromTheInspector() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3 && c.regions()->rowCount() >= 2);
+        QString midiRegion;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const auto idx = c.regions()->index(i);
+            if (!c.regions()->data(idx, c.regions()->roleNames().key("isAudio")).toBool()) midiRegion = c.regions()->data(idx, c.regions()->roleNames().key("regionId")).toString();
+        }
+        QVERIFY(!midiRegion.isEmpty());
+        c.selectRegion(midiRegion, "replace");
+        c.setSelectedRegionsMidi("transpose", 5);
+        QTRY_COMPARE(c.regions()->find(midiRegion)->transpose, 5);
+        c.setSelectedRegionsMidi("velocity", -20);
+        QTRY_COMPARE(c.regions()->find(midiRegion)->velocityOffset, -20);
+        c.setSelectedRegionsMidi("quantize", 0.5);
+        QTRY_COMPARE(c.regions()->find(midiRegion)->quantizeBeats, 0.5);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(midiRegion)->quantizeBeats, 0.0);
+        const QString track = c.regions()->find(midiRegion)->trackId;
+        c.setTrackMidi(track, "transpose", -3);
+        QTRY_COMPARE(c.tracks()->find(track)->transpose, -3);
+        c.setTrackMidi(track, "keyLow", 60);
+        QTRY_COMPARE(c.tracks()->find(track)->keyLow, 60);
+        c.setTrackMidi(track, "keyHigh", 40);                        // below the low end: the low end follows
+        QTRY_COMPARE(c.tracks()->find(track)->keyHigh, 40);
+        QCOMPARE(c.tracks()->find(track)->keyLow, 40);
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

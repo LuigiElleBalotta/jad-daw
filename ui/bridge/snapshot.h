@@ -51,6 +51,7 @@ struct TrackRow {
     bool hidden = false;       // the track is hidden but shown anyway (Track > Toggle Hide View): drawn dimmed
     QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)
     QString instrumentLabel;  // the name of a plug-in instrument
+    int transpose = 0, velocity = 0, keyLow = 0, keyHigh = 127, velocityLow = 1, velocityHigh = 127;  // the shaping of the notes of an instrument track
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
     std::vector<InsertRow> inserts;
     std::vector<SendRow> sends;
@@ -78,6 +79,8 @@ struct RegionRow {
     std::string json;  // the whole region as the Core stores it (copy and paste)
     bool muted = false;  // Mute Regions (Alt+M): shown grey, silent
     double loopBeats = 0.0;  // > 0: the region loops every loopBeats
+    int transpose = 0, velocityOffset = 0;  // MIDI region: how its notes are shaped when they play
+    double quantizeBeats = 0.0;             // 0: off
 };
 
 // True when `a` and `b` hold the same ids in the same order: the models then update in place (dataChanged) instead of

@@ -2301,4 +2301,40 @@ void ProjectController::setRegionControls(const QString& regionId, const QString
     sendCommand({{"type", "replace_region"}, {"region", region}});
 }
 
+void ProjectController::setSelectedRegionsMidi(const QString& what, double value) {
+    if (!host_ || !std::isfinite(value) || (what != "transpose" && what != "velocity" && what != "quantize")) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (r->audio) continue;
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded()) continue;
+        const char* key = what == "transpose" ? "transpose" : (what == "velocity" ? "velocityOffset" : "quantize");
+        const std::int64_t v = what == "quantize" ? std::clamp<std::int64_t>(std::llround(value * lpc::kPPQ), 0, 4 * lpc::kPPQ)
+                                                  : std::clamp<std::int64_t>(std::llround(value), what == "transpose" ? -48 : -127, what == "transpose" ? 48 : 127);
+        if (v == 0) region.erase(key);
+        else region[key] = v;
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
+    }
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::setTrackMidi(const QString& trackId, const QString& what, int value) {
+    if (!host_) return;
+    const TrackRow* t = tracks_.find(trackId);
+    if (!t || t->kind != QLatin1String("instrument")) return;
+    int transpose = t->transpose, velocity = t->velocity, keyLow = t->keyLow, keyHigh = t->keyHigh, velocityLow = t->velocityLow, velocityHigh = t->velocityHigh;
+    if (what == "transpose") transpose = std::clamp(value, -48, 48);
+    else if (what == "velocity") velocity = std::clamp(value, -127, 127);
+    else if (what == "keyLow") keyLow = std::clamp(value, 0, 127);
+    else if (what == "keyHigh") keyHigh = std::clamp(value, 0, 127);
+    else if (what == "velocityLow") velocityLow = std::clamp(value, 1, 127);
+    else if (what == "velocityHigh") velocityHigh = std::clamp(value, 1, 127);
+    else return;
+    if (keyLow > keyHigh) (what == "keyLow" ? keyHigh : keyLow) = what == "keyLow" ? keyLow : keyHigh;  // the other end follows
+    if (velocityLow > velocityHigh) (what == "velocityLow" ? velocityHigh : velocityLow) = what == "velocityLow" ? velocityLow : velocityHigh;
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()},
+                 {"midi", {{"transpose", transpose}, {"velocity", velocity}, {"keyLow", keyLow}, {"keyHigh", keyHigh}, {"velocityLow", velocityLow}, {"velocityHigh", velocityHigh}}}});
+}
+
 }  // namespace jad

@@ -458,6 +458,10 @@ public:
     Q_INVOKABLE void duplicateSelectedRegions();
     Q_INVOKABLE void toggleMuteSelectedRegions();
     Q_INVOKABLE void toggleLoopSelectedRegions();
+    // The Inspector's region fields for the selected MIDI regions (one undo step): what == "transpose" (semitones), "velocity" (added) or "quantize" (beats, 0 = off)
+    Q_INVOKABLE void setSelectedRegionsMidi(const QString& what, double value);
+    // The Inspector's track fields for an instrument track: what == "transpose", "velocity", "keyLow", "keyHigh", "velocityLow" or "velocityHigh"
+    Q_INVOKABLE void setTrackMidi(const QString& trackId, const QString& what, int value);
     Q_INVOKABLE void selectFollowingRegions(bool sameTrackOnly);
     Q_INVOKABLE void selectOverlappedRegions();
     Q_INVOKABLE void selectSameColoredRegions();

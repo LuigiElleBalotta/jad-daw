@@ -84,7 +84,7 @@ bool stripChanged(const Track& a, const Track& b) {
 }
 
 bool configChanged(const Track& a, const Track& b) {
-    return a.kind != b.kind || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
+    return a.kind != b.kind || a.midi != b.midi || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
            a.strip.sends != b.strip.sends || a.strip.output != b.strip.output;
 }
 
@@ -223,10 +223,15 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
                 for (const MidiNote& n : r.notes) {
                     if (n.muted) continue;
                     if (r.loopLength > 0 && (n.start >= loop || shift + n.start >= r.length)) continue;  // outside the loop or the region
+                    const int pitch = n.note + r.transpose + t.midi.transpose;
+                    if (pitch < std::max(0, t.midi.keyLow) || pitch > std::min(127, t.midi.keyHigh)) continue;  // Key Limit: not played
+                    const int velocity = std::clamp(std::clamp(n.velocity + r.velocityOffset + t.midi.velocity, 1, 127), t.midi.velocityLow, t.midi.velocityHigh);
+                    std::int64_t start = n.start;
+                    if (r.quantize > 0) start = (start + r.quantize / 2) / r.quantize * r.quantize;  // Quantize: the start moves to the grid, the end stays
                     const std::int64_t end = r.loopLength > 0 ? std::min({n.start + n.length, loop, r.length - shift}) : n.start + n.length;
-                    const std::int64_t on = toFrames(p.tempoMap.ticksToSamples(r.start + shift + n.start, p.sampleRate));
-                    const std::int64_t off = toFrames(p.tempoMap.ticksToSamples(r.start + shift + end, p.sampleRate));
-                    rp.notes.push_back(NoteSpan{on, std::max(on, off), n.note, n.velocity});
+                    const std::int64_t on = toFrames(p.tempoMap.ticksToSamples(r.start + shift + start, p.sampleRate));
+                    const std::int64_t off = toFrames(p.tempoMap.ticksToSamples(r.start + shift + std::max(end, start + 1), p.sampleRate));
+                    rp.notes.push_back(NoteSpan{on, std::max(on, off), static_cast<std::uint8_t>(pitch), static_cast<std::uint8_t>(velocity)});
                 }
             }
             std::stable_sort(rp.notes.begin(), rp.notes.end(), [](const NoteSpan& a, const NoteSpan& b) { return a.onFrame < b.onFrame; });

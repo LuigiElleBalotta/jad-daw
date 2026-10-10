@@ -19,6 +19,7 @@ struct TrackPatch {
     std::optional<std::string> color;
     std::optional<bool> showInTracks;
     std::optional<std::string> automationMode;  // off, read, touch, latch or write
+    std::optional<MidiShaping> midi;            // transpose, velocity and the limits (instrument tracks)
 };
 
 CommandPtr makeAddTrack(Track track, int index = -1);  // index -1 appends

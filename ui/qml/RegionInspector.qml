@@ -1,7 +1,7 @@
 import QtQuick
 import Jad
 
-// "Region: ..." section of the Inspector. Mute, Loop and Gain are real; Quantize, Transpose and Velocity are not done yet.
+// "Region: ..." section of the Inspector. Mute, Loop, Gain and, for MIDI regions, Quantize, Transpose and Velocity are real.
 Column {
     id: root
     required property ProjectController project
@@ -30,9 +30,30 @@ Column {
             label: qsTr("Loop")
             FlagCheck { id: loop; objectName: "regionLoop"; anchors.verticalCenter: parent.verticalCenter; on: (root.region.loopBeats ?? 0) > 0; onFlipped: root.project.toggleLoopSelectedRegions() }
         }
-        InspectorRow { label: qsTr("Quantize"); StubValue { project: root.project; label: qsTr("Quantize"); text: qsTr("Off") } }
-        InspectorRow { label: qsTr("Transpose"); StubValue { project: root.project; label: qsTr("Region Transpose"); text: "0" } }
-        InspectorRow { label: qsTr("Velocity"); StubValue { project: root.project; label: qsTr("Region Velocity"); text: "0" } }
+        InspectorRow {
+            label: qsTr("Quantize")
+            visible: !root.region.audio
+            SelectField {
+                objectName: "regionQuantize"
+                anchors.verticalCenter: parent.verticalCenter
+                implicitWidth: 100
+                readonly property var grids: [0, 1, 0.5, 0.25, 0.125, 0.0625]
+                choices: grids
+                value: { for (const g of grids) if (Math.abs(g - (root.region.quantizeBeats ?? 0)) < 1e-6) return g; return 0 }
+                format: (g) => g === 0 ? qsTr("Off") : (g === 1 ? qsTr("1/4 Note") : qsTr("1/%1 Note").arg(Math.round(4 / g)))
+                onChosen: (g) => root.project.setSelectedRegionsMidi("quantize", g)
+            }
+        }
+        InspectorRow {
+            label: qsTr("Transpose")
+            visible: !root.region.audio
+            NumberField { objectName: "regionTranspose"; anchors.verticalCenter: parent.verticalCenter; from: -48; to: 48; decimals: 0; value: root.region.transpose ?? 0; onCommitted: (v) => root.project.setSelectedRegionsMidi("transpose", v) }
+        }
+        InspectorRow {
+            label: qsTr("Velocity")
+            visible: !root.region.audio
+            NumberField { objectName: "regionVelocity"; anchors.verticalCenter: parent.verticalCenter; from: -127; to: 127; decimals: 0; value: root.region.velocityOffset ?? 0; onCommitted: (v) => root.project.setSelectedRegionsMidi("velocity", v) }
+        }
         InspectorRow {
             label: qsTr("Gain")
             NumberField {

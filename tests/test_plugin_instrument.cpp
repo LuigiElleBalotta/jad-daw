@@ -261,3 +261,77 @@ TEST_CASE("regions: a looped MIDI region repeats its notes and a muted region is
     for (std::int64_t at = 0; at < 2 * Fixture::kQuarter; at += 256) silent.render(at, 256, l.data(), r.data());
     REQUIRE(host2.lastInstrument->seen.empty());
 }
+
+TEST_CASE("notes are shaped by the region and the track when they play", "[shaping][graph]") {
+    Fixture f;
+    Region shaped = f.project.findTrack(f.track.id)->regions[0];   // notes: 60 (velocity 100) at 0 and 64 (velocity 90) at one quarter
+    shaped.transpose = 2;
+    shaped.velocityOffset = -10;
+    REQUIRE(makeReplaceRegion(shaped)->apply(f.project).ok());
+    TrackPatch patch;
+    MidiShaping m;
+    m.transpose = 1;
+    m.velocity = -5;
+    patch.midi = m;
+    REQUIRE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    auto played = [&](Project& project) {
+        FakePluginHost host;
+        host.instruments[kInst] = 0;
+        RenderGraph graph(48000.0);
+        for (const AudioMsg& msg : initialMessages(project, f.media, &host)) graph.apply(msg);
+        std::vector<float> l(256), r(256);
+        for (std::int64_t at = 0; at < 2 * Fixture::kQuarter + 512; at += 256) graph.render(at, 256, l.data(), r.data());
+        std::vector<std::pair<int, int>> ons;   // pitch, velocity
+        if (host.lastInstrument)
+            for (const auto& s : host.lastInstrument->seen)
+                if ((s.event.status & 0xf0) == 0x90) ons.emplace_back(s.event.data1, s.event.data2);
+        return ons;
+    };
+    auto ons = played(f.project);
+    REQUIRE(ons.size() == 2);
+    REQUIRE(ons[0] == std::make_pair(63, 85));      // 60 + 2 + 1, 100 - 10 - 5
+    REQUIRE(ons[1] == std::make_pair(67, 75));
+
+    m.keyLow = 65;                                    // Key Limit: the first note is not played
+    patch.midi = m;
+    REQUIRE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    ons = played(f.project);
+    REQUIRE(ons.size() == 1);
+    REQUIRE(ons[0].first == 67);
+
+    m.velocityHigh = 70;                              // Velocity Limit: brought inside
+    patch.midi = m;
+    REQUIRE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    REQUIRE(played(f.project)[0].second == 70);
+
+    patch.midi = MidiShaping{-99, 0, 0, 127, 1, 127};    // out of range is refused
+    REQUIRE_FALSE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    MidiShaping crossed;
+    crossed.keyLow = 80;
+    crossed.keyHigh = 20;
+    patch.midi = crossed;
+    REQUIRE_FALSE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    shaped.transpose = 99;
+    REQUIRE_FALSE(makeReplaceRegion(shaped)->apply(f.project).ok());
+}
+
+TEST_CASE("quantize moves the start of the notes to the grid when they play", "[shaping][graph]") {
+    Fixture f;
+    Region r = f.project.findTrack(f.track.id)->regions[0];
+    r.notes = {MidiNote{kPPQ / 2 + 100, kPPQ, 60, 100, false}};    // a little late after the eighth
+    r.quantize = kPPQ / 2;                                          // eighth notes
+    REQUIRE(makeReplaceRegion(r)->apply(f.project).ok());
+    FakePluginHost host;
+    host.instruments[kInst] = 0;
+    RenderGraph graph(48000.0);
+    for (const AudioMsg& msg : initialMessages(f.project, f.media, &host)) graph.apply(msg);
+    std::vector<float> l(256), r2(256);
+    for (std::int64_t at = 0; at < 2 * Fixture::kQuarter; at += 256) graph.render(at, 256, l.data(), r2.data());
+    bool found = false;
+    for (const auto& s : host.lastInstrument->seen)
+        if ((s.event.status & 0xf0) == 0x90) {
+            REQUIRE(s.frame == Fixture::kQuarter / 2);              // on the eighth, not 100 ticks after it
+            found = true;
+        }
+    REQUIRE(found);
+}

@@ -359,6 +359,9 @@ public:
         if (patch_.color) j["color"] = *patch_.color;
         if (patch_.showInTracks) j["showInTracks"] = *patch_.showInTracks;
         if (patch_.automationMode) j["automationMode"] = *patch_.automationMode;
+        if (patch_.midi)
+            j["midi"] = {{"transpose", patch_.midi->transpose}, {"velocity", patch_.midi->velocity}, {"keyLow", patch_.midi->keyLow}, {"keyHigh", patch_.midi->keyHigh},
+                         {"velocityLow", patch_.midi->velocityLow}, {"velocityHigh", patch_.midi->velocityHigh}};
         return j;
     }
     ApplyResult apply(Project& p) const override {
@@ -372,7 +375,15 @@ public:
             const std::string& m = *patch_.automationMode;
             if (m != "off" && m != "read" && m != "touch" && m != "latch" && m != "write") return fail("bad_value", "the automation mode is off, read, touch, latch or write");
         }
+        if (patch_.midi) {
+            if (t->kind != TrackKind::Instrument) return fail("invalid_kind", "only instrument tracks shape their notes");
+            if (auto e = checkMidiShaping(*patch_.midi)) return fail(*e);
+        }
         TrackPatch previous;
+        if (patch_.midi) {
+            previous.midi = t->midi;
+            t->midi = *patch_.midi;
+        }
         if (patch_.automationMode) {
             previous.automationMode = t->automationMode;
             t->automationMode = *patch_.automationMode;
@@ -943,6 +954,17 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("color")) patch.color = j["color"].get<std::string>();
             if (j.contains("showInTracks")) patch.showInTracks = j["showInTracks"].get<bool>();
             if (j.contains("automationMode")) patch.automationMode = j["automationMode"].get<std::string>();
+            if (j.contains("midi")) {
+                const auto& m = j["midi"];
+                MidiShaping shaping;
+                shaping.transpose = m.value("transpose", 0);
+                shaping.velocity = m.value("velocity", 0);
+                shaping.keyLow = m.value("keyLow", 0);
+                shaping.keyHigh = m.value("keyHigh", 127);
+                shaping.velocityLow = m.value("velocityLow", 1);
+                shaping.velocityHigh = m.value("velocityHigh", 127);
+                patch.midi = shaping;
+            }
             return makeSetTrackProps(j.at("trackId").get<Uuid>(), patch);
         }
         if (type == "set_signature") return makeSetSignature(j.at("tick").get<Ticks>(), j.at("numerator").get<int>(), j.at("denominator").get<int>());

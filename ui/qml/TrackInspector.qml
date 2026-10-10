@@ -95,10 +95,32 @@ Column {
             width: parent.width
             visible: root.track.kind === "instrument"
             InspectorRow { label: qsTr("Region type"); StubValue { project: root.project; label: qsTr("Default Region Type"); text: qsTr("MIDI") } }
-            InspectorRow { label: qsTr("Transpose"); StubValue { project: root.project; label: qsTr("Track Transpose"); text: "0" } }
-            InspectorRow { label: qsTr("Velocity"); StubValue { project: root.project; label: qsTr("Track Velocity"); text: "0" } }
-            InspectorRow { label: qsTr("Key limit"); StubValue { project: root.project; label: qsTr("Key Limit"); text: "C-2  G8" } }
-            InspectorRow { label: qsTr("Velocity limit"); StubValue { project: root.project; label: qsTr("Velocity Limit"); text: "1  127" } }
+            InspectorRow {
+                label: qsTr("Transpose")
+                NumberField { objectName: "trackTranspose"; anchors.verticalCenter: parent.verticalCenter; from: -48; to: 48; decimals: 0; value: root.track.transpose ?? 0; onCommitted: (v) => root.project.setTrackMidi(root.track.trackId, "transpose", v) }
+            }
+            InspectorRow {
+                label: qsTr("Velocity")
+                NumberField { objectName: "trackVelocity"; anchors.verticalCenter: parent.verticalCenter; from: -127; to: 127; decimals: 0; value: root.track.velocity ?? 0; onCommitted: (v) => root.project.setTrackMidi(root.track.trackId, "velocity", v) }
+            }
+            InspectorRow {
+                label: qsTr("Key limit")
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.spacing[1]
+                    NumberField { objectName: "trackKeyLow"; implicitWidth: 52; from: 0; to: 127; decimals: 0; value: root.track.keyLow ?? 0; onCommitted: (v) => root.project.setTrackMidi(root.track.trackId, "keyLow", v) }
+                    NumberField { objectName: "trackKeyHigh"; implicitWidth: 52; from: 0; to: 127; decimals: 0; value: root.track.keyHigh ?? 127; onCommitted: (v) => root.project.setTrackMidi(root.track.trackId, "keyHigh", v) }
+                }
+            }
+            InspectorRow {
+                label: qsTr("Velocity limit")
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.spacing[1]
+                    NumberField { objectName: "trackVelocityLow"; implicitWidth: 52; from: 1; to: 127; decimals: 0; value: root.track.velocityLow ?? 1; onCommitted: (v) => root.project.setTrackMidi(root.track.trackId, "velocityLow", v) }
+                    NumberField { objectName: "trackVelocityHigh"; implicitWidth: 52; from: 1; to: 127; decimals: 0; value: root.track.velocityHigh ?? 127; onCommitted: (v) => root.project.setTrackMidi(root.track.trackId, "velocityHigh", v) }
+                }
+            }
             InspectorRow { label: qsTr("Delay"); StubValue { project: root.project; label: qsTr("Track Delay"); text: "0" } }
             InspectorRow { label: qsTr("No transpose"); StubCheck { project: root.project; label: qsTr("No Transpose"); anchors.verticalCenter: parent.verticalCenter } }
         }

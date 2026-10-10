@@ -30,6 +30,7 @@ MaybeError checkSendFields(const Project& p, const Uuid& owner, const Send& s);
 MaybeError checkInsert(const ProcessorRef& insert);
 // An instrument: a built-in one (see effect_specs.h) or a "vst3:" plug-in with a base64 state and no parameters.
 MaybeError checkInstrument(const ProcessorRef& instrument);
+MaybeError checkMidiShaping(const MidiShaping& midi);  // transpose, velocity, key limit and velocity limit of an instrument track
 bool isKnownTrackColor(const std::string& color);  // "" (automatic) or a palette name
 bool validTrackName(const std::string& name);      // 1 to 64 UTF-8 code points, no control characters
 bool validPatchId(const std::string& id);          // 1 to 64 characters of A-Z a-z 0-9 . _ -

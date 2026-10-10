@@ -85,6 +85,9 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (!r.controls.empty()) j["controls"] = r.controls;
     if (r.loopLength != 0) j["loopLength"] = r.loopLength;
     if (r.muted) j["muted"] = true;
+    if (r.transpose != 0) j["transpose"] = r.transpose;
+    if (r.velocityOffset != 0) j["velocityOffset"] = r.velocityOffset;
+    if (r.quantize != 0) j["quantize"] = r.quantize;
 }
 
 void from_json(const nlohmann::json& j, Region& r) {
@@ -101,6 +104,9 @@ void from_json(const nlohmann::json& j, Region& r) {
     if (j.contains("controls")) j.at("controls").get_to(r.controls);
     r.loopLength = j.value("loopLength", std::int64_t{0});
     r.muted = j.value("muted", false);
+    r.transpose = j.value("transpose", 0);
+    r.velocityOffset = j.value("velocityOffset", 0);
+    r.quantize = j.value("quantize", Ticks{0});
 }
 
 void to_json(nlohmann::json& j, const MidiControl& c) { j = {{"tick", c.tick}, {"status", c.status}, {"data1", c.data1}, {"data2", c.data2}}; }
@@ -156,6 +162,7 @@ void to_json(nlohmann::json& j, const Track& t) {
     if (!t.patchId.empty()) j["patchId"] = t.patchId;
     if (!t.showInTracks) j["showInTracks"] = false;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
+    if (!(t.midi == MidiShaping{})) j["midi"] = {{"transpose", t.midi.transpose}, {"velocity", t.midi.velocity}, {"keyLow", t.midi.keyLow}, {"keyHigh", t.midi.keyHigh}, {"velocityLow", t.midi.velocityLow}, {"velocityHigh", t.midi.velocityHigh}};
 }
 
 void from_json(const nlohmann::json& j, Track& t) {
@@ -170,6 +177,15 @@ void from_json(const nlohmann::json& j, Track& t) {
     t.instrument = inst.is_null() ? std::nullopt : std::optional<ProcessorRef>(inst.get<ProcessorRef>());
     t.patchId = j.value("patchId", std::string());
     t.automationMode = j.value("automationMode", std::string("read"));
+    if (j.contains("midi")) {
+        const auto& m = j.at("midi");
+        t.midi.transpose = m.value("transpose", 0);
+        t.midi.velocity = m.value("velocity", 0);
+        t.midi.keyLow = m.value("keyLow", 0);
+        t.midi.keyHigh = m.value("keyHigh", 127);
+        t.midi.velocityLow = m.value("velocityLow", 1);
+        t.midi.velocityHigh = m.value("velocityHigh", 127);
+    }
     if (j.contains("showInTracks")) {
         if (!j["showInTracks"].is_boolean()) throw std::runtime_error("showInTracks must be a boolean");
         t.showInTracks = j["showInTracks"].get<bool>();

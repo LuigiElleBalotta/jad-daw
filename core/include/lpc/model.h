@@ -41,6 +41,9 @@ struct Region {
     float gainDb = 0.0f;
     std::int64_t fadeIn = 0, fadeOut = 0;  // audio: the ramps at the ends, in the unit of start (each at most as long as the region)
     bool muted = false;  // Mute Regions: kept in the track, not played
+    int transpose = 0;           // MIDI regions, played: semitones added to every note
+    int velocityOffset = 0;      // MIDI regions, played: added to every velocity
+    Ticks quantize = 0;          // MIDI regions, played: > 0 moves the start of every note to the nearest multiple of this many ticks
     std::int64_t loopLength = 0;  // > 0: the first loopLength (same unit as length, at most length) repeat until the end of the region
     std::vector<MidiNote> notes;
     std::vector<MidiControl> controls;  // MIDI regions: sorted by tick
@@ -89,6 +92,15 @@ struct AutomationLane {
     bool operator==(const AutomationLane&) const = default;
 };
 
+// How the notes of an instrument track are shaped when they play (the Inspector's Transpose, Velocity, Key Limit and Velocity Limit).
+struct MidiShaping {
+    int transpose = 0;                 // semitones
+    int velocity = 0;                  // added to every velocity
+    int keyLow = 0, keyHigh = 127;     // notes outside are not played
+    int velocityLow = 1, velocityHigh = 127;  // velocities are brought inside
+    bool operator==(const MidiShaping&) const = default;
+};
+
 struct Track {
     Uuid id;
     TrackKind kind = TrackKind::Audio;
@@ -98,6 +110,7 @@ struct Track {
     std::optional<ProcessorRef> instrument;
     std::string patchId;  // the built-in patch applied to the track; empty when none
     bool showInTracks = true;  // false: a bus or aux that lives in the Mixer only, not in the Tracks area
+    MidiShaping midi;  // instrument tracks
     std::string automationMode = "read";  // "off" (the lanes are ignored), "read", "touch", "latch" or "write" (the last three record fader moves)
     std::vector<Region> regions;
     std::vector<AutomationLane> automation;

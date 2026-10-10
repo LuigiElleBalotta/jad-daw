@@ -71,7 +71,7 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 ## 10. The rest of the `stub` actions (the owner: "port them to Windows")
 Most stubs were never Mac-only: they are Logic features not written yet. Left out for good: Print, Page Setup, Movie, Dolby Atmos, Mastering Assistant.
 - [x] Batch 1: Record Enable / Input Monitoring (already wired), Select Tracks, Auto Set Locators, Snap Smart, Drag Mode Shuffle L/R.
-- [ ] Batch 2: record options (Overlapping MIDI/Audio Recordings, Use Musical Grid, Low Latency Monitoring, Record/Play/Stop Button Options).
+- [x] Batch 2: Overlapping MIDI/Audio Recordings (Create Take Folder / Create Tracks / Create Tracks and Mute, MIDI also Merge; the passes of a cycle are told apart by the engine), Use Musical Grid, Record Button Options (Record/Record Toggle, Record/Record Repeat), Discard Recording. Not done: Low Latency Monitoring Mode (needs an engine switch that bypasses latent inserts on monitored tracks) and Play/Stop Button Options (the guide does not describe them).
 - [ ] Batch 3: Edit: Trim Fill within Locators, Cut/Insert Time, Delete/Separate/Copy MIDI Events, Move to Beat / Recorded Position / Focused Track.
 - [ ] Batch 4: tools (Text, Automation Select/Curve, Marquee, Slip, Rotate) and floats (Transport, Event, Region Inspector, Step Input Keyboard).
 - [ ] Batch 5: Track: Assign Icon, Configure Header, Show Output Track, External MIDI track, stacks (Flatten, Convert Folder Stack).
@@ -118,3 +118,4 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - 2026-10-10: Gain, Fade and Solo tools.
 - 2026-10-10: Edit > Move > Slip/Rotate Left/Right and Set Nudge Value.
 - 2026-10-10: stub actions batch 1 (Select Tracks, Auto Set Locators, Snap Smart, Shuffle L/R drag modes).
+- 2026-10-10: stub actions batch 2 (overlapping recordings, musical grid, record button options, discard recording).

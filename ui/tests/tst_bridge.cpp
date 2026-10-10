@@ -918,6 +918,69 @@ private slots:
         QVERIFY(!take->absolute);                                  // musical time: it follows the tempo
         c.setUseMusicalGrid(false);
     }
+    void cycleRecordingMakesTakesOrNewTracksOrOneMergedRegionPerTheOverlapSetting() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString instrument;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "instrument") instrument = c.tracks()->trackIdAt(i);
+        QVERIFY(!instrument.isEmpty());
+        c.setOverlapMidi("bogus");
+        QCOMPARE(c.overlapMidi(), QString("takes"));
+        c.setOverlapAudio("merge");                                   // merge is for MIDI only
+        QCOMPARE(c.overlapAudio(), QString("takes"));
+        c.setTrackToggle("track.recordArm", instrument, true);
+        QTRY_COMPARE(c.liveTargetTrack(), instrument);
+        c.setLoopRange(16.0, 17.0);                                   // one beat = half a second
+        c.toggleLoop();
+        QVERIFY(c.loopEnabled());
+        auto recordTwoPasses = [&] {
+            c.locateBeats(16.0);
+            QTRY_VERIFY(std::abs(c.positionBeats() - 16.0) < 0.05);
+            c.startRecording();
+            QVERIFY(c.recording());
+            QTest::qWait(100);
+            c.playNote(62, 100, true);
+            QTest::qWait(100);
+            c.playNote(62, 0, false);
+            QTest::qWait(550);                                        // the cycle wraps
+            c.playNote(64, 100, true);
+            QTest::qWait(100);
+            c.playNote(64, 0, false);
+            QTest::qWait(100);
+            c.stop();
+            QTRY_VERIFY_WITH_TIMEOUT(!c.recording(), 15000);
+        };
+        const int tracksBefore = c.tracks()->rowCount();
+        const int regionsBefore = c.regions()->rowCount();
+        c.setOverlapMidi("tracks");
+        recordTwoPasses();
+        QTRY_VERIFY_WITH_TIMEOUT(c.tracks()->rowCount() > tracksBefore, 15000);   // a pass on a new track, made like the armed one
+        QTRY_VERIFY(c.regions()->rowCount() >= regionsBefore + 2);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), tracksBefore);
+        QTRY_COMPARE(c.regions()->rowCount(), regionsBefore);
+        c.setOverlapMidi("merge");
+        recordTwoPasses();
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), regionsBefore + 1, 15000);   // one region holds both
+        QCOMPARE(c.tracks()->rowCount(), tracksBefore);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), regionsBefore);
+        c.setOverlapMidi("takes");
+        recordTwoPasses();
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->rowCount() >= regionsBefore + 2, 15000);   // takes of one passage on the same track
+        QCOMPARE(c.tracks()->rowCount(), tracksBefore);
+        int takes = 0;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->trackId == instrument && !r->takeGroup.isEmpty()) ++takes;
+        }
+        QVERIFY(takes >= 2);
+        c.undo();
+        c.toggleLoop();
+    }
     void countInChoiceAcceptsBarsAndBeatsOnly() {
         jad::ProjectController c(false);
         QCOMPARE(c.countInChoice(), 1);

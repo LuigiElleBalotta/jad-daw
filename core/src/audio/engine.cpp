@@ -73,6 +73,8 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             countClick_ = static_cast<ClickTrack*>(m.obj.ptr);
             if (old.ptr && !feedback_.push(Feedback{old})) garbageOverflow_.fetch_add(1, std::memory_order_relaxed);
             recording_ = true;
+            recNext_ = -1;
+            recPass_ = 0;
             countLeft_ = std::max<std::int64_t>(m.frame, 0);
             countPos_ = 0;
             playing_ = playing_ || countLeft_ == 0;  // while the transport already runs (a punch-in) there is no count-in
@@ -176,6 +178,8 @@ void AudioEngine::capture(int offset, int n) noexcept {
     c.channels = std::max(inChannels_, 1);
     c.frames = n;
     c.position = position_;
+    if (recNext_ >= 0 && position_ != recNext_) ++recPass_;
+    recNext_ = position_ + n;
     for (int ch = 0; ch < c.channels; ++ch)
         for (int i = 0; i < n; ++i) c.ch[ch][i] = ch < inChannels_ && offset + i < inFrames_ ? inBuf_[ch][static_cast<std::size_t>(offset + i)] : 0.0f;
     if (!rec_.push(c)) recDropped_.fetch_add(1, std::memory_order_relaxed);
@@ -194,7 +198,7 @@ void AudioEngine::drainMidi() noexcept {
         } else if (type == 0xB0 || type == 0xD0 || type == 0xE0) {  // controllers, aftertouch and the pitch wheel go to a plug-in instrument
             if (!liveTarget_.isNull()) graph_.liveControl(liveTarget_, type, e.data1, e.data2);
         }
-        if (recording_ && playing_ && (on || off || type == 0xB0 || type == 0xE0)) midiRec_.push(MidiRecEvent{position_, e});
+        if (recording_ && playing_ && (on || off || type == 0xB0 || type == 0xE0)) midiRec_.push(MidiRecEvent{position_, e, recPass_ + (recNext_ >= 0 && position_ != recNext_ ? 1u : 0u)});
     };
     MidiEvent e;
     while (midiDevice_.pop(e)) handle(e);

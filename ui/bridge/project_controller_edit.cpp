@@ -1196,7 +1196,13 @@ void ProjectController::finishRecording() {
         emit notice("Recording discarded");
         return;
     }
-    if (!recChunks_.empty()) finishMidiRecording(recChunks_.front().position, recChunks_.back().position + recChunks_.back().frames);
+    // the passes: runs of blocks that follow each other on the timeline (a cycle wrap starts a new one)
+    std::vector<std::pair<std::int64_t, std::int64_t>> passes;
+    for (const RecChunkInfo& ch : recChunks_) {
+        if (!passes.empty() && passes.back().second == ch.position) passes.back().second = ch.position + ch.frames;
+        else passes.push_back({ch.position, ch.position + ch.frames});
+    }
+    if (!passes.empty()) finishMidiRecording(passes);
     else { recMidiTracks_.clear(); recMidi_.clear(); }
     if (recTracks_.isEmpty()) {  // only instrument tracks were armed: the notes are the take
         recChannels_.clear();
@@ -1221,10 +1227,13 @@ void ProjectController::finishRecording() {
     const std::int64_t punchOut = punchEnabled_ ? static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(punchEndBeats_ * lpc::kPPQ)), sampleRate_))) : std::numeric_limits<std::int64_t>::max();
     int made = 0;
     double seconds = 0;
+    const bool newTracks = overlapAudio_ != "takes";  // Create Tracks (and Mute): a pass is a track, not a take
+    QMap<QString, QStringList> madeTracks;
+    nlohmann::json trackCommands = nlohmann::json::array();
     const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh.mm.ss");
     for (const QString& trackId : std::as_const(recTracks_)) {
         const int input = recInputs_.value(trackId);
-        const QString takeGroup = runs.size() > 1 ? QUuid::createUuid().toString(QUuid::WithoutBraces) : QString();  // the passes of a cycle are takes of one passage
+        const QString takeGroup = runs.size() > 1 && !newTracks ? QUuid::createUuid().toString(QUuid::WithoutBraces) : QString();  // the passes of a cycle are takes of one passage
         QString trackName;
         for (const TrackRow& t : allRows_) if (t.id == trackId) trackName = t.name;
         int take = 0;
@@ -1261,7 +1270,8 @@ void ProjectController::finishRecording() {
             }
             const double startBeats = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(start), sampleRate_)) / lpc::kPPQ;
             const bool lastRun = &run == &runs.back();
-            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), trackId, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun, musicalGrid_});  // the last pass plays
+            const QString target = newTracks ? trackForPass(trackId, take, madeTracks, trackCommands) : trackId;
+            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), target, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun, musicalGrid_});  // the last pass plays
             seconds = std::max(seconds, static_cast<double>(data.size() / (stereo ? 2 : 1)) / sampleRate_);
             ++take;
             ++made;
@@ -1273,6 +1283,8 @@ void ProjectController::finishRecording() {
         emit notice("Nothing was recorded");
         return;
     }
+    if (overlapAudio_ == "tracksMute") mutePreviousPasses(madeTracks, trackCommands);
+    if (!trackCommands.empty()) sendCommand(trackCommands.size() == 1 ? trackCommands.front() : nlohmann::json{{"type", "transaction"}, {"commands", trackCommands}});  // before the takes: they land on these
     emit notice(QString("Recorded %1 take%2, %3 s").arg(made).arg(made == 1 ? "" : "s").arg(seconds, 0, 'f', 1));
     if (!importRunning_) startNextImport();
 }
@@ -1534,57 +1546,85 @@ void ProjectController::drainMidiRecording() {
 }
 
 // The notes played during the take become a MIDI region on each armed instrument track (the passes of a cycle merge).
-void ProjectController::finishMidiRecording(std::int64_t startFrame, std::int64_t endFrame) {
+void ProjectController::finishMidiRecording(const std::vector<std::pair<std::int64_t, std::int64_t>>& passes) {
     drainMidiRecording();
     const QStringList tracks = recMidiTracks_;
     recMidiTracks_.clear();
     std::vector<lpc::audio::AudioEngine::MidiRecEvent> events;
     events.swap(recMidi_);
-    if (tracks.isEmpty() || events.empty() || !host_) return;
+    if (tracks.isEmpty() || events.empty() || !host_ || passes.empty()) return;
     auto toTicks = [this](std::int64_t frames) { return static_cast<std::int64_t>(tempoMap_.samplesToTicks(static_cast<double>(frames), sampleRate_)); };
-    const std::int64_t startTick = toTicks(startFrame);
     const std::int64_t barTicks = static_cast<std::int64_t>(std::llround(barBeats() * lpc::kPPQ));
-    struct Open { std::int64_t tick; int velocity; };
-    std::map<int, Open> held;
-    nlohmann::json notes = nlohmann::json::array();
-    nlohmann::json controls = nlohmann::json::array();
-    std::int64_t lastTick = startTick;
-    auto close = [&](int note, std::int64_t offTick) {
-        const auto it = held.find(note);
-        if (it == held.end()) return;
-        const std::int64_t length = std::max<std::int64_t>(offTick - it->second.tick, lpc::kPPQ / 32);
-        notes.push_back({{"start", it->second.tick - startTick}, {"length", length}, {"note", note}, {"velocity", it->second.velocity}});
-        lastTick = std::max(lastTick, it->second.tick + length);
-        held.erase(it);
-    };
-    for (const auto& e : events) {
-        const std::int64_t tick = std::max(toTicks(e.position), startTick);
-        const int type = e.event.status & 0xF0;
-        const bool on = type == 0x90 && e.event.data2 > 0;
-        const bool off = type == 0x80 || (type == 0x90 && e.event.data2 == 0);
-        if (on) {
-            close(e.event.data1, tick);  // a repeated note ends the one before
-            held[e.event.data1] = {tick, e.event.data2};
-        } else if (off) {
-            close(e.event.data1, tick);
-        } else if ((type == 0xB0 && e.event.data1 < 120) || type == 0xD0 || type == 0xE0) {  // the pedal, the wheels and aftertouch of the take
-            controls.push_back({{"tick", tick - startTick}, {"status", type}, {"data1", e.event.data1 & 0x7f}, {"data2", type == 0xD0 ? 0 : (e.event.data2 & 0x7f)}});
-            lastTick = std::max(lastTick, tick);
+    const bool merge = overlapMidi_ == "merge";  // every pass is one region
+    std::map<std::size_t, std::vector<const lpc::audio::AudioEngine::MidiRecEvent*>> groups;
+    for (const auto& e : events) groups[merge ? 0 : std::min<std::size_t>(e.pass, passes.size() - 1)].push_back(&e);
+
+    struct Part { std::int64_t startTick = 0, length = 0; nlohmann::json notes, controls; };
+    std::vector<Part> parts;
+    for (const auto& [pass, list] : groups) {
+        const std::int64_t startFrame = merge ? passes.front().first : passes[pass].first;
+        const std::int64_t endFrame = merge ? passes.back().second : passes[pass].second;
+        const std::int64_t startTick = toTicks(startFrame);
+        struct Open { std::int64_t tick; int velocity; };
+        std::map<int, Open> held;
+        nlohmann::json notes = nlohmann::json::array();
+        nlohmann::json controls = nlohmann::json::array();
+        std::int64_t lastTick = startTick;
+        auto close = [&](int note, std::int64_t offTick) {
+            const auto it = held.find(note);
+            if (it == held.end()) return;
+            const std::int64_t length = std::max<std::int64_t>(offTick - it->second.tick, lpc::kPPQ / 32);
+            notes.push_back({{"start", it->second.tick - startTick}, {"length", length}, {"note", note}, {"velocity", it->second.velocity}});
+            lastTick = std::max(lastTick, it->second.tick + length);
+            held.erase(it);
+        };
+        for (const auto* ep : list) {
+            const auto& e = *ep;
+            const std::int64_t tick = std::max(toTicks(e.position), startTick);
+            const int type = e.event.status & 0xF0;
+            const bool on = type == 0x90 && e.event.data2 > 0;
+            const bool off = type == 0x80 || (type == 0x90 && e.event.data2 == 0);
+            if (on) {
+                close(e.event.data1, tick);  // a repeated note ends the one before
+                held[e.event.data1] = {tick, e.event.data2};
+            } else if (off) {
+                close(e.event.data1, tick);
+            } else if ((type == 0xB0 && e.event.data1 < 120) || type == 0xD0 || type == 0xE0) {  // the pedal, the wheels and aftertouch of the take
+                controls.push_back({{"tick", tick - startTick}, {"status", type}, {"data1", e.event.data1 & 0x7f}, {"data2", type == 0xD0 ? 0 : (e.event.data2 & 0x7f)}});
+                lastTick = std::max(lastTick, tick);
+            }
         }
+        const std::int64_t endTick = std::max(toTicks(endFrame), lastTick);
+        for (const auto& [note, o] : std::map<int, Open>(held)) close(note, endTick);  // notes still held when the pass ends
+        if (notes.empty() && controls.empty()) continue;
+        parts.push_back({startTick, std::max<std::int64_t>(barTicks, ((endTick - startTick + barTicks - 1) / barTicks) * barTicks), notes, controls});
     }
-    const std::int64_t endTick = std::max(toTicks(endFrame), lastTick);
-    for (const auto& [note, o] : std::map<int, Open>(held)) close(note, endTick);  // notes still held when the take stops
-    if (notes.empty() && controls.empty()) return;
-    const std::int64_t length = std::max<std::int64_t>(barTicks, ((endTick - startTick + barTicks - 1) / barTicks) * barTicks);
+    if (parts.empty()) return;
+
     nlohmann::json commands = nlohmann::json::array();
     const std::string nullId = "00000000-0000-0000-0000-000000000000";
-    for (const QString& id : tracks)
-        commands.push_back({{"type", "add_region"}, {"trackId", id.toStdString()}, {"index", -1},
-                            {"region", {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"},
-                                        {"start", startTick}, {"length", length}, {"mediaId", nullId}, {"sourceOffsetFrames", 0},
-                                        {"gainDb", 0}, {"notes", notes}, {"controls", controls}}}});
+    const bool newTracks = overlapMidi_ == "tracks" || overlapMidi_ == "tracksMute";
+    QMap<QString, QStringList> madeTracks;
+    std::size_t noteCount = 0;
+    for (const Part& p : parts) noteCount += p.notes.size();
+    for (const QString& id : tracks) {
+        const QString group = !newTracks && parts.size() > 1 ? QUuid::createUuid().toString(QUuid::WithoutBraces) : QString();  // the passes are takes of one passage
+        for (std::size_t k = 0; k < parts.size(); ++k) {
+            const Part& p = parts[k];
+            const QString target = newTracks ? trackForPass(id, static_cast<int>(k), madeTracks, commands) : id;
+            nlohmann::json region = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"},
+                                     {"start", p.startTick}, {"length", p.length}, {"mediaId", nullId}, {"sourceOffsetFrames", 0},
+                                     {"gainDb", 0}, {"notes", p.notes}, {"controls", p.controls}};
+            if (!group.isEmpty()) {
+                region["takeGroup"] = group.toStdString();
+                if (k + 1 < parts.size()) region["muted"] = true;  // the last pass plays
+            }
+            commands.push_back({{"type", "add_region"}, {"trackId", target.toStdString()}, {"index", -1}, {"region", region}});
+        }
+    }
+    if (overlapMidi_ == "tracksMute") mutePreviousPasses(madeTracks, commands);
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
-    emit notice(QString("Recorded %1 note%2").arg(static_cast<int>(notes.size())).arg(notes.size() == 1 ? "" : "s"));
+    emit notice(QString("Recorded %1 note%2").arg(static_cast<int>(noteCount)).arg(noteCount == 1 ? "" : "s"));
 }
 
 void ProjectController::setRegionFades(const QString& regionId, double fadeInBeats, double fadeOutBeats) {

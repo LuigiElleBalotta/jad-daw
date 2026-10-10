@@ -55,6 +55,7 @@ public:
     struct MidiRecEvent {
         std::int64_t position = 0;
         MidiEvent event;
+        std::uint32_t pass = 0;  // 0 for the first pass of a take; a cycle that wraps starts the next one
     };
     bool pushDeviceMidi(MidiEvent e) { return midiDevice_.push(e); }
     bool pushUiMidi(MidiEvent e) { return midiUi_.push(e); }
@@ -95,6 +96,8 @@ private:
     int inFrames_ = 0, inChannels_ = 0;
     std::atomic<float> inPeak_[kMaxInputs];
     bool recording_ = false;
+    std::int64_t recNext_ = -1;    // where the recording continues when the passes follow each other; -1 before the first block
+    std::uint32_t recPass_ = 0;    // the pass in progress: a block that does not continue the one before starts the next
     std::int64_t countLeft_ = 0, countPos_ = 0;  // the count-in before a recording: frames left, frames played
     ClickTrack* countClick_ = nullptr;
     std::atomic<bool> recordingPub_{false};

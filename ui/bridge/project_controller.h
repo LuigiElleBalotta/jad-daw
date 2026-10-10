@@ -116,6 +116,11 @@ class ProjectController : public QObject {
     Q_PROPERTY(int audioBufferSize READ audioBufferSize NOTIFY audioSettingsChanged)
     Q_PROPERTY(int inputChannels READ inputChannels NOTIFY audioSettingsChanged)    // of the open device
     Q_PROPERTY(double deviceRate READ deviceRate NOTIFY audioSettingsChanged)       // 0 when no device is open
+    // Record > Overlapping Audio / MIDI Recordings > Cycle On: what a cycle recording makes of its passes. "takes": the passes are takes of one passage
+    // on the armed track (the last plays); "tracks": each pass after the first goes to a new track made like the armed one; "tracksMute": the same and
+    // the earlier tracks are muted. MIDI also has "merge": all the passes are one region.
+    Q_PROPERTY(QString overlapAudio READ overlapAudio WRITE setOverlapAudio NOTIFY recordingChanged)
+    Q_PROPERTY(QString overlapMidi READ overlapMidi WRITE setOverlapMidi NOTIFY recordingChanged)
     Q_PROPERTY(bool useMusicalGrid READ useMusicalGrid WRITE setUseMusicalGrid NOTIFY recordingChanged)  // Record > Use Musical Grid: new audio takes follow the tempo (musical time)
     Q_PROPERTY(QString recordButtonMode READ recordButtonMode WRITE setRecordButtonMode NOTIFY recordingChanged)  // "toggle" (Record/Record Toggle) or "repeat" (Record/Record Repeat)
     Q_PROPERTY(bool allowQuickPunch READ allowQuickPunch WRITE setAllowQuickPunch NOTIFY punchChanged)  // Record while playing starts a take
@@ -295,6 +300,10 @@ public:
     bool recording() const { return recording_; }
     bool punchEnabled() const { return punchEnabled_; }
     bool allowQuickPunch() const { return allowQuickPunch_; }
+    QString overlapAudio() const { return overlapAudio_; }
+    QString overlapMidi() const { return overlapMidi_; }
+    void setOverlapAudio(const QString& mode);
+    void setOverlapMidi(const QString& mode);
     bool useMusicalGrid() const { return musicalGrid_; }
     void setUseMusicalGrid(bool on);
     QString recordButtonMode() const { return recordButtonMode_; }
@@ -929,7 +938,8 @@ private:
     void applyLiveTarget();
     void openMidi();
     void drainMidiRecording();
-    void finishMidiRecording(std::int64_t startFrame, std::int64_t endFrame);
+    // `passes`: the first and last frame of each pass of the take (a cycle that wraps makes several)
+    void finishMidiRecording(const std::vector<std::pair<std::int64_t, std::int64_t>>& passes);
     QString effectEditorTrack_;
     int effectEditorIndex_ = -1;
     QString audioOutput_, audioInput_;
@@ -952,6 +962,11 @@ private:
     bool punchEnabled_ = false;
     bool allowQuickPunch_ = true;
     bool musicalGrid_ = false;
+    QString overlapAudio_ = QStringLiteral("takes"), overlapMidi_ = QStringLiteral("takes");
+    // The track that pass `pass` (0 = the first) of a cycle recording on `base` is put on: `base` itself, or a track made like it (commands are added to make it).
+    QString trackForPass(const QString& base, int pass, QMap<QString, QStringList>& made, nlohmann::json& commands);
+    // Create Tracks and Mute: the tracks of the earlier passes do not play.
+    void mutePreviousPasses(const QMap<QString, QStringList>& made, nlohmann::json& commands) const;
     QString recordButtonMode_ = QStringLiteral("toggle");
     bool discardOnFinish_ = false, repeatOnFinish_ = false;  // how the recording in progress ends
     double recStartBeats_ = 0;                               // where it started

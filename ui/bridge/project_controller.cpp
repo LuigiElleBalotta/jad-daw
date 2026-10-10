@@ -1396,6 +1396,61 @@ void ProjectController::play() {
     host_->play();
 }
 
+void ProjectController::setOverlapAudio(const QString& mode) {
+    if ((mode != "takes" && mode != "tracks" && mode != "tracksMute") || mode == overlapAudio_) return;
+    overlapAudio_ = mode;
+    QSettings().setValue("record/overlapAudio", mode);
+    emit recordingChanged();
+}
+
+void ProjectController::setOverlapMidi(const QString& mode) {
+    if ((mode != "takes" && mode != "tracks" && mode != "tracksMute" && mode != "merge") || mode == overlapMidi_) return;
+    overlapMidi_ = mode;
+    QSettings().setValue("record/overlapMidi", mode);
+    emit recordingChanged();
+}
+
+QString ProjectController::trackForPass(const QString& base, int pass, QMap<QString, QStringList>& made, nlohmann::json& commands) {
+    if (pass <= 0) return base;
+    QStringList& list = made[base];
+    while (list.size() < pass) {
+        const auto baseId = lpc::Uuid::parse(base.toStdString());
+        if (!baseId) return base;
+        std::optional<lpc::Track> source = host_->read([id = *baseId](const lpc::Project& p) -> std::optional<lpc::Track> {
+            const lpc::Track* t = p.findTrack(id);
+            return t ? std::optional<lpc::Track>(*t) : std::nullopt;
+        }).get();
+        if (!source) return base;
+        int at = -1, i = 0;
+        for (const TrackRow& t : allRows_) {
+            if (t.id == base) at = i;
+            ++i;
+        }
+        lpc::Track track = *source;
+        const lpc::Uuid id = lpc::Uuid::random();
+        track.id = id;
+        track.name = source->name + " (" + std::to_string(list.size() + 2) + ")";
+        track.regions.clear();
+        track.automation.clear();
+        track.freeze.reset();
+        track.strip.inserts.clear();
+        track.strip.sends.clear();
+        track.strip.mute = track.strip.solo = false;
+        commands.push_back({{"type", "add_track"}, {"index", at < 0 ? -1 : at + 1 + static_cast<int>(list.size())}, {"track", track}});
+        list << QString::fromStdString(id.toString());
+    }
+    return list[pass - 1];
+}
+
+void ProjectController::mutePreviousPasses(const QMap<QString, QStringList>& made, nlohmann::json& commands) const {
+    for (auto it = made.begin(); it != made.end(); ++it) {
+        if (it.value().isEmpty()) continue;
+        QStringList earlier{it.key()};
+        for (int k = 0; k + 1 < it.value().size(); ++k) earlier << it.value()[k];
+        for (const QString& id : earlier) commands.push_back({{"type", "set_strip"}, {"trackId", id.toStdString()}, {"mute", true}});
+    }
+}
+
 void ProjectController::setUseMusicalGrid(bool on) {
     if (on == musicalGrid_) return;
     musicalGrid_ = on;
@@ -1590,6 +1645,10 @@ void ProjectController::loadPanelState(QSettings& s) {
     quickHelp_ = s.value("panels/quickHelp", false).toBool();
     dragMode_ = s.value("edit/dragMode", "overlap").toString();
     musicalGrid_ = s.value("record/musicalGrid", false).toBool();
+    for (QString* mode : {&overlapAudio_, &overlapMidi_}) {
+        const QString v = s.value(mode == &overlapAudio_ ? "record/overlapAudio" : "record/overlapMidi", "takes").toString();
+        if (v == "tracks" || v == "tracksMute" || (mode == &overlapMidi_ && v == "merge")) *mode = v;
+    }
     recordButtonMode_ = s.value("record/buttonMode", "toggle").toString() == "repeat" ? QStringLiteral("repeat") : QStringLiteral("toggle");
     automationFollows_ = s.value("edit/automationFollows", false).toBool();
     for (const QString& k : s.value("panels/barItemsOff").toStringList()) barItemsOff_.insert(k);

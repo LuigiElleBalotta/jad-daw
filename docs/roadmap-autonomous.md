@@ -36,7 +36,8 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
       recording into a region with the count-in (cycle passes merge), Musical Typing window (Window > Show Musical Typing, Ctrl+K).
       Not covered: step input, sustain pedal and pitch bend/CC recording (only notes are stored).
 - [x] A polyphonic Synth (waveform, ADSR, low-pass) chosen from the instrument slot; the sine stays as "Sine" (the default).
-- [ ] VST3 instruments (hosting) and MIDI to plug-ins.
+- [x] VST3 instruments (hosting), MIDI to plug-ins, controller events (CC, pitch bend, aftertouch) in regions: played, recorded, imported, edited in the Piano Roll lane.
+      Not covered: step input, MIDI effects, multi-output instruments.
 
 ## 5. Audio editing
 - [x] Fades (in, out) on audio regions: quarter-sine ramps, handles at the top corners of a selected region, `set_region_fades` with undo. Not covered:
@@ -55,12 +56,12 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 
 ## 7. Export
 - [x] Bounce dialog: WAV 16/24/32-bit float, AIFF 16/24, normalize to -0.3 dBFS, range (whole project / cycle area), tail, TPDF dither on 16-bit; the built-in effects
-      are rendered. Not covered: FLAC and MP3 encoders (no encoder library yet), VST3 plug-ins in the offline render.
+      are rendered. FLAC 16/24 (own encoder) and VST3 effects and instruments in the render. Not covered: MP3 (no encoder library).
 
 ## 8. Windows and dialogs of the menus (all of them)
-- [ ] Project Settings (Audio, Metronome, Recording, Sync, General), Preferences (General, Audio, Display, MIDI, Advanced).
-- [ ] Undo History, Customize Control Bar and Display, Customize Toolbar, Key Commands editor, Colors, Quick Help.
-- [ ] Loop Browser, Browsers (All Files, Project, Media), List Editors (Event, Marker, Tempo, Signature), Note Pad, Project Audio.
+- [x] Project Settings (name, rate, tempo, count-in, recording), Preferences (Audio, MIDI; the other tabs say what is not done).
+- [x] Undo History, Customize Control Bar and Display, Customize Toolbar, Key Commands editor, Colors. Not done: Quick Help.
+- [x] Loop Browser and Browsers (a file browser, no audition), List Editors (Event, Marker, Tempo, Signature), Note Pad, Project Audio.
 - [ ] Score editor, Step Sequencer, Session Players, MIDI Transform, Group Settings, I/O Labels/Assignments, Automation Settings.
 - [ ] Every remaining `stub` in `ui/actions/actions.json` becomes real or gets a window that is honest about what it does.
 

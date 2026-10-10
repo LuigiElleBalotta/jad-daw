@@ -259,6 +259,7 @@ Item {
                 tool: root.project.tool
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 muted: model.muted
+                loopBeats: model.loopBeats
                 fadeInBeats: model.fadeInBeats
                 fadeOutBeats: model.fadeOutBeats
                 x: root.beatsToX(startBeats)

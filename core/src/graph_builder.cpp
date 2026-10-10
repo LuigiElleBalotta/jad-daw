@@ -192,6 +192,7 @@ PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
 std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
     for (const Region& r : t.regions) {
+        if (r.muted) continue;  // Mute Regions: it stays in the project but does not play
         RegionPlayback rp;
         rp.startFrame = regionFrame(p, r, r.start);
         rp.endFrame = regionFrame(p, r, r.start + r.length);
@@ -212,17 +213,28 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             if (!src) continue;  // missing media: the region stays silent, MediaStore keeps the warning
             rp.source = src.get();
             rp.sourceOffsetFrames = r.sourceOffsetFrames;
+            if (r.loopLength > 0) rp.loopFrames = std::max<std::int64_t>(1, regionFrame(p, r, r.start + r.loopLength) - rp.startFrame);
             cfg->keepAlive.push_back(std::move(src));
         } else {
-            for (const MidiNote& n : r.notes) {
-                if (n.muted) continue;
-                const std::int64_t on = toFrames(p.tempoMap.ticksToSamples(r.start + n.start, p.sampleRate));
-                const std::int64_t off = toFrames(p.tempoMap.ticksToSamples(r.start + n.start + n.length, p.sampleRate));
-                rp.notes.push_back(NoteSpan{on, std::max(on, off), n.note, n.velocity});
+            const std::int64_t loop = r.loopLength > 0 ? r.loopLength : r.length;  // one pass is the whole region when it does not loop
+            const std::int64_t passes = r.loopLength > 0 ? std::min<std::int64_t>((r.length + loop - 1) / loop, 2048) : 1;
+            for (std::int64_t pass = 0; pass < passes; ++pass) {
+                const std::int64_t shift = pass * loop;
+                for (const MidiNote& n : r.notes) {
+                    if (n.muted) continue;
+                    if (r.loopLength > 0 && (n.start >= loop || shift + n.start >= r.length)) continue;  // outside the loop or the region
+                    const std::int64_t end = r.loopLength > 0 ? std::min({n.start + n.length, loop, r.length - shift}) : n.start + n.length;
+                    const std::int64_t on = toFrames(p.tempoMap.ticksToSamples(r.start + shift + n.start, p.sampleRate));
+                    const std::int64_t off = toFrames(p.tempoMap.ticksToSamples(r.start + shift + end, p.sampleRate));
+                    rp.notes.push_back(NoteSpan{on, std::max(on, off), n.note, n.velocity});
+                }
             }
             std::stable_sort(rp.notes.begin(), rp.notes.end(), [](const NoteSpan& a, const NoteSpan& b) { return a.onFrame < b.onFrame; });
-            for (const MidiControl& c : r.controls)
-                rp.controls.push_back(ControlSpan{toFrames(p.tempoMap.ticksToSamples(r.start + c.tick, p.sampleRate)), c.status, c.data1, c.data2});
+            for (std::int64_t pass = 0; pass < passes; ++pass)
+                for (const MidiControl& c : r.controls) {
+                    if (r.loopLength > 0 && (c.tick >= loop || pass * loop + c.tick > r.length)) continue;
+                    rp.controls.push_back(ControlSpan{toFrames(p.tempoMap.ticksToSamples(r.start + pass * loop + c.tick, p.sampleRate)), c.status, c.data1, c.data2});
+                }
             std::stable_sort(rp.controls.begin(), rp.controls.end(), [](const ControlSpan& a, const ControlSpan& b) { return a.frame < b.frame; });
         }
         cfg->regions.push_back(std::move(rp));

@@ -221,3 +221,43 @@ TEST_CASE("regions: controller events reach a plug-in instrument at their frames
     graph.render(0, 256, l.data(), r.data(), false);
     REQUIRE(host.lastInstrument->seen.back().event.data1 == 1);
 }
+
+TEST_CASE("regions: a looped MIDI region repeats its notes and a muted region is silent", "[loop][mute][graph]") {
+    Fixture f;
+    Region looped = f.project.findTrack(f.track.id)->regions[0];
+    REQUIRE(makeSetRegionLoop(looped.id, 2 * kPPQ)->apply(f.project).ok());
+    FakePluginHost host;
+    host.instruments[kInst] = 0;
+    {
+        RenderGraph graph(48000.0);
+        for (const AudioMsg& m : initialMessages(f.project, f.media, &host)) graph.apply(m);
+        std::vector<float> l(256), r(256);
+        for (std::int64_t at = 0; at < 4 * Fixture::kQuarter + 512; at += 256) graph.render(at, 256, l.data(), r.data());
+        int ons = 0;
+        long long secondPass = -1;
+        for (const auto& s : host.lastInstrument->seen)
+            if ((s.event.status & 0xf0) == 0x90) {
+                ++ons;
+                if (s.event.data1 == 60 && s.frame >= 2 * Fixture::kQuarter) secondPass = s.frame;
+            }
+        REQUIRE(ons == 4);                                           // two notes, played twice
+        REQUIRE(secondPass == 2 * Fixture::kQuarter);                // the repeat starts one loop later
+    }
+    REQUIRE_FALSE(makeSetRegionLoop(looped.id, 5 * kPPQ)->apply(f.project).ok());      // longer than the region
+    REQUIRE_FALSE(makeSplitRegion(looped.id, kPPQ, Uuid{9, 9})->apply(f.project).ok());   // a looped region is not split
+    auto shorter = makeResizeRegion(looped.id, 0, kPPQ)->apply(f.project);             // the loop never exceeds the region
+    REQUIRE(shorter.ok());
+    REQUIRE(f.project.findTrack(f.track.id)->regions[0].loopLength == kPPQ);
+    REQUIRE_FALSE(makeResizeRegion(looped.id, kPPQ, kPPQ)->apply(f.project).ok());     // the left edge of a looped region stays
+
+    Region muted = f.project.findTrack(f.track.id)->regions[0];
+    muted.muted = true;
+    REQUIRE(makeReplaceRegion(muted)->apply(f.project).ok());
+    FakePluginHost host2;
+    host2.instruments[kInst] = 0;
+    RenderGraph silent(48000.0);
+    for (const AudioMsg& m : initialMessages(f.project, f.media, &host2)) silent.apply(m);
+    std::vector<float> l(256), r(256);
+    for (std::int64_t at = 0; at < 2 * Fixture::kQuarter; at += 256) silent.render(at, 256, l.data(), r.data());
+    REQUIRE(host2.lastInstrument->seen.empty());
+}

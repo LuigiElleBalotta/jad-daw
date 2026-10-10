@@ -134,6 +134,27 @@ private:
     float gainDb_;
 };
 
+class SetRegionLoopCmd final : public Command {
+public:
+    SetRegionLoopCmd(Uuid id, std::int64_t loopLength) : id_(id), loop_(loopLength) {}
+    std::string type() const override { return "set_region_loop"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"loopLength", loop_}}; }
+    ApplyResult apply(Project& p) const override {
+        std::size_t index = 0;
+        Track* t = p.findTrackOfRegion(id_, &index);
+        if (!t) return fail("not_found", "no such region");
+        Region& r = t->regions[index];
+        if (loop_ < 0 || loop_ > r.length) return fail("bad_value", "a loop is between 0 and the length of the region");
+        const std::int64_t previous = r.loopLength;
+        r.loopLength = loop_;
+        return success(makeSetRegionLoop(id_, previous));
+    }
+
+private:
+    Uuid id_;
+    std::int64_t loop_;
+};
+
 class SetRegionFadesCmd final : public Command {
 public:
     SetRegionFadesCmd(Uuid id, std::int64_t fadeIn, std::int64_t fadeOut) : id_(id), in_(fadeIn), out_(fadeOut) {}
@@ -356,6 +377,7 @@ CommandPtr makeSetInsertParam(Uuid trackId, int index, std::string param, std::o
 }
 
 CommandPtr makeSetPatchId(Uuid trackId, std::string patchId) { return std::make_unique<SetPatchIdCmd>(trackId, std::move(patchId)); }
+CommandPtr makeSetRegionLoop(Uuid regionId, std::int64_t loopLength) { return std::make_unique<SetRegionLoopCmd>(regionId, loopLength); }
 CommandPtr makeSetInstrumentState(Uuid trackId, std::string state) { return std::make_unique<SetInstrumentStateCmd>(trackId, std::move(state)); }
 CommandPtr makeSetInstrument(Uuid trackId, ProcessorRef instrument) { return std::make_unique<SetInstrumentCmd>(trackId, std::move(instrument)); }
 CommandPtr makeSetOutput(Uuid trackId, Uuid output) { return std::make_unique<SetOutputCmd>(trackId, output); }

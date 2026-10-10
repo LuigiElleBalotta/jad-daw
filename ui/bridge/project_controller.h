@@ -457,6 +457,7 @@ public:
     Q_INVOKABLE void pasteRegions(bool atOriginalPosition = false);
     Q_INVOKABLE void duplicateSelectedRegions();
     Q_INVOKABLE void toggleMuteSelectedRegions();
+    Q_INVOKABLE void toggleLoopSelectedRegions();
     Q_INVOKABLE void selectFollowingRegions(bool sameTrackOnly);
     Q_INVOKABLE void selectOverlappedRegions();
     Q_INVOKABLE void selectSameColoredRegions();
@@ -705,7 +706,6 @@ private:
     };
     std::vector<ClipRegion> clipboard_;   // the copied regions
     QStringList pendingRegionSelection_;  // ids of regions just pasted: selected when the next snapshot has them
-    QSet<QString> mutedRegions_;          // region ids muted with Ctrl+M
     double nudgeBeats_ = 0.25;
     std::vector<const RegionRow*> selectedRegionRows() const;
     void setAllStrips(const char* field, bool on);

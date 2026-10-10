@@ -719,7 +719,7 @@ private slots:
         QVERIFY(copy);
         QVERIFY(std::abs(copy->startBeats - (before.startBeats + before.lengthBeats)) < 0.01);
     }
-    void muteRegionIsVisualAndToggles() {
+    void muteRegionSilencesItAndToggles() {
         TempDir dir;
         jad::ProjectController c(false);
         QVERIFY(c.openProject(url(makeDemo(dir))));
@@ -727,9 +727,28 @@ private slots:
         const int muted = c.regions()->roleNames().key("muted");
         c.selectRegion(c.regions()->regionIdAt(0), "replace");
         c.toggleMuteSelectedRegions();
-        QVERIFY(c.regions()->data(c.regions()->index(0), muted).toBool());
+        QTRY_VERIFY(c.regions()->data(c.regions()->index(0), muted).toBool());
         c.toggleMuteSelectedRegions();
-        QVERIFY(!c.regions()->data(c.regions()->index(0), muted).toBool());
+        QTRY_VERIFY(!c.regions()->data(c.regions()->index(0), muted).toBool());
+        c.toggleMuteSelectedRegions();
+        QTRY_VERIFY(c.regions()->data(c.regions()->index(0), muted).toBool());
+        c.undo();                                                    // a command now: one undo step
+        QTRY_VERIFY(!c.regions()->data(c.regions()->index(0), muted).toBool());
+    }
+    void loopUnloopRegionsRepeatsTheContentAndIsOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int loop = c.regions()->roleNames().key("loopBeats");
+        c.selectRegion(c.regions()->regionIdAt(0), "replace");
+        QCOMPARE(c.regions()->data(c.regions()->index(0), loop).toDouble(), 0.0);
+        c.toggleLoopSelectedRegions();
+        QTRY_VERIFY(c.regions()->data(c.regions()->index(0), loop).toDouble() > 0.0);
+        c.toggleLoopSelectedRegions();
+        QTRY_COMPARE(c.regions()->data(c.regions()->index(0), loop).toDouble(), 0.0);
+        c.undo();
+        QTRY_VERIFY(c.regions()->data(c.regions()->index(0), loop).toDouble() > 0.0);
     }
     void nudgeMovesSelectedRegionsByTheNudgeValue() {
         TempDir dir;

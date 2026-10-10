@@ -473,3 +473,31 @@ TEST_CASE("graph: the peak is read after the fader or, for pre-fader metering, b
     REQUIRE(of(post, 1) == Catch::Approx(0.125f));    // 0.5 * fader 0.25
     REQUIRE(of(pre, 1) == Catch::Approx(0.5f));       // before the fader
 }
+
+TEST_CASE("RenderGraph: a looped audio region restarts its source every loopFrames", "[graph][loop]") {
+    Rig rig;
+    auto* cfg = new TrackConfig;
+    std::vector<float> ramp(2 * 100);
+    for (int i = 0; i < 100; ++i) ramp[static_cast<std::size_t>(2 * i)] = ramp[static_cast<std::size_t>(2 * i + 1)] = static_cast<float>(i) / 100.0f;
+    auto src = std::make_shared<MemorySource>(48000, 2, ramp);
+    rig.media.push_back(src);
+    RegionPlayback r;
+    r.startFrame = 50;
+    r.endFrame = 400;
+    r.source = src.get();
+    r.sourceOffsetFrames = 0;
+    r.loopFrames = 100;
+    cfg->regions.push_back(r);
+    cfg->keepAlive.push_back(src);
+    rig.addNode(1, TrackKind::Audio, cfg);
+    rig.addMaster();
+    const Stereo s = rig.render(500);
+    REQUIRE(s.l[49] == 0.0f);                                    // before the region
+    REQUIRE(s.l[50] == Catch::Approx(0.0f));                     // the start of the first pass
+    REQUIRE(s.l[149] == Catch::Approx(0.99f));                   // the end of the first pass
+    REQUIRE(s.l[150] == Catch::Approx(0.0f));                    // the second pass starts again
+    REQUIRE(s.l[175] == Catch::Approx(0.25f));
+    REQUIRE(s.l[375] == Catch::Approx(0.25f));                   // the fourth pass, cut by the region end
+    REQUIRE(s.l[399] == Catch::Approx(0.49f));
+    REQUIRE(s.l[400] == 0.0f);                                   // after the region
+}

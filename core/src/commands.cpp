@@ -586,9 +586,11 @@ public:
         if (start_ < 0 || start_ > kMaxPosition || length_ <= 0 || length_ > kMaxPosition)
             return fail("bad_region", "region start and length must be in (0, 2^40]");
         const Region old = t->regions[idx];
+        if (old.loopLength > 0 && start_ != old.start) return fail("bad_region", "a looped region can only be resized from its right edge");
         Region r = old;
         r.start = start_;
         r.length = length_;
+        r.loopLength = std::min(old.loopLength, length_);
         const std::int64_t moved = start_ - old.start;
         if (t->kind == TrackKind::Audio) {
             r.sourceOffsetFrames = old.sourceOffsetFrames + framesBetween(p, old.timeBase, old.start, start_);
@@ -633,6 +635,7 @@ public:
         if (!t) return fail("not_found", "no such region");
         if (newId_.isNull() || allRegionIds(p).count(newId_)) return fail("duplicate_id", "the id of the new region is missing or already used");
         const Region old = t->regions[idx];
+        if (old.loopLength > 0) return fail("bad_region", "a looped region cannot be split: turn the loop off first");
         if (at_ <= old.start || at_ >= old.start + old.length) return fail("bad_region", "the split position must be inside the region");
         Region left = old, right = old;
         left.length = at_ - old.start;
@@ -709,6 +712,7 @@ public:
             const Region& b = regions[order[i]];
             if (a.timeBase != b.timeBase || a.start + a.length != b.start) return fail("bad_region", "regions must be adjacent");
             if (a.gainDb != b.gainDb) return fail("bad_region", "regions must have the same gain");
+            if (a.loopLength > 0 || b.loopLength > 0) return fail("bad_region", "looped regions cannot be joined: turn the loops off first");
             if (track->kind == TrackKind::Audio) {
                 if (a.mediaId != b.mediaId) return fail("bad_region", "regions must use the same media");
                 if (b.sourceOffsetFrames != a.sourceOffsetFrames + framesBetween(p, a.timeBase, a.start, b.start))
@@ -956,6 +960,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "remove_send") return makeRemoveSend(j.at("sendId").get<Uuid>());
         if (type == "set_inserts") return makeSetInserts(j.at("trackId").get<Uuid>(), j.at("inserts").get<std::vector<ProcessorRef>>());
         if (type == "set_patch_id") return makeSetPatchId(j.at("trackId").get<Uuid>(), j.at("patchId").get<std::string>());
+        if (type == "set_region_loop") return makeSetRegionLoop(j.at("regionId").get<Uuid>(), j.at("loopLength").get<std::int64_t>());
         if (type == "set_instrument_state") return makeSetInstrumentState(j.at("trackId").get<Uuid>(), j.at("state").get<std::string>());
         if (type == "set_instrument") return makeSetInstrument(j.at("trackId").get<Uuid>(), j.at("instrument").get<ProcessorRef>());
         if (type == "set_output") return makeSetOutput(j.at("trackId").get<Uuid>(), j.at("output").get<Uuid>());

@@ -144,6 +144,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.gainDb = r.gainDb;
             rr.json = nlohmann::json(r).dump();
             rr.absolute = r.timeBase == lpc::TimeBase::Absolute;
+            rr.muted = r.muted;
+            rr.loopBeats = r.loopLength > 0 ? toBeats(p, r, r.start + r.loopLength) - toBeats(p, r, r.start) : 0.0;
             rr.startBeats = toBeats(p, r, r.start);
             rr.lengthBeats = toBeats(p, r, r.start + r.length) - rr.startBeats;
             rr.sourceOffsetFrames = r.sourceOffsetFrames;

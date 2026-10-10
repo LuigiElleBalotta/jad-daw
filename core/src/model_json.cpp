@@ -83,6 +83,8 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (r.fadeIn != 0) j["fadeIn"] = r.fadeIn;  // written only when set: older projects and files stay as they were
     if (r.fadeOut != 0) j["fadeOut"] = r.fadeOut;
     if (!r.controls.empty()) j["controls"] = r.controls;
+    if (r.loopLength != 0) j["loopLength"] = r.loopLength;
+    if (r.muted) j["muted"] = true;
 }
 
 void from_json(const nlohmann::json& j, Region& r) {
@@ -97,6 +99,8 @@ void from_json(const nlohmann::json& j, Region& r) {
     r.fadeIn = j.value("fadeIn", std::int64_t{0});
     r.fadeOut = j.value("fadeOut", std::int64_t{0});
     if (j.contains("controls")) j.at("controls").get_to(r.controls);
+    r.loopLength = j.value("loopLength", std::int64_t{0});
+    r.muted = j.value("muted", false);
 }
 
 void to_json(nlohmann::json& j, const MidiControl& c) { j = {{"tick", c.tick}, {"status", c.status}, {"data1", c.data1}, {"data2", c.data2}}; }

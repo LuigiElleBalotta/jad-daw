@@ -186,6 +186,7 @@ ApplicationWindow {
         "edit.trimRemoveOverlaps": () => controller.removeOverlaps(),
         "edit.trimRegionEndToNextRegion": () => controller.regionEndToNextRegion(),
         "region.mute": () => controller.toggleMuteSelectedRegions(),
+        "region.loop": () => controller.toggleLoopSelectedRegions(),
         "transport.playStop": () => root.togglePlay(),
         "transport.toStart": () => controller.locateBeats(0),
         "transport.loop": () => root.toggleLoop(),

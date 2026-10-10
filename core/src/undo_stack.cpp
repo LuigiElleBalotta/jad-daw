@@ -54,7 +54,7 @@ std::string humanize(const std::string& type) {
         {"move_region", "Move region"}, {"replace_region", "Edit region"}, {"resize_region", "Resize region"}, {"split_region", "Split region"},
         {"join_regions", "Join regions"}, {"add_send", "Add send"}, {"remove_send", "Remove send"}, {"set_send", "Send"}, {"set_inserts", "Inserts"},
         {"add_insert", "Add insert"}, {"remove_insert", "Remove insert"}, {"set_insert_param", "Insert parameter"}, {"set_insert_state", "Plug-in state"},
-        {"move_insert", "Move insert"}, {"set_insert_bypass", "Bypass insert"}, {"set_patch_id", "Patch"}, {"set_instrument", "Instrument"}, {"set_instrument_state", "Instrument state"},
+        {"move_insert", "Move insert"}, {"set_insert_bypass", "Bypass insert"}, {"set_patch_id", "Patch"}, {"set_instrument", "Instrument"}, {"set_instrument_state", "Instrument state"}, {"set_region_loop", "Region loop"},
         {"set_output", "Output"}, {"set_region_gain", "Region gain"}, {"set_region_fades", "Region fades"}, {"set_markers", "Markers"},
         {"set_groups", "Groups"}, {"set_automation", "Automation"}, {"set_project_name", "Project name"}, {"set_track_order", "Track order"}};
     for (const auto& [id, label] : names)

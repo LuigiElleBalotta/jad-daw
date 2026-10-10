@@ -1,7 +1,7 @@
 import QtQuick
 import Jad
 
-// "Region: ..." section of the Inspector. Gain is real; the rest has no playback support yet (visual only).
+// "Region: ..." section of the Inspector. Mute, Loop and Gain are real; Quantize, Transpose and Velocity are not done yet.
 Column {
     id: root
     required property ProjectController project
@@ -22,8 +22,14 @@ Column {
         visible: head.expanded
         topPadding: Theme.spacing[2]
         bottomPadding: Theme.spacing[2]
-        InspectorRow { label: qsTr("Mute"); StubCheck { project: root.project; label: qsTr("Region Mute"); anchors.verticalCenter: parent.verticalCenter } }
-        InspectorRow { label: qsTr("Loop"); StubCheck { id: loop; project: root.project; label: qsTr("Region Loop"); anchors.verticalCenter: parent.verticalCenter } }
+        InspectorRow {
+            label: qsTr("Mute")
+            FlagCheck { objectName: "regionMute"; anchors.verticalCenter: parent.verticalCenter; on: root.region.muted === true; onFlipped: root.project.toggleMuteSelectedRegions() }
+        }
+        InspectorRow {
+            label: qsTr("Loop")
+            FlagCheck { id: loop; objectName: "regionLoop"; anchors.verticalCenter: parent.verticalCenter; on: (root.region.loopBeats ?? 0) > 0; onFlipped: root.project.toggleLoopSelectedRegions() }
+        }
         InspectorRow { label: qsTr("Quantize"); StubValue { project: root.project; label: qsTr("Quantize"); text: qsTr("Off") } }
         InspectorRow { label: qsTr("Transpose"); StubValue { project: root.project; label: qsTr("Region Transpose"); text: "0" } }
         InspectorRow { label: qsTr("Velocity"); StubValue { project: root.project; label: qsTr("Region Velocity"); text: "0" } }

@@ -74,6 +74,7 @@ struct RegionPlayback {
     std::int64_t sourceOffsetFrames = 0;
     float gain = 1.0f;
     std::int64_t fadeInFrames = 0, fadeOutFrames = 0;  // ramps (a quarter of a sine) at the start and the end
+    std::int64_t loopFrames = 0;  // audio: > 0 repeats the first loopFrames of the region until its end
     std::vector<NoteSpan> notes;  // MIDI regions, sorted by onFrame
     std::vector<ControlSpan> controls;  // MIDI regions, sorted by frame
 };

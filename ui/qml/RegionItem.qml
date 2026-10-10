@@ -22,6 +22,7 @@ Item {
     property string tool: "pointer"
     property bool selected: false
     property bool muted: false
+    property real loopBeats: 0             // > 0: the region repeats its first loopBeats
     property real fadeInBeats: 0           // the fades of an audio region
     property real fadeOutBeats: 0
     property real fadeInPx: -1             // live feedback while a fade handle is dragged (-1: not dragged)
@@ -102,6 +103,19 @@ Item {
             color: (root.missing || root.muted) ? Theme.surfaceRaised : root.fill  // a muted region is grey
             border.color: root.selected ? Theme.textPrimary : ((root.missing || root.muted) ? Theme.stateMute : root.solid)
             border.width: root.selected ? 2 : 1
+        }
+
+        Repeater {  // a loop: a mark where each repeat starts
+            model: root.loopBeats > 0 ? Math.min(64, Math.ceil(root.lengthBeats / root.loopBeats) - 1) : 0
+            delegate: Rectangle {
+                required property int index
+                x: (index + 1) * root.loopBeats * root.pixelsPerBeat
+                width: 1
+                height: parent.height
+                color: root.solid
+                opacity: 0.8
+                Rectangle { width: 4; height: 4; radius: 2; color: root.solid; anchors.horizontalCenter: parent.horizontalCenter; y: 2 }
+            }
         }
 
         Loader {

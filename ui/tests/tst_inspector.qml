@@ -52,21 +52,22 @@ TestCase {
         i.regionSection.gainField.committed(-6)
         tryVerify(function () { return p.inspector.region.gainDb === -6 })
     }
-    function test_visual_only_fields_announce_themselves_when_switched_on() {
+    function test_the_loop_and_mute_checkboxes_change_the_region() {
         var i = createTemporaryObject(inspC, tc)
         var id = p.tracks.trackIdAt(1)
         p.createRegion(id, 0, 4)
         tryVerify(function () { return p.regions.rowCount() > 0 })
         p.selectRegion(p.regions.regionIdAt(0), "replace")
         tryVerify(function () { return i.regionSection.visible })
-        var got = []
-        p.notice.connect(function (m) { got.push(m) })
         wait(200)  // let the layout settle before clicking
+        compare(p.inspector.region.loopBeats, 0)
         mouseClick(i.regionSection.loopCheck)
-        compare(got.length, 1)
-        verify(got[0].indexOf("not implemented yet") >= 0)
-        mouseClick(i.regionSection.loopCheck)   // off: no notice
-        compare(got.length, 1)
+        tryVerify(function () { return p.inspector.region.loopBeats > 0 })
+        verify(i.regionSection.loopCheck.on)
+        mouseClick(i.regionSection.loopCheck)   // off again
+        tryVerify(function () { return p.inspector.region.loopBeats === 0 })
+        mouseClick(findChild(i.regionSection, "regionMute"))
+        tryVerify(function () { return p.inspector.region.muted === true })
     }
     function test_the_sections_collapse() {
         var i = createTemporaryObject(inspC, tc)

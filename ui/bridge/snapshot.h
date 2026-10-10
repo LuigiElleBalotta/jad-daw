@@ -76,7 +76,8 @@ struct RegionRow {
     QString color;  // the colour name of its track
     double gainDb = 0.0;
     std::string json;  // the whole region as the Core stores it (copy and paste)
-    bool muted = false;  // Ctrl+M: shown grey (kept by the controller, like the R and I states)
+    bool muted = false;  // Mute Regions (Alt+M): shown grey, silent
+    double loopBeats = 0.0;  // > 0: the region loops every loopBeats
 };
 
 // True when `a` and `b` hold the same ids in the same order: the models then update in place (dataChanged) instead of

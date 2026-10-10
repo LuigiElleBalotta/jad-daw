@@ -292,5 +292,6 @@
  {"id":"track.color.red","label":"Red","menu":"","shortcut":"","kind":"command","status":"ready"},
  {"id":"track.color.pink","label":"Pink","menu":"","shortcut":"","kind":"command","status":"ready"},
  {"id":"track.color.magenta","label":"Magenta","menu":"","shortcut":"","kind":"command","status":"ready"},
- {"id":"region.mute","label":"Mute Regions","menu":"","shortcut":"Alt+M","kind":"command","status":"ready"}
+ {"id":"region.mute","label":"Mute Regions","menu":"","shortcut":"Alt+M","kind":"command","status":"ready"},
+ {"id":"region.loop","label":"Loop/Unloop Regions","menu":"","shortcut":"L","kind":"command","status":"ready"}
 ]

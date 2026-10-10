@@ -30,6 +30,7 @@ MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r) {
     if (r.start < 0 || r.length <= 0) return CommandError{"bad_region", "region needs start >= 0 and length > 0"};
     if (r.start > kMaxPosition || r.length > kMaxPosition) return CommandError{"bad_region", "region start and length must be at most 2^40"};
     if (!inRange(r.gainDb, -96.0f, 24.0f)) return CommandError{"bad_value", "region gainDb must be in [-96, 24]"};
+    if (r.loopLength < 0 || r.loopLength > r.length) return CommandError{"bad_region", "a region loop is between 0 and the length of the region"};
     if (kind == TrackKind::Audio) {
         if (r.mediaId.isNull() || !p.findMedia(r.mediaId))
             return CommandError{"bad_region", "audio region needs a mediaId present in the media pool"};

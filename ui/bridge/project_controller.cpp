@@ -330,7 +330,6 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         emit selectionChanged();
     }
     mixer_.reset(s.tracks);
-    for (RegionRow& r : s.regions) r.muted = mutedRegions_.contains(r.id);
     regions_.reset(s.regions);
     if (!pendingRegionSelection_.isEmpty() && regions_.find(pendingRegionSelection_.first())) {
         selectRegions(pendingRegionSelection_, "replace");

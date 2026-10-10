@@ -49,7 +49,9 @@ void InspectorModel::update(const std::vector<TrackRow>& tracks, const std::vect
                   {"audio", shownRegion->audio},
                   {"gainDb", shownRegion->gainDb},
                   {"startBeats", shownRegion->startBeats},
-                  {"lengthBeats", shownRegion->lengthBeats}};
+                  {"lengthBeats", shownRegion->lengthBeats},
+                  {"muted", shownRegion->muted},
+                  {"loopBeats", shownRegion->loopBeats}};
     }
     for (const TrackRow& t : tracks)
         if (t.kind == "bus" || t.kind == "aux") targets.append(QVariantMap{{"id", t.id}, {"name", t.name}});

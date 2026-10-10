@@ -120,17 +120,40 @@ void ProjectController::duplicateSelectedRegions() {
     clipboard_ = saved;
 }
 
+// Mute Regions: the selected regions go silent when any of them sounds, else they all sound again (one undo step).
 void ProjectController::toggleMuteSelectedRegions() {
     const auto rows = selectedRegionRows();
-    if (rows.empty()) return;
+    if (rows.empty() || !host_) return;
     bool anyUnmuted = false;
-    for (const RegionRow* r : rows) anyUnmuted = anyUnmuted || !mutedRegions_.contains(r->id);
+    for (const RegionRow* r : rows) anyUnmuted = anyUnmuted || !r->muted;
+    nlohmann::json commands = nlohmann::json::array();
     for (const RegionRow* r : rows) {
-        if (anyUnmuted) mutedRegions_.insert(r->id);
-        else mutedRegions_.remove(r->id);
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded() || r->muted == anyUnmuted) continue;
+        if (anyUnmuted) region["muted"] = true;
+        else region.erase("muted");
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
     }
-    for (RegionRow& r : regionRows_) r.muted = mutedRegions_.contains(r.id);
-    regions_.reset(regionRows_);
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+// Loop/Unloop Regions (L): the selected regions repeat their content until their end, or stop repeating; one undo step.
+void ProjectController::toggleLoopSelectedRegions() {
+    const auto rows = selectedRegionRows();
+    if (rows.empty() || !host_) return;
+    bool anyUnlooped = false;
+    for (const RegionRow* r : rows) anyUnlooped = anyUnlooped || r->loopBeats <= 0;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow* r : rows) {
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded()) continue;
+        const std::int64_t length = region.value("length", std::int64_t{0});
+        if ((r->loopBeats > 0) == anyUnlooped) continue;  // already as it should be
+        commands.push_back({{"type", "set_region_loop"}, {"regionId", r->id.toStdString()}, {"loopLength", anyUnlooped ? length : std::int64_t{0}}});
+    }
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
 void ProjectController::selectFollowingRegions(bool sameTrackOnly) {

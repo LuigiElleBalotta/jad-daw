@@ -176,7 +176,17 @@ void RenderGraph::renderAudio(TrackNode& t, const TrackConfig& cfg, std::int64_t
         if (lo >= hi) continue;
         const int count = static_cast<int>(hi - lo);
         const int offset = static_cast<int>(lo - blockStart);
-        reg.source->read(reg.sourceOffsetFrames + (lo - reg.startFrame), scratchL_.data(), scratchR_.data(), count);
+        if (reg.loopFrames > 0 && reg.loopFrames < reg.endFrame - reg.startFrame) {  // the loop: the source restarts every loopFrames
+            int done = 0;
+            while (done < count) {
+                const std::int64_t at = (lo + done - reg.startFrame) % reg.loopFrames;
+                const int part = static_cast<int>(std::min<std::int64_t>(count - done, reg.loopFrames - at));
+                reg.source->read(reg.sourceOffsetFrames + at, scratchL_.data() + done, scratchR_.data() + done, part);
+                done += part;
+            }
+        } else {
+            reg.source->read(reg.sourceOffsetFrames + (lo - reg.startFrame), scratchL_.data(), scratchR_.data(), count);
+        }
         for (int i = 0; i < count; ++i) {
             float g = reg.gain;
             if (reg.fadeInFrames > 0 || reg.fadeOutFrames > 0) {  // a quarter sine each way: two regions fading over the same span add up to constant power

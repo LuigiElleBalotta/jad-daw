@@ -40,6 +40,8 @@ struct Region {
     std::int64_t sourceOffsetFrames = 0;
     float gainDb = 0.0f;
     std::int64_t fadeIn = 0, fadeOut = 0;  // audio: the ramps at the ends, in the unit of start (each at most as long as the region)
+    bool muted = false;  // Mute Regions: kept in the track, not played
+    std::int64_t loopLength = 0;  // > 0: the first loopLength (same unit as length, at most length) repeat until the end of the region
     std::vector<MidiNote> notes;
     std::vector<MidiControl> controls;  // MIDI regions: sorted by tick
     bool operator==(const Region&) const = default;

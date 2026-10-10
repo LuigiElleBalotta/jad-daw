@@ -102,6 +102,8 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   filters and then Single | Tracks | All from its bar and scrolls sideways.
 - **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
   follows and the sound changes at once; the whole drag is one undo step.
+- **Regions:** Loop/Unloop Regions (`L` or the Inspector's Loop box): the first loop of the region repeats until its end, for audio (the source restarts) and for MIDI (notes and controllers), with marks where each repeat
+  starts; drag the right edge to repeat more. A looped region is not split, joined or resized from its left edge (turn the loop off first). Mute Regions (`Alt+M` or the Inspector's Mute box) silences them.
 - **Editors** (`E`, the Ed button, or a double click on a region): the Piano Roll with the keyboard, the ruler, the region bar and the
   notes of the selected MIDI region. Pointer: click selects (Shift extends), drag moves, drag either end of a note resizes it, Option-click
   draws a note; Pencil draws a note; Eraser deletes; Delete removes the selection. Quantize (strength, swing, Dequantize), Scale Quantize

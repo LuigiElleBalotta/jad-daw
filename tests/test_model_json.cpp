@@ -151,3 +151,61 @@ TEST_CASE("model json: showInTracks must be a boolean", "[model][json][visibilit
     j["tracks"][1]["kind"] = "audio";   // any track can be hidden now
     REQUIRE_FALSE(projectFromJson(j).tracks[1].showInTracks);
 }
+
+TEST_CASE("model json: every optional region and track field survives a save and a load and is absent when it has its default", "[model][json]") {
+    std::mt19937_64 rng(77);
+    Project p(Uuid::random(rng));
+    MediaItem media{Uuid::random(rng), "audio/frozen.wav", "h", 48000, 2, 48000};
+    p.mediaPool.push_back(media);
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Instrument;
+    t.name = "Keys";
+    ProcessorRef inst;
+    inst.processorId = "builtin.sine";
+    t.instrument = inst;
+    t.midi = MidiShaping{3, -4, 24, 96, 10, 120};
+    t.delayMs = -12.5;
+    t.freeze = Freeze{media.id, 1234};
+    Region r;
+    r.id = Uuid::random(rng);
+    r.timeBase = TimeBase::Musical;
+    r.start = 0;
+    r.length = 4 * kPPQ;
+    r.muted = true;
+    r.takeGroup = "group-1";
+    r.transpose = -2;
+    r.velocityOffset = 7;
+    r.quantize = kPPQ / 4;
+    r.loopLength = kPPQ;
+    r.notes.push_back(MidiNote{0, kPPQ / 2, 60, 100, true});
+    r.controls = {MidiControl{0, 0xB0, 64, 127}, MidiControl{kPPQ, 0xE0, 5, 70}, MidiControl{2 * kPPQ, 0xD0, 33, 0}};
+    t.regions.push_back(r);
+    p.tracks.push_back(t);
+
+    const Project back = projectFromJson(toJson(p));
+    const Track* bt = back.findTrack(t.id);
+    REQUIRE(bt);
+    REQUIRE(*bt == t);                                              // everything, the frozen audio and the shaping included
+    REQUIRE(bt->regions[0] == r);
+
+    Project plain(Uuid::random(rng));
+    Track a;
+    a.id = Uuid::random(rng);
+    a.kind = TrackKind::Instrument;
+    a.name = "Plain";
+    a.instrument = inst;
+    Region pr;
+    pr.id = Uuid::random(rng);
+    pr.timeBase = TimeBase::Musical;
+    pr.length = kPPQ;
+    a.regions.push_back(pr);
+    plain.tracks.push_back(a);
+    const nlohmann::json j = toJson(plain);
+    for (const auto& tj : j.at("tracks")) {
+        if (tj.at("name") != "Plain") continue;
+        for (const char* key : {"midi", "delayMs", "freeze"}) REQUIRE_FALSE(tj.contains(key));              // a plain track is written as before
+        for (const char* key : {"muted", "takeGroup", "transpose", "velocityOffset", "quantize", "loopLength", "controls"})
+            REQUIRE_FALSE(tj.at("regions")[0].contains(key));
+    }
+}

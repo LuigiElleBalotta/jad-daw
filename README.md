@@ -141,7 +141,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Mixing:** the Group slot of a strip (menu: No Group, a group, New Group…, Group Settings…) links tracks (volume, pan, mute, solo, selection; Mix > Groups
   Active); the Automation slot sets Off / Read / Touch / Latch / Write, and the writing modes record fader and pan moves into the lanes while the project plays;
   Track > Create Track Stack makes an aux that sums the selected tracks; Mix > I/O Labels names the inputs; Mix > Pre-Fader Metering.
-- **File:** Save As, Save a Copy As, Import Audio File and Bounce (a dialog: WAV 16/24/32-bit float or AIFF 16/24, whole project or the cycle area, normalize, tail,
+- **File:** Save As, Save a Copy As, Import Audio File and Bounce (a dialog: WAV 16/24/32-bit float, AIFF 16/24 or FLAC 16/24, whole project or the cycle area, normalize, tail,
   dither on 16 bit; an offline render with the built-in effects and the loaded VST3 effects and instruments, aligned for their latency; the transport stops and cannot play while it renders), Import > MIDI File (one instrument track per channel, one undo step)
   and Export > Selected Regions as MIDI File (format 1 with tempo and signature).
 

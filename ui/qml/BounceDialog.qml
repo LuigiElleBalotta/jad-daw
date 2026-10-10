@@ -16,7 +16,8 @@ Dialog {
     property bool normalizeOn: false
     property real tail: 0.5
     readonly property var formats: [{ id: "wav16", label: "WAV 16 bit" }, { id: "wav24", label: "WAV 24 bit" }, { id: "wav32", label: "WAV 32 bit float" },
-                                    { id: "aiff16", label: "AIFF 16 bit" }, { id: "aiff24", label: "AIFF 24 bit" }]
+                                    { id: "aiff16", label: "AIFF 16 bit" }, { id: "aiff24", label: "AIFF 24 bit" },
+                                    { id: "flac16", label: "FLAC 16 bit" }, { id: "flac24", label: "FLAC 24 bit" }]
     background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
     header: Item { height: 0 }
 
@@ -24,8 +25,8 @@ Dialog {
         id: fileDialog
         title: qsTr("Bounce the project")
         fileMode: FileDialog.SaveFile
-        defaultSuffix: root.format.startsWith("aiff") ? "aif" : "wav"
-        nameFilters: [root.format.startsWith("aiff") ? qsTr("AIFF audio (*.aif *.aiff)") : qsTr("WAV audio (*.wav)")]
+        defaultSuffix: root.format.startsWith("aiff") ? "aif" : (root.format.startsWith("flac") ? "flac" : "wav")
+        nameFilters: [root.format.startsWith("aiff") ? qsTr("AIFF audio (*.aif *.aiff)") : (root.format.startsWith("flac") ? qsTr("FLAC audio (*.flac)") : qsTr("WAV audio (*.wav)"))]
         onAccepted: root.project.bounceProjectAs(selectedFile, { format: root.format, range: root.range, normalize: root.normalizeOn, tail: root.tail })
     }
 

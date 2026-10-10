@@ -28,6 +28,7 @@
 #include "lpc/offline_render.h"
 #include "lpc/audio/effects.h"
 #include "lpc/aiff.h"
+#include "lpc/flac.h"
 #include "lpc/midi_file.h"
 #include "lpc/audio_ops.h"
 #include "lpc/effect_specs.h"
@@ -702,10 +703,11 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     const bool normalizeOn = options.value("normalize", false).toBool();
     const double tail = std::clamp(options.value("tail", 0.5).toDouble(), 0.0, 30.0);
     const bool aiff = format.startsWith("aiff");
+    const bool flac = format.startsWith("flac");
     const int bits = format.endsWith("16") ? 16 : (format.endsWith("32") ? 32 : 24);
     const bool dither = options.value("dither", bits == 16).toBool() && bits == 16;
     std::filesystem::path out = file.toLocalFile().toStdWString();
-    if (out.extension().empty()) out += aiff ? ".aif" : ".wav";
+    if (out.extension().empty()) out += aiff ? ".aif" : (flac ? ".flac" : ".wav");
     if (!saveProject()) return;
     const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
     if (lpc::projectEndFrame(project) == 0) {
@@ -737,7 +739,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
     const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
-    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, bits, normalizeOn, dither] {
+    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, flac, bits, normalizeOn, dither] {
         QString message;
         try {
             lpc::MediaStore media(root, /*streaming=*/false);
@@ -750,6 +752,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
             if (normalizeOn) lpc::normalize(data, -0.3);
             if (dither) lpc::ditherTpdf(data, bits);
             if (aiff) lpc::writeAiff(out, r.sampleRate, 2, data.samples, bits);
+            else if (flac) lpc::writeFlac(out, r.sampleRate, 2, data.samples, bits);
             else lpc::writeWav(out, r.sampleRate, 2, data.samples, bits == 16 ? lpc::WavFormat::Pcm16 : (bits == 32 ? lpc::WavFormat::Float32 : lpc::WavFormat::Pcm24));
             message = QString("Bounced %1 s to %2").arg(static_cast<double>(r.frames) / r.sampleRate, 0, 'f', 1).arg(QString::fromStdWString(out.filename().wstring()));
         } catch (const std::exception& e) {

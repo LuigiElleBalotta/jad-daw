@@ -99,3 +99,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: MIDI Transform window.
 - 2026-10-10: Quick Help bar (action name, menu path, key of the hovered button).
 - 2026-10-10: Mix > Move Track Automation with Regions.
+- 2026-10-10: Window > Zoom All / Fill / Center / Full Screen Tile / Bring All to Front, Open Audio Track Editor / Audio File Editor / Step Editor.

@@ -62,6 +62,8 @@ public:
     std::future<void> setLiveTarget(Uuid track);  // the instrument track that plays the live MIDI (null: none)  // the transport keeps playing
     // Which input channels a track plays through its strip (first/second 1-based, 0 = not monitored)
     std::future<void> setMonitor(Uuid track, int first, int second);
+    // Low Latency Monitoring Mode: a monitored track bypasses the inserts whose latency is above `limitFrames` (0 = off).
+    std::future<void> setLowLatency(int limitFrames);
     std::future<void> setMetronome(bool on);  // a click on every beat of the tempo map while playing, accent on the first beat of a bar
 
     // Called on the project thread after every accepted submit/undo/redo and after a rebuild of the audio

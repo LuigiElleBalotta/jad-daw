@@ -305,6 +305,16 @@ std::future<void> ProjectHost::setMonitor(Uuid track, int first, int second) {
     });
 }
 
+std::future<void> ProjectHost::setLowLatency(int limitFrames) {
+    return call([this, limitFrames] {
+        if (degraded_) return;
+        audio::AudioMsg m;
+        m.kind = audio::MsgKind::SetLowLatency;
+        m.frame = limitFrames;
+        post(m);
+    });
+}
+
 std::future<void> ProjectHost::setClickSettings(audio::ClickSettings settings) {
     return call([this, s = std::move(settings)]() mutable {
         clickSettings_ = std::move(s);

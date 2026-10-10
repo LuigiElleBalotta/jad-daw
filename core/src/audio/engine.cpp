@@ -62,6 +62,7 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             recordingPub_.store(false, std::memory_order_relaxed);
             break;
         case MsgKind::SetMonitor:
+        case MsgKind::SetLowLatency:
             graph_.apply(m);
             break;
         case MsgKind::SetLiveTarget:

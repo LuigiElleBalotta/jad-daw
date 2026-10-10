@@ -30,7 +30,7 @@ Owned makeOwned(T* object) {
     return Owned{object, [](void* p) { delete static_cast<T*>(p); }};
 }
 
-enum class MsgKind : std::uint8_t { AddTrack, RemoveTrack, SetStrip, SetConfig, Reorder, Play, Stop, Locate, SetLoop, SetClick, SetClickKit, StartRecord, StopRecord, SetMonitor, SetLiveTarget };
+enum class MsgKind : std::uint8_t { AddTrack, RemoveTrack, SetStrip, SetConfig, Reorder, Play, Stop, Locate, SetLoop, SetClick, SetClickKit, StartRecord, StopRecord, SetMonitor, SetLiveTarget, SetLowLatency };
 
 // Project thread -> audio thread. obj meaning per kind:
 //   AddTrack: TrackNode*, SetConfig: TrackConfig*, Reorder: std::vector<Uuid>* (processing order),
@@ -39,6 +39,7 @@ enum class MsgKind : std::uint8_t { AddTrack, RemoveTrack, SetStrip, SetConfig, 
 //   frame2 = second input channel + 1 (0 = the first one on both sides),
 //   StartRecord: ClickTrack* (the count-in clicks from 0), frame = count-in length in frames; the transport starts after it
 //   and the input is captured from then until Stop,
+//   SetLowLatency: frame = the longest latency (frames) an insert may have on a monitored track before it is bypassed (0 = off),
 //   SetClickKit: ClickKit* (the samples of the click sounds),
 //   SetClick: ClickTrack* (null keeps the current one); frame = 1 switches the metronome on, 0 off
 struct AudioMsg {

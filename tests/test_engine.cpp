@@ -3,6 +3,7 @@
 #include "lpc/audio/engine.h"
 #include "lpc/commands.h"
 #include "lpc/graph_builder.h"
+#include "fake_plugin_host.h"
 #include "rt_guard.h"
 
 using namespace lpc;
@@ -288,6 +289,36 @@ TEST_CASE("engine: a monitored track plays the chosen input channels through its
     e.input(in, 2, 256);
     e.processBlock(l.data(), r.data(), 256);
     REQUIRE(std::abs(l[100]) < 0.01f);
+}
+
+TEST_CASE("engine: low latency mode lets a monitored input skip an insert with a long latency", "[engine][monitor]") {
+    Setup s;
+    const char* kPlugin = "vst3:00112233445566778899aabbccddeeff";
+    ProcessorRef slow;
+    slow.processorId = kPlugin;
+    REQUIRE(makeAddInsert(s.audioId, slow)->apply(s.p).ok());
+    test::FakePluginHost host;
+    host.known[kPlugin] = test::FakeSpec{1024, 1.0f};   // a plug-in that waits 1024 frames
+    AudioEngine e(kSr);
+    for (const AudioMsg& m : initialMessages(s.p, s.media, &host, nullptr)) e.applyDirect(m);
+    AudioMsg mon = msg(MsgKind::SetMonitor, 100, 1, 1);
+    mon.track = s.audioId;
+    e.applyDirect(mon);
+    std::vector<float> l(256), r(256), a(256, 0.3f);
+    const float* in[1] = {a.data()};
+    e.applyDirect(msg(MsgKind::Locate, 101, 200000));      // past the region: only the input is heard
+    e.applyDirect(msg(MsgKind::Play, 102));
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    REQUIRE(std::abs(l[100]) < 0.01f);                      // the insert holds the input back
+    e.applyDirect(msg(MsgKind::SetLowLatency, 103, 480));   // 10 ms: this insert is above it
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    REQUIRE(l[100] == Catch::Approx(0.3f).margin(0.02f));   // now it is heard at once
+    e.applyDirect(msg(MsgKind::SetLowLatency, 104, 0));
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    REQUIRE(std::abs(l[100]) < 0.01f);                      // switched off again: the insert holds the input back once more
 }
 
 TEST_CASE("engine: live MIDI plays the target instrument with the transport stopped and is kept while recording", "[engine][midi]") {

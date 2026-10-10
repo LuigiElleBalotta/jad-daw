@@ -196,6 +196,7 @@ private:
     std::vector<float> scratchL_, scratchR_, preL_, preR_, dlyL_, dlyR_;
     float masterPeak_ = 0.0f;
     const float* const* input_ = nullptr;
+    int lowLatencyLimit_ = 0;  // Low Latency Monitoring Mode: see MsgKind::SetLowLatency
     int inputChannels_ = 0;
     // written by the audio thread, read and cleared by the UI thread; a torn read only shifts a meter for one frame
     std::array<std::atomic<std::uint64_t>, kMaxTracks> peakHi_{}, peakLo_{};

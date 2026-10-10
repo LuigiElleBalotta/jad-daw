@@ -54,6 +54,9 @@ Owned RenderGraph::apply(const AudioMsg& m) noexcept {
             }
             return {};
         }
+        case MsgKind::SetLowLatency:
+            lowLatencyLimit_ = static_cast<int>(std::max<std::int64_t>(0, m.frame));
+            return {};
         case MsgKind::SetStrip: {
             if (TrackNode* n = find(m.track)) n->strip = m.strip;
             return {};
@@ -293,6 +296,8 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
         }
         t.blockReduction = 0.0f;
         for (const auto& insert : cfg->inserts) {
+            // Low Latency Monitoring Mode: what is played through is not made to wait for a plug-in with a long latency
+            if (lowLatencyLimit_ > 0 && t.monitorL >= 0 && insert->latencySamples() > lowLatencyLimit_) continue;
             insert->process(l, r, n);
             t.blockReduction = std::max(t.blockReduction, insert->reductionDb());
         }

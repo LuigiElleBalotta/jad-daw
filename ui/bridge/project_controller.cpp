@@ -1470,6 +1470,14 @@ void ProjectController::mutePreviousPasses(const QMap<QString, QStringList>& mad
     }
 }
 
+void ProjectController::setLowLatencyMonitoring(bool on) {
+    if (on == lowLatency_) return;
+    lowLatency_ = on;
+    QSettings().setValue("record/lowLatency", on);
+    if (host_) host_->setLowLatency(on ? sampleRate_ / 100 : 0);  // an insert that waits more than 10 ms is left out of what is played through
+    emit recordingChanged();
+}
+
 void ProjectController::setUseMusicalGrid(bool on) {
     if (on == musicalGrid_) return;
     musicalGrid_ = on;
@@ -1664,6 +1672,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     quickHelp_ = s.value("panels/quickHelp", false).toBool();
     dragMode_ = s.value("edit/dragMode", "overlap").toString();
     musicalGrid_ = s.value("record/musicalGrid", false).toBool();
+    lowLatency_ = s.value("record/lowLatency", false).toBool();
     for (QString* mode : {&overlapAudio_, &overlapMidi_}) {
         const QString v = s.value(mode == &overlapAudio_ ? "record/overlapAudio" : "record/overlapMidi", "takes").toString();
         if (v == "tracks" || v == "tracksMute" || (mode == &overlapMidi_ && v == "merge")) *mode = v;

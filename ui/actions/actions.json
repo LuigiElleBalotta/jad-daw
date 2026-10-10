@@ -178,7 +178,7 @@
  {"id":"record.useMusicalGrid","label":"Use Musical Grid","menu":"Record","shortcut":"","kind":"toggle","status":"ready","sep":true},
  {"id":"record.allowQuickPunchIn","label":"Allow Quick Punch-In","menu":"Record","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"record.autoInputMonitoring","label":"Auto Input Monitoring","menu":"Record","shortcut":"","kind":"toggle","status":"ready"},
- {"id":"record.lowLatencyMonitoringMode","label":"Low Latency Monitoring Mode","menu":"Record","shortcut":"","kind":"command","status":"stub"},
+ {"id":"record.lowLatencyMonitoringMode","label":"Low Latency Monitoring Mode","menu":"Record","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"record.recordToggle","label":"Record/Record Toggle","menu":"Record/Record Button Options","shortcut":"","kind":"command","status":"ready","sep":true,"group":"recbutton"},
  {"id":"record.recordRepeat","label":"Record/Record Repeat","menu":"Record/Record Button Options","shortcut":"","kind":"command","status":"ready","group":"recbutton"},
  {"id":"record.discardRecording","label":"Discard Recording and Return to Last Play Position","menu":"Record/Record Button Options","shortcut":"Ctrl+.","kind":"command","status":"ready","sep":true},

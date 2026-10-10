@@ -127,6 +127,7 @@ class ProjectController : public QObject {
     // the earlier tracks are muted. MIDI also has "merge": all the passes are one region.
     Q_PROPERTY(QString overlapAudio READ overlapAudio WRITE setOverlapAudio NOTIFY recordingChanged)
     Q_PROPERTY(QString overlapMidi READ overlapMidi WRITE setOverlapMidi NOTIFY recordingChanged)
+    Q_PROPERTY(bool lowLatencyMonitoring READ lowLatencyMonitoring WRITE setLowLatencyMonitoring NOTIFY recordingChanged)  // Record > Low Latency Monitoring Mode
     Q_PROPERTY(bool useMusicalGrid READ useMusicalGrid WRITE setUseMusicalGrid NOTIFY recordingChanged)  // Record > Use Musical Grid: new audio takes follow the tempo (musical time)
     Q_PROPERTY(QString recordButtonMode READ recordButtonMode WRITE setRecordButtonMode NOTIFY recordingChanged)  // "toggle" (Record/Record Toggle) or "repeat" (Record/Record Repeat)
     Q_PROPERTY(bool allowQuickPunch READ allowQuickPunch WRITE setAllowQuickPunch NOTIFY punchChanged)  // Record while playing starts a take
@@ -311,6 +312,8 @@ public:
     QString overlapMidi() const { return overlapMidi_; }
     void setOverlapAudio(const QString& mode);
     void setOverlapMidi(const QString& mode);
+    bool lowLatencyMonitoring() const { return lowLatency_; }
+    void setLowLatencyMonitoring(bool on);
     bool useMusicalGrid() const { return musicalGrid_; }
     void setUseMusicalGrid(bool on);
     QString recordButtonMode() const { return recordButtonMode_; }
@@ -1026,6 +1029,7 @@ private:
     bool punchEnabled_ = false;
     bool allowQuickPunch_ = true;
     bool musicalGrid_ = false;
+    bool lowLatency_ = false;
     QString overlapAudio_ = QStringLiteral("takes"), overlapMidi_ = QStringLiteral("takes");
     // The track that pass `pass` (0 = the first) of a cycle recording on `base` is put on: `base` itself, or a track made like it (commands are added to make it).
     QString cloneTrackCommand(const QString& base, const QString& name, int after, nlohmann::json& commands);

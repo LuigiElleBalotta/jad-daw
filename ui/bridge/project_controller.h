@@ -516,7 +516,8 @@ public:
     Q_INVOKABLE QVariantList regionTakes(const QString& regionId) const;
     Q_INVOKABLE void setActiveTake(const QString& regionId);        // this take plays, the others of its group are muted (one undo step)
     Q_INVOKABLE void deleteOtherTakes(const QString& regionId);     // keeps this take as an ordinary region and removes the others of its group
-    Q_INVOKABLE void unpackTakes(const QString& regionId);          // the takes become ordinary regions (muted ones stay muted)
+    Q_INVOKABLE void unpackTakes(const QString& regionId);
+    Q_INVOKABLE void splitTakesAtPlayhead(const QString& regionId);  // every take of the region's passage is cut at the playhead; each side is a passage of its own (comping)          // the takes become ordinary regions (muted ones stay muted)
     // The Inspector's region fields for the selected MIDI regions (one undo step): what == "transpose" (semitones), "velocity" (added) or "quantize" (beats, 0 = off)
     Q_INVOKABLE void setSelectedRegionsMidi(const QString& what, double value);
     // The Inspector's track fields for an instrument track: what == "transpose", "velocity", "keyLow", "keyHigh", "velocityLow" or "velocityHigh"

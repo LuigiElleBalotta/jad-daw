@@ -231,6 +231,7 @@ Item {
                 onObjectRemoved: (index, object) => regionContext.removeItem(object)
             }
             MenuSeparator { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0 }
+            ThemedMenuItem { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0; text: qsTr("Split Takes at Playhead"); onTriggered: root.project.splitTakesAtPlayhead(regionContext.regionId) }
             ThemedMenuItem { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0; text: qsTr("Delete Other Takes"); onTriggered: root.project.deleteOtherTakes(regionContext.regionId) }
             ThemedMenuItem { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0; text: qsTr("Unpack Takes"); onTriggered: root.project.unpackTakes(regionContext.regionId) }
             MenuSeparator { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0 }

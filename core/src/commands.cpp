@@ -651,9 +651,13 @@ private:
 
 class SplitRegionCmd final : public Command {
 public:
-    SplitRegionCmd(Uuid id, std::int64_t at, Uuid newId) : id_(id), at_(at), newId_(newId) {}
+    SplitRegionCmd(Uuid id, std::int64_t at, Uuid newId, std::string rightTakeGroup) : id_(id), at_(at), newId_(newId), rightTakeGroup_(std::move(rightTakeGroup)) {}
     std::string type() const override { return "split_region"; }
-    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"at", at_}, {"newRegionId", newId_}}; }
+    json toJson() const override {
+        json j = {{"type", type()}, {"regionId", id_}, {"at", at_}, {"newRegionId", newId_}};
+        if (!rightTakeGroup_.empty()) j["rightTakeGroup"] = rightTakeGroup_;
+        return j;
+    }
 
     ApplyResult apply(Project& p) const override {
         std::size_t idx = 0;
@@ -668,6 +672,7 @@ public:
         left.fadeOut = 0;   // the cut is not an end: the outer ends keep their fades
         right.fadeIn = 0;
         right.id = newId_;
+        if (!rightTakeGroup_.empty() && !old.takeGroup.empty()) right.takeGroup = rightTakeGroup_;  // the right parts of the takes of a passage become a passage of their own
         right.start = at_;
         right.length = old.start + old.length - at_;
         if (t->kind == TrackKind::Audio) {
@@ -710,6 +715,7 @@ private:
     Uuid id_;
     std::int64_t at_;
     Uuid newId_;
+    std::string rightTakeGroup_;
 };
 
 class JoinRegionsCmd final : public Command {
@@ -933,7 +939,7 @@ CommandPtr makeRemoveRegion(Uuid regionId) { return std::make_unique<RemoveRegio
 CommandPtr makeMoveRegion(Uuid regionId, std::int64_t newStart) { return std::make_unique<MoveRegionCmd>(regionId, newStart); }
 CommandPtr makeReplaceRegion(Region region) { return std::make_unique<ReplaceRegionCmd>(std::move(region)); }
 CommandPtr makeResizeRegion(Uuid regionId, std::int64_t start, std::int64_t length) { return std::make_unique<ResizeRegionCmd>(regionId, start, length); }
-CommandPtr makeSplitRegion(Uuid regionId, std::int64_t at, Uuid newRegionId) { return std::make_unique<SplitRegionCmd>(regionId, at, newRegionId); }
+CommandPtr makeSplitRegion(Uuid regionId, std::int64_t at, Uuid newRegionId, std::string rightTakeGroup) { return std::make_unique<SplitRegionCmd>(regionId, at, newRegionId, std::move(rightTakeGroup)); }
 CommandPtr makeJoinRegions(std::vector<Uuid> regionIds) { return std::make_unique<JoinRegionsCmd>(std::move(regionIds)); }
 CommandPtr makeAddSend(Uuid trackId, Send send, int index) { return std::make_unique<AddSendCmd>(trackId, send, index); }
 CommandPtr makeRemoveSend(Uuid sendId) { return std::make_unique<RemoveSendCmd>(sendId); }
@@ -992,7 +998,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "move_region") return makeMoveRegion(j.at("regionId").get<Uuid>(), j.at("start").get<std::int64_t>());
         if (type == "replace_region") return makeReplaceRegion(j.at("region").get<Region>());
         if (type == "resize_region") return makeResizeRegion(j.at("regionId").get<Uuid>(), j.at("start").get<std::int64_t>(), j.at("length").get<std::int64_t>());
-        if (type == "split_region") return makeSplitRegion(j.at("regionId").get<Uuid>(), j.at("at").get<std::int64_t>(), j.at("newRegionId").get<Uuid>());
+        if (type == "split_region") return makeSplitRegion(j.at("regionId").get<Uuid>(), j.at("at").get<std::int64_t>(), j.at("newRegionId").get<Uuid>(), j.value("rightTakeGroup", std::string()));
         if (type == "join_regions") return makeJoinRegions(j.at("regionIds").get<std::vector<Uuid>>());
         if (type == "add_send") return makeAddSend(j.at("trackId").get<Uuid>(), j.at("send").get<Send>(), j.value("index", -1));
         if (type == "remove_send") return makeRemoveSend(j.at("sendId").get<Uuid>());

@@ -2941,4 +2941,23 @@ void ProjectController::addSearchedPlugin(const QString& id, const QString& kind
     else if (kind == QLatin1String("instrument")) setInstrumentPlugin(track, id, name);
 }
 
+void ProjectController::splitTakesAtPlayhead(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || row->takeGroup.isEmpty()) return;
+    const double at = positionBeats_;
+    const QString rightGroup = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow& r : regionRows_) {
+        if (r.trackId != row->trackId || r.takeGroup != row->takeGroup) continue;
+        if (at <= r.startBeats + 1e-6 || at >= r.startBeats + r.lengthBeats - 1e-6) continue;  // the playhead is not inside this take
+        commands.push_back({{"type", "split_region"}, {"regionId", r.id.toStdString()}, {"at", regionPosition(r, at)},
+                            {"newRegionId", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"rightTakeGroup", rightGroup.toStdString()}});
+    }
+    if (commands.empty()) {
+        emit notice("Put the playhead inside the takes first");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

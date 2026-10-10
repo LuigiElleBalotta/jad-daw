@@ -1538,6 +1538,19 @@ private slots:
         c.undo();
         QTRY_VERIFY(c.regions()->find(second)->muted);
         const int before = c.regions()->rowCount();
+        c.simulatePlaybackForTest(false, 1.0);                       // comping: cut the takes at the playhead; each side is a passage of its own
+        c.splitTakesAtPlayhead(first);
+        QTRY_COMPARE(c.regions()->rowCount(), before + 2);          // both takes were cut in two
+        QString rightTake;
+        for (const jad::RegionRow& r : c.regions()->rows())
+            if (r.takeGroup == "take-group-1" && r.startBeats > 0.5) rightTake = r.id;
+        QVERIFY(rightTake.isEmpty());                                // the right parts left the old group
+        for (const jad::RegionRow& r : c.regions()->rows())
+            if (r.takeGroup != "take-group-1" && !r.takeGroup.isEmpty()) rightTake = r.id;
+        QVERIFY(!rightTake.isEmpty());
+        QCOMPARE(c.regionTakes(rightTake).size(), 2);                // and form a group of two
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), before);
         c.deleteOtherTakes(first);
         QTRY_COMPARE(c.regions()->rowCount(), before - 1);
         QVERIFY(c.regions()->find(first)->takeGroup.isEmpty());

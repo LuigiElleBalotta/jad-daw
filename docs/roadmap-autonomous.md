@@ -103,3 +103,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: Track > Freeze (rendered audio before the fader replaces instrument, regions and inserts; set_track_freeze, undo).
 - 2026-10-10: Mix > Search and Add Plug-in.
 - 2026-10-10: send level automation (target send:<id>, lanes Send 1/Send 2 in Show Automation).
+- 2026-10-10: comping: Split Takes at Playhead (each side a passage of its own, pick a take per part).

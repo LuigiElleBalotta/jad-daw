@@ -333,6 +333,8 @@ void ProjectController::beginGesture() {
     }
     liveGain_.clear();
     livePan_.clear();
+    gestureActive_ = true;
+    groupBase_.clear();
     host_->beginGesture();
 }
 
@@ -349,6 +351,8 @@ void ProjectController::endGesture() {
     liveTimer_.stop();
     liveGain_.clear();  // the final value follows as an ordinary command
     livePan_.clear();
+    gestureActive_ = false;
+    groupBase_.clear();
     if (host_) host_->endGesture();
 }
 
@@ -1566,6 +1570,98 @@ void ProjectController::trimRegionToFrames(const QString& regionId, double fromF
     auto beatsAt = [&](double frames) { return static_cast<double>(tempoMap_.samplesToTicks(startSamples + frames, sampleRate_)) / lpc::kPPQ; };
     const double newStart = beatsAt(from), newEnd = beatsAt(to);
     sendCommand(resizeCommand(*r, newStart, newEnd - newStart));
+}
+
+namespace {
+QVariantMap groupMap(const GroupRow& g) {
+    return {{"id", g.id}, {"name", g.name}, {"members", g.members}, {"volume", g.volume}, {"pan", g.pan}, {"mute", g.mute}, {"solo", g.solo}, {"selection", g.selection}};
+}
+}  // namespace
+
+QVariantList ProjectController::groups() const {
+    QVariantList out;
+    for (const GroupRow& g : groupRows_) out.append(groupMap(g));
+    return out;
+}
+
+QVariantMap ProjectController::trackGroup(const QString& trackId) const {
+    for (const GroupRow& g : groupRows_)
+        if (g.members.contains(trackId)) return groupMap(g);
+    return {};
+}
+
+void ProjectController::sendGroups(const std::vector<GroupRow>& rows) {
+    nlohmann::json list = nlohmann::json::array();
+    for (const GroupRow& g : rows) {
+        nlohmann::json members = nlohmann::json::array();
+        for (const QString& m : g.members) members.push_back(m.toStdString());
+        list.push_back({{"id", g.id.toStdString()}, {"name", g.name.left(64).toStdString()}, {"members", members}, {"volume", g.volume}, {"pan", g.pan},
+                        {"mute", g.mute}, {"solo", g.solo}, {"selection", g.selection}});
+    }
+    sendCommand({{"type", "set_groups"}, {"groups", list}});
+}
+
+void ProjectController::createGroup(const QStringList& trackIds, const QString& name) {
+    if (!host_ || trackIds.isEmpty()) return;
+    auto rows = groupRows_;
+    for (GroupRow& g : rows)
+        for (const QString& id : trackIds) g.members.removeAll(id);  // a track is in one group only
+    rows.erase(std::remove_if(rows.begin(), rows.end(), [](const GroupRow& g) { return g.members.isEmpty(); }), rows.end());
+    GroupRow g;
+    g.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    g.name = name.trimmed().isEmpty() ? QStringLiteral("Group %1").arg(static_cast<int>(rows.size()) + 1) : name.trimmed();
+    for (const QString& id : trackIds)
+        if (tracks_.find(id) && !g.members.contains(id)) g.members << id;
+    if (g.members.isEmpty()) return;
+    rows.push_back(g);
+    sendGroups(rows);
+}
+
+void ProjectController::createGroupFromSelection() {
+    if (selectedTracks_.isEmpty()) {
+        emit notice("Select the tracks of the group first");
+        return;
+    }
+    createGroup(selectedTracks_);
+}
+
+void ProjectController::setTrackGroup(const QString& trackId, const QString& groupId) {
+    if (!host_ || !tracks_.find(trackId)) return;
+    if (groupId == "new") {
+        createGroup(selectedTracks_.contains(trackId) ? selectedTracks_ : QStringList{trackId});
+        return;
+    }
+    auto rows = groupRows_;
+    for (GroupRow& g : rows) g.members.removeAll(trackId);
+    if (!groupId.isEmpty())
+        for (GroupRow& g : rows)
+            if (g.id == groupId) g.members << trackId;
+    rows.erase(std::remove_if(rows.begin(), rows.end(), [](const GroupRow& g) { return g.members.isEmpty(); }), rows.end());  // an empty group goes
+    sendGroups(rows);
+}
+
+void ProjectController::setGroupField(const QString& groupId, const QString& field, const QVariant& value) {
+    if (!host_) return;
+    auto rows = groupRows_;
+    for (GroupRow& g : rows) {
+        if (g.id != groupId) continue;
+        if (field == "name") { const QString n = value.toString().trimmed(); if (n.isEmpty()) return; g.name = n; }
+        else if (field == "volume") g.volume = value.toBool();
+        else if (field == "pan") g.pan = value.toBool();
+        else if (field == "mute") g.mute = value.toBool();
+        else if (field == "solo") g.solo = value.toBool();
+        else if (field == "selection") g.selection = value.toBool();
+        else return;
+        sendGroups(rows);
+        return;
+    }
+}
+
+void ProjectController::deleteGroup(const QString& groupId) {
+    if (!host_) return;
+    auto rows = groupRows_;
+    rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const GroupRow& g) { return g.id == groupId; }), rows.end());
+    sendGroups(rows);
 }
 
 }  // namespace jad

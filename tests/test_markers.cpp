@@ -131,3 +131,45 @@ TEST_CASE("fades: set_region_fades is validated, undone, kept through JSON and s
     nlohmann::json plain = Region{};
     REQUIRE_FALSE(plain.contains("fadeIn"));
 }
+
+TEST_CASE("groups: set_groups is validated, undone and kept through JSON; removing a track takes it out of its group", "[groups]") {
+    std::mt19937_64 rng(13);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    std::vector<Uuid> ids;
+    for (int i = 0; i < 3; ++i) {
+        Track t;
+        t.id = Uuid::random(rng);
+        t.kind = TrackKind::Audio;
+        t.name = "T" + std::to_string(i);
+        ids.push_back(t.id);
+        REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    }
+    Group g;
+    g.id = Uuid::random(rng);
+    g.name = "Drums";
+    g.members = {ids[0], ids[1]};
+    REQUIRE_FALSE(s.execute(p, makeSetGroups({g})).has_value());
+    REQUIRE(p.groups.size() == 1);
+    Group other = g;
+    other.id = Uuid::random(rng);
+    other.name = "Again";
+    REQUIRE(s.execute(p, makeSetGroups({g, other})).has_value());                       // a track in two groups
+    Group bad = g;
+    bad.members = {p.tracks[0].id};                                                       // the master
+    REQUIRE(s.execute(p, makeSetGroups({bad})).has_value());
+    Group unnamed = g;
+    unnamed.name = "";
+    REQUIRE(s.execute(p, makeSetGroups({unnamed})).has_value());
+    const nlohmann::json doc = toJson(p);
+    REQUIRE(doc.contains("groups"));
+    REQUIRE(projectFromJson(doc).groups.size() == 1);
+    Project none(Uuid::random(rng));
+    REQUIRE_FALSE(toJson(none).contains("groups"));                                      // no groups: not written
+    REQUIRE_FALSE(s.execute(p, makeRemoveTrack(ids[0])).has_value());
+    REQUIRE(p.groups[0].members == std::vector<Uuid>{ids[1]});                           // it left the group
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.groups[0].members.size() == 2);                                            // and is back with its place in the group
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.groups.empty());
+}

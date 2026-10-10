@@ -12,7 +12,7 @@ Rectangle {
 
     readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
     readonly property bool valid: info.found === true && info.audio === true
-    readonly property real rate: project.sampleRateHz
+    readonly property real rate: project ? project.sampleRateHz : 48000
     // the frames shown: the region's part, or the whole file
     readonly property real shownFrom: valid ? (fileMode ? 0 : info.sourceOffsetFrames) : 0
     readonly property real shownFrames: valid ? (fileMode ? Math.max(1, info.mediaFrames) : Math.max(1, info.lengthFrames)) : 1

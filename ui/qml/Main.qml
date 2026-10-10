@@ -76,6 +76,7 @@ ApplicationWindow {
 
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
+    GroupSettingsWindow { id: groupSettings; project: controller }
     AudioProcessDialog { id: audioDialog; project: controller }
     PreferencesDialog { id: preferencesDialog; project: controller }
     EffectEditorWindow { id: effectEditor; project: controller }
@@ -200,6 +201,9 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "mix.createGroup": () => controller.createGroupFromSelection(),
+        "mix.groupsActive": () => { controller.groupsActive = !controller.groupsActive },
+        "mix.groupSettings": () => { if (controller.selectedTrackIds.length > 0) controller.openGroupSettings(controller.selectedTrackIds[0]) },
         "view.waveformZoom": () => { controller.waveformZoom = controller.waveformZoom >= 8 ? 1 : controller.waveformZoom * 2 },
         "audio.normalize": () => audioDialog.show("normalize", qsTr("Normalize"), qsTr("Peak level"), "dBFS", -0.3, -24, 0),
         "audio.reverse": () => controller.processSelectedRegions("reverse", 0),
@@ -275,6 +279,7 @@ ApplicationWindow {
         "view.editors": root.editorsVisible,
         "view.library": controller.libraryVisible,
         "track.globalTracks": controller.globalTracksVisible,
+        "mix.groupsActive": controller.groupsActive,
         "transport.metronome": controller.metronomeOn,
         "transport.record": controller.recording,
         "transport.punch": controller.punchEnabled,

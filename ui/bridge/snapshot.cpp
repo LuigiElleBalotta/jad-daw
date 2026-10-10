@@ -51,6 +51,14 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
     s.beatsPerBar = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().numerator;
     s.beatUnit = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().denominator;
     s.tempoMap = p.tempoMap;
+    for (const lpc::Group& g : p.groups) {
+        GroupRow gr;
+        gr.id = QString::fromStdString(g.id.toString());
+        gr.name = QString::fromStdString(g.name);
+        for (const lpc::Uuid& m : g.members) gr.members << QString::fromStdString(m.toString());
+        gr.volume = g.volume; gr.pan = g.pan; gr.mute = g.mute; gr.solo = g.solo; gr.selection = g.selection;
+        s.groups.push_back(gr);
+    }
     for (const lpc::Marker& m : p.markers)
         s.markers.push_back({QString::fromStdString(m.id.toString()), QString::fromStdString(m.name), static_cast<double>(m.tick) / lpc::kPPQ});
     for (const lpc::MediaItem& m : p.mediaPool) s.mediaPaths.insert(QString::fromStdString(m.id.toString()), QString::fromStdString(m.path));
@@ -70,6 +78,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.gainDb = t.strip.gainDb;
         tr.pan = t.strip.pan;
         tr.input = t.strip.input;
+        for (const lpc::Group& g : p.groups)
+            if (std::find(g.members.begin(), g.members.end(), t.id) != g.members.end()) tr.groupId = QString::fromStdString(g.id.toString());
         tr.regionCount = static_cast<int>(t.regions.size());
         tr.showInTracks = t.showInTracks;
         tr.patchId = QString::fromStdString(t.patchId);

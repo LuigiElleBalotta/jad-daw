@@ -117,6 +117,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(QStringList midiInputsChosen READ midiInputsChosen NOTIFY midiChanged)  // the MIDI inputs in use (empty: all)
     Q_PROPERTY(int midiOpenCount READ midiOpenCount NOTIFY midiChanged)
     Q_PROPERTY(int waveformZoom READ waveformZoom WRITE setWaveformZoom NOTIFY waveformZoomChanged)  // vertical zoom of the waveforms: 1, 2, 4 or 8
+    Q_PROPERTY(bool groupsActive READ groupsActive WRITE setGroupsActive NOTIFY groupsChanged)  // Mix > Groups Active (Shift-G)
+    Q_PROPERTY(int groupsRevision READ groupsRevision NOTIFY groupsChanged)
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -194,6 +196,21 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    bool groupsActive() const { return groupsActive_; }
+    void setGroupsActive(bool on) { if (on != groupsActive_) { groupsActive_ = on; ++groupsRevision_; emit groupsChanged(); } }
+    int groupsRevision() const { return groupsRevision_; }
+    // Track groups: tracks whose volume, pan, mute and solo (and selection) move together; every change is one undo step
+    Q_INVOKABLE QVariantList groups() const;                          // {id, name, members, volume, pan, mute, solo, selection}
+    Q_INVOKABLE QVariantMap trackGroup(const QString& trackId) const;  // the group of a track ({} when none)
+    Q_INVOKABLE void createGroup(const QStringList& trackIds, const QString& name = QString());
+    Q_INVOKABLE void createGroupFromSelection();
+    Q_INVOKABLE void setTrackGroup(const QString& trackId, const QString& groupId);  // "" takes it out; "new" starts a group with it
+    Q_INVOKABLE void setGroupField(const QString& groupId, const QString& field, const QVariant& value);  // name, volume, pan, mute, solo, selection
+    Q_INVOKABLE void deleteGroup(const QString& groupId);
+    // Group Settings window: for the group of this track ("" closes it)
+    Q_PROPERTY(QString groupSettingsTrack READ groupSettingsTrack NOTIFY groupSettingsChanged)
+    QString groupSettingsTrack() const { return groupSettingsTrack_; }
+    Q_INVOKABLE void openGroupSettings(const QString& trackId) { groupSettingsTrack_ = trackId; emit groupSettingsChanged(); }
     int waveformZoom() const { return waveformZoom_; }
     void setWaveformZoom(int z) { if ((z == 1 || z == 2 || z == 4 || z == 8) && z != waveformZoom_) { waveformZoom_ = z; emit waveformZoomChanged(); } }
     QStringList midiInputsChosen() const { return midiChosen_; }
@@ -532,6 +549,8 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void groupsChanged();
+    void groupSettingsChanged();
     void waveformZoomChanged();
     void midiChanged();
     void effectEditorChanged();
@@ -678,6 +697,15 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    bool groupsActive_ = true;
+    QString groupSettingsTrack_;
+    int groupsRevision_ = 0;
+    std::vector<GroupRow> groupRows_;
+    bool gestureActive_ = false;  // a fader or knob drag is running: the group fan-out works from where it started
+    QHash<QString, QHash<QString, double>> groupBase_;  // field -> track -> value at the start of the drag
+    void sendGroups(const std::vector<GroupRow>& rows);
+    QStringList groupPeers(const QString& trackId, const char* field) const;
+    double stripValue(const QString& trackId, const char* field) const;
     int waveformZoom_ = 1;
     QStringList midiChosen_;
     QString liveTarget_;

@@ -2,6 +2,7 @@
 #include <string>
 #include <QHash>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 #include <cstdint>
 #include <functional>
@@ -43,6 +44,7 @@ struct TrackRow {
     bool recordArm = false, inputMonitor = false, soloSafe = false;  // the R and I stubs: their state is kept by the controller
     double gainDb = 0.0, pan = 0.0;
     int input = 0;  // the recording input: 0 stereo 1+2, n mono input n
+    QString groupId;  // the group the track is in (empty: none)
     int regionCount = 0;
     bool showInTracks = true;  // false: a bus or aux that is listed in the Mixer only
     QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)
@@ -51,6 +53,12 @@ struct TrackRow {
     std::vector<SendRow> sends;
     std::vector<SmartRow> smart;  // the Smart Controls of the track's patch, with their current values
     std::vector<AutoRow> volumeAuto, panAuto;  // the automation lanes
+};
+
+struct GroupRow {
+    QString id, name;
+    QStringList members;
+    bool volume = true, pan = false, mute = true, solo = true, selection = true;
 };
 
 struct RegionRow {
@@ -94,6 +102,7 @@ struct Snapshot {
     std::vector<TrackRow> tracks;  // project order, master included
     std::vector<RegionRow> regions;
     std::vector<MarkerRow> markers;  // sorted by position
+    std::vector<GroupRow> groups;
     lpc::TempoMap tempoMap;
     QHash<QString, QString> mediaPaths;  // media id -> path relative to the project folder
 };

@@ -338,6 +338,8 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     regionRows_ = s.regions;
     tempoMap_ = s.tempoMap;
     markerRows_ = s.markers;
+    groupRows_ = s.groups;
+    ++groupsRevision_;
     mediaPaths_ = s.mediaPaths;
     sampleRate_ = s.sampleRate;
     name_ = s.name;
@@ -353,6 +355,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         }
     emit routingRevisionChanged();
     emit projectChanged();
+    emit groupsChanged();
     applyMonitoring();
     applyLiveTarget();
     pruneSelection();
@@ -406,7 +409,53 @@ void ProjectController::submit(const QString& commandJson) {
 
 void ProjectController::setStripField(const QString& trackId, const char* field, nlohmann::json value) {
     if (!host_) return;
-    sendCommand({{"type", "set_strip"}, {"trackId", trackId.toStdString()}, {field, std::move(value)}});
+    const QStringList peers = groupsActive_ ? groupPeers(trackId, field) : QStringList();
+    if (peers.isEmpty()) {
+        sendCommand({{"type", "set_strip"}, {"trackId", trackId.toStdString()}, {field, std::move(value)}});
+        return;
+    }
+    // the members of the group follow: volume and pan by the same amount, mute and solo to the same state
+    const std::string f = field;
+    nlohmann::json commands = nlohmann::json::array();
+    commands.push_back({{"type", "set_strip"}, {"trackId", trackId.toStdString()}, {field, value}});
+    const bool relative = f == "gainDb" || f == "pan";
+    double delta = 0;
+    if (relative) {
+        QHash<QString, double>& base = groupBase_[QString::fromLatin1(field)];
+        if (!gestureActive_) base.clear();
+        const auto remember = [&](const QString& id) { if (!base.contains(id)) base.insert(id, stripValue(id, field)); };
+        remember(trackId);
+        for (const QString& peer : peers) remember(peer);
+        delta = value.get<double>() - base.value(trackId);
+        for (const QString& peer : peers) {
+            const double next = std::clamp(base.value(peer) + delta, f == "pan" ? -1.0 : -96.0, f == "pan" ? 1.0 : 24.0);
+            commands.push_back({{"type", "set_strip"}, {"trackId", peer.toStdString()}, {field, next}});
+        }
+        if (!gestureActive_) base.clear();
+    } else {
+        for (const QString& peer : peers) commands.push_back({{"type", "set_strip"}, {"trackId", peer.toStdString()}, {field, value}});
+    }
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
+double ProjectController::stripValue(const QString& trackId, const char* field) const {
+    for (const TrackRow& t : allRows_)
+        if (t.id == trackId) return std::string(field) == "pan" ? t.pan : t.gainDb;
+    return 0.0;
+}
+
+// The other members of the group of `trackId` that share the property being changed.
+QStringList ProjectController::groupPeers(const QString& trackId, const char* field) const {
+    const std::string f = field;
+    for (const GroupRow& g : groupRows_) {
+        if (!g.members.contains(trackId)) continue;
+        const bool linked = f == "gainDb" ? g.volume : (f == "pan" ? g.pan : (f == "mute" ? g.mute : (f == "solo" ? g.solo : false)));
+        if (!linked) return {};
+        QStringList peers = g.members;
+        peers.removeAll(trackId);
+        return peers;
+    }
+    return {};
 }
 
 void ProjectController::setGain(const QString& trackId, double db) {
@@ -440,6 +489,11 @@ void ProjectController::selectTrack(const QString& id, const QString& mode) {
     if (!tracks_.find(id)) return;
     QStringList next = selectedTracks_;
     applyMode(next, {id}, mode);
+    if (groupsActive_ && mode == "replace")  // selecting a member selects the whole group when it links the selection
+        for (const GroupRow& g : groupRows_)
+            if (g.selection && g.members.contains(id))
+                for (const QString& m : g.members)
+                    if (!next.contains(m) && tracks_.find(m)) next.append(m);
     if (next == selectedTracks_) return;
     selectedTracks_ = next;
     emit selectionChanged();

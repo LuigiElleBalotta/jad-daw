@@ -115,7 +115,17 @@ public:
         const int index = static_cast<int>(it - p.tracks.begin());
         Track removed = std::move(*it);
         p.tracks.erase(it);
-        return success(makeAddTrack(std::move(removed), index));
+        std::vector<Group> before = p.groups;  // the track leaves its group; undoing puts the groups back too
+        bool inGroup = false;
+        for (Group& g : p.groups) {
+            const auto m = std::find(g.members.begin(), g.members.end(), id_);
+            if (m != g.members.end()) { g.members.erase(m); inGroup = true; }
+        }
+        if (!inGroup) return success(makeAddTrack(std::move(removed), index));
+        std::vector<CommandPtr> undo;
+        undo.push_back(makeAddTrack(std::move(removed), index));
+        undo.push_back(makeSetGroups(std::move(before)));
+        return success(makeTransaction(std::move(undo)));
     }
 
 private:
@@ -195,6 +205,36 @@ public:
 
 private:
     Ticks tick_;
+};
+
+class SetGroupsCmd final : public Command {
+public:
+    explicit SetGroupsCmd(std::vector<Group> groups) : groups_(std::move(groups)) {}
+    std::string type() const override { return "set_groups"; }
+    json toJson() const override { return {{"type", type()}, {"groups", groups_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        if (groups_.size() > 64) return fail("too_many", "at most 64 groups");
+        std::unordered_set<Uuid> seenTracks;
+        for (std::size_t i = 0; i < groups_.size(); ++i) {
+            const Group& g = groups_[i];
+            if (g.name.empty() || g.name.size() > 64) return fail("bad_group", "a group name has 1 to 64 bytes");
+            for (std::size_t k = 0; k < i; ++k)
+                if (groups_[k].id == g.id) return fail("bad_group", "group ids must be unique");
+            for (const Uuid& m : g.members) {
+                const Track* t = p.findTrack(m);
+                if (!t) return fail("not_found", "a group member is not a track");
+                if (t->kind == TrackKind::Master) return fail("invalid_kind", "the master track cannot be in a group");
+                if (!seenTracks.insert(m).second) return fail("bad_group", "a track can be in one group only");
+            }
+        }
+        std::vector<Group> previous = std::move(p.groups);
+        p.groups = groups_;
+        return success(makeSetGroups(std::move(previous)));
+    }
+
+private:
+    std::vector<Group> groups_;
 };
 
 class SetMarkersCmd final : public Command {
@@ -771,6 +811,7 @@ CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCm
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
+CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch) { return std::make_unique<SetTrackPropsCmd>(trackId, std::move(patch)); }
@@ -808,6 +849,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());
+        if (type == "set_groups") return makeSetGroups(j.at("groups").get<std::vector<Group>>());
         if (type == "set_markers") return makeSetMarkers(j.at("markers").get<std::vector<Marker>>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());
         if (type == "set_track_props") {

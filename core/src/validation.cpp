@@ -173,6 +173,18 @@ MaybeError checkProject(const Project& p) {
     for (const Track& t : p.tracks)
         if (t.id.isNull() || !trackIds.insert(t.id).second) return CommandError{"duplicate_id", "track id missing or used twice"};
 
+    std::unordered_set<Uuid> groupIds, grouped;
+    if (p.groups.size() > 64) return CommandError{"limit", "a project holds at most 64 groups"};
+    for (const Group& g : p.groups) {
+        if (g.id.isNull() || !groupIds.insert(g.id).second) return CommandError{"duplicate_id", "group id missing or used twice"};
+        if (g.name.empty() || g.name.size() > 64) return CommandError{"bad_value", "a group name has 1 to 64 bytes"};
+        for (const Uuid& m : g.members) {
+            const Track* t = p.findTrack(m);
+            if (!t || t->kind == TrackKind::Master) return CommandError{"not_found", "a group member is not a track (or is the master)"};
+            if (!grouped.insert(m).second) return CommandError{"bad_value", "a track is in two groups"};
+        }
+    }
+
     for (const MediaItem& m : p.mediaPool) {
         if (m.id.isNull() || !mediaIds.insert(m.id).second) return CommandError{"duplicate_id", "media id missing or used twice"};
         if (!validRelativeMediaPath(m.path)) return CommandError{"bad_media", "media path must be relative, inside the project, with '/' separators"};

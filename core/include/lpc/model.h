@@ -99,6 +99,15 @@ struct Marker {
     bool operator==(const Marker&) const = default;
 };
 
+// Tracks whose strips move together (Mix > Group Settings): a change of one member's volume, pan, mute or solo reaches the others.
+struct Group {
+    Uuid id;
+    std::string name;
+    std::vector<Uuid> members;  // tracks (never the master), each in at most one group
+    bool volume = true, pan = false, mute = true, solo = true, selection = true;
+    bool operator==(const Group&) const = default;
+};
+
 struct MediaItem {
     Uuid id;
     std::string path;  // relative to the project folder, forward slashes
@@ -114,6 +123,7 @@ struct Project {
     int sampleRate = 48000;
     TempoMap tempoMap;
     std::vector<Marker> markers;
+    std::vector<Group> groups;
     std::vector<Track> tracks;  // tracks[0] is the master track in a new project
     std::vector<MediaItem> mediaPool;
 

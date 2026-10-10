@@ -12,6 +12,7 @@ Panel {
     property var targets: []     // the buses and auxes a send or the output can go to: [{id, name}]
     property real peak: 0        // the master strip's meter
     property real reduction: 0      // dB of gain reduction by the track's compressors, drawn in the gain reduction bar
+    property var groupChoices: []   // [{id, name}] the groups of the project
     property var instrumentChoices: []  // [{id, name}] for the instrument slot's menu
     property var effectGroups: []   // [{group, effects: [{id, name}]}] for the Audio FX menu
     property var effectNames: ({})  // processor id -> display name
@@ -98,6 +99,8 @@ Panel {
     signal eqRequested(string id)                               // a click on the EQ box
     signal instrumentChosen(string id, string processorId)      // the instrument slot's menu
     signal instrumentEditorRequested(string id)                 // a double click on the instrument slot
+    signal groupChosen(string id, string groupId)             // the Group slot's menu: "" none, "new" a new group, else a group
+    signal groupSettingsRequested(string id)
     signal peakReset()                                          // a click on the peak field
 
     function beginRename() {
@@ -185,6 +188,27 @@ Panel {
             onObjectAdded: (index, object) => menu.insertItem(index + (menu.withNewBus ? 2 : 0), object)  // after New Bus and its separator
             onObjectRemoved: (index, object) => menu.removeItem(object)
         }
+    }
+    readonly property string groupName: { for (const g of groupChoices) if (g.id === (info.groupId ?? "")) return g.name; return "" }
+    ThemedMenu {  // the group of a track
+        id: groupMenu
+        ThemedMenuItem { text: qsTr("No Group"); onTriggered: root.groupChosen(root.trackId, "") }
+        MenuSeparator {}
+        Instantiator {
+            model: root.groupChoices
+            delegate: ThemedMenuItem {
+                required property var modelData
+                text: modelData.name
+                checkable: true
+                checked: (root.info.groupId ?? "") === modelData.id
+                onTriggered: root.groupChosen(root.trackId, modelData.id)
+            }
+            onObjectAdded: (index, object) => groupMenu.insertItem(index + 2, object)
+            onObjectRemoved: (index, object) => groupMenu.removeItem(object)
+        }
+        MenuSeparator {}
+        ThemedMenuItem { text: qsTr("New Group…"); onTriggered: root.groupChosen(root.trackId, "new") }
+        ThemedMenuItem { text: qsTr("Group Settings…"); enabled: (root.info.groupId ?? "") !== ""; onTriggered: root.groupSettingsRequested(root.trackId) }
     }
     ThemedMenu {  // the instrument of an instrument track
         id: instrumentMenu
@@ -525,7 +549,14 @@ Panel {
         }
         FixedRow {
             rowHeight: StripMetrics.group
-            StripSlot { id: groupSlot; anchors.fill: parent; text: root.master ? "" : qsTr("Group"); dim: true; onClicked: root.stubUsed("Group") }
+            StripSlot {
+                id: groupSlot
+                anchors.fill: parent
+                text: root.master ? "" : (root.info.groupId ? (root.groupName !== "" ? root.groupName : qsTr("Group")) : qsTr("Group"))
+                dim: !root.info.groupId
+                visible: !root.master
+                onClicked: groupMenu.popup(groupSlot, 0, groupSlot.height)
+            }
         }
         FixedRow {
             rowHeight: StripMetrics.automation

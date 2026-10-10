@@ -13,7 +13,7 @@ inline QVariantMap trackToMap(const TrackRow& t) {
         inserts.append(QVariantMap{{"processorId", i.processorId}, {"gainDb", i.gainDb}, {"label", i.label}, {"plugin", i.plugin}, {"bypass", i.bypass}, {"params", i.params}});
     for (const SendRow& s : t.sends)
         sends.append(QVariantMap{{"id", s.id}, {"targetId", s.targetId}, {"targetName", s.targetName}, {"levelDb", s.levelDb}, {"preFader", s.preFader}});
-    return {{"instrumentParams", t.instrumentParams}, {"trackId", t.id},         {"name", t.name},           {"color", t.color},         {"kind", t.kind},
+    return {{"instrumentParams", t.instrumentParams}, {"groupId", t.groupId}, {"trackId", t.id},         {"name", t.name},           {"color", t.color},         {"kind", t.kind},
             {"master", t.master},      {"patchId", t.patchId},     {"patchName", t.patchName}, {"instrument", t.instrument},
             {"gainDb", t.gainDb},      {"pan", t.pan},             {"mute", t.mute},           {"solo", t.solo},
             {"outputId", t.outputId},  {"outputName", t.outputName}, {"inserts", inserts},     {"sends", sends},

@@ -150,13 +150,22 @@ TestCase {
         var m = createTemporaryObject(stripC, this, { info: { trackId: "m", name: "Stereo Out", color: "purple", kind: "master", master: true, gainDb: 0, pan: 0, inserts: [], sends: [] } })
         verify(!m.addInsertSlot.visible)
     }
-    function test_group_and_automation_slots_announce_themselves() {
+    function test_the_group_slot_shows_the_group_and_the_menu_chooses_one() {
         var s = createTemporaryObject(stripC, this)
+        s.groupChoices = [{ id: "g1", name: "Drums" }]
+        compare(s.groupSlot.text, "Group")                 // not in a group
+        var chosen = [], settings = []
+        s.groupChosen.connect(function (id, g) { chosen.push([id, g]) })
+        s.groupSettingsRequested.connect(function (id) { settings.push(id) })
+        s.groupChosen("t", "g1")
+        s.groupChosen("t", "new")
+        compare(chosen, [["t", "g1"], ["t", "new"]])
+        s.info = { trackId: "t", name: "Keys", color: "purple", kind: "instrument", master: false, groupId: "g1", gainDb: 0, pan: 0, mute: false, solo: false, outputName: "Stereo Out", inserts: [], sends: [] }
+        compare(s.groupSlot.text, "Drums")                 // in a group: its name
         var got = []
         s.stubUsed.connect(function (label) { got.push(label) })
-        mouseClick(s.groupSlot)
         mouseClick(s.automationSlot)
-        compare(got, ["Group", "Automation"])
+        compare(got, ["Automation"])
     }
     function test_changing_track_mid_drag_sends_nothing() {
         var s = createTemporaryObject(stripC, this)

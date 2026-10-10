@@ -158,8 +158,10 @@ void from_json(const nlohmann::json& j, Track& t) {
 }
 
 nlohmann::json toJson(const Project& p) {
-    return {{"name", p.name},         {"sampleRate", p.sampleRate}, {"tempoMap", p.tempoMap},
-            {"markers", p.markers},   {"tracks", p.tracks},         {"mediaPool", p.mediaPool}};
+    nlohmann::json j = {{"name", p.name},         {"sampleRate", p.sampleRate}, {"tempoMap", p.tempoMap},
+                        {"markers", p.markers},   {"tracks", p.tracks},         {"mediaPool", p.mediaPool}};
+    if (!p.groups.empty()) j["groups"] = p.groups;  // only when there are some: older files stay as they were
+    return j;
 }
 
 Project projectFromJson(const nlohmann::json& j) {
@@ -172,6 +174,7 @@ Project projectFromJson(const nlohmann::json& j) {
     j.at("markers").get_to(p.markers);
     j.at("tracks").get_to(p.tracks);
     j.at("mediaPool").get_to(p.mediaPool);
+    if (j.contains("groups")) j.at("groups").get_to(p.groups);
     const auto masters = std::count_if(p.tracks.begin(), p.tracks.end(),
                                        [](const Track& t) { return t.kind == TrackKind::Master; });
     if (masters != 1) throw std::runtime_error("project must contain exactly one master track");

@@ -1157,6 +1157,43 @@ private slots:
         QCOMPARE(c.waveformZoom(), 4);
         QCOMPARE(spy.count(), 1);
     }
+    void groupedTracksMoveTogetherInOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QString keys, tone;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i) {
+            if (c.tracks()->kindAt(i) == "instrument") keys = c.tracks()->trackIdAt(i);
+            if (c.tracks()->kindAt(i) == "audio") tone = c.tracks()->trackIdAt(i);
+        }
+        auto gainOf = [&](const QString& id) { for (int i = 0; i < c.mixer()->rowCount(); ++i) { const auto m = c.mixer()->data(c.mixer()->index(i), c.mixer()->roleNames().key("info")).toMap(); if (m.value("trackId").toString() == id) return m.value("gainDb").toDouble(); } return 1e9; };
+        auto mutedOf = [&](const QString& id) { for (int i = 0; i < c.mixer()->rowCount(); ++i) { const auto m = c.mixer()->data(c.mixer()->index(i), c.mixer()->roleNames().key("info")).toMap(); if (m.value("trackId").toString() == id) return m.value("mute").toBool(); } return false; };
+        const double keys0 = gainOf(keys), tone0 = gainOf(tone);
+        c.createGroup({keys, tone}, "Band");
+        QTRY_COMPARE(c.groups().size(), 1);
+        QCOMPARE(c.trackGroup(tone).value("name").toString(), QString("Band"));
+        QCOMPARE(c.trackGroup(keys).value("id"), c.trackGroup(tone).value("id"));
+        c.setGain(tone, tone0 - 6.0);
+        QTRY_VERIFY(std::abs(gainOf(tone) - (tone0 - 6.0)) < 0.01);
+        QTRY_VERIFY(std::abs(gainOf(keys) - (keys0 - 6.0)) < 0.01);          // the other member moved by the same amount
+        c.setMute(tone, true);
+        QTRY_VERIFY(mutedOf(keys));                                           // mute is shared as it is
+        c.undo();                                                             // one step took both
+        QTRY_VERIFY(!mutedOf(keys));
+        c.setGroupsActive(false);
+        c.setGain(tone, tone0 - 12.0);
+        QTRY_VERIFY(std::abs(gainOf(tone) - (tone0 - 12.0)) < 0.01);
+        QVERIFY(std::abs(gainOf(keys) - (keys0 - 6.0)) < 0.01);               // groups off: alone
+        c.setGroupsActive(true);
+        c.setGroupField(c.trackGroup(tone).value("id").toString(), "volume", false);
+        QTRY_VERIFY(!c.trackGroup(tone).value("volume").toBool());
+        c.setTrackGroup(tone, "");                                            // out of the group: the group of one track goes with it? no, keys remains
+        QTRY_VERIFY(c.trackGroup(tone).isEmpty());
+        QVERIFY(!c.trackGroup(keys).isEmpty());
+        c.setTrackGroup(keys, "");
+        QTRY_COMPARE(c.groups().size(), 0);                                   // an empty group goes
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

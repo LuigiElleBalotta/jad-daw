@@ -4,7 +4,7 @@ import Jad
 
 // The Editors area (control bar button Ed, key E): a tab strip that depends on the selection and the editor below it.
 // With no region or a MIDI region the first tab is the Piano Roll; with an audio region the tabs are Track | File | Smart Tempo.
-// Only the Piano Roll exists so far; the other tabs say so.
+// The Piano Roll, the Score (view only), the Step Sequencer and, for audio regions, the Audio Track and File editors exist; the other tabs say so.
 Rectangle {
     id: root
     required property ProjectController project
@@ -16,7 +16,7 @@ Rectangle {
     readonly property bool audioRegion: info.found === true && info.audio === true
     readonly property bool midiRegion: info.found === true && info.audio !== true
     readonly property var tabs: audioRegion ? [qsTr("Track"), qsTr("File"), qsTr("Smart Tempo")]
-                              : (midiRegion ? [qsTr("Piano Roll"), qsTr("Score"), qsTr("Smart Tempo")]
+                              : (midiRegion ? [qsTr("Piano Roll"), qsTr("Score"), qsTr("Step Sequencer"), qsTr("Smart Tempo")]
                                             : [qsTr("Piano Roll"), qsTr("Score"), qsTr("Step Sequencer"), qsTr("Session Player")])
     onTabsChanged: if (tab >= tabs.length) tab = 0
 
@@ -72,11 +72,29 @@ Rectangle {
         fileMode: root.tab === 1
         onProcessRequested: (op) => root.processRequested(op)
     }
+    ScoreView {
+        id: score
+        y: strip.height
+        width: parent.width
+        height: parent.height - strip.height
+        visible: !root.audioRegion && root.tab === 1
+        project: root.project
+        regionId: root.regionId
+    }
+    StepSequencer {
+        id: steps
+        y: strip.height
+        width: parent.width
+        height: parent.height - strip.height
+        visible: !root.audioRegion && root.tab === 2 && root.tabs[2] === qsTr("Step Sequencer")
+        project: root.project
+        regionId: root.regionId
+    }
     Text {
         y: strip.height
         width: parent.width
         height: parent.height - strip.height
-        visible: (root.tab !== 0 || root.audioRegion) && !(root.audioRegion && root.tab <= 1)
+        visible: (root.tab !== 0 || root.audioRegion) && !(root.audioRegion && root.tab <= 1) && !score.visible && !steps.visible
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         text: qsTr("%1 is not implemented yet").arg(root.tabs[root.tab] ?? "")

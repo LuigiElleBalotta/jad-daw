@@ -125,7 +125,7 @@ Dialog {
                         Cell {
                             visible: !row.isNote
                             Layout.preferredWidth: 80
-                            text: row.modelData.kind === "cc" ? String(row.modelData.c.data1) : (row.modelData.kind === "touch" ? "" : "")
+                            text: row.modelData.c && row.modelData.kind === "cc" ? String(row.modelData.c.data1) : ""
                         }
                         NumberField {
                             visible: row.isNote
@@ -147,7 +147,7 @@ Dialog {
                         Cell {
                             visible: !row.isNote
                             Layout.preferredWidth: 70
-                            text: row.modelData.kind === "cc" ? String(row.modelData.c.data2) : (row.modelData.kind === "bend" ? String((row.modelData.c.data1 | (row.modelData.c.data2 << 7)) - 8192) : String(row.modelData.c.data1))
+                            text: !row.modelData.c ? "" : (row.modelData.kind === "cc" ? String(row.modelData.c.data2) : (row.modelData.kind === "bend" ? String((row.modelData.c.data1 | (row.modelData.c.data2 << 7)) - 8192) : String(row.modelData.c.data1)))
                         }
                         NumberField {
                             visible: row.isNote

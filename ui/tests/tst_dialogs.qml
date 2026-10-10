@@ -14,6 +14,8 @@ TestCase {
     Component { id: promptC; NumberPromptDialog { parent: Overlay.overlay; heading: "Repeat"; prompt: "Copies"; value: 4; from: 1; to: 64 } }
     Component { id: searchC; SearchTrackDialog { parent: Overlay.overlay } }
     Component { id: listC; ListEditorsWindow { parent: Overlay.overlay } }
+    Component { id: stepC; StepSequencer { width: 900; height: 300 } }
+    Component { id: scoreC; ScoreView { width: 900; height: 300 } }
 
     function test_the_number_prompt_returns_a_clamped_number() {
         const d = createTemporaryObject(promptC, this)
@@ -75,5 +77,36 @@ TestCase {
         c.setTempoAt(8, 90)
         tryVerify(function () { return d.tempos.length === 2 })
         compare(d.position(8), "3 1 0")
+    }
+
+    function test_step_sequencer_toggles_notes_and_the_score_shows_them() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        c.createRegion(c.tracks.trackIdAt(0), 0, 4)
+        tryVerify(function () { return c.regions.rowCount() === 1 })
+        const id = c.regions.data(c.regions.index(0, 0), 257)
+        const seq = createTemporaryObject(stepC, this, { project: c, regionId: id })
+        tryVerify(function () { return seq.hasMidi })
+        compare(seq.steps, 16)                                  // four beats of 16th notes
+        const kick0 = findChild(seq, "step_36_0")
+        const kick4 = findChild(seq, "step_36_4")
+        verify(kick0 && kick4)
+        mouseClick(kick0)
+        mouseClick(kick4)
+        tryVerify(function () { return c.regionNotes(id).length === 2 })
+        compare(c.regionNotes(id)[1].start, 1)                  // the fifth step is one beat in
+        tryVerify(function () { return kick0.on })
+        mouseClick(kick0)                                       // off again
+        tryVerify(function () { return c.regionNotes(id).length === 1 })
+        const score = createTemporaryObject(scoreC, this, { project: c, regionId: id })
+        tryVerify(function () { return score.hasMidi && score.notes.length === 1 })
+        compare(score.diatonic(64), 30)                         // E4 is the bottom line of the treble staff
+        compare(score.diatonic(43), 18)                         // G2 is the bottom line of the bass staff
+        const canvas = findChild(score, "scoreCanvas")
+        verify(canvas)
+        canvas.requestPaint()
+        wait(50)                                                // painting a staff with a note must not fail
     }
 }

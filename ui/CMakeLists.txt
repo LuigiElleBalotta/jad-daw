@@ -63,6 +63,8 @@ qt_add_qml_module(jad_ui_lib
         qml/UndoHistoryDialog.qml
         qml/RecentProjectsDialog.qml
         qml/ColorsDialog.qml
+        qml/NumberPromptDialog.qml
+        qml/SearchTrackDialog.qml
         qml/FlagCheck.qml
         qml/MarkerListWindow.qml
         qml/ProjectAudioWindow.qml

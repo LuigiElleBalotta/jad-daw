@@ -97,6 +97,26 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    NumberPromptDialog {
+        id: repeatDialog
+        heading: qsTr("Repeat Multiple")
+        prompt: qsTr("Number of copies")
+        value: 4
+        from: 1
+        to: 64
+        onAccepted2: (v) => controller.repeatSelectedRegions(Math.round(v))
+    }
+    NumberPromptDialog {
+        id: lengthDialog
+        heading: qsTr("Change Length")
+        prompt: qsTr("Length in beats")
+        value: 4
+        from: 0.0625
+        to: 4096
+        decimals: 2
+        onAccepted2: (v) => controller.setSelectedRegionsLength(v)
+    }
+    SearchTrackDialog { id: searchTrackDialog; project: controller }
     ProjectAudioWindow { id: projectAudioWindow; project: controller }
     NotePadWindow { id: notePadWindow; project: controller }
     MarkerListWindow { id: markerList; project: controller }
@@ -242,6 +262,13 @@ ApplicationWindow {
         "window.openProjectAudio": () => projectAudioWindow.open(),
         "view.controlBar": () => { controller.controlBarVisible = !controller.controlBarVisible },
         "view.toolbar": () => { controller.toolbarVisible = !controller.toolbarVisible },
+        "edit.repeatMultiple": () => repeatDialog.open(),
+        "edit.lengthChange": () => lengthDialog.open(),
+        "view.colors": () => colorsDialog.open(),
+        "mix.iOAssignments": () => ioLabelsDialog.open(),
+        "mix.pluginWindow": () => controller.openAllPluginWindows(),
+        "window.showKeyboard": () => { musicalTyping.visible = !musicalTyping.visible },
+        "track.searchAndSelectTrack": () => searchTrackDialog.open(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

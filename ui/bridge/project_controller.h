@@ -456,6 +456,10 @@ public:
     Q_INVOKABLE void cutSelectedRegions();
     Q_INVOKABLE void pasteRegions(bool atOriginalPosition = false);
     Q_INVOKABLE void duplicateSelectedRegions();
+    Q_INVOKABLE void repeatSelectedRegions(int copies);
+    Q_INVOKABLE void setSelectedRegionsLength(double beats);
+    Q_INVOKABLE QVariantList trackList() const;  // {id, name, kind} of the tracks listed in the Tracks area (the master not included)
+    Q_INVOKABLE void openAllPluginWindows();  // Mix > Show All Plug-in Windows
     Q_INVOKABLE void toggleMuteSelectedRegions();
     Q_INVOKABLE void toggleLoopSelectedRegions();
     // Takes: the regions of one take group on a track, in time order ({id, active, label}); one of them plays
@@ -725,7 +729,7 @@ private:
     QTimer liveTimer_;
     bool liveWired_ = false;
     QHash<QString, double> liveGain_, livePan_;  // the latest value of each strip, waiting for the next tick
-    void pasteClipboard(double offsetBeats, bool keepTrack);
+    void pasteClipboard(double offsetBeats, bool keepTrack, int copies = 1);
     bool inspectorVisible_ = true, libraryVisible_ = false, smartControlsVisible_ = false;
     double leftColumnWidth_ = 240.0, smartControlsHeight_ = 180.0, mixerHeight_ = 600.0;
     bool mixerDetached_ = false;

@@ -1542,6 +1542,27 @@ private slots:
         QVERIFY(c.regions()->find(first)->takeGroup.isEmpty());
         QVERIFY(c.regionTakes(first).isEmpty());
     }
+    void repeatMultipleLengthChangeAndTheTrackSearchList() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const int n = c.regions()->rowCount();
+        const QString id = c.regions()->regionIdAt(0);
+        const jad::RegionRow before = *c.regions()->find(id);
+        c.selectRegion(id, "replace");
+        c.repeatSelectedRegions(3);
+        QTRY_COMPARE(c.regions()->rowCount(), n + 3);
+        c.undo();                                                    // all the copies are one undo step
+        QTRY_COMPARE(c.regions()->rowCount(), n);
+        c.selectRegion(id, "replace");
+        c.setSelectedRegionsLength(1.5);
+        QTRY_VERIFY(std::abs(c.regions()->find(id)->lengthBeats - 1.5) < 1e-6);
+        QVERIFY(std::abs(c.regions()->find(id)->startBeats - before.startBeats) < 1e-6);
+        const QVariantList tracks = c.trackList();
+        QVERIFY(tracks.size() >= 3);
+        QVERIFY(!tracks.first().toMap().value("name").toString().isEmpty());
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

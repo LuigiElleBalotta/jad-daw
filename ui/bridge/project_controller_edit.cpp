@@ -70,7 +70,7 @@ void ProjectController::cutSelectedRegions() {
 
 // Puts the clipboard `offsetBeats` later than where it came from. A region goes on the selected track when all of the copied
 // regions come from one track and the selected track can hold them; otherwise every region goes back on its own track.
-void ProjectController::pasteClipboard(double offsetBeats, bool keepTrack) {
+void ProjectController::pasteClipboard(double offsetBeats, bool keepTrack, int copies) {
     if (!host_ || clipboard_.empty()) return;
     bool oneTrack = true;
     for (const ClipRegion& c : clipboard_) oneTrack = oneTrack && c.row.trackId == clipboard_.front().row.trackId;
@@ -81,19 +81,21 @@ void ProjectController::pasteClipboard(double offsetBeats, bool keepTrack) {
     }
     nlohmann::json commands = nlohmann::json::array();
     QStringList created;
-    for (const ClipRegion& c : clipboard_) {
-        const QString trackId = target.isEmpty() ? c.row.trackId : target;
-        bool exists = false;
-        for (const TrackRow& t : allRows_) exists = exists || (t.id == trackId && !t.master);
-        if (!exists) continue;
-        nlohmann::json region = nlohmann::json::parse(c.json, nullptr, false);
-        if (region.is_discarded()) continue;
-        const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        region["id"] = id.toStdString();
-        region["start"] = regionPosition(c.row, std::clamp(c.row.startBeats + offsetBeats, 0.0, kMaxBeatsEdit));
-        commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"region", region}});
-        created << id;
-    }
+    for (int copy = 1; copy <= std::max(1, copies); ++copy)
+        for (const ClipRegion& c : clipboard_) {
+            const QString trackId = target.isEmpty() ? c.row.trackId : target;
+            bool exists = false;
+            for (const TrackRow& t : allRows_) exists = exists || (t.id == trackId && !t.master);
+            if (!exists) continue;
+            nlohmann::json region = nlohmann::json::parse(c.json, nullptr, false);
+            if (region.is_discarded()) continue;
+            const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            region["id"] = id.toStdString();
+            region.erase("takeGroup");  // a copy is an ordinary region, not one more take
+            region["start"] = regionPosition(c.row, std::clamp(c.row.startBeats + offsetBeats * copy, 0.0, kMaxBeatsEdit));
+            commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"region", region}});
+            created << id;
+        }
     if (commands.empty()) return;
     // the pasted regions become the selection once the project has them
     pendingRegionSelection_ = created;
@@ -108,7 +110,10 @@ void ProjectController::pasteRegions(bool atOriginalPosition) {
 }
 
 // Duplicate: a copy of the selection right after it (the clipboard is left alone).
-void ProjectController::duplicateSelectedRegions() {
+void ProjectController::duplicateSelectedRegions() { repeatSelectedRegions(1); }
+
+// Edit > Repeat > Multiple: `copies` copies of the selected regions, one after the other, right after the selection (one undo step).
+void ProjectController::repeatSelectedRegions(int copies) {
     const auto rows = selectedRegionRows();
     if (rows.empty()) return;
     double first = rows.front()->startBeats, last = 0.0;
@@ -116,7 +121,7 @@ void ProjectController::duplicateSelectedRegions() {
     const auto saved = clipboard_;
     clipboard_.clear();
     for (const RegionRow* r : rows) clipboard_.push_back({*r, r->json});
-    pasteClipboard(last - first, true);
+    pasteClipboard(last - first, true, std::clamp(copies, 1, 64));
     clipboard_ = saved;
 }
 
@@ -273,6 +278,15 @@ void ProjectController::regionEndToNextRegion() {
         if (next && next->startBeats - r->startBeats >= kMinLength && std::abs(next->startBeats - (r->startBeats + r->lengthBeats)) > kEps)
             commands.push_back(resizeCommand(*r, r->startBeats, next->startBeats - r->startBeats));
     }
+    if (!commands.empty()) sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+// Edit > Length > Change: every selected region gets this length (in beats), its start stays.
+void ProjectController::setSelectedRegionsLength(double beats) {
+    if (!host_ || !std::isfinite(beats) || beats < kMinLength) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow* r : selectedRegionRows())
+        if (std::abs(r->lengthBeats - beats) > 1e-9) commands.push_back(resizeCommand(*r, r->startBeats, std::min(beats, kMaxBeatsEdit)));
     if (!commands.empty()) sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
@@ -2408,6 +2422,33 @@ void ProjectController::unpackTakes(const QString& regionId) {
     }
     if (commands.empty()) return;
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::openAllPluginWindows() {
+#ifdef JAD_HAVE_JUCE
+    if (!host_ || !pluginHost_) return;
+    const std::vector<lpc::InsertSlot> wanted = host_->read([](const lpc::Project& p) {
+        std::vector<lpc::InsertSlot> out;
+        for (const lpc::Track& t : p.tracks) {
+            if (t.instrument && lpc::isVst3Id(t.instrument->processorId)) out.push_back({t.id, lpc::kInstrumentSlot});
+            for (std::size_t i = 0; i < t.strip.inserts.size(); ++i)
+                if (lpc::isVst3Id(t.strip.inserts[i].processorId)) out.push_back({t.id, static_cast<int>(i)});
+        }
+        return out;
+    }).get();
+    int opened = 0;
+    for (const lpc::InsertSlot& w : wanted)
+        if (pluginHost_->openEditor(w)) ++opened;
+    if (wanted.empty()) emit notice("There are no plug-ins in the project");
+    else if (opened == 0) emit notice("The plug-ins have no window, or they are not loaded yet");
+#endif
+}
+
+QVariantList ProjectController::trackList() const {
+    QVariantList out;
+    for (const TrackRow& t : allRows_)
+        if (!t.master && t.showInTracks) out.append(QVariantMap{{"id", t.id}, {"name", t.name}, {"kind", t.kind}});
+    return out;
 }
 
 }  // namespace jad

@@ -82,7 +82,7 @@ Panel {
         }
         MenuButton {
             visible: { root.project.barItemsRevision; return root.project.barItem("tb.snap") }
-            label: qsTr("Drag: Overlap ▾")
+            label: qsTr("Drag: %1 ▾").arg(root.project.dragMode === "noOverlap" ? qsTr("No Overlap") : (root.project.dragMode === "xfade" ? qsTr("X-Fade") : qsTr("Overlap")))
             ids: ["drag.overlap", "drag.noOverlap", "drag.xfade"]
         }
         Separator {}

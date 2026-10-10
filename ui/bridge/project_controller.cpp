@@ -889,11 +889,89 @@ nlohmann::json ProjectController::moveCommand(const RegionRow& row, double start
     return {{"type", "move_region"}, {"regionId", row.id.toStdString()}, {"start", start}};
 }
 
+void ProjectController::setDragMode(const QString& mode) {
+    if ((mode != "overlap" && mode != "noOverlap" && mode != "xfade") || mode == dragMode_) return;
+    dragMode_ = mode;
+    QSettings().setValue("edit/dragMode", mode);
+    emit dragModeChanged();
+}
+
+nlohmann::json ProjectController::overlapCommands(const std::vector<std::pair<const RegionRow*, double>>& moved) const {
+    nlohmann::json out = nlohmann::json::array();
+    if (dragMode_ == "overlap") return out;
+    const auto isMoved = [&](const QString& id) {
+        for (const auto& m : moved)
+            if (m.first->id == id) return true;
+        return false;
+    };
+    constexpr double eps = 1e-6;
+    std::set<QString> touched;  // a region is trimmed once, against the first mover that reaches it
+    for (const auto& [row, newStart] : moved) {
+        const double ns = std::max(0.0, newStart), ne = ns + row->lengthBeats;
+        for (const RegionRow& t : regionRows_) {
+            if (t.trackId != row->trackId || t.id == row->id || isMoved(t.id) || touched.count(t.id)) continue;
+            const double ts = t.startBeats, te = t.startBeats + t.lengthBeats;
+            if (te <= ns + eps || ts >= ne - eps) continue;  // not under it
+            if (dragMode_ == "xfade") {
+                // two audio regions that overlap at one end: the overlap is a crossfade (the Core's fades add up to constant power)
+                if (!row->audio || !t.audio) continue;
+                nlohmann::json other = nlohmann::json::parse(t.json, nullptr, false);
+                if (other.is_discarded()) continue;
+                const auto unitOf = [this](const RegionRow& r, double lengthBeats) { return regionPosition(r, r.startBeats + lengthBeats) - regionPosition(r, r.startBeats); };
+                std::int64_t fadeIn = unitOf(*row, row->fadeInBeats), fadeOut = unitOf(*row, row->fadeOutBeats);
+                if (ts < ns - eps && te <= ne + eps) {  // the mover starts inside the other one: the other fades out, the mover fades in
+                    const double span = te - ns;
+                    other["fadeOut"] = unitOf(t, span);
+                    fadeIn = unitOf(*row, span);
+                } else if (ts >= ns - eps && te > ne + eps) {  // the mover ends inside the other one
+                    const double span = ne - ts;
+                    other["fadeIn"] = unitOf(t, span);
+                    fadeOut = unitOf(*row, span);
+                } else {
+                    continue;
+                }
+                touched.insert(t.id);
+                out.push_back({{"type", "replace_region"}, {"region", other}});
+                // the mover's fades are set after its move
+                out.push_back({{"type", "set_region_fades"}, {"regionId", row->id.toStdString()}, {"fadeIn", fadeIn}, {"fadeOut", fadeOut}});
+                continue;
+            }
+            touched.insert(t.id);
+            if (ts >= ns - eps && te <= ne + eps) {  // entirely under the mover
+                out.push_back({{"type", "remove_region"}, {"regionId", t.id.toStdString()}});
+            } else if (ts < ns - eps && te > ne + eps) {  // the mover lies inside it: cut it in two around the mover
+                const QString right = QUuid::createUuid().toString(QUuid::WithoutBraces);
+                out.push_back({{"type", "split_region"}, {"regionId", t.id.toStdString()}, {"at", regionPosition(t, ns)}, {"newRegionId", right.toStdString()}});
+                const std::int64_t from = regionPosition(t, ne);
+                out.push_back({{"type", "resize_region"}, {"regionId", right.toStdString()}, {"start", from}, {"length", std::max<std::int64_t>(1, regionPosition(t, te) - from)}});
+            } else if (ts < ns - eps) {  // its end is under the mover
+                out.push_back({{"type", "resize_region"}, {"regionId", t.id.toStdString()}, {"start", regionPosition(t, ts)}, {"length", std::max<std::int64_t>(1, regionPosition(t, ns) - regionPosition(t, ts))}});
+            } else {  // its start is under the mover
+                const std::int64_t from = regionPosition(t, ne);
+                out.push_back({{"type", "resize_region"}, {"regionId", t.id.toStdString()}, {"start", from}, {"length", std::max<std::int64_t>(1, regionPosition(t, te) - from)}});
+            }
+        }
+    }
+    return out;
+}
+
 void ProjectController::moveRegion(const QString& regionId, double startBeats) {
     if (!host_ || !std::isfinite(startBeats)) return;
     const RegionRow* row = regions_.find(regionId);
     if (!row) return;
-    sendCommand(moveCommand(*row, startBeats));
+    nlohmann::json commands = overlapCommands({{row, startBeats}});
+    if (commands.empty()) {
+        sendCommand(moveCommand(*row, startBeats));
+        return;
+    }
+    // the trims first, the move, then (X-Fade) the fades of the mover, which a move would otherwise not have set yet
+    nlohmann::json all = nlohmann::json::array();
+    for (const auto& c : commands)
+        if (c.value("type", "") != "set_region_fades") all.push_back(c);
+    all.push_back(moveCommand(*row, startBeats));
+    for (const auto& c : commands)
+        if (c.value("type", "") == "set_region_fades") all.push_back(c);
+    sendCommand({{"type", "transaction"}, {"commands", all}});
 }
 
 // A selected region was dragged: all the selected regions move by the same amount, as one "Drag" step.
@@ -909,8 +987,15 @@ void ProjectController::moveSelectedRegions(const QString& regionId, double star
     for (const QString& id : std::as_const(selectedRegions_))  // the group stops at the start of the project
         if (const RegionRow* r = regions_.find(id)) delta = std::max(delta, -r->startBeats);
     nlohmann::json commands = nlohmann::json::array();
+    std::vector<std::pair<const RegionRow*, double>> moved;
     for (const QString& id : std::as_const(selectedRegions_))
-        if (const RegionRow* r = regions_.find(id)) commands.push_back(moveCommand(*r, r->startBeats + delta));
+        if (const RegionRow* r = regions_.find(id)) moved.emplace_back(r, r->startBeats + delta);
+    const nlohmann::json trims = overlapCommands(moved);
+    for (const auto& c : trims)
+        if (c.value("type", "") != "set_region_fades") commands.push_back(c);
+    for (const auto& m : moved) commands.push_back(moveCommand(*m.first, m.second));
+    for (const auto& c : trims)
+        if (c.value("type", "") == "set_region_fades") commands.push_back(c);
     if (!commands.empty()) sendCommand({{"type", "transaction"}, {"commands", commands}});
 }
 
@@ -1351,6 +1436,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
     controlBarVisible_ = s.value("panels/controlBar", true).toBool();
     toolbarVisible_ = s.value("panels/toolbar", true).toBool();
+    dragMode_ = s.value("edit/dragMode", "overlap").toString();
     for (const QString& k : s.value("panels/barItemsOff").toStringList()) barItemsOff_.insert(k);
     autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();
     loadClickSettings(s);

@@ -68,6 +68,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
     Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
     Q_PROPERTY(QString snap READ snap WRITE setSnap NOTIFY snapChanged)
+    Q_PROPERTY(QString dragMode READ dragMode WRITE setDragMode NOTIFY dragModeChanged)  // "overlap", "noOverlap" or "xfade"
     Q_PROPERTY(double snapBeats READ snapBeats NOTIFY snapChanged)
     Q_PROPERTY(bool followPlayhead READ followPlayhead WRITE setFollowPlayhead NOTIFY followPlayheadChanged)
     Q_PROPERTY(QStringList selectedTrackIds READ selectedTrackIds NOTIFY selectionChanged)
@@ -167,6 +168,8 @@ public:
     QString tool() const { return tool_; }
     void setTool(const QString& tool);  // pointer, pencil, eraser, scissors or glue; anything else is ignored
     QString snap() const { return snap_; }
+    QString dragMode() const { return dragMode_; }
+    void setDragMode(const QString& mode);
     void setSnap(const QString& snap);  // off, bar, half, quarter, eighth or sixteenth; anything else is ignored
     double snapBeats() const;           // the grid in beats (quarter notes); 0 when snapping is off
     bool followPlayhead() const { return followPlayhead_; }
@@ -677,6 +680,7 @@ signals:
     void nudgeChanged();
     void toolChanged();
     void snapChanged();
+    void dragModeChanged();
     void followPlayheadChanged();
     void trackHeightChanged();
     // The loader refused a folder; the message is the loader's. The previous project stays open.
@@ -711,6 +715,10 @@ private:
     bool selectedToggle(const QString& actionId) const;
     void toggleSelectedFlag(const char* field, bool TrackRow::*flag);
     std::int64_t regionPosition(const RegionRow& row, double beats) const;  // beats -> the region's own unit
+    // What the Drag mode asks when regions land on others: No Overlap trims or removes what lies under them, X-Fade turns the overlap of two audio
+    // regions into a crossfade; `moved` is (region, new start in beats). Empty in the Overlap mode.
+    nlohmann::json overlapCommands(const std::vector<std::pair<const RegionRow*, double>>& moved) const;
+    QString dragMode_ = QStringLiteral("overlap");
     nlohmann::json resizeCommand(const RegionRow& row, double startBeats, double lengthBeats) const;
     nlohmann::json moveCommand(const RegionRow& row, double startBeats) const;
     void setError(const QString& message);

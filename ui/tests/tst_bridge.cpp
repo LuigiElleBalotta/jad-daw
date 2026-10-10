@@ -1618,6 +1618,42 @@ private slots:
         QVERIFY(!c.standardLocations().isEmpty());
         QVERIFY(c.browseFolder("/this/does/not/exist").value("entries").isValid());   // a missing folder shows the home folder instead
     }
+    void noOverlapDragTrimsSplitsAndRemovesWhatLiesUnderTheMovedRegion() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        const QString track = c.tracks()->trackIdAt(0);
+        c.createRegion(track, 0, 16);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString big = c.regions()->regionIdAt(0);
+        c.createRegion(track, 20, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        QString small;
+        for (int i = 0; i < 2; ++i) if (c.regions()->regionIdAt(i) != big) small = c.regions()->regionIdAt(i);
+        QCOMPARE(c.dragMode(), QString("overlap"));
+        c.moveRegion(small, 4);                                      // Overlap: nothing is touched
+        QTRY_COMPARE(c.regions()->find(small)->startBeats, 4.0);
+        QCOMPARE(c.regions()->rowCount(), 2);
+        QCOMPARE(c.regions()->find(big)->lengthBeats, 16.0);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(small)->startBeats, 20.0);
+        c.setDragMode("noOverlap");
+        c.moveRegion(small, 4);                                      // inside the big one: it is cut in two around the moved region
+        QTRY_COMPARE(c.regions()->rowCount(), 3);
+        QCOMPARE(c.regions()->find(big)->lengthBeats, 4.0);          // [0, 4)
+        double rightStart = -1;
+        for (const jad::RegionRow& r : c.regions()->rows()) if (r.id != big && r.id != small) rightStart = r.startBeats;
+        QCOMPARE(rightStart, 8.0);                                   // [8, 16)
+        c.undo();                                                    // all of it is one undo step
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        QCOMPARE(c.regions()->find(big)->lengthBeats, 16.0);
+        c.moveRegion(big, 18);                                       // the big one lands on the small one (20..24): the small one is trimmed to its end
+        QTRY_COMPARE(c.regions()->find(big)->startBeats, 18.0);
+        QVERIFY(c.regions()->find(small) == nullptr || c.regions()->find(small)->startBeats >= 34.0 || c.regions()->find(small)->lengthBeats < 4.0);
+        c.setDragMode("overlap");
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

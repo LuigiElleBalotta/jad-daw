@@ -629,7 +629,7 @@ void ProjectController::setTrackToggle(const QString& actionId, const QString& t
     const bool arm = actionId == QStringLiteral("track.recordArm");
     if (!safe) tracks_.setToggle(trackId, arm ? TrackListModel::RecordArm : TrackListModel::InputMonitor, on);
     mixer_.setToggle(trackId, safe ? MixerModel::SoloSafe : (arm ? MixerModel::RecordArm : MixerModel::InputMonitor), on);
-    if (actionId == QStringLiteral("track.inputMonitor")) applyMonitoring();
+    if (actionId == QStringLiteral("track.inputMonitor") || actionId == QStringLiteral("track.recordArm")) applyMonitoring();
     if (arm) applyLiveTarget();
     emit trackTogglesChanged();
 }
@@ -1261,6 +1261,7 @@ void ProjectController::tick() {
         playing_ = playing;
         if (!playing) finishAutomationCaptures(true);  // stopped: what was written (latch and write too) goes into the lanes
         emit playingChanged();
+        applyMonitoring();
     }
     if (playing_) tickAutomationWrite();
     const std::int64_t frames = engine_->positionFrames();
@@ -1343,6 +1344,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     setSmartControlsHeight(s.value("panels/smartControlsHeight", smartControlsHeight_).toDouble());
     setMixerHeight(s.value("panels/mixerHeight", mixerHeight_).toDouble());
     mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
+    autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();
     loadClickSettings(s);
     loadAudioSettings(s);
     loadMidiSettings(s);

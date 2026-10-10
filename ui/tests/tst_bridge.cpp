@@ -1400,6 +1400,17 @@ private slots:
         c.importMidiFile(QUrl::fromLocalFile(mid + ".missing"));
         QVERIFY(!c.lastError().isEmpty());
     }
+    void autoInputMonitoringIsAToggleThatIsKept() {
+        jad::ProjectController c(false);
+        QSignalSpy spy(&c, &jad::ProjectController::recordingChanged);
+        const bool before = c.autoInputMonitoring();
+        c.setAutoInputMonitoring(!before);
+        QCOMPARE(c.autoInputMonitoring(), !before);
+        QCOMPARE(spy.count(), 1);
+        c.setAutoInputMonitoring(!before);
+        QCOMPARE(spy.count(), 1);                                    // no change, no signal
+        c.setAutoInputMonitoring(before);                            // put the stored choice back for the other tests
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -54,6 +54,16 @@ Dialog {
             label: qsTr("Count-in")
             Text { text: root.project.countInEnabled ? qsTr("On, %1").arg(root.project.countInChoice > 0 ? qsTr("%1 bar(s)").arg(root.project.countInChoice) : qsTr("%1/4").arg(-root.project.countInChoice)) : qsTr("Off"); color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }
         }
+        Row2 {
+            label: qsTr("Recording")
+            CheckBox {
+                objectName: "autoInputMonitoring"
+                text: qsTr("Auto input monitoring")
+                checked: root.project.autoInputMonitoring
+                onToggled: root.project.autoInputMonitoring = checked
+                contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
+            }
+        }
         RowLayout {
             spacing: Theme.spacing[2]
             IconButton { implicitHeight: 24; label: qsTr("Metronome Settings…"); onClicked: { root.close(); root.metronomeRequested() } }

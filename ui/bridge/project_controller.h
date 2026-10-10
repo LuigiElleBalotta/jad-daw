@@ -99,6 +99,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString clickGrouping READ clickGrouping WRITE setClickGrouping NOTIFY clickSettingsChanged)  // "3+2+2"
     Q_PROPERTY(int clickRevision READ clickRevision NOTIFY clickSettingsChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(bool autoInputMonitoring READ autoInputMonitoring WRITE setAutoInputMonitoring NOTIFY recordingChanged)  // Record > Auto Input Monitoring
     Q_PROPERTY(bool countInEnabled READ countInEnabled WRITE setCountInEnabled NOTIFY recordingChanged)
     Q_PROPERTY(int countInChoice READ countInChoice WRITE setCountInChoice NOTIFY recordingChanged)  // the count-in before a recording: 1..6 bars, or -1..-3 for 1/4..3/4 of a bar in beats
     Q_PROPERTY(int sampleRateHz READ sampleRateHz NOTIFY projectChanged)  // the project's sample rate
@@ -286,6 +287,9 @@ public:
     Q_INVOKABLE void setTrackInput(const QString& trackId, int input);
     Q_INVOKABLE QStringList inputChoices() const;  // "Input 1", ... for the open device
     bool countInEnabled() const { return countIn_; }
+    // On: an armed audio track plays its input while the project is stopped or recording, and its recorded audio while it plays. Off: only the I button monitors.
+    bool autoInputMonitoring() const { return autoInput_; }
+    void setAutoInputMonitoring(bool on);
     void setCountInEnabled(bool on);
     int countInChoice() const { return countInChoice_; }
     void setCountInChoice(int choice);
@@ -750,6 +754,7 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    bool autoInput_ = true;
     bool showHidden_ = false;
     bool preFader_ = false;
     bool groupsActive_ = true;

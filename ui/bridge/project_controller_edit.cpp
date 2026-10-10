@@ -879,6 +879,14 @@ void ProjectController::setCountInEnabled(bool on) {
     emit recordingChanged();
 }
 
+void ProjectController::setAutoInputMonitoring(bool on) {
+    if (on == autoInput_) return;
+    autoInput_ = on;
+    QSettings().setValue("record/autoInputMonitoring", on);
+    applyMonitoring();
+    emit recordingChanged();
+}
+
 void ProjectController::setCountInChoice(int choice) {
     if (choice == 0 || choice < -3 || choice > 6 || choice == countInChoice_) return;
     countInChoice_ = choice;
@@ -940,7 +948,8 @@ void ProjectController::applyMonitoring() {
     const QSet<QString> on = trackToggles_.value(QStringLiteral("track.inputMonitor"));
     for (const TrackRow& t : allRows_) {
         if (t.master || t.kind != "audio") continue;
-        const bool monitored = on.contains(t.id);
+        const bool armed = trackToggles_.value(QStringLiteral("track.recordArm")).contains(t.id);
+        const bool monitored = on.contains(t.id) || (autoInput_ && armed && (!playing_ || recording_));
         host_->setMonitor(lpc::Uuid::parse(t.id.toStdString()).value_or(lpc::Uuid{}), monitored ? (t.input == 0 ? 1 : t.input) : 0, monitored && t.input == 0 ? 2 : 0);
     }
 }
@@ -996,6 +1005,7 @@ void ProjectController::startRecording() {
     recording_ = true;
     recFinishing_ = false;
     host_->startRecording(startFrame, countFrames, std::move(count), !quickPunch);
+    applyMonitoring();
     emit recordingChanged();
 }
 
@@ -1024,6 +1034,7 @@ void ProjectController::finishRecording() {
     drainRecording();
     recording_ = false;
     recFinishing_ = false;
+    applyMonitoring();
     emit recordingChanged();
     if (!recChunks_.empty()) finishMidiRecording(recChunks_.front().position, recChunks_.back().position + recChunks_.back().frames);
     else { recMidiTracks_.clear(); recMidi_.clear(); }

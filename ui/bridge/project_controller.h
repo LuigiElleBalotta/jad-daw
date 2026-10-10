@@ -92,6 +92,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool audioEnabled READ audioEnabled WRITE setAudioEnabled NOTIFY audioEnabledChanged)
     Q_PROPERTY(double masterPeak READ masterPeak NOTIFY peakChanged)
+    Q_PROPERTY(bool quickHelpVisible READ quickHelpVisible WRITE setQuickHelpVisible NOTIFY barsChanged)  // View > Quick Help
     Q_PROPERTY(bool controlBarVisible READ controlBarVisible WRITE setControlBarVisible NOTIFY barsChanged)  // View > Control Bar
     Q_PROPERTY(bool toolbarVisible READ toolbarVisible WRITE setToolbarVisible NOTIFY barsChanged)          // View > Toolbar
     Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
@@ -333,6 +334,8 @@ public:
     Q_INVOKABLE bool barItem(const QString& key) const { return !barItemsOff_.contains(key); }
     Q_INVOKABLE void setBarItem(const QString& key, bool shown);
     Q_INVOKABLE void resetBarItems();
+    bool quickHelpVisible() const { return quickHelp_; }
+    void setQuickHelpVisible(bool on) { if (on == quickHelp_) return; quickHelp_ = on; QSettings().setValue("panels/quickHelp", on); ++barItemsRevision_; emit barsChanged(); }
     bool controlBarVisible() const { return controlBarVisible_; }
     void setControlBarVisible(bool on);
     bool toolbarVisible() const { return toolbarVisible_; }
@@ -823,7 +826,7 @@ private:
     double peak_ = 0.0;
     int peaksRevision_ = 0;
     bool globalTracksVisible_ = false;
-    bool controlBarVisible_ = true, toolbarVisible_ = true;
+    bool controlBarVisible_ = true, toolbarVisible_ = true, quickHelp_ = false;
     QSet<QString> barItemsOff_;
     QString templatesFolder_;  // empty: the default one
     QStringList replaceIds_;   // regions that the paste in progress replaces

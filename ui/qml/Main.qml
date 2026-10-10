@@ -300,6 +300,7 @@ ApplicationWindow {
         "edit.moveShuffleLeft": () => controller.shuffleSelectedRegion(-1),
         "edit.moveShuffleRight": () => controller.shuffleSelectedRegion(1),
         "window.openMidiTransform": () => midiTransform.open(),
+        "view.quickHelp": () => { controller.quickHelpVisible = !controller.quickHelpVisible },
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),
@@ -401,6 +402,7 @@ ApplicationWindow {
         "track.globalTracks": controller.globalTracksVisible,
         "track.toggleHideView": controller.showHiddenTracks,
         "view.controlBar": controller.controlBarVisible,
+        "view.quickHelp": controller.quickHelpVisible,
         "view.toolbar": controller.toolbarVisible,
         "record.autoInputMonitoring": controller.autoInputMonitoring,
         "mix.preFaderMetering": controller.preFaderMetering,
@@ -485,6 +487,35 @@ ApplicationWindow {
             root.actionMap[object.actionId] = object
             root.actionsVersion++
             ActionHub.add(object)
+        }
+    }
+
+    Rectangle {  // Quick Help: what the button under the pointer does, from the table of actions
+        id: quickHelp
+        visible: controller.quickHelpVisible
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 8
+        z: 200
+        width: Math.min(parent.width - 16, helpText.implicitWidth + 24)
+        height: 28
+        radius: Theme.radiusControl
+        color: Theme.surfaceRaised
+        border.color: Theme.borderStrong
+        readonly property string id: ActionHub.hoveredId
+        Text {
+            id: helpText
+            objectName: "quickHelpText"
+            anchors.centerIn: parent
+            color: Theme.textPrimary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontTypeBodySize
+            text: {
+                const reg = ActionHub.registry
+                if (!reg || quickHelp.id === "") return qsTr("Quick Help: point at a button")
+                const sc = reg.shortcut(quickHelp.id), menu = reg.menu(quickHelp.id)
+                return reg.label(quickHelp.id) + (menu ? "  —  " + menu.replace(/\//g, " > ") : "") + (sc ? "  —  " + sc : "") + (reg.isStub(quickHelp.id) ? "  —  " + qsTr("not implemented yet") : "")
+            }
         }
     }
 

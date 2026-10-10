@@ -12,6 +12,7 @@ IconButton {
     active: action ? action.on : false
     enabled: action ? action.enabled : true
     onClicked: if (action) action.trigger()
+    onHoveredChanged: { if (hovered) ActionHub.hoveredId = actionId; else if (ActionHub.hoveredId === actionId) ActionHub.hoveredId = "" }
 
     ToolTip.visible: hovered && ToolTip.text !== ""
     ToolTip.delay: 600

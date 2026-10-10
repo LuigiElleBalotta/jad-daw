@@ -231,7 +231,7 @@
  {"id":"track.height.normal","label":"Normal","menu":"View/Track Height","shortcut":"","kind":"command","status":"ready","group":"trackHeight"},
  {"id":"track.height.large","label":"Large","menu":"View/Track Height","shortcut":"","kind":"command","status":"ready","group":"trackHeight"},
  {"id":"track.height.xlarge","label":"Extra Large","menu":"View/Track Height","shortcut":"","kind":"command","status":"ready","group":"trackHeight"},
- {"id":"view.quickHelp","label":"Quick Help","menu":"View","shortcut":"","kind":"toggle","status":"stub","sep":true},
+ {"id":"view.quickHelp","label":"Quick Help","menu":"View","shortcut":"","kind":"toggle","status":"ready","sep":true},
  {"id":"view.enterFullScreen","label":"Enter Full Screen","menu":"View","shortcut":"Ctrl+Alt+F","kind":"command","status":"ready"},
  {"id":"window.minimize","label":"Minimize","menu":"Window","shortcut":"Ctrl+M","kind":"command","status":"ready"},
  {"id":"window.zoom","label":"Zoom","menu":"Window","shortcut":"","kind":"command","status":"ready"},

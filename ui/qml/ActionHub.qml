@@ -6,6 +6,7 @@ import QtQuick
 QtObject {
     property var registry: null
     property var actions: ({})
+    property string hoveredId: ""  // the action of the button the pointer is over (Quick Help)
     property int version: 0  // bumps when an action is added: bindings that read it re-evaluate
 
     function add(action) {

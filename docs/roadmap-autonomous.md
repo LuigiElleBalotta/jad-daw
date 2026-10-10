@@ -72,3 +72,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
   automation (volume/pan), global tracks, markers, cycle area, Save As/Import/Bounce, MP3/FLAC/AIFF import and drop-to-new-track.
 - 2026-10-10: Track > Hide Selected Track / Hide Unselected Tracks / Unhide All Tracks / Toggle Hide View (any track but the master can be hidden; hidden tracks keep playing and stay in the Mixer).
 - 2026-10-10: Track > Sort Tracks by (name/type/color, set_track_order command) and Assign Track Color (Colors window).
+- 2026-10-10: Marker List window (Navigate > Open Marker List, Go To > Marker, Rename Marker).

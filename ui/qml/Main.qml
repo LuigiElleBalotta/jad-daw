@@ -81,6 +81,7 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    MarkerListWindow { id: markerList; project: controller }
     ProjectSettingsDialog { id: projectSettings; project: controller; onMetronomeRequested: metronomeDialog.open(); onPreferencesRequested: preferencesDialog.open() }
     IoLabelsDialog { id: ioLabelsDialog; project: controller }
     BounceDialog { id: bounceOptions; project: controller }
@@ -209,6 +210,9 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "navigate.goToMarker": () => markerList.open(),
+        "navigate.renameMarker": () => markerList.open(),
+        "navigate.openMarkerList": () => markerList.open(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

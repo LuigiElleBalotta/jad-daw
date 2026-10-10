@@ -10,6 +10,7 @@ TestCase {
     when: windowShown
 
     Component { id: ctlC; ProjectController { audioEnabled: false } }
+    Component { id: listC; MarkerListWindow { parent: Overlay.overlay } }
     Component { id: tlC; Timeline { width: 1000; height: 500 } }
 
     function setup() {
@@ -36,6 +37,22 @@ TestCase {
         tryVerify(function () { return c.markers().length === 1 })
         c.undo()
         tryVerify(function () { return c.markers().length === 2 })
+    }
+
+    function test_marker_list_shows_the_markers_and_goes_to_one() {
+        const c = setup()
+        c.addMarker(8, "Verse")
+        tryVerify(function () { return c.markers().length === 1 })
+        c.addMarker(16, "Chorus")
+        tryVerify(function () { return c.markers().length === 2 })
+        const w = createTemporaryObject(listC, this, { project: c })
+        w.open()
+        tryCompare(w, "visible", true)
+        const view = findChild(w.contentItem, "markerListView")
+        tryCompare(view, "count", 2)
+        compare(w.list[1].name, "Chorus")
+        compare(w.list[1].beats, 16)
+        w.close()
     }
 
     function test_tempo_and_signature_events() {

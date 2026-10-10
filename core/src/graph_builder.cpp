@@ -199,7 +199,7 @@ void fillSendAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
         for (std::size_t i = 0; i < t.strip.sends.size() && i < cfg.sends.size(); ++i) {
             if (t.strip.sends[i].id != *id) continue;
             for (const AutomationPoint& pt : lane.points)
-                cfg.sends[i].levelAuto.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), dbToLinear(static_cast<float>(pt.value))});
+                cfg.sends[i].levelAuto.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), dbToLinear(static_cast<float>(pt.value)), static_cast<float>(pt.curve)});
         }
     }
 }
@@ -223,7 +223,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             if (lane.target != "volume" && lane.target != "pan") continue;
             for (const AutomationPoint& pt : lane.points)
                 out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)),
-                                        lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value)});
+                                        lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value), static_cast<float>(pt.curve)});
         }
         for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}, {}});
         fillSendAutomation(p, t, *cfg);
@@ -309,7 +309,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         if (lane.target != "volume" && lane.target != "pan") continue;
         for (const AutomationPoint& pt : lane.points)
             out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)),
-                                    lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value)});
+                                    lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value), static_cast<float>(pt.curve)});
     }
     int slotIndex = 0;
     std::vector<int> builtAt(t.strip.inserts.size(), -1);  // where each insert of the model ended up in the config
@@ -332,7 +332,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             pa.insert = built;
             pa.param = target->index;
             for (const AutomationPoint& pt : lane.points)
-                pa.points.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), std::clamp(static_cast<float>(pt.value), 0.0f, 1.0f)});
+                pa.points.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), std::clamp(static_cast<float>(pt.value), 0.0f, 1.0f), static_cast<float>(pt.curve)});
             cfg->paramAuto.push_back(std::move(pa));
         }
     for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}, {}});

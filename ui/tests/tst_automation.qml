@@ -49,6 +49,41 @@ TestCase {
         compare(c.automationPoints(id, "volume").length, 1)
     }
 
+    function test_the_curve_tool_bends_a_segment_and_the_select_tool_moves_and_deletes_a_range() {
+        const c = setup()
+        const id = c.tracks.trackIdAt(0)
+        c.setAutomationPoints(id, "pan", [{ beats: 0, value: -1 }, { beats: 8, value: 1 }, { beats: 12, value: 0 }])
+        tryVerify(function () { return c.automationPoints(id, "pan").length === 3 })
+        compare(c.automationPoints(id, "pan")[0].curve, 0)
+        const lane = createTemporaryObject(laneC, this, { project: c, trackId: id, param: "pan" })
+        // Automation Curve: press in the middle of the first segment and drag it down (towards the start value): it starts slowly
+        c.tool = "autoCurve"
+        const x = lane.beatsToX(4), y = lane.valueToY(0)
+        mousePress(lane, x, y)
+        mouseMove(lane, x, y + 20)
+        mouseRelease(lane, x, y + 20)
+        tryVerify(function () { return c.automationPoints(id, "pan")[0].curve !== 0 })
+        verify(c.automationPoints(id, "pan")[0].curve > 0)           // the lower the pointer, the slower the start
+        compare(c.automationPoints(id, "pan").length, 3)              // no point was added
+        compare(c.automationPoints(id, "pan")[1].curve, 0)
+        // Automation Select: a range around the second point, moved by two beats, then deleted
+        c.tool = "autoSelect"
+        mousePress(lane, lane.beatsToX(7), 10)
+        mouseMove(lane, lane.beatsToX(9), 10)
+        mouseRelease(lane, lane.beatsToX(9), 10)
+        verify(lane.hasSelection)
+        compare(lane.selFrom, 7)
+        compare(lane.selTo, 9)
+        mousePress(lane, lane.beatsToX(8), 30)
+        mouseMove(lane, lane.beatsToX(10), 30)
+        mouseRelease(lane, lane.beatsToX(10), 30)
+        tryVerify(function () { return c.automationPoints(id, "pan")[1].beats === 10 })
+        compare(c.automationPoints(id, "pan")[0].beats, 0)
+        lane.deleteSelection()
+        tryVerify(function () { return c.automationPoints(id, "pan").length === 2 })
+        c.tool = "pointer"
+    }
+
     function test_the_lane_follows_changes_made_elsewhere() {
         const c = setup()
         const id = c.tracks.trackIdAt(0)

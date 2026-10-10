@@ -77,6 +77,17 @@ void from_json(const nlohmann::json& j, Strip& s) {
     s.input = j.value("input", 0);
 }
 
+void to_json(nlohmann::json& j, const AutomationPoint& p) {
+    j = {{"tick", p.tick}, {"value", p.value}};
+    if (p.curve != 0.0) j["curve"] = p.curve;  // written only when bent: older projects and files stay as they were
+}
+
+void from_json(const nlohmann::json& j, AutomationPoint& p) {
+    j.at("tick").get_to(p.tick);
+    j.at("value").get_to(p.value);
+    p.curve = j.value("curve", 0.0);
+}
+
 void to_json(nlohmann::json& j, const MediaItem& m) {
     j = {{"id", m.id}, {"path", m.path}, {"hash", m.hash}, {"sampleRate", m.sampleRate}, {"channels", m.channels}, {"frames", m.frames}};
     if (m.recordedAt >= 0) j["recordedAt"] = m.recordedAt;  // written only for a take: older projects and files stay as they were

@@ -35,7 +35,8 @@ void from_json(const nlohmann::json& j, ProcessorRef& r);  // `label` is optiona
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Send, id, targetTrackId, levelDb, preFader)
 void to_json(nlohmann::json& j, const Strip& s);
 void from_json(const nlohmann::json& j, Strip& s);
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationPoint, tick, value)
+void to_json(nlohmann::json& j, const AutomationPoint& p);
+void from_json(const nlohmann::json& j, AutomationPoint& p);  // `curve` is optional
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AutomationLane, id, target, points)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Marker, id, tick, name)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Group, id, name, members, volume, pan, mute, solo, selection)

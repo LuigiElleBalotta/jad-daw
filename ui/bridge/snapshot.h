@@ -36,6 +36,7 @@ struct SmartRow {
 
 struct AutoRow {
     double beats = 0, value = 0;  // volume in dB, pan in -1..1
+    double curve = 0;             // the bend of the segment up to the next point, -1..1
 };
 
 struct TrackRow {

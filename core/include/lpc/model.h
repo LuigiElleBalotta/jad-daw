@@ -84,6 +84,7 @@ struct Strip {
 struct AutomationPoint {
     Ticks tick = 0;
     double value = 0.0;
+    double curve = 0.0;  // the bend of the segment up to the next point, -1..1: 0 is straight, above 0 starts slowly, below 0 quickly
     bool operator==(const AutomationPoint&) const = default;
 };
 

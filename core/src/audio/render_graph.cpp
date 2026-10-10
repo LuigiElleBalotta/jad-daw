@@ -253,7 +253,8 @@ float autoValue(const std::vector<AutoPoint>& pts, std::int64_t frame) noexcept 
     while (hi < pts.size() && pts[hi].frame <= frame) ++hi;
     const AutoPoint& a = pts[hi - 1];
     const AutoPoint& b = pts[hi];
-    const float t = static_cast<float>(frame - a.frame) / static_cast<float>(b.frame - a.frame);
+    float t = static_cast<float>(frame - a.frame) / static_cast<float>(b.frame - a.frame);
+    if (a.curve != 0.0f) t = std::pow(t, std::exp2(2.0f * a.curve));  // 4^curve: above 0 the segment starts slowly, below 0 quickly
     return a.value + (b.value - a.value) * t;
 }
 }  // namespace

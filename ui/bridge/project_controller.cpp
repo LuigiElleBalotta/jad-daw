@@ -656,7 +656,7 @@ bool ProjectController::selectedToggle(const QString& actionId) const {
 }
 
 void ProjectController::setTool(const QString& tool) {
-    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom", "mute", "gain", "fade", "solo", "text", "slip", "rotate"};
+    static const QStringList known{"pointer", "pencil", "eraser", "scissors", "glue", "zoom", "mute", "gain", "fade", "solo", "text", "slip", "rotate", "autoCurve", "autoSelect"};
     if (!known.contains(tool) || tool == tool_) return;
     tool_ = tool;
     emit toolChanged();
@@ -964,7 +964,11 @@ nlohmann::json ProjectController::automationFollowCommands(const std::vector<std
     for (const Lane& l : lanes) {
         if (!l.changed) continue;
         nlohmann::json pts = nlohmann::json::array();
-        for (const AutoRow& p : l.points) pts.push_back({{"tick", static_cast<std::int64_t>(std::llround(std::max(0.0, p.beats) * lpc::kPPQ))}, {"value", p.value}});
+        for (const AutoRow& p : l.points) {
+            nlohmann::json point = {{"tick", static_cast<std::int64_t>(std::llround(std::max(0.0, p.beats) * lpc::kPPQ))}, {"value", p.value}};
+            if (p.curve != 0.0) point["curve"] = p.curve;
+            pts.push_back(point);
+        }
         out.push_back({{"type", "set_automation"}, {"trackId", l.track.toStdString()}, {"target", l.target.toStdString()}, {"points", pts}});
     }
     return out;

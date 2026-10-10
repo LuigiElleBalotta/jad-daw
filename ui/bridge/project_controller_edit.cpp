@@ -918,7 +918,7 @@ QVariantList ProjectController::automationPoints(const QString& trackId, const Q
             for (const auto& lane : t.paramAuto)
                 if (lane.first == target) points = &lane.second;
         if (!points) continue;
-        for (const AutoRow& p : *points) out.append(QVariantMap{{"beats", p.beats}, {"value", p.value}});
+        for (const AutoRow& p : *points) out.append(QVariantMap{{"beats", p.beats}, {"value", p.value}, {"curve", p.curve}});
     }
     return out;
 }
@@ -934,7 +934,10 @@ void ProjectController::setAutomationPoints(const QString& trackId, const QStrin
         const QVariantMap m = v.toMap();
         const double beats = m.value("beats").toDouble(), value = m.value("value").toDouble();
         if (!std::isfinite(beats) || !std::isfinite(value)) continue;
-        list.push_back({{"tick", static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))}, {"value", std::clamp(value, lo, hi)}});
+        nlohmann::json point = {{"tick", static_cast<std::int64_t>(std::llround(std::clamp(beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))}, {"value", std::clamp(value, lo, hi)}};
+        const double curve = m.value("curve").toDouble();
+        if (std::isfinite(curve) && curve != 0.0) point["curve"] = std::clamp(curve, -1.0, 1.0);
+        list.push_back(point);
     }
     sendCommand({{"type", "set_automation"}, {"trackId", trackId.toStdString()}, {"target", target.toStdString()}, {"points", list}});
 }
@@ -2001,7 +2004,7 @@ void ProjectController::finishAutomationCapture(const QString& trackId) {
         const double from = moves.front().first, to = moves.back().first;
         QVariantList points;
         for (const AutoRow& p : old)
-            if (p.beats < from - 1e-9 || p.beats > to + 1e-9) points.append(QVariantMap{{"beats", p.beats}, {"value", p.value}});
+            if (p.beats < from - 1e-9 || p.beats > to + 1e-9) points.append(QVariantMap{{"beats", p.beats}, {"value", p.value}, {"curve", p.curve}});
         for (const auto& [b, v] : kept) points.append(QVariantMap{{"beats", b}, {"value", v}});
         setAutomationPoints(trackId, QString::fromLatin1(target), points);
     };

@@ -84,6 +84,7 @@ struct RegionPlayback {
 struct AutoPoint {
     std::int64_t frame = 0;
     float value = 0.0f;
+    float curve = 0.0f;  // the bend of the segment up to the next point (-1..1, 0 straight)
 };
 
 struct SendPlayback {

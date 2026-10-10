@@ -1,6 +1,8 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <random>
 #include "lpc/commands.h"
+#include "lpc/graph_builder.h"
 #include "lpc/model_json.h"
 #include "lpc/validation.h"
 
@@ -229,4 +231,23 @@ TEST_CASE("set_project_key: a key is a tonic with a sharp and a mode, undo resto
     REQUIRE_FALSE(toJson(before).contains("key"));
     REQUIRE(res.inverse->apply(p).ok());
     REQUIRE(p == before);
+}
+
+TEST_CASE("automation: a segment can be bent, 0 is straight, out of range is refused and json keeps it", "[automation][curve]") {
+    Project project{Uuid::random(gRng)};
+    const Track a = track(TrackKind::Audio, "A");
+    REQUIRE(makeAddTrack(a)->apply(project).ok());
+    std::vector<AutomationPoint> bent{{0, 0.0, 0.5}, {kPPQ * 4, 1.0, 0.0}};  // pan from 0 to 1 over four beats
+    REQUIRE(makeSetAutomation(a.id, "pan", bent)->apply(project).ok());
+    MediaStore media;
+    auto cfg = buildConfig(project, *project.findTrack(a.id), media, nullptr);
+    REQUIRE(cfg->panAuto.size() == 2);
+    REQUIRE(cfg->panAuto[0].curve == Catch::Approx(0.5f));
+    REQUIRE(cfg->panAuto[1].curve == 0.0f);
+    REQUIRE_FALSE(makeSetAutomation(a.id, "pan", std::vector<AutomationPoint>{{0, 0.0, 1.5}})->apply(project).ok());
+    REQUIRE_FALSE(makeSetAutomation(a.id, "pan", std::vector<AutomationPoint>{{0, 0.0, -2.0}})->apply(project).ok());
+    const nlohmann::json j = toJson(project);
+    REQUIRE(j["tracks"][1]["automation"][0]["points"][0]["curve"] == 0.5);
+    REQUIRE_FALSE(j["tracks"][1]["automation"][0]["points"][1].contains("curve"));  // a straight segment writes nothing
+    REQUIRE(projectFromJson(j) == project);
 }

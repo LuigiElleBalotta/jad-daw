@@ -148,7 +148,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
                 out = &tr.sendAuto.back().second;
             }
             if (!out) continue;
-            for (const lpc::AutomationPoint& pt : lane.points) out->push_back({static_cast<double>(pt.tick) / lpc::kPPQ, pt.value});
+            for (const lpc::AutomationPoint& pt : lane.points) out->push_back({static_cast<double>(pt.tick) / lpc::kPPQ, pt.value, pt.curve});
         }
         s.tracks.push_back(tr);
         if (master) continue;

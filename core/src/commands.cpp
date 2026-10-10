@@ -355,7 +355,7 @@ public:
         if (points_.size() > 4096) return fail("too_many", "at most 4096 automation points per lane");
         const double lo = paramTarget ? 0.0 : (target_ == "pan" ? -1.0 : -96.0), hi = paramTarget ? 1.0 : (target_ == "pan" ? 1.0 : (sendTarget ? 12.0 : 24.0));
         for (const AutomationPoint& pt : points_)
-            if (pt.tick < 0 || pt.tick > kMaxPosition || !(pt.value >= lo && pt.value <= hi)) return fail("bad_point", "an automation point is out of range");
+            if (pt.tick < 0 || pt.tick > kMaxPosition || !(pt.value >= lo && pt.value <= hi) || !(pt.curve >= -1.0 && pt.curve <= 1.0)) return fail("bad_point", "an automation point is out of range");
         std::vector<AutomationPoint> sorted = points_;
         std::stable_sort(sorted.begin(), sorted.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.tick < b.tick; });
         auto it = std::find_if(t->automation.begin(), t->automation.end(), [&](const AutomationLane& l) { return l.target == target_; });

@@ -444,6 +444,7 @@ void ProjectController::endGesture() {
 
 void ProjectController::setGainLive(const QString& trackId, double db) {
     if (!host_ || !std::isfinite(db)) return;
+    autoselectLane(trackId, "volume");
     liveGain_[trackId] = db;
     captureAutomation(trackId, false, std::clamp(db, -96.0, 24.0));
     if (!liveTimer_.isActive()) {
@@ -454,6 +455,7 @@ void ProjectController::setGainLive(const QString& trackId, double db) {
 
 void ProjectController::setPanLive(const QString& trackId, double pan) {
     if (!host_ || !std::isfinite(pan)) return;
+    autoselectLane(trackId, "pan");
     livePan_[trackId] = pan;
     captureAutomation(trackId, true, std::clamp(pan, -1.0, 1.0));
     if (!liveTimer_.isActive()) {
@@ -1469,9 +1471,16 @@ void ProjectController::setInstrumentParam(const QString& trackId, const QString
 
 namespace {
 struct EngineMidi final : lpc::IMidiSink {
-    explicit EngineMidi(lpc::audio::AudioEngine& e) : engine(e) {}
-    void midi(unsigned char status, unsigned char d1, unsigned char d2) noexcept override { engine.pushDeviceMidi({status, d1, d2}); }
+    EngineMidi(lpc::audio::AudioEngine& e, ProjectController* o, const std::atomic<int>* w) : engine(e), owner(o), watch(w) {}
+    void midi(unsigned char status, unsigned char d1, unsigned char d2) noexcept override {
+        engine.pushDeviceMidi({status, d1, d2});
+        const int w = watch->load(std::memory_order_relaxed);  // Automation Quick Access listens to one controller
+        if (w != -1 && (status & 0xF0) == 0xB0 && (w == -2 || w == d1))
+            QMetaObject::invokeMethod(owner, "quickAccessMessage", Qt::QueuedConnection, Q_ARG(int, static_cast<int>(d1)), Q_ARG(int, static_cast<int>(d2)));
+    }
     lpc::audio::AudioEngine& engine;
+    ProjectController* owner;
+    const std::atomic<int>* watch;
 };
 }  // namespace
 
@@ -1499,7 +1508,7 @@ void ProjectController::openMidi() {
         emit midiChanged();
         return;
     }
-    midiSink_ = std::make_unique<EngineMidi>(*engine_);
+    midiSink_ = std::make_unique<EngineMidi>(*engine_, this, &aqaWatch_);
     std::vector<std::string> names;
     for (const QString& n : std::as_const(midiChosen_)) names.push_back(n.toStdString());
     std::shared_ptr<lpc::IMidiInputs> open = lpc::openJuceMidiInputs(names, *midiSink_);
@@ -3791,5 +3800,67 @@ void ProjectController::showOutputTrack() {
     selectTrack(target->id, "replace");
 }
 
+
+void ProjectController::setAutomationQuickAccess(bool on) {
+    if (on == aqa_) return;
+    aqa_ = on;
+    if (on && aqaCc_ < 0) aqaCc_ = -1;
+    aqaWatch_ = on ? (aqaCc_ >= 0 ? aqaCc_ : -2) : -1;
+    QSettings().setValue("automation/aqa", on);
+    emit automationSettingsChanged();
+}
+
+void ProjectController::setAutoselectAutomationParam(bool on) {
+    if (on == autoselect_) return;
+    autoselect_ = on;
+    QSettings().setValue("automation/autoselect", on);
+    emit automationSettingsChanged();
+}
+
+void ProjectController::learnQuickAccessController() {
+    aqa_ = true;
+    aqaCc_ = -1;
+    aqaWatch_ = -2;
+    QSettings().setValue("automation/aqa", true);
+    QSettings().setValue("automation/aqaCc", -1);
+    emit automationSettingsChanged();
+}
+
+void ProjectController::quickAccessMessage(int controller, int value) {
+    if (!aqa_ || controller < 0 || controller > 127) return;
+    if (aqaCc_ < 0) {  // waiting: the first controller that moves is the one
+        aqaCc_ = controller;
+        aqaWatch_ = controller;
+        QSettings().setValue("automation/aqaCc", controller);
+        emit automationSettingsChanged();
+        emit notice(QString("Automation Quick Access: controller %1").arg(controller));
+        return;
+    }
+    if (controller != aqaCc_ || !host_) return;
+    QString track;
+    for (const QString& id : selectedTracks_)
+        for (const TrackRow& t : allRows_)
+            if (t.id == id && !t.master) { track = id; break; }
+    if (track.isEmpty()) return;
+    const double x = std::clamp(value, 0, 127) / 127.0;
+    const QString param = automationParamFor(track);
+    if (param != "volume" && param != "pan") {
+        emit notice("Automation Quick Access moves Volume and Pan");
+        return;
+    }
+    if (!aqaGesture_) {  // the first move of a run is a touch
+        aqaGesture_ = true;
+        beginGesture();
+    }
+    aqaRelease_.start();
+    if (param == "volume") setGainLive(track, x <= 0.0 ? -96.0 : 6.0 + (x - 1.0) * 66.0);
+    else setPanLive(track, x * 2.0 - 1.0);
+}
+
+void ProjectController::autoselectLane(const QString& trackId, const QString& param) {
+    if (!autoselect_ || !automationVisible_) return;
+    const TrackRow* t = findTrackRow(allRows_, trackId);
+    if (t && !t->master && t->automationMode == "read" && automationParamFor(trackId) != param) setTrackAutomationParam(trackId, param);
+}
 
 }  // namespace jad

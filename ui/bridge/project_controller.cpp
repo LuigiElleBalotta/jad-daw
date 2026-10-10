@@ -125,6 +125,13 @@ ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QO
     connect(this, &ProjectController::projectChanged, this, &ProjectController::trackFlagsChanged);
     timer_.setInterval(33);
     autosaveTimer_.setInterval(120000);
+    aqaRelease_.setSingleShot(true);
+    aqaRelease_.setInterval(500);
+    connect(&aqaRelease_, &QTimer::timeout, this, [this] {  // the controller was let go: the touch ends
+        if (!aqaGesture_) return;
+        aqaGesture_ = false;
+        endGesture();
+    });
     connect(&autosaveTimer_, &QTimer::timeout, this, &ProjectController::autosaveNow);
     autosaveTimer_.start();
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
@@ -1662,6 +1669,10 @@ void ProjectController::loadPanelState(QSettings& s) {
     }
     recordButtonMode_ = s.value("record/buttonMode", "toggle").toString() == "repeat" ? QStringLiteral("repeat") : QStringLiteral("toggle");
     automationFollows_ = s.value("edit/automationFollows", false).toBool();
+    aqa_ = s.value("automation/aqa", false).toBool();
+    aqaCc_ = s.value("automation/aqaCc", -1).toInt();
+    autoselect_ = s.value("automation/autoselect", false).toBool();
+    aqaWatch_ = aqa_ ? (aqaCc_ >= 0 ? aqaCc_ : -2) : -1;
     for (const QString& k : s.value("panels/barItemsOff").toStringList()) barItemsOff_.insert(k);
     autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();
     loadClickSettings(s);

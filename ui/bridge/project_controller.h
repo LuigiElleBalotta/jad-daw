@@ -68,6 +68,11 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
     Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
     Q_PROPERTY(QString snap READ snap WRITE setSnap NOTIFY snapChanged)
+    // Mix > Automation Settings. Quick Access: one MIDI controller (a CC) writes the active automation parameter (volume or pan) of the selected track. Turning it
+    // on waits for the controller to be moved (-2), which assigns it. Autoselect: moving a fader or knob in Read mode shows its lane while Show Automation is on.
+    Q_PROPERTY(bool automationQuickAccess READ automationQuickAccess WRITE setAutomationQuickAccess NOTIFY automationSettingsChanged)
+    Q_PROPERTY(int quickAccessController READ quickAccessController NOTIFY automationSettingsChanged)  // the CC number; -1 none, -2 waiting for a move
+    Q_PROPERTY(bool autoselectAutomationParam READ autoselectAutomationParam WRITE setAutoselectAutomationParam NOTIFY automationSettingsChanged)
     Q_PROPERTY(bool automationFollowsRegions READ automationFollowsRegions WRITE setAutomationFollowsRegions NOTIFY dragModeChanged)  // Mix > Move Track Automation with Regions
     Q_PROPERTY(QString dragMode READ dragMode WRITE setDragMode NOTIFY dragModeChanged)  // "overlap", "noOverlap" or "xfade"
     Q_PROPERTY(double snapBeats READ snapBeats NOTIFY snapChanged)
@@ -351,6 +356,13 @@ public:
     bool automationVisible() const { return automationVisible_; }
     void setAutomationVisible(bool on);
     QString automationParam() const { return automationParam_; }
+    bool automationQuickAccess() const { return aqa_; }
+    void setAutomationQuickAccess(bool on);
+    int quickAccessController() const { return aqa_ && aqaCc_ < 0 ? -2 : aqaCc_; }
+    bool autoselectAutomationParam() const { return autoselect_; }
+    void setAutoselectAutomationParam(bool on);
+    Q_INVOKABLE void learnQuickAccessController();             // the next controller that moves is the one
+    Q_INVOKABLE void quickAccessMessage(int controller, int value);  // from the MIDI thread (queued)
     void setAutomationParam(const QString& param);
     // param: "volume", "pan" or "send1".."send4" (the first sends of the track, a send's level in dB)
     Q_INVOKABLE QVariantList automationPoints(const QString& trackId, const QString& param) const;  // {beats, value}; follows `revision`
@@ -789,6 +801,7 @@ signals:
     void toolChanged();
     void snapChanged();
     void dragModeChanged();
+    void automationSettingsChanged();
     void autosaveFound();  // the project that was just opened has an autosave newer than its saved file
     void followPlayheadChanged();
     void trackHeightChanged();
@@ -1019,6 +1032,11 @@ private:
     void clickSettingsEdited();
     std::uint64_t snapshots_ = 0;
     QString automationParam_ = QStringLiteral("volume");
+    bool aqa_ = false, autoselect_ = false, aqaGesture_ = false;
+    int aqaCc_ = -1;
+    std::atomic<int> aqaWatch_{-1};  // read by the MIDI thread: -1 off, -2 any controller, else the one
+    QTimer aqaRelease_;
+    void autoselectLane(const QString& trackId, const QString& param);  // Autoselect Automation Parameter in Read Mode
     std::vector<MarkerRow> markerRows_;
     void sendMarkers(const std::vector<MarkerRow>& rows);
     QHash<QString, double> meter_, hold_, reduction_;

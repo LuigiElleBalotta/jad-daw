@@ -2085,6 +2085,45 @@ private slots:
             QTRY_COMPARE(c.selectedTrackIds(), QStringList({bus}));
         }
     }
+    void automationQuickAccessLearnsAControllerAndWritesTheSelectedTracksVolumeAndPan() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 2);
+        const QString track = c.tracks()->trackIdAt(0);
+        c.selectTrack(track, "replace");
+        c.quickAccessMessage(74, 100);                               // off: nothing happens
+        QCOMPARE(c.quickAccessController(), -1);
+        c.setAutomationQuickAccess(true);
+        QCOMPARE(c.quickAccessController(), -2);                     // waiting for a controller
+        c.quickAccessMessage(74, 10);                                // the first one that moves is assigned
+        QCOMPARE(c.quickAccessController(), 74);
+        c.quickAccessMessage(20, 127);                               // another controller is ignored
+        const double before = c.tracks()->find(track)->gainDb;
+        c.quickAccessMessage(74, 127);                               // the top of the range: +6 dB
+        QTRY_VERIFY(std::abs(c.tracks()->find(track)->gainDb - 6.0) < 0.1);
+        c.quickAccessMessage(74, 0);
+        QTRY_VERIFY(c.tracks()->find(track)->gainDb < -90.0);
+        QTest::qWait(700);                                           // the touch ends and the run is one undo step
+        c.undo();
+        QTRY_VERIFY(std::abs(c.tracks()->find(track)->gainDb - before) < 0.1);
+        c.setAutomationParam("pan");
+        c.quickAccessMessage(74, 127);
+        QTRY_VERIFY(c.tracks()->find(track)->pan > 0.9);
+        QTest::qWait(700);
+        c.setAutomationQuickAccess(false);
+        c.setAutomationParam("volume");
+        // Autoselect: moving the fader shows its lane
+        c.setAutoselectAutomationParam(true);
+        c.setAutomationVisible(true);
+        c.setTrackAutomationParam(track, "pan");
+        c.setAutomationMode(track, "read");
+        QTRY_COMPARE(c.tracks()->find(track)->automationMode, QString("read"));
+        c.setGainLive(track, -3.0);
+        QCOMPARE(c.automationParamFor(track), QString("volume"));
+        c.setAutoselectAutomationParam(false);
+        c.setAutomationVisible(false);
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

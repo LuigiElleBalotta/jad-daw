@@ -138,6 +138,7 @@ ApplicationWindow {
     MidiTransformDialog { id: midiTransform; project: controller }
     CopyMidiEventsDialog { id: copyMidiEvents; project: controller }
     TrackIconDialog { id: trackIconDialog; project: controller }
+    AutomationSettingsDialog { id: automationSettings; project: controller }
     TextPromptDialog {
         id: regionNameDialog
         property string regionId
@@ -301,6 +302,9 @@ ApplicationWindow {
         "edit.moveToFocusedTrack": () => controller.moveSelectedToFocusedTrack(),
         "edit.copyMidiEvents": () => copyMidiEvents.open(),
         "track.assignTrackIcon": () => trackIconDialog.open(),
+        "mix.automationSettings": () => automationSettings.open(),
+        "mix.enableAutomationQuickAccess": () => { controller.automationQuickAccess = !controller.automationQuickAccess },
+        "mix.autoselectAutomationParameterInReadMode": () => { controller.autoselectAutomationParam = !controller.autoselectAutomationParam },
         "track.configureTrackHeader": () => { customizeBars.section = "th"; customizeBars.open() },
         "track.showOutputTrack": () => controller.showOutputTrack(),
         "edit.moveToRecordedPosition": () => controller.moveSelectedToRecordedPosition(),
@@ -547,6 +551,8 @@ ApplicationWindow {
         "transport.metronome": controller.metronomeOn,
         "transport.record": controller.recording,
         "transport.punch": controller.punchEnabled,
+        "mix.enableAutomationQuickAccess": controller.automationQuickAccess,
+        "mix.autoselectAutomationParameterInReadMode": controller.autoselectAutomationParam,
         "record.recordToggle": controller.recordButtonMode === "toggle",
         "record.recordRepeat": controller.recordButtonMode === "repeat",
         "record.overlapAudioTakes": controller.overlapAudio === "takes",

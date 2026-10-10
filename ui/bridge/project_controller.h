@@ -387,6 +387,10 @@ public:
     // makes a new audio track named after the file. WAV, MP3, FLAC and AIFF; other rates are converted to the project's.
     Q_INVOKABLE void importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats);
     Q_INVOKABLE void importAudioFilesHere(const QList<QUrl>& files);
+    // File > Import > MIDI File: one new instrument track with a region per channel of the file, at the playhead
+    Q_INVOKABLE void importMidiFile(const QUrl& file);
+    // File > Export > Selected Regions as MIDI File (the MIDI regions selected, or every instrument track when none is)
+    Q_INVOKABLE void exportMidiFile(const QUrl& file);
     Q_INVOKABLE void submit(const QString& commandJson);
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();

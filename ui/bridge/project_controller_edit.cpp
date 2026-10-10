@@ -27,6 +27,7 @@
 #include "lpc/offline_render.h"
 #include "lpc/audio/effects.h"
 #include "lpc/aiff.h"
+#include "lpc/midi_file.h"
 #include "lpc/audio_ops.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
@@ -2010,6 +2011,103 @@ void ProjectController::createTrackAutomation() {
             commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"automationMode", "read"}});
     if (commands.empty()) return;
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::importMidiFile(const QUrl& file) {
+    if (!host_) return;
+    QFile f(file.toLocalFile());
+    if (!f.open(QIODevice::ReadOnly)) {
+        setError("Cannot open " + file.toLocalFile());
+        return;
+    }
+    const QByteArray raw = f.readAll();
+    lpc::MidiFileData data;
+    try {
+        data = lpc::parseMidiFile(std::vector<std::uint8_t>(raw.begin(), raw.end()));
+    } catch (const std::exception& e) {
+        setError(QString("Cannot import the MIDI file: ") + e.what());
+        return;
+    }
+    if (data.tracks.empty()) {
+        setError("The MIDI file has no notes");
+        return;
+    }
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    const lpc::Ticks bar = std::max<lpc::Ticks>(lpc::kPPQ, static_cast<lpc::Ticks>(beatsPerBar_) * lpc::kPPQ * 4 / std::max(1, beatUnit_));
+    const lpc::Ticks base = static_cast<lpc::Ticks>(std::llround(std::max(0.0, positionBeats_) * lpc::kPPQ));
+    const QString baseName = QFileInfo(file.toLocalFile()).completeBaseName();
+    nlohmann::json commands = nlohmann::json::array();
+    for (std::size_t i = 0; i < data.tracks.size(); ++i) {
+        const lpc::MidiFileTrack& t = data.tracks[i];
+        if (t.notes.empty()) continue;
+        lpc::Ticks end = 0;
+        for (const lpc::MidiNote& n : t.notes) end = std::max(end, n.start + n.length);
+        lpc::Region region;
+        region.id = lpc::Uuid::random();
+        region.timeBase = lpc::TimeBase::Musical;
+        region.start = base;
+        region.length = (end + bar - 1) / bar * bar;
+        region.notes = t.notes;
+        nlohmann::json regionJson = region;
+        std::string name = t.name.empty() ? (data.tracks.size() == 1 ? baseName.toStdString() : baseName.toStdString() + " " + std::to_string(i + 1)) : t.name;
+        nlohmann::json track = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()},
+                                {"kind", "instrument"},
+                                {"name", name.substr(0, 60)},
+                                {"color", ""},
+                                {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()},
+                                           {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                                {"regions", nlohmann::json::array({regionJson})},
+                                {"automation", nlohmann::json::array()},
+                                {"instrument", {{"processorId", "builtin.sine"}, {"params", nlohmann::json::object()}, {"state", ""}}}};
+        commands.push_back({{"type", "add_track"}, {"index", -1}, {"track", track}});
+    }
+    if (commands.empty()) {
+        setError("The MIDI file has no notes");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+    emit notice(QString("Imported %1 MIDI track(s)").arg(commands.size()));
+}
+
+void ProjectController::exportMidiFile(const QUrl& file) {
+    if (!host_) return;
+    const QStringList regionIds = selectedRegions_;
+    const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+    lpc::MidiFileData data;
+    data.bpm = tempoMap_.bpmAt(0);
+    data.numerator = beatsPerBar_;
+    data.denominator = beatUnit_;
+    for (const lpc::Track& t : project.tracks) {
+        if (t.kind != lpc::TrackKind::Instrument) continue;
+        lpc::MidiFileTrack out;
+        out.name = t.name;
+        out.channel = static_cast<int>(data.tracks.size() % 16);
+        if (out.channel == 9) out.channel = 10;  // channel 10 is for drums in General MIDI
+        for (const lpc::Region& r : t.regions) {
+            if (r.timeBase != lpc::TimeBase::Musical) continue;
+            if (!regionIds.isEmpty() && !regionIds.contains(QString::fromStdString(r.id.toString()))) continue;
+            for (const lpc::MidiNote& n : r.notes) {
+                if (n.muted) continue;
+                lpc::MidiNote m = n;
+                m.start += r.start;
+                out.notes.push_back(m);
+            }
+        }
+        if (!out.notes.empty()) data.tracks.push_back(std::move(out));
+    }
+    if (data.tracks.empty()) {
+        setError("There are no MIDI notes to export");
+        return;
+    }
+    const std::vector<std::uint8_t> bytes = lpc::writeMidiFile(data);
+    QString path = file.toLocalFile();
+    if (QFileInfo(path).suffix().isEmpty()) path += ".mid";
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly) || f.write(reinterpret_cast<const char*>(bytes.data()), static_cast<qint64>(bytes.size())) != static_cast<qint64>(bytes.size())) {
+        setError("Cannot write " + path);
+        return;
+    }
+    emit notice(QString("Exported %1 MIDI track(s)").arg(data.tracks.size()));
 }
 
 }  // namespace jad

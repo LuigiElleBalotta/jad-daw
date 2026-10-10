@@ -74,3 +74,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: Track > Sort Tracks by (name/type/color, set_track_order command) and Assign Track Color (Colors window).
 - 2026-10-10: Marker List window (Navigate > Open Marker List, Go To > Marker, Rename Marker).
 - 2026-10-10: Mix > Delete Automation and Create Track Automation.
+- 2026-10-10: MIDI file import/export (core midi_file, File > Import > MIDI File, File > Export > Selected Regions as MIDI File).

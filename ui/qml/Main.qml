@@ -74,6 +74,22 @@ ApplicationWindow {
         onAccepted: controller.importAudioFilesHere(selectedFiles)
     }
 
+    FileDialog {
+        id: importMidiDialog
+        title: qsTr("Import a MIDI file")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("MIDI files (*.mid *.midi)"), qsTr("All files (*)")]
+        onAccepted: controller.importMidiFile(selectedFile)
+    }
+    FileDialog {
+        id: exportMidiDialog
+        title: qsTr("Export as MIDI file")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "mid"
+        nameFilters: [qsTr("MIDI files (*.mid)")]
+        onAccepted: controller.exportMidiFile(selectedFile)
+    }
+
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
     ConfirmDialog { id: confirm }
@@ -140,6 +156,8 @@ ApplicationWindow {
         "file.saveAs": () => { saveAsDialog.openCopy = true; saveAsDialog.open() },
         "file.saveACopyAs": () => { saveAsDialog.openCopy = false; saveAsDialog.open() },
         "file.importAudio": () => importDialog.open(),
+        "file.importMidi": () => importMidiDialog.open(),
+        "file.exportMidi": () => exportMidiDialog.open(),
         "file.bounce": () => bounceOptions.open(),
         "file.quit": () => Qt.quit(),
         "edit.undo": () => controller.undo(),
@@ -365,6 +383,8 @@ ApplicationWindow {
         "file.saveAs": !controller.hasProject,
         "file.saveACopyAs": !controller.hasProject,
         "file.importAudio": !controller.hasProject,
+        "file.importMidi": !controller.hasProject,
+        "file.exportMidi": !controller.hasProject,
         "file.bounce": !controller.hasProject,
         "track.showInTracks": !controller.selectedCanHide,
         "track.recordArm": controller.selectedTrackIds.length === 0,

@@ -1383,6 +1383,23 @@ private slots:
         c.createTrackAutomation();
         QVERIFY(c.automationVisible());
     }
+    void midiFileExportThenImportMakesNewInstrumentTracksWithTheSameNotes() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const int tracks = c.tracks()->rowCount();
+        const QString mid = QString::fromStdWString(dir.path().wstring()) + "/out.mid";
+        c.exportMidiFile(QUrl::fromLocalFile(mid));
+        QVERIFY(QFileInfo::exists(mid));
+        QVERIFY(QFileInfo(mid).size() > 30);
+        c.importMidiFile(QUrl::fromLocalFile(mid));
+        QTRY_VERIFY(c.tracks()->rowCount() > tracks);
+        c.undo();                                                    // one undo step for the whole file
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks);
+        c.importMidiFile(QUrl::fromLocalFile(mid + ".missing"));
+        QVERIFY(!c.lastError().isEmpty());
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

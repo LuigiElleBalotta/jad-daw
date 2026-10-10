@@ -2554,4 +2554,21 @@ QVariantList ProjectController::regionControlEvents(const QString& regionId) con
     return out;
 }
 
+void ProjectController::setBarItem(const QString& key, bool shown) {
+    if (shown == !barItemsOff_.contains(key)) return;
+    if (shown) barItemsOff_.remove(key);
+    else barItemsOff_.insert(key);
+    QSettings().setValue("panels/barItemsOff", QStringList(barItemsOff_.begin(), barItemsOff_.end()));
+    ++barItemsRevision_;
+    emit barsChanged();
+}
+
+void ProjectController::resetBarItems() {
+    if (barItemsOff_.isEmpty()) return;
+    barItemsOff_.clear();
+    QSettings().setValue("panels/barItemsOff", QStringList());
+    ++barItemsRevision_;
+    emit barsChanged();
+}
+
 }  // namespace jad

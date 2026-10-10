@@ -323,6 +323,13 @@ public:
     void setAutomationParam(const QString& param);
     Q_INVOKABLE QVariantList automationPoints(const QString& trackId, const QString& target) const;  // {beats, value}; follows `revision`
     Q_INVOKABLE void setAutomationPoints(const QString& trackId, const QString& target, const QVariantList& points);
+    // Customize Control Bar and Display / Customize Toolbar: the parts of the bars that are shown ("cb.panels", "cb.transport", "cb.lcd", "cb.modes",
+    // "cb.master", "tb.menus", "tb.tools", "tb.snap", "tb.heights", "tb.zoom", "tb.undo"); every part is on until the user turns it off. Kept in the settings.
+    Q_PROPERTY(int barItemsRevision READ barItemsRevision NOTIFY barsChanged)
+    int barItemsRevision() const { return barItemsRevision_; }
+    Q_INVOKABLE bool barItem(const QString& key) const { return !barItemsOff_.contains(key); }
+    Q_INVOKABLE void setBarItem(const QString& key, bool shown);
+    Q_INVOKABLE void resetBarItems();
     bool controlBarVisible() const { return controlBarVisible_; }
     void setControlBarVisible(bool on);
     bool toolbarVisible() const { return toolbarVisible_; }
@@ -792,6 +799,8 @@ private:
     int peaksRevision_ = 0;
     bool globalTracksVisible_ = false;
     bool controlBarVisible_ = true, toolbarVisible_ = true;
+    QSet<QString> barItemsOff_;
+    int barItemsRevision_ = 0;
     bool automationVisible_ = false;
     bool metronome_ = false;
     bool autoInput_ = true;

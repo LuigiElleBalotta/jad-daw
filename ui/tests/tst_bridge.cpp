@@ -1585,6 +1585,21 @@ private slots:
         QVERIFY(found);
         QVERIFY(std::filesystem::exists(dir.path() / "d.lpc" / "audio"));
     }
+    void partsOfTheBarsCanBeTurnedOffAndReset() {
+        jad::ProjectController c(false);
+        c.resetBarItems();
+        QVERIFY(c.barItem("cb.lcd"));
+        const int rev = c.barItemsRevision();
+        QSignalSpy spy(&c, &jad::ProjectController::barsChanged);
+        c.setBarItem("cb.lcd", false);
+        QVERIFY(!c.barItem("cb.lcd"));
+        QVERIFY(c.barItemsRevision() > rev);
+        QCOMPARE(spy.count(), 1);
+        c.setBarItem("cb.lcd", false);                               // no change, no signal
+        QCOMPARE(spy.count(), 1);
+        c.resetBarItems();
+        QVERIFY(c.barItem("cb.lcd"));
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

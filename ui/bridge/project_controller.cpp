@@ -1351,6 +1351,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     mixerDetached_ = s.value("panels/mixerDetached", mixerDetached_).toBool();
     controlBarVisible_ = s.value("panels/controlBar", true).toBool();
     toolbarVisible_ = s.value("panels/toolbar", true).toBool();
+    for (const QString& k : s.value("panels/barItemsOff").toStringList()) barItemsOff_.insert(k);
     autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();
     loadClickSettings(s);
     loadAudioSettings(s);

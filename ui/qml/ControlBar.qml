@@ -20,6 +20,7 @@ Panel {
         spacing: Theme.spacing[3]
 
         Row {
+            visible: { root.project.barItemsRevision; return root.project.barItem("cb.panels") }
             spacing: Theme.spacing[2]
             ActionButton { actionId: "view.library"; label: qsTr("Lib") }
             ActionButton { actionId: "view.inspector"; label: qsTr("Insp") }
@@ -33,6 +34,7 @@ Panel {
         Item { Layout.fillWidth: true }
 
         Row {
+            visible: { root.project.barItemsRevision; return root.project.barItem("cb.transport") }
             spacing: Theme.spacing[2]
             ActionButton { actionId: "transport.toStart"; source: "icons/rewind.svg" }
             ActionButton { actionId: "transport.barBack"; label: "<" }
@@ -44,6 +46,7 @@ Panel {
 
         Lcd {
             id: lcdItem
+            visible: { root.project.barItemsRevision; return root.project.barItem("cb.lcd") }
             project: root.project
             onMessage: (text) => root.message(text)
         }
@@ -51,6 +54,7 @@ Panel {
         Item { Layout.fillWidth: true }
 
         Row {
+            visible: { root.project.barItemsRevision; return root.project.barItem("cb.modes") }
             spacing: Theme.spacing[2]
             ActionButton { actionId: "transport.metronome"; label: qsTr("Met") }
             ActionButton { actionId: "transport.countIn"; label: "1 2 3" }
@@ -60,6 +64,7 @@ Panel {
 
         Slider {
             id: master
+            visible: { root.project.barItemsRevision; return root.project.barItem("cb.master") }
             Layout.preferredWidth: 90
             from: -96
             to: 24

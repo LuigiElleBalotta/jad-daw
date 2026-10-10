@@ -89,3 +89,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: Edit > Repeat > Multiple, Length > Change, Track > Search and Select Track, View > Colors, Mix > I/O Assignments, Show All Plug-in Windows, Window > Show Keyboard.
 - 2026-10-10: Bounce in Place (Track menu). Freeze still open.
 - 2026-10-10: List Editors window (Event, Marker, Tempo, Signature).
+- 2026-10-10: Customize Control Bar and Display / Customize Toolbar.

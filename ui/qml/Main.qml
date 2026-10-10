@@ -97,6 +97,7 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    CustomizeBarsDialog { id: customizeBars; project: controller }
     ListEditorsWindow { id: listEditors; project: controller }
     NumberPromptDialog {
         id: repeatDialog
@@ -274,6 +275,8 @@ ApplicationWindow {
         "view.listEditors": () => { listEditors.tab = 0; listEditors.open() },
         "window.openEventList": () => { listEditors.tab = 0; listEditors.open() },
         "window.openSignatureList": () => { listEditors.tab = 3; listEditors.open() },
+        "view.customizeControlBarAndDisplay": () => { customizeBars.section = "cb"; customizeBars.open() },
+        "view.customizeToolbar": () => { customizeBars.section = "tb"; customizeBars.open() },
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

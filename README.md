@@ -102,6 +102,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   filters and then Single | Tracks | All from its bar and scrolls sideways.
 - **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
   follows and the sound changes at once; the whole drag is one undo step.
+- **Customize Control Bar and Display / Customize Toolbar** (View menu): switch the parts of the two bars on and off (panel buttons, transport, LCD, metronome group, master volume; menus, tools, snap and drag, heights, zoom, undo); kept in the settings.
 - **List Editors** (View menu, Window > Open Event List / Open Signature List): tables of the notes and controller events of the selected MIDI region (pitch, velocity and length can be typed, an event deleted), the markers, the tempo changes and the time signatures.
 - **Bounce in Place** (Track menu): each selected audio or instrument track is rendered offline, with its inserts, VST3 plug-ins, sends and the buses it feeds, to a new audio track "<name> Bounce"
   starting where its first region starts, with two seconds of tail; the original track is left as it is.

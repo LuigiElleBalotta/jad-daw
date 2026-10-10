@@ -213,6 +213,8 @@ ApplicationWindow {
         "navigate.goToMarker": () => markerList.open(),
         "navigate.renameMarker": () => markerList.open(),
         "navigate.openMarkerList": () => markerList.open(),
+        "mix.createTrackAutomation": () => controller.createTrackAutomation(),
+        "mix.deleteAutomation": () => controller.deleteAutomationOfSelected(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

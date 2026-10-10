@@ -1987,4 +1987,29 @@ void ProjectController::setSelectedTracksColor(const QString& color) {
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
+void ProjectController::deleteAutomationOfSelected() {
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedTracks_)) {
+        const TrackRow* t = tracks_.find(id);
+        if (!t || t->master) continue;
+        if (!t->volumeAuto.empty()) commands.push_back({{"type", "set_automation"}, {"trackId", id.toStdString()}, {"target", "volume"}, {"points", nlohmann::json::array()}});
+        if (!t->panAuto.empty()) commands.push_back({{"type", "set_automation"}, {"trackId", id.toStdString()}, {"target", "pan"}, {"points", nlohmann::json::array()}});
+    }
+    if (commands.empty()) {
+        emit notice("The selected tracks have no automation");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::createTrackAutomation() {
+    setAutomationVisible(true);
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && !t->master && t->automationMode == QLatin1String("off"))
+            commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"automationMode", "read"}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

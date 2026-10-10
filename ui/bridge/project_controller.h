@@ -224,6 +224,8 @@ public:
     // lane between their first and last point and are one undo step.
     Q_INVOKABLE void setAutomationMode(const QString& trackId, const QString& mode);
     Q_INVOKABLE QString automationMode(const QString& trackId) const;
+    Q_INVOKABLE void deleteAutomationOfSelected();  // Mix > Delete Automation: every lane of the selected tracks (one step)
+    Q_INVOKABLE void createTrackAutomation();       // Mix > Create Track Automation: shows the lanes and takes the selected tracks out of Off
     // Group Settings window: for the group of this track ("" closes it)
     Q_PROPERTY(QString groupSettingsTrack READ groupSettingsTrack NOTIFY groupSettingsChanged)
     QString groupSettingsTrack() const { return groupSettingsTrack_; }

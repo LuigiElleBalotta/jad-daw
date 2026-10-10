@@ -1367,6 +1367,22 @@ private slots:
         c.setSelectedTracksColor("red");
         QTRY_COMPARE(c.tracks()->find(firstAudioTrackId(c))->color, QString("red"));
     }
+    void deleteAutomationClearsTheLanesOfTheSelectedTracksInOneStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const QString audio = firstAudioTrackId(c);
+        c.setAutomationPoints(audio, "volume", {QVariantMap{{"beats", 0.0}, {"value", -6.0}}, QVariantMap{{"beats", 4.0}, {"value", 0.0}}});
+        QTRY_COMPARE(c.automationPoints(audio, "volume").size(), 2);
+        c.selectTrack(audio, "replace");
+        c.deleteAutomationOfSelected();
+        QTRY_COMPARE(c.automationPoints(audio, "volume").size(), 0);
+        c.undo();
+        QTRY_COMPARE(c.automationPoints(audio, "volume").size(), 2);
+        c.createTrackAutomation();
+        QVERIFY(c.automationVisible());
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

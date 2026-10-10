@@ -1,6 +1,9 @@
 #include "actions/action_registry.h"
 
 #include <QDebug>
+#include <QKeySequence>
+#include <QFileInfo>
+#include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -20,8 +23,8 @@ QString readFile(const QString& path) {
 
 ActionRegistry::ActionRegistry(QObject* parent) : QObject(parent) {
     // a missing user file is normal and not a problem
-    load(readFile(":/qt/qml/Jad/actions/actions.json"),
-         readFile(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/shortcuts.json"));
+    userFile_ = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/shortcuts.json";
+    load(readFile(":/qt/qml/Jad/actions/actions.json"), readFile(userFile_));
 }
 
 QList<ActionDef> ActionRegistry::parseTable(const QString& json, QStringList* problems) {
@@ -87,13 +90,11 @@ void ActionRegistry::load(const QString& tableJson, const QString& userJson) {
     handled_.clear();
     defs_ = parseTable(tableJson, &problems_);
     index_.clear();
-    QJsonObject defaults;
-    for (int i = 0; i < defs_.size(); ++i) {
-        index_.insert(defs_[i].id, i);
-        if (!defs_[i].shortcut.isEmpty()) defaults.insert(defs_[i].id, defs_[i].shortcut);
-    }
+    index_.clear();
+    for (int i = 0; i < defs_.size(); ++i) index_.insert(defs_[i].id, i);
+    userJson_ = userJson;
     QStringList shortcutProblems;
-    shortcuts_.reset(new ShortcutMap(ShortcutMap::fromFiles(QString::fromUtf8(QJsonDocument(defaults).toJson()), userJson, &shortcutProblems)));
+    shortcuts_.reset(new ShortcutMap(ShortcutMap::fromFiles(defaultsJson(), userJson, &shortcutProblems)));
     // ids that the user file names but the table does not know are reported by ShortcutMap; keep every message
     problems_ += shortcutProblems;
     for (const QString& p : std::as_const(problems_)) qWarning().noquote() << "actions:" << p;
@@ -155,6 +156,66 @@ bool ActionRegistry::stubTriggered(const QString& id, bool checked) {
     if (d->isToggle() && !checked) return false;  // switching off is silent
     emit notImplemented(d->label);
     return true;
+}
+
+}  // namespace jad
+
+namespace jad {
+
+QString ActionRegistry::defaultsJson() const {
+    QJsonObject defaults;
+    for (const ActionDef& d : defs_) defaults.insert(d.id, d.shortcut);  // "" for an action without a key
+    return QString::fromUtf8(QJsonDocument(defaults).toJson());
+}
+
+void ActionRegistry::applyUser(const QString& userJson) {
+    userJson_ = userJson;
+    QStringList problems;
+    shortcuts_.reset(new ShortcutMap(ShortcutMap::fromFiles(defaultsJson(), userJson, &problems)));
+    ++shortcutsRevision_;
+    emit shortcutsChanged();
+}
+
+QVariantList ActionRegistry::keyCommands() const {
+    QVariantList out;
+    for (const ActionDef& d : defs_)
+        out.append(QVariantMap{{"id", d.id}, {"label", d.label}, {"menu", d.menu}, {"shortcut", shortcut(d.id)}, {"default", d.shortcut},
+                               {"changed", shortcut(d.id) != d.shortcut}, {"stub", d.isStub()}});
+    return out;
+}
+
+QString ActionRegistry::setUserShortcut(const QString& id, const QString& sequence) {
+    if (!find(id)) return QStringLiteral("Unknown action");
+    QJsonObject user = QJsonDocument::fromJson(userJson_.toUtf8()).object();
+    const QString portable = sequence.trimmed();
+    QString normalised;
+    if (!portable.isEmpty()) {
+        normalised = QKeySequence(portable, QKeySequence::PortableText).toString(QKeySequence::PortableText);
+        if (normalised.isEmpty()) return QStringLiteral("Not a key combination");
+        for (const ActionDef& d : defs_)
+            if (d.id != id && shortcut(d.id) == normalised) return QStringLiteral("%1 is already used by %2").arg(normalised, d.label);
+    }
+    if (normalised == find(id)->shortcut) user.remove(id);  // back to the default: nothing to keep
+    else user.insert(id, normalised);
+    const QString json = QString::fromUtf8(QJsonDocument(user).toJson());
+    if (!userFile_.isEmpty()) {
+        QDir().mkpath(QFileInfo(userFile_).absolutePath());
+        QFile f(userFile_);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return QStringLiteral("Cannot write the shortcuts file");
+        f.write(json.toUtf8());
+    }
+    applyUser(json);
+    return {};
+}
+
+void ActionRegistry::resetShortcuts() {
+    if (!userFile_.isEmpty()) QFile::remove(userFile_);
+    applyUser(QString());
+}
+
+QString ActionRegistry::keySequenceText(int key, int modifiers) const {
+    if (key == Qt::Key_Control || key == Qt::Key_Shift || key == Qt::Key_Alt || key == Qt::Key_Meta || key == Qt::Key_unknown) return {};
+    return QKeySequence(QKeyCombination(Qt::KeyboardModifiers(modifiers), Qt::Key(key))).toString(QKeySequence::PortableText);
 }
 
 }  // namespace jad

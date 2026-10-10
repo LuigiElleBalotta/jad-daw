@@ -28,6 +28,7 @@ class ActionRegistry : public QObject {
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(QStringList problems READ problems CONSTANT)
+    Q_PROPERTY(int shortcutsRevision READ shortcutsRevision NOTIFY shortcutsChanged)
 public:
     explicit ActionRegistry(QObject* parent = nullptr);
 
@@ -37,6 +38,14 @@ public:
     // For tests: replaces the table and the user overrides.
     void loadForTest(const QString& tableJson, const QString& userJson) { load(tableJson, userJson); }
 
+    int shortcutsRevision() const { return shortcutsRevision_; }
+    // Help > Key Commands: every action with its key; setUserShortcut returns "" when it worked, else why not (the key belongs to another
+    // action). An empty sequence frees the action's key. The choice is kept in shortcuts.json in the application config folder.
+    Q_INVOKABLE QVariantList keyCommands() const;
+    Q_INVOKABLE QString setUserShortcut(const QString& id, const QString& sequence);
+    Q_INVOKABLE void resetShortcuts();
+    Q_INVOKABLE QString keySequenceText(int key, int modifiers) const;  // the portable text of a key press ("Ctrl+Shift+K"); "" for a lone modifier
+    void setUserFileForTest(const QString& path) { userFile_ = path; }
     Q_INVOKABLE QString label(const QString& id) const;
     Q_INVOKABLE QString shortcut(const QString& id) const;  // the user's override when valid, else the table's
     Q_INVOKABLE QString menu(const QString& id) const;
@@ -56,6 +65,7 @@ public:
 
 signals:
     void notImplemented(const QString& label);
+    void shortcutsChanged();
 
 private:
     void load(const QString& tableJson, const QString& userJson);
@@ -66,6 +76,10 @@ private:
     QSet<QString> handled_;
     QStringList problems_;
     std::unique_ptr<ShortcutMap> shortcuts_;
+    QString userJson_, userFile_;
+    int shortcutsRevision_ = 0;
+    QString defaultsJson() const;
+    void applyUser(const QString& userJson);
 };
 
 }  // namespace jad

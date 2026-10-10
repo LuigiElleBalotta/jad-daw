@@ -59,6 +59,7 @@ qt_add_qml_module(jad_ui_lib
         qml/IoLabelsDialog.qml
         qml/BounceDialog.qml
         qml/ConfirmDialog.qml
+        qml/KeyCommandsWindow.qml
         qml/UndoHistoryDialog.qml
         qml/RecentProjectsDialog.qml
         qml/ProjectSettingsDialog.qml

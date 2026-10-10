@@ -41,6 +41,11 @@ ShortcutMap::Parsed ShortcutMap::parse(const QString& defaultsJson, const QStrin
         result.problems << QString("default shortcuts unreadable: %1").arg(error);
     } else {
         for (auto it = defaults.begin(); it != defaults.end(); ++it) {
+            if (it.value().isString() && it.value().toString().isEmpty()) {  // an action without a default key: it can still get one
+                result.known.insert(it.key());
+                continue;
+            }
+            result.known.insert(it.key());
             const QString seq = it.value().isString() ? normalised(it.value().toString()) : QString();
             if (seq.isEmpty()) {
                 result.problems << QString("default shortcut for %1 is not a valid sequence").arg(it.key());
@@ -58,8 +63,12 @@ ShortcutMap::Parsed ShortcutMap::parse(const QString& defaultsJson, const QStrin
     }
     for (auto it = user.begin(); it != user.end(); ++it) {
         const QString& id = it.key();
-        if (!result.sequences.contains(id)) {
+        if (!result.known.contains(id)) {
             result.problems << QString("unknown action %1").arg(id);
+            continue;
+        }
+        if (it.value().isString() && it.value().toString().isEmpty()) {  // freed: the action has no key
+            result.sequences.remove(id);
             continue;
         }
         const QString seq = it.value().isString() ? normalised(it.value().toString()) : QString();

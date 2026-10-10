@@ -1,4 +1,5 @@
 #include <QFile>
+#include <QTemporaryDir>
 #include <QSet>
 #include <QSignalSpy>
 #include <QtTest>
@@ -32,6 +33,42 @@ private slots:
         }
         QVERIFY(ids.contains("transport.playStop"));
         QVERIFY(ids.contains("edit.undo"));
+    }
+    void keysCanBeChangedFreedAndResetWithTheConflictNamed() {
+        const QString table = R"([
+            {"id":"a.one","label":"One","menu":"File","shortcut":"Ctrl+K","kind":"command","status":"ready"},
+            {"id":"a.two","label":"Two","menu":"File","shortcut":"","kind":"command","status":"ready"},
+            {"id":"a.three","label":"Three","menu":"File","shortcut":"Ctrl+J","kind":"command","status":"ready"}])";
+        QTemporaryDir dir;
+        jad::ActionRegistry r;
+        r.loadForTest(table, "");
+        r.setUserFileForTest(dir.filePath("shortcuts.json"));
+        QSignalSpy spy(&r, &jad::ActionRegistry::shortcutsChanged);
+        QCOMPARE(r.shortcut("a.two"), QString());
+        QCOMPARE(r.setUserShortcut("a.two", "Ctrl+Shift+P"), QString());           // an action without a key gets one
+        QCOMPARE(r.shortcut("a.two"), QString("Ctrl+Shift+P"));
+        QCOMPARE(spy.count(), 1);
+        QVERIFY(r.setUserShortcut("a.three", "Ctrl+K").contains("One"));             // used by "One": refused, with its name
+        QCOMPARE(r.shortcut("a.three"), QString("Ctrl+J"));
+        QVERIFY(!r.setUserShortcut("a.three", "Ctrl+Nonsense+Zzz").isEmpty());       // not a key combination
+        QCOMPARE(r.setUserShortcut("a.one", ""), QString());                         // frees a default key
+        QCOMPARE(r.shortcut("a.one"), QString());
+        QCOMPARE(r.setUserShortcut("a.three", "Ctrl+K"), QString());                 // which another action can now take
+        QVERIFY(QFile::exists(dir.filePath("shortcuts.json")));
+        bool changedSeen = false;
+        for (const QVariant& v : r.keyCommands()) changedSeen = changedSeen || (v.toMap().value("id") == "a.three" && v.toMap().value("changed").toBool());
+        QVERIFY(changedSeen);
+        jad::ActionRegistry again;                                                    // a new session reads the file
+        again.loadForTest(table, QString::fromUtf8([&] { QFile f(dir.filePath("shortcuts.json")); f.open(QIODevice::ReadOnly); return f.readAll(); }()));
+        QCOMPARE(again.shortcut("a.three"), QString("Ctrl+K"));
+        QCOMPARE(again.shortcut("a.two"), QString("Ctrl+Shift+P"));
+        QCOMPARE(again.shortcut("a.one"), QString());
+        r.resetShortcuts();
+        QCOMPARE(r.shortcut("a.one"), QString("Ctrl+K"));
+        QCOMPARE(r.shortcut("a.two"), QString());
+        QVERIFY(!QFile::exists(dir.filePath("shortcuts.json")));
+        QCOMPARE(r.keySequenceText(Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier), QString("Ctrl+Shift+K"));
+        QCOMPARE(r.keySequenceText(Qt::Key_Shift, Qt::ShiftModifier), QString());    // a lone modifier is not a key
     }
     void badTablesAreReportedNotCrashed() {
         QStringList problems;

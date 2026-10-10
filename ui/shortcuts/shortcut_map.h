@@ -1,5 +1,6 @@
 #pragma once
 #include <QHash>
+#include <QSet>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -20,6 +21,7 @@ public:
 private:
     struct Parsed {
         QHash<QString, QString> sequences;
+        QSet<QString> known;  // every action of the table, with or without a key
         QStringList problems;
     };
     static Parsed parse(const QString& defaultsJson, const QString& userJson);

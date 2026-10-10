@@ -77,6 +77,7 @@ ApplicationWindow {
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
     ConfirmDialog { id: confirm }
+    KeyCommandsWindow { id: keyCommands; registry: actionRegistry; visible: false }
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ProjectSettingsDialog { id: projectSettings; project: controller; onMetronomeRequested: metronomeDialog.open(); onPreferencesRequested: preferencesDialog.open() }
@@ -209,6 +210,7 @@ ApplicationWindow {
         "track.newTracks": () => newTracksDialog.open(),
         "edit.undoHistory": () => undoHistoryDialog.open(),
         "edit.deleteUndoHistory": () => confirm.ask(qsTr("Delete Undo History"), qsTr("The steps can no longer be undone."), qsTr("Delete"), () => controller.clearUndoHistory()),
+        "help.keyCommands": () => { keyCommands.visible = true; keyCommands.raise() },
         "file.openRecent": () => recentDialog.open(),
         "file.close": () => controller.closeProject(),
         "file.closeProject": () => controller.closeProject(),

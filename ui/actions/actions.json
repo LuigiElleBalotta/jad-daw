@@ -263,7 +263,7 @@
  {"id":"window.showStepInputKeyboard","label":"Show Step Input Keyboard","menu":"Window","shortcut":"Ctrl+Alt+K","kind":"command","status":"stub"},
  {"id":"mix.pluginWindow","label":"Show All Plug-in Windows","menu":"Window","shortcut":"V","kind":"command","status":"stub","sep":true},
  {"id":"window.pluginManager","label":"Plug-in Manager…","menu":"Window","shortcut":"","kind":"command","status":"ready","sep":true},
- {"id":"help.keyCommands","label":"Key Commands…","menu":"Help","shortcut":"Alt+K","kind":"command","status":"stub"},
+ {"id":"help.keyCommands","label":"Key Commands…","menu":"Help","shortcut":"Alt+K","kind":"command","status":"ready"},
  {"id":"help.about","label":"About JAD Daw","menu":"Help","shortcut":"","kind":"command","status":"ready"},
  {"id":"transport.playStop","label":"Play/Stop","menu":"","shortcut":"Space","kind":"command","status":"ready","verified":true},
  {"id":"transport.stop","label":"Stop","menu":"","shortcut":"","kind":"command","status":"ready"},

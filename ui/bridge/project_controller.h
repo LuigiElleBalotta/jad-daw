@@ -491,6 +491,10 @@ public:
     Q_INVOKABLE void separateMidiByPitch();
     Q_INVOKABLE void moveSelectedToFocusedTrack();  // Edit > Move > To Focused Track: the selected track; the regions keep their time
     Q_INVOKABLE void joinPerTracks();
+    // Window > Show Step Input Keyboard: a note is put at the playhead, `stepBeats` long, in the selected MIDI region that holds the playhead (a new one-bar region
+    // on the selected or armed instrument track when none does); the playhead then moves on by the step unless `chord` (the next note joins this one).
+    Q_INVOKABLE void stepInputNote(int note, int velocity, double stepBeats, bool chord);
+    Q_INVOKABLE void stepInputMove(double stepBeats);  // a rest (positive) or a step back (negative)
     // Edit > Copy MIDI Events: the events between the locators of the selected MIDI regions (the MIDI regions of the selected track when none is selected) are
     // copied or moved to the playhead on `destTrackId` (empty: the selected track, else the same track). `mode`: copyMerge, copyReplace, copyInsert, moveMerge,
     // moveReplace or moveInsert. Merge blends them with what is there, Replace first clears the destination range, Insert pushes what follows to the right.

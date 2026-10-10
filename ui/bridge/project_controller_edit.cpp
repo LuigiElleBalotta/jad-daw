@@ -3700,4 +3700,61 @@ void ProjectController::copyMidiEvents(const QString& mode, const QString& destT
 }
 
 
+void ProjectController::stepInputNote(int note, int velocity, double stepBeats, bool chord) {
+    if (!host_ || note < 0 || note > 127 || !std::isfinite(stepBeats) || stepBeats <= 0) return;
+    velocity = std::clamp(velocity, 1, 127);
+    const std::int64_t at = static_cast<std::int64_t>(std::llround(std::max(0.0, positionBeats_) * lpc::kPPQ));
+    const std::int64_t step = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::llround(stepBeats * lpc::kPPQ)));
+    const std::int64_t barTicks = static_cast<std::int64_t>(std::llround(barBeats() * lpc::kPPQ));
+    // the region that holds the playhead: a selected MIDI region first, else any MIDI region of the selected tracks
+    const RegionRow* home = nullptr;
+    const auto holds = [&](const RegionRow& r) {
+        const std::int64_t s = static_cast<std::int64_t>(std::llround(r.startBeats * lpc::kPPQ)), e = s + static_cast<std::int64_t>(std::llround(r.lengthBeats * lpc::kPPQ));
+        return at >= s && at <= e;
+    };
+    for (const RegionRow* r : selectedRegionRows())
+        if (!r->audio && holds(*r)) { home = r; break; }
+    if (!home)
+        for (const RegionRow& r : regionRows_)
+            if (!r.audio && selectedTracks_.contains(r.trackId) && holds(r)) { home = &r; break; }
+    const nlohmann::json newNote = {{"start", 0}, {"length", step}, {"note", note}, {"velocity", velocity}};
+    if (home) {
+        nlohmann::json region = nlohmann::json::parse(home->json, nullptr, false);
+        if (region.is_discarded()) return;
+        const std::int64_t base = region.value("start", std::int64_t{0});
+        nlohmann::json n = newNote;
+        n["start"] = at - base;
+        region["notes"].push_back(n);
+        const std::int64_t end = at - base + step;
+        if (end > region.value("length", std::int64_t{0}))  // the region grows by whole bars
+            region["length"] = ((end + barTicks - 1) / barTicks) * barTicks;
+        sendCommand({{"type", "replace_region"}, {"region", region}});
+    } else {
+        QString track;
+        for (const QString& id : selectedTracks_)
+            for (const TrackRow& t : allRows_)
+                if (t.id == id && !t.master && t.kind == "instrument") track = id;
+        if (track.isEmpty()) track = liveTargetTrack();
+        if (track.isEmpty()) {
+            emit notice("Select an instrument track for step input");
+            return;
+        }
+        const std::int64_t start = (at / barTicks) * barTicks;
+        nlohmann::json n = newNote;
+        n["start"] = at - start;
+        const std::int64_t end = at - start + step;
+        nlohmann::json region = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"}, {"start", start},
+                                 {"length", ((end + barTicks - 1) / barTicks) * barTicks}, {"mediaId", "00000000-0000-0000-0000-000000000000"},
+                                 {"sourceOffsetFrames", 0}, {"gainDb", 0}, {"notes", nlohmann::json::array({n})}, {"controls", nlohmann::json::array()}};
+        sendCommand({{"type", "add_region"}, {"trackId", track.toStdString()}, {"index", -1}, {"region", region}});
+    }
+    if (!chord) locateBeats(positionBeats_ + stepBeats);
+}
+
+void ProjectController::stepInputMove(double stepBeats) {
+    if (!std::isfinite(stepBeats)) return;
+    locateBeats(std::max(0.0, positionBeats_ + stepBeats));
+}
+
+
 }  // namespace jad

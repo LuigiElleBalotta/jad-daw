@@ -2029,6 +2029,35 @@ private slots:
         QCOMPARE(c.tool(), QString("rotate"));
         c.setTool("pointer");
     }
+    void stepInputPutsNotesAtThePlayheadInARegionAndMovesOn() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        const QString track = c.tracks()->trackIdAt(0);
+        c.selectTrack(track, "replace");
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.stepInputNote(60, 100, 1.0, false);                        // no region: a one-bar region is made at the playhead
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString r = c.regions()->regionIdAt(0);
+        QCOMPARE(c.regions()->find(r)->startBeats, 0.0);
+        QCOMPARE(c.regions()->find(r)->lengthBeats, 4.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 1.0) < 0.05);       // the playhead stepped on
+        c.stepInputNote(64, 100, 1.0, true);                         // a chord: the playhead stays
+        QTRY_COMPARE(c.regionNotes(r).size(), 2);
+        QTest::qWait(100);
+        QVERIFY(std::abs(c.positionBeats() - 1.0) < 0.05);
+        c.stepInputMove(1.0);                                        // a rest
+        QTRY_VERIFY(std::abs(c.positionBeats() - 2.0) < 0.05);
+        c.stepInputMove(-4.0);                                       // back, but not before the start
+        QTRY_VERIFY(std::abs(c.positionBeats()) < 0.05);
+        c.locateBeats(3.5);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 3.5) < 0.05);
+        c.stepInputNote(67, 90, 1.0, false);                         // past the region's end: it grows by a bar
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        QCOMPARE(c.regions()->find(r)->lengthBeats, 8.0);
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

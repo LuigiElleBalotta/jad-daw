@@ -191,6 +191,28 @@ ApplicationWindow {
     PreferencesDialog { id: preferencesDialog; project: controller }
     EffectEditorWindow { id: effectEditor; project: controller }
     MusicalTypingWindow { id: musicalTyping; project: controller; visible: false }
+    TransportFloatWindow { id: transportFloat; project: controller; visible: false }
+    EventFloatWindow { id: eventFloat; project: controller; piano: editorArea.piano; visible: false }
+    RegionInspectorFloatWindow { id: regionInspectorFloat; project: controller; visible: false }
+    StepInputKeyboardWindow { id: stepInput; project: controller; visible: false }
+    // Window > Cycle Through Windows: the next visible window of the app comes to the front
+    function cycleWindows() {
+        const all = [root, musicalTyping, transportFloat, eventFloat, regionInspectorFloat, stepInput].filter(w => w.visible)
+        if (all.length < 2) return
+        let at = all.findIndex(w => w.active)
+        const next = all[(at + 1) % all.length]
+        next.raise()
+        next.requestActivate()
+    }
+    // Window > Move & Resize: the window takes a part of the screen
+    function placeWindow(part) {
+        const a = root.screen
+        const w = a.desktopAvailableWidth, h = a.desktopAvailableHeight, x0 = a.virtualX, y0 = a.virtualY
+        root.visibility = Window.Windowed
+        if (part === "fill") { root.visibility = Window.Maximized; return }
+        const r = ({ left: [0, 0, w / 2, h], right: [w / 2, 0, w / 2, h], top: [0, 0, w, h / 2], bottom: [0, h / 2, w, h / 2], center: [w * 0.1, h * 0.1, w * 0.8, h * 0.8] })[part]
+        root.x = x0 + r[0]; root.y = y0 + r[1]; root.width = r[2]; root.height = r[3]
+    }
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
     // the Mixer in a window of its own (View > Mixer when it is detached, Window > Open Mixer)
     Window {
@@ -345,6 +367,17 @@ ApplicationWindow {
         "mix.iOAssignments": () => ioLabelsDialog.open(),
         "mix.pluginWindow": () => controller.openAllPluginWindows(),
         "window.showKeyboard": () => { musicalTyping.visible = !musicalTyping.visible },
+        "window.openTransportFloat": () => { transportFloat.visible = !transportFloat.visible },
+        "window.showEventFloat": () => { eventFloat.visible = !eventFloat.visible },
+        "window.showRegionInspectorFloat": () => { regionInspectorFloat.visible = !regionInspectorFloat.visible },
+        "window.showStepInputKeyboard": () => { stepInput.visible = !stepInput.visible },
+        "window.cycleThroughWindows": () => root.cycleWindows(),
+        "window.moveResizeFill": () => root.placeWindow("fill"),
+        "window.moveResizeLeft": () => root.placeWindow("left"),
+        "window.moveResizeRight": () => root.placeWindow("right"),
+        "window.moveResizeTop": () => root.placeWindow("top"),
+        "window.moveResizeBottom": () => root.placeWindow("bottom"),
+        "window.moveResizeCenter": () => root.placeWindow("center"),
         "track.searchAndSelectTrack": () => searchTrackDialog.open(),
         "mix.bounceInPlace": () => controller.bounceInPlace(),
         "view.listEditors": () => { listEditors.tab = 0; listEditors.open() },

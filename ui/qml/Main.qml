@@ -76,6 +76,10 @@ ApplicationWindow {
 
     MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
+    ConfirmDialog { id: confirm }
+    UndoHistoryDialog { id: undoHistoryDialog; project: controller }
+    RecentProjectsDialog { id: recentDialog; project: controller }
+    ProjectSettingsDialog { id: projectSettings; project: controller; onMetronomeRequested: metronomeDialog.open(); onPreferencesRequested: preferencesDialog.open() }
     IoLabelsDialog { id: ioLabelsDialog; project: controller }
     BounceDialog { id: bounceOptions; project: controller }
     GroupSettingsWindow { id: groupSettings; project: controller }
@@ -203,6 +207,13 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "edit.undoHistory": () => undoHistoryDialog.open(),
+        "edit.deleteUndoHistory": () => confirm.ask(qsTr("Delete Undo History"), qsTr("The steps can no longer be undone."), qsTr("Delete"), () => controller.clearUndoHistory()),
+        "file.openRecent": () => recentDialog.open(),
+        "file.close": () => controller.closeProject(),
+        "file.closeProject": () => controller.closeProject(),
+        "file.revert": () => confirm.ask(qsTr("Revert to Saved"), qsTr("Every change since the last save is lost."), qsTr("Revert"), () => controller.revertToSaved()),
+        "file.projectSettings": () => projectSettings.open(),
         "track.createTrackStack": () => controller.createSummingStack(),
         "mix.iOLabels": () => ioLabelsDialog.open(),
         "mix.preFaderMetering": () => { controller.preFaderMetering = !controller.preFaderMetering },
@@ -329,6 +340,10 @@ ApplicationWindow {
     })
     readonly property var disabledStates: ({
         "file.save": !controller.hasProject,
+        "file.close": !controller.hasProject,
+        "file.closeProject": !controller.hasProject,
+        "file.revert": !controller.hasProject,
+        "file.projectSettings": !controller.hasProject,
         "file.saveAs": !controller.hasProject,
         "file.saveACopyAs": !controller.hasProject,
         "file.importAudio": !controller.hasProject,

@@ -1831,4 +1831,90 @@ void ProjectController::createSummingStack(const QString& name) {
     emit notice(QString("Created %1 for %2 track%3").arg(label).arg(members.size()).arg(members.size() == 1 ? "" : "s"));
 }
 
+void ProjectController::closeProject() {
+    if (!host_ && !engine_) return;
+    finishAutomationCaptures(true);
+    recording_ = false;
+    teardown();
+    ++generation_;
+    importQueue_.clear();
+    dir_.clear();
+    allRows_.clear();
+    regionRows_.clear();
+    markerRows_.clear();
+    groupRows_.clear();
+    tracks_.reset(std::vector<TrackRow>());
+    mixer_.reset(std::vector<TrackRow>());
+    regions_.reset(std::vector<RegionRow>());
+    selectedTracks_.clear();
+    selectedRegions_.clear();
+    name_.clear();
+    liveTarget_.clear();
+    playing_ = false;
+    positionBeats_ = 0;
+    emit selectionChanged();
+    emit playingChanged();
+    emit positionChanged();
+    emit projectChanged();
+    emit groupsChanged();
+}
+
+bool ProjectController::revertToSaved() {
+    if (!host_) return false;
+    const QUrl folder = QUrl::fromLocalFile(projectFolder());
+    return openProject(folder);
+}
+
+void ProjectController::addRecent() {
+    const QString path = projectFolder();
+    if (path.isEmpty()) return;
+    recent_.removeAll(path);
+    recent_.prepend(path);
+    while (recent_.size() > 10) recent_.removeLast();
+    emit recentChanged();
+}
+
+QStringList ProjectController::recentProjects() const {
+    QStringList out;
+    for (const QString& p : recent_)
+        if (QFileInfo::exists(p + "/project.json")) out << p;
+    return out;
+}
+
+bool ProjectController::openRecent(const QString& folder) {
+    if (!QFileInfo::exists(folder + "/project.json")) {
+        setError("This project is not there any more");
+        recent_.removeAll(folder);
+        emit recentChanged();
+        return false;
+    }
+    return openProject(QUrl::fromLocalFile(folder));
+}
+
+void ProjectController::loadRecent(QSettings& s) { recent_ = s.value("recent/projects").toStringList(); emit recentChanged(); }
+void ProjectController::saveRecent(QSettings& s) const { s.setValue("recent/projects", recent_); }
+
+void ProjectController::setProjectName(const QString& name) {
+    const QString clean = name.trimmed().left(128);
+    if (!host_ || clean.isEmpty() || clean == name_) return;
+    sendCommand({{"type", "set_project_name"}, {"name", clean.toStdString()}});
+}
+
+QVariantMap ProjectController::undoHistory() const {
+    if (!host_) return {{"undo", QStringList()}, {"redo", QStringList()}};
+    const auto h = host_->history().get();
+    QStringList undo, redo;
+    for (const std::string& l : h.first) undo << QString::fromStdString(l);
+    for (const std::string& l : h.second) redo << QString::fromStdString(l);
+    return {{"undo", undo}, {"redo", redo}};
+}
+
+void ProjectController::undoSteps(int count) { for (int i = 0; i < std::clamp(count, 0, 1000); ++i) undo(); }
+void ProjectController::redoSteps(int count) { for (int i = 0; i < std::clamp(count, 0, 1000); ++i) redo(); }
+
+void ProjectController::clearUndoHistory() {
+    if (host_) host_->clearHistory().get();
+    emit notice("The undo history was deleted");
+}
+
 }  // namespace jad

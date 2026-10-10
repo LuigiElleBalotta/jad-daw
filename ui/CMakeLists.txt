@@ -58,6 +58,10 @@ qt_add_qml_module(jad_ui_lib
         qml/GroupSettingsWindow.qml
         qml/IoLabelsDialog.qml
         qml/BounceDialog.qml
+        qml/ConfirmDialog.qml
+        qml/UndoHistoryDialog.qml
+        qml/RecentProjectsDialog.qml
+        qml/ProjectSettingsDialog.qml
         qml/MusicalTypingWindow.qml
         qml/EffectEditorWindow.qml
         qml/PreferencesDialog.qml

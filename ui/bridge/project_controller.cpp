@@ -248,6 +248,7 @@ bool ProjectController::openProject(const QUrl& folder) {
     }).get();
     refresh(host_->revision());
     timer_.start();
+    addRecent();
     emit projectChanged();
     return true;
 }
@@ -1345,6 +1346,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     loadAudioSettings(s);
     loadMidiSettings(s);
     loadIoSettings(s);
+    loadRecent(s);
 }
 
 void ProjectController::savePanelState(QSettings& s) const {
@@ -1359,6 +1361,7 @@ void ProjectController::savePanelState(QSettings& s) const {
     saveAudioSettings(s);
     saveMidiSettings(s);
     saveIoSettings(s);
+    saveRecent(s);
 }
 
 void ProjectController::setLeftColumnWidth(double width) {

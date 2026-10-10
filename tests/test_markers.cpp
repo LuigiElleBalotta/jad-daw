@@ -206,3 +206,42 @@ TEST_CASE("automation modes: set_track_props carries the mode, the JSON omits th
     auto withoutLane = buildConfig(p, *p.findTrack(t.id), media, nullptr, nullptr);
     REQUIRE(withoutLane->volumeAuto.empty());                                            // off: ignored
 }
+
+TEST_CASE("project name: set_project_name is validated and undone", "[project]") {
+    std::mt19937_64 rng(15);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    p.name = "Old";
+    REQUIRE_FALSE(s.execute(p, makeSetProjectName("New name")).has_value());
+    REQUIRE(p.name == "New name");
+    REQUIRE(s.execute(p, makeSetProjectName("")).has_value());
+    REQUIRE(s.execute(p, makeSetProjectName("bad\nname")).has_value());
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.name == "Old");
+}
+
+TEST_CASE("undo history: the steps are listed in words, oldest first, and the redo steps next first", "[undo][history]") {
+    std::mt19937_64 rng(16);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Audio;
+    t.name = "A";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    StripPatch patch;
+    patch.gainDb = -3.0f;
+    REQUIRE_FALSE(s.execute(p, makeSetStrip(t.id, patch)).has_value());
+    REQUIRE_FALSE(s.execute(p, makeSetProjectName("X")).has_value());
+    std::vector<CommandPtr> two;
+    two.push_back(makeSetProjectName("Y"));
+    two.push_back(makeSetProjectName("Z"));
+    REQUIRE_FALSE(s.execute(p, makeTransaction(std::move(two))).has_value());
+    const auto labels = s.undoLabels();
+    REQUIRE(labels == std::vector<std::string>({"Add track", "Channel strip", "Project name", "Project name (2)"}));
+    REQUIRE(s.redoLabels().empty());
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(s.undoLabels().size() == 2);
+    REQUIRE(s.redoLabels() == std::vector<std::string>({"Project name", "Project name (2)"}));   // the next redo first
+}

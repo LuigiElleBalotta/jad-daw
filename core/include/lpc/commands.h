@@ -34,6 +34,7 @@ CommandPtr makeRemoveSignature(Ticks tick);
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points);
 // Replaces the track groups (members must be existing tracks but the master, none in two groups, unique ids, at most 64 groups).
 CommandPtr makeSetGroups(std::vector<Group> groups);
+CommandPtr makeSetProjectName(std::string name);  // 1 to 128 characters without control characters
 CommandPtr makeSetMarkers(std::vector<Marker> markers);  // replaces the whole list (sorted by tick, unique ids); the undo is the previous list
 CommandPtr makeAddMedia(MediaItem item, int index = -1);  // index -1 appends
 CommandPtr makeRemoveMedia(Uuid mediaId);

@@ -161,6 +161,14 @@ std::future<std::optional<CommandError>> ProjectHost::submit(CommandPtr command)
     });
 }
 
+std::future<std::pair<std::vector<std::string>, std::vector<std::string>>> ProjectHost::history() {
+    return call([this] { return std::make_pair(undo_.undoLabels(), undo_.redoLabels()); });
+}
+
+std::future<void> ProjectHost::clearHistory() {
+    return call([this] { undo_.clear(); });
+}
+
 std::future<void> ProjectHost::beginGesture() {
     return call([this] {
         gestureOpen_ = true;

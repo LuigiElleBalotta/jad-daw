@@ -1291,6 +1291,59 @@ private slots:
         const lpc::WavData cycle = lpc::decodeAudioFile(other.path() / "cycle.wav");
         QVERIFY(std::abs(cycle.frames() - 2 * 24000) < 600);                            // 2 beats at 120 bpm = 1 s
     }
+    void closeRevertRecentAndRenameTheProject() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QSignalSpy recent(&c, &jad::ProjectController::recentChanged);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QVERIFY(recent.count() >= 1);
+        QVERIFY(c.recentProjects().contains(c.projectFolder()));
+        c.setProjectName("Renamed");
+        QTRY_COMPARE(c.projectName(), QString("Renamed"));
+        c.undo();
+        QTRY_COMPARE(c.projectName(), QString("Demo"));
+        c.setProjectName("   ");                              // empty: ignored
+        c.addTrack("audio");
+        const int tracks = c.tracks()->rowCount();
+        QTRY_VERIFY(c.tracks()->totalCount() > 0);
+        QTest::qWait(150);
+        QVERIFY(c.revertToSaved());                             // the added track was never saved
+        QTRY_VERIFY(c.tracks()->rowCount() <= tracks);
+        const QString folder = c.projectFolder();
+        c.closeProject();
+        QVERIFY(!c.hasProject());
+        QCOMPARE(c.tracks()->rowCount(), 0);
+        QCOMPARE(c.regions()->rowCount(), 0);
+        QVERIFY(c.openRecent(folder));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QVERIFY(!c.openRecent(folder + "/nowhere"));
+        QSettings s(QDir(QDir::tempPath()).filePath("jad-recent-test.ini"), QSettings::IniFormat);
+        c.saveRecent(s);
+        jad::ProjectController d(false);
+        d.loadRecent(s);
+        QVERIFY(d.recentProjects().contains(folder));
+    }
+    void theUndoHistoryListsStepsAndCanBeSteppedAndDeleted() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QVERIFY(c.undoHistory().value("undo").toStringList().isEmpty());
+        const QString audio = firstAudioTrackId(c);
+        c.setGain(audio, -3.0);
+        c.setPan(audio, 0.5);
+        QTest::qWait(150);
+        QTRY_COMPARE(c.undoHistory().value("undo").toStringList().size(), 2);
+        QCOMPARE(c.undoHistory().value("undo").toStringList().first(), QString("Channel strip"));
+        c.undoSteps(2);
+        QTRY_COMPARE(c.undoHistory().value("redo").toStringList().size(), 2);
+        c.redoSteps(1);
+        QTRY_COMPARE(c.undoHistory().value("undo").toStringList().size(), 1);
+        c.clearUndoHistory();
+        QVERIFY(c.undoHistory().value("undo").toStringList().isEmpty());
+        QVERIFY(c.undoHistory().value("redo").toStringList().isEmpty());
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

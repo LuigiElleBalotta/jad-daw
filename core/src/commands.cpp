@@ -237,6 +237,24 @@ private:
     std::vector<Group> groups_;
 };
 
+class SetProjectNameCmd final : public Command {
+public:
+    explicit SetProjectNameCmd(std::string name) : name_(std::move(name)) {}
+    std::string type() const override { return "set_project_name"; }
+    json toJson() const override { return {{"type", type()}, {"name", name_}}; }
+    ApplyResult apply(Project& p) const override {
+        if (name_.empty() || name_.size() > 512) return fail("bad_value", "a project name has 1 to 128 characters");
+        for (const unsigned char c : name_)
+            if (c < 0x20 || c == 0x7f) return fail("bad_value", "a project name has no control characters");
+        std::string previous = p.name;
+        p.name = name_;
+        return success(makeSetProjectName(std::move(previous)));
+    }
+
+private:
+    std::string name_;
+};
+
 class SetMarkersCmd final : public Command {
 public:
     explicit SetMarkersCmd(std::vector<Marker> markers) : markers_(std::move(markers)) {}
@@ -821,6 +839,7 @@ CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_uniqu
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
+CommandPtr makeSetProjectName(std::string name) { return std::make_unique<SetProjectNameCmd>(std::move(name)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch) { return std::make_unique<SetTrackPropsCmd>(trackId, std::move(patch)); }
@@ -859,6 +878,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());
         if (type == "set_groups") return makeSetGroups(j.at("groups").get<std::vector<Group>>());
+        if (type == "set_project_name") return makeSetProjectName(j.at("name").get<std::string>());
         if (type == "set_markers") return makeSetMarkers(j.at("markers").get<std::vector<Marker>>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());
         if (type == "set_track_props") {

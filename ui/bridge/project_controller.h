@@ -449,6 +449,20 @@ public:
     Q_INVOKABLE void setInputLabel(int input, const QString& label);
     Q_PROPERTY(int inputLabelsRevision READ inputLabelsRevision NOTIFY inputLabelsChanged)
     int inputLabelsRevision() const { return inputLabelsRevision_; }
+    // File: Close Project (the window stays, empty), Revert to Saved (the project is read again from its folder), the recent projects
+    Q_INVOKABLE void closeProject();
+    Q_INVOKABLE bool revertToSaved();
+    Q_INVOKABLE QStringList recentProjects() const;  // folders that still hold a project, the latest first
+    Q_INVOKABLE bool openRecent(const QString& folder);
+    Q_INVOKABLE void setProjectName(const QString& name);
+    Q_INVOKABLE QString projectFolder() const { return QString::fromStdU16String(dir_.u16string()); }
+    void loadRecent(QSettings& s);
+    void saveRecent(QSettings& s) const;
+    // Edit > Undo History: {undo: [labels, oldest first], redo: [labels, next first]}; stepping goes to a point of it, clearing forgets it
+    Q_INVOKABLE QVariantMap undoHistory() const;
+    Q_INVOKABLE void undoSteps(int count);
+    Q_INVOKABLE void redoSteps(int count);
+    Q_INVOKABLE void clearUndoHistory();
     Q_INVOKABLE void deleteUnusedTracks();     // audio and instrument tracks without regions
     Q_INVOKABLE void deselectOutsideLocators();
     Q_INVOKABLE void selectSimilarRegions();   // the same audio file, or MIDI of the same length, as a selected region
@@ -571,6 +585,7 @@ signals:
     void metronomeChanged();
     void meteringChanged();
     void groupsChanged();
+    void recentChanged();
     void inputLabelsChanged();
     void groupSettingsChanged();
     void waveformZoomChanged();
@@ -721,6 +736,8 @@ private:
     bool metronome_ = false;
     bool preFader_ = false;
     bool groupsActive_ = true;
+    QStringList recent_;
+    void addRecent();
     QStringList inputLabels_;
     int inputLabelsRevision_ = 0;
     struct AutoCapture {

@@ -37,6 +37,9 @@ public:
     // endGesture() turns them into a single undo step. Use it only for commands that set the same thing again and again.
     std::future<void> beginGesture();
     std::future<void> endGesture();
+    // The undo history in words: {steps that can be undone, oldest first; steps that can be redone, next first}. clearHistory() forgets both.
+    std::future<std::pair<std::vector<std::string>, std::vector<std::string>>> history();
+    std::future<void> clearHistory();
     std::future<std::optional<CommandError>> undo();
     std::future<std::optional<CommandError>> redo();
 

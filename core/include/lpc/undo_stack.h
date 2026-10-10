@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "lpc/command.h"
@@ -20,6 +21,10 @@ public:
     std::optional<CommandError> undo(Project& project);
     std::optional<CommandError> redo(Project& project);
     void clear();
+    // What each step did, oldest first, in words ("Move region", "3 changes"...): the steps that can be undone and the ones that can be redone
+    // (the redo list is in the order they would be redone).
+    std::vector<std::string> undoLabels() const;
+    std::vector<std::string> redoLabels() const;
 
 private:
     struct Entry {

@@ -989,6 +989,41 @@ private slots:
         c.undo();
         c.toggleLoop();
     }
+    void cycleRecordingOfAudioCanMakeANewTrackForEachPassAndMuteTheEarlierOnes() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "audio") audio = c.tracks()->trackIdAt(i);
+        QVERIFY(!audio.isEmpty());
+        c.setTrackToggle("track.recordArm", audio, true);
+        c.setLoopRange(16.0, 17.0);                                   // one beat = half a second
+        c.toggleLoop();
+        QVERIFY(c.loopEnabled());
+        c.setOverlapAudio("tracksMute");
+        const int tracksBefore = c.tracks()->rowCount();
+        const int regionsBefore = c.regions()->rowCount();
+        c.locateBeats(16.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 16.0) < 0.05);
+        c.startRecording();
+        QVERIFY(c.recording());
+        QTest::qWait(1400);                                           // two passes and a bit
+        c.stop();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.recording(), 15000);
+        QTRY_VERIFY_WITH_TIMEOUT(c.tracks()->rowCount() > tracksBefore, 20000);       // a pass on a new track
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->rowCount() >= regionsBefore + 2, 20000);
+        QVERIFY(c.tracks()->find(audio)->mute);                       // the first pass's track is muted, the last one plays
+        bool lastPlays = false;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i) {
+            const jad::TrackRow* t = c.tracks()->find(c.tracks()->trackIdAt(i));
+            if (t && t->id != audio && t->name.startsWith(c.tracks()->find(audio)->name + " (") && !t->mute) lastPlays = true;
+        }
+        QVERIFY(lastPlays);
+        c.setOverlapAudio("takes");
+        c.toggleLoop();
+    }
     void countInChoiceAcceptsBarsAndBeatsOnly() {
         jad::ProjectController c(false);
         QCOMPARE(c.countInChoice(), 1);

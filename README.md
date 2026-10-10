@@ -1,8 +1,9 @@
 # JAD Daw (Just Another Daw)
 
-Open source (AGPLv3) digital audio workstation, work in progress. This repository currently contains the
-**Core** (project model, undoable JSON commands, real-time audio engine, offline renderer, a CLI) and the
-**UI shell** (Qt Quick: transport, tracks, timeline, mixer).
+Open source (AGPLv3) digital audio workstation, work in progress, modelled on Logic Pro (behaviour and look; the icons are our own). The repository holds the
+**Core** (project model, undoable JSON commands, real-time audio engine, offline renderer, a CLI), the **platform layer** (JUCE: audio and MIDI devices, VST3 hosting)
+and the **UI** (Qt Quick: transport, tracks, timeline, Inspector, Library, Mixer, Piano Roll and many windows). It has only been run on Windows so far.
+Recording, editing, mixing and bouncing work; `docs/roadmap-autonomous.md` lists what was done and what was left out.
 
 ## Build (Windows, Visual Studio 2022, CMake)
 
@@ -39,9 +40,8 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - Menus (File, Edit, Track, Navigate, Record, Mix, View, Window, Help), control bar with LCD, local toolbar, track
   headers, timeline and mixer. Every action comes from one table, `ui/actions/actions.json`: label, menu, default
   shortcut (Logic Pro's), and whether it is **ready** or a **stub**.
-- A stub is present and can be switched on, but nothing is behind it yet (recording, metronome, count-in, punch,
-  Score, Step Sequencer, Session Players, plug-in automation...). Switching a stub on shows a "not implemented yet" notice; switching it off
-  shows nothing. Everything else works through the Core's JSON commands, with undo/redo.
+- A stub is present and can be chosen, but nothing is behind it yet (Flex, Smart Tempo, Session Players, folder stacks, movie, printing, the Mac window sets...).
+  Choosing a stub shows a "not implemented yet" notice. Everything else works through the Core's JSON commands, with undo/redo.
 - Real today: open/create/save projects (a `.lpc` folder), play, locate, cycle, tempo and time signature (double click
   the LCD), master volume, tracks (new, delete, rename, colour, heights, select with click / Shift / Ctrl), mute, solo,
   fader and pan, regions (select, rectangle select, move, resize from the edges, split, join, delete, draw an empty
@@ -50,9 +50,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 ![Tools and selection](docs/images/tools-and-selection.png)
 
 - **Inspector** (`I`, or the Inspector button): the Region and Track sections of the selected region and track, and two
-  channel strips (the track and its output). Real: region gain, track name and colour, and everything on the strips
-  (insert gain, sends, output, pan, fader, mute, solo). Quantize, Loop, Transpose, Key and Velocity limits, Delay and the
-  like have no engine yet: they are visual only and say so when switched on.
+  channel strips (the track and its output). Real: region mute, loop, gain, quantize, transpose and velocity, the track's name, colour,
+  transpose, velocity, key and velocity limits and delay, and everything on the strips (inserts, sends, output, pan, fader, mute, solo). The rest
+  (region type, No Transpose, Freeze mode, Q-Reference) is visual only and says so when switched on.
 
 ![Inspector](docs/images/inspector.png)
 

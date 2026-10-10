@@ -655,7 +655,7 @@ void ProjectController::setTool(const QString& tool) {
 }
 
 void ProjectController::setSnap(const QString& snap) {
-    static const QStringList known{"off", "bar", "half", "quarter", "eighth", "sixteenth"};
+    static const QStringList known{"off", "bar", "half", "quarter", "eighth", "sixteenth", "smart"};  // smart: the grid follows the zoom (Timeline)
     if (!known.contains(snap) || snap == snap_) return;
     snap_ = snap;
     emit snapChanged();
@@ -898,8 +898,17 @@ nlohmann::json ProjectController::moveCommand(const RegionRow& row, double start
     return {{"type", "move_region"}, {"regionId", row.id.toStdString()}, {"start", start}};
 }
 
+void ProjectController::selectAllTracks() {
+    QStringList all;
+    for (const TrackRow& t : allRows_)
+        if (!t.master) all.append(t.id);
+    if (all == selectedTracks_) return;
+    selectedTracks_ = all;
+    emit selectionChanged();
+}
+
 void ProjectController::setDragMode(const QString& mode) {
-    if ((mode != "overlap" && mode != "noOverlap" && mode != "xfade") || mode == dragMode_) return;
+    if ((mode != "overlap" && mode != "noOverlap" && mode != "xfade" && mode != "shuffleL" && mode != "shuffleR") || mode == dragMode_) return;
     dragMode_ = mode;
     QSettings().setValue("edit/dragMode", mode);
     emit dragModeChanged();
@@ -961,6 +970,43 @@ nlohmann::json ProjectController::overlapCommands(const std::vector<std::pair<co
             if (m.first->id == id) return true;
         return false;
     };
+    if (dragMode_ == "shuffleL" || dragMode_ == "shuffleR") {
+        // Shuffle: what the mover lands on is pushed away instead of being cut. R pushes it to the right, behind the mover, L to the left,
+        // before it; a pushed region that reaches its neighbour pushes that one too, so the order on the track is kept.
+        constexpr double e = 1e-6;
+        std::map<QString, double> starts;  // where each region of the track ends up
+        for (const auto& [row, newStart] : moved) {
+            const double ns = std::max(0.0, newStart), ne = ns + row->lengthBeats;
+            std::vector<const RegionRow*> others;
+            for (const RegionRow& t : regionRows_)
+                if (t.trackId == row->trackId && t.id != row->id && !isMoved(t.id)) others.push_back(&t);
+            const auto at = [&](const RegionRow* t) { auto it = starts.find(t->id); return it == starts.end() ? t->startBeats : it->second; };
+            if (dragMode_ == "shuffleR") {
+                std::sort(others.begin(), others.end(), [&](const RegionRow* a, const RegionRow* b) { return at(a) < at(b); });
+                double cursor = ne;
+                for (const RegionRow* t : others) {
+                    const double ts = at(t), te = ts + t->lengthBeats;
+                    if (te <= ns + e) continue;       // before the mover
+                    if (ts >= cursor - e) break;      // clear of what was pushed
+                    starts[t->id] = cursor;
+                    cursor += t->lengthBeats;
+                }
+            } else {
+                std::sort(others.begin(), others.end(), [&](const RegionRow* a, const RegionRow* b) { return at(a) > at(b); });
+                double cursor = ns;
+                for (const RegionRow* t : others) {
+                    const double ts = at(t), te = ts + t->lengthBeats;
+                    if (ts >= ne - e) continue;       // after the mover
+                    if (te <= cursor + e) break;
+                    starts[t->id] = std::max(0.0, cursor - t->lengthBeats);
+                    cursor -= t->lengthBeats;
+                }
+            }
+        }
+        for (const auto& [id, start] : starts)
+            if (const RegionRow* t = regions_.find(id)) out.push_back(moveCommand(*t, start));
+        return out;
+    }
     constexpr double eps = 1e-6;
     std::set<QString> touched;  // a region is trimmed once, against the first mover that reaches it
     for (const auto& [row, newStart] : moved) {

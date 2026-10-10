@@ -13,7 +13,7 @@ Panel {
     readonly property alias scissorsButton: scissorsButton
     readonly property alias glueButton: glueButton
     readonly property alias soloIndicator: soloIndicator
-    readonly property string snapLabel: ({ "off": "Off", "bar": "Bar", "half": "1/2", "quarter": "1/4", "eighth": "1/8", "sixteenth": "1/16" })[project.snap] ?? project.snap
+    readonly property string snapLabel: ({ "off": "Off", "bar": "Bar", "half": "1/2", "quarter": "1/4", "eighth": "1/8", "sixteenth": "1/16", "smart": "Smart" })[project.snap] ?? project.snap
 
     implicitHeight: 32
     radius: 0
@@ -82,8 +82,8 @@ Panel {
         }
         MenuButton {
             visible: { root.project.barItemsRevision; return root.project.barItem("tb.snap") }
-            label: qsTr("Drag: %1 ▾").arg(root.project.dragMode === "noOverlap" ? qsTr("No Overlap") : (root.project.dragMode === "xfade" ? qsTr("X-Fade") : qsTr("Overlap")))
-            ids: ["drag.overlap", "drag.noOverlap", "drag.xfade"]
+            label: qsTr("Drag: %1 ▾").arg(({ "noOverlap": qsTr("No Overlap"), "xfade": qsTr("X-Fade"), "shuffleL": qsTr("Shuffle L"), "shuffleR": qsTr("Shuffle R") })[root.project.dragMode] ?? qsTr("Overlap"))
+            ids: ["drag.overlap", "drag.noOverlap", "drag.xfade", "view.dragModeShuffleR", "view.dragModeShuffleL"]
         }
         Separator {}
 

@@ -68,6 +68,15 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 ## 9. Platform
 - [ ] (waits for the owner: macOS run and the CI Configure fix; the app icon exists) macOS build run for real (never done), the CI Configure failure (only when the owner says), signed bundle, app icon.
 
+## 10. The rest of the `stub` actions (the owner: "port them to Windows")
+Most stubs were never Mac-only: they are Logic features not written yet. Left out for good: Print, Page Setup, Movie, Dolby Atmos, Mastering Assistant.
+- [x] Batch 1: Record Enable / Input Monitoring (already wired), Select Tracks, Auto Set Locators, Snap Smart, Drag Mode Shuffle L/R.
+- [ ] Batch 2: record options (Overlapping MIDI/Audio Recordings, Use Musical Grid, Low Latency Monitoring, Record/Play/Stop Button Options).
+- [ ] Batch 3: Edit: Trim Fill within Locators, Cut/Insert Time, Delete/Separate/Copy MIDI Events, Move to Beat / Recorded Position / Focused Track.
+- [ ] Batch 4: tools (Text, Automation Select/Curve, Marquee, Slip, Rotate) and floats (Transport, Event, Region Inspector, Step Input Keyboard).
+- [ ] Batch 5: Track: Assign Icon, Configure Header, Show Output Track, External MIDI track, stacks (Flatten, Convert Folder Stack).
+- [ ] Batch 6: Mix: Automation Settings, Convert Automation, Quick Access, Autoselect in Read; File: Project Alternatives, Project Management, Share.
+
 ## Log
 - 2026-10-10: roadmap written. Done before it: metronome with counting modes and user samples, audio recording with count-in,
   automation (volume/pan), global tracks, markers, cycle area, Save As/Import/Bounce, MP3/FLAC/AIFF import and drop-to-new-track.
@@ -108,3 +117,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: unsaved-changes prompt (save, don't save, cancel) and autosave with recovery.
 - 2026-10-10: Gain, Fade and Solo tools.
 - 2026-10-10: Edit > Move > Slip/Rotate Left/Right and Set Nudge Value.
+- 2026-10-10: stub actions batch 1 (Select Tracks, Auto Set Locators, Snap Smart, Shuffle L/R drag modes).

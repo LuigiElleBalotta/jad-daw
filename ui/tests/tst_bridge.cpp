@@ -1667,6 +1667,61 @@ private slots:
         QVERIFY(c.regions()->find(small) == nullptr || c.regions()->find(small)->startBeats >= 34.0 || c.regions()->find(small)->lengthBeats < 4.0);
         c.setDragMode("overlap");
     }
+    void shuffleDragPushesWhatItLandsOnAndAutoSetLocatorsAndSelectTracks() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 2);
+        c.selectAllTracks();
+        QCOMPARE(c.selectedTrackIds().size(), 2);
+        const QString track = c.tracks()->trackIdAt(0);
+        c.createRegion(track, 0, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString a = c.regions()->regionIdAt(0);
+        c.createRegion(track, 4, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        QString b;
+        for (int i = 0; i < 2; ++i) if (c.regions()->regionIdAt(i) != a) b = c.regions()->regionIdAt(i);
+        c.createRegion(track, 8, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 3);
+        QString d;
+        for (int i = 0; i < 3; ++i) if (c.regions()->regionIdAt(i) != a && c.regions()->regionIdAt(i) != b) d = c.regions()->regionIdAt(i);
+        c.setDragMode("shuffleR");
+        QCOMPARE(c.dragMode(), QString("shuffleR"));
+        c.moveRegion(a, 2);                                          // [2, 6) lands on b: b goes behind it and pushes d on
+        QTRY_COMPARE(c.regions()->find(b)->startBeats, 6.0);
+        QCOMPARE(c.regions()->find(d)->startBeats, 10.0);
+        QCOMPARE(c.regions()->find(a)->startBeats, 2.0);
+        c.undo();                                                    // one undo step
+        QTRY_COMPARE(c.regions()->find(b)->startBeats, 4.0);
+        QCOMPARE(c.regions()->find(d)->startBeats, 8.0);
+        c.setDragMode("shuffleL");
+        const QString track2 = c.tracks()->trackIdAt(1);
+        c.createRegion(track2, 10, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 4);
+        QString x;
+        for (int i = 0; i < 4; ++i) if (c.regions()->find(c.regions()->regionIdAt(i))->trackId == track2) x = c.regions()->regionIdAt(i);
+        c.createRegion(track2, 14, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 5);
+        QString y;
+        for (int i = 0; i < 5; ++i) { const QString id = c.regions()->regionIdAt(i); if (c.regions()->find(id)->trackId == track2 && id != x) y = id; }
+        c.moveRegion(y, 12);                                         // [12, 16) lands on x (10..14): x goes before it, to 8
+        QTRY_COMPARE(c.regions()->find(x)->startBeats, 8.0);
+        QCOMPARE(c.regions()->find(y)->startBeats, 12.0);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(x)->startBeats, 10.0);
+        c.setDragMode("overlap");
+        // Auto Set Locators: nothing selected = all the regions
+        c.selectRegions({}, "replace");
+        c.autoSetLocators();
+        QCOMPARE(c.loopStartBeats(), 0.0);
+        QCOMPARE(c.loopEndBeats(), 18.0);
+        c.setSnap("smart");
+        QCOMPARE(c.snap(), QString("smart"));
+        c.setSnap("quarter");
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

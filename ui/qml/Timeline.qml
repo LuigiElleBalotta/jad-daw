@@ -9,7 +9,13 @@ Item {
     property real pixelsPerBeat: 40
     property real scrollBeats: 0
     property real scrollY: 0
-    readonly property real snapBeats: project.snapBeats   // 0 disables snapping
+    // 0 disables snapping. Smart: the finest grid whose lines are still about 14 px apart, so it follows the zoom like the ruler does
+    readonly property real snapBeats: {
+        if (project.snap !== "smart") return project.snapBeats
+        const grids = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, project.barBeats]
+        for (const g of grids) if (g * pixelsPerBeat >= 14) return g
+        return project.barBeats
+    }
     readonly property real minPixelsPerBeat: 4
     readonly property real maxPixelsPerBeat: 400
     readonly property real rowHeight: Theme.sizeTrackHeight[project.trackHeightIndex]

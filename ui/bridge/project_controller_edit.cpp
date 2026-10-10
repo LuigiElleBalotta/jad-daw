@@ -574,6 +574,19 @@ void ProjectController::setLocatorsBySelection(bool rounded) {
     setLoopBeats(from, to);
 }
 
+void ProjectController::autoSetLocators() {
+    if (!selectedRegions_.isEmpty()) {
+        setLocatorsBySelection(false);
+        return;
+    }
+    double from = -1, to = 0;
+    for (const RegionRow& r : regionRows_) {
+        from = from < 0 ? r.startBeats : std::min(from, r.startBeats);
+        to = std::max(to, r.startBeats + r.lengthBeats);
+    }
+    if (from >= 0 && to > from) setLoopBeats(from, to);
+}
+
 void ProjectController::moveLocators(int direction) {
     const double length = loopEndBeats_ - loopStartBeats_;
     if (length <= 0) return;

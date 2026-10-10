@@ -460,6 +460,9 @@ public:
     Q_INVOKABLE void toggleLoop();
     // Navigate: the cycle from the selected regions (rounded: out to whole bars) with the cycle switched on; move it by its own length
     Q_INVOKABLE void setLocatorsBySelection(bool rounded);
+    // Navigate > Auto Set Locators: the cycle is set to the selected regions, or to everything on the tracks when none is selected.
+    Q_INVOKABLE void autoSetLocators();
+    Q_INVOKABLE void selectAllTracks();  // Edit > Select Tracks
     Q_INVOKABLE void moveLocators(int direction);
     Q_INVOKABLE void deleteMarkerAtPlayhead();
     Q_INVOKABLE void clearError();

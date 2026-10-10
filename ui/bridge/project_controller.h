@@ -639,6 +639,10 @@ public:
     // file that plays; MIDI: the notes inside the region, those pushed out are dropped). Rotate Left/Right moves the notes of a MIDI region the same way but what
     // leaves at one end comes back at the other. One undo step.
     Q_INVOKABLE void slipSelectedRegions(int direction, bool rotate);
+    // The Slip and Rotate tools: the same by an amount dragged (beats; positive = the content moves right).
+    Q_INVOKABLE void slipRegions(const QStringList& ids, double deltaBeats, bool rotate);
+    Q_INVOKABLE void renameRegion(const QString& regionId, const QString& name);  // empty: back to the track's name
+    Q_INVOKABLE QString regionName(const QString& regionId) const;                // the name shown: its own, or the track's
     // Piano Roll: the notes of a MIDI region, in beats from the region start: [{start, length, note, velocity}]
     Q_INVOKABLE QVariantList regionNotes(const QString& regionId) const;
     Q_INVOKABLE void setRegionNotes(const QString& regionId, const QVariantList& notes);  // one undo step

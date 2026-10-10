@@ -138,6 +138,13 @@ ApplicationWindow {
     MidiTransformDialog { id: midiTransform; project: controller }
     CopyMidiEventsDialog { id: copyMidiEvents; project: controller }
     TextPromptDialog {
+        id: regionNameDialog
+        property string regionId
+        heading: qsTr("Rename Region")
+        prompt: qsTr("Name of the region")
+        onAccepted2: (t) => controller.renameRegion(regionId, t)
+    }
+    TextPromptDialog {
         id: templateName
         heading: qsTr("Save as Template")
         prompt: qsTr("Name of the template")
@@ -463,6 +470,9 @@ ApplicationWindow {
         "tool.gain": () => { controller.tool = "gain" },
         "tool.fade": () => { controller.tool = "fade" },
         "tool.solo": () => { controller.tool = "solo" },
+        "tool.text": () => { controller.tool = "text" },
+        "tool.slip": () => { controller.tool = "slip" },
+        "tool.rotate": () => { controller.tool = "rotate" },
         "snap.off": () => { controller.snap = "off" },
         "snap.bar": () => { controller.snap = "bar" },
         "snap.half": () => { controller.snap = "half" },
@@ -535,6 +545,9 @@ ApplicationWindow {
         "tool.gain": controller.tool === "gain",
         "tool.fade": controller.tool === "fade",
         "tool.solo": controller.tool === "solo",
+        "tool.text": controller.tool === "text",
+        "tool.slip": controller.tool === "slip",
+        "tool.rotate": controller.tool === "rotate",
         "track.showInTracks": controller.selectedShowInTracks,
         "track.recordArm": controller.selectedRecordArm,
         "track.inputMonitor": controller.selectedInputMonitor,
@@ -683,6 +696,7 @@ ApplicationWindow {
             Timeline {
                 id: timeline
                 onEditRequested: { if (!root.editorsVisible) root.showLowerPane("editors") }
+                onRenameRequested: (id) => { regionNameDialog.regionId = id; regionNameDialog.text = controller.regionName(id); regionNameDialog.open() }
                 onAutomationParameterRequested: (id) => { automationParamDialog.trackId = id; automationParamDialog.open() }
                 Layout.fillWidth: true
                 Layout.fillHeight: true

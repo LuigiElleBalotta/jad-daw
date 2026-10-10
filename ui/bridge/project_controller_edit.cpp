@@ -3126,10 +3126,17 @@ void ProjectController::discardAutosave() {
 }
 
 void ProjectController::slipSelectedRegions(int direction, bool rotate) {
-    if (!host_ || direction == 0) return;
+    if (direction == 0) return;
+    slipRegions(selectedRegions_, direction * nudgeBeats_, rotate);
+}
+
+void ProjectController::slipRegions(const QStringList& ids, double deltaBeats, bool rotate) {
+    if (!host_ || !std::isfinite(deltaBeats) || std::abs(deltaBeats) < 1e-9) return;
     nlohmann::json commands = nlohmann::json::array();
     bool skippedAudio = false;
-    for (const RegionRow* r : selectedRegionRows()) {
+    for (const QString& id : ids) {
+        const RegionRow* r = regions_.find(id);
+        if (!r) continue;
         nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
         if (region.is_discarded()) continue;
         if (r->audio) {
@@ -3137,16 +3144,18 @@ void ProjectController::slipSelectedRegions(int direction, bool rotate) {
                 skippedAudio = true;
                 continue;
             }
-            // the audio plays from a later part of the file when the content moves left: the offset changes by the nudge in frames
-            const double from = r->startBeats, to = r->startBeats + direction * nudgeBeats_;
-            const double frames = tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(std::max(0.0, to) * lpc::kPPQ)), sampleRate_) -
-                                  tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(from * lpc::kPPQ)), sampleRate_);
-            const std::int64_t offset = region.value("sourceOffsetFrames", std::int64_t{0}) + static_cast<std::int64_t>(std::llround(frames));
+            // the content moves right: the region plays an earlier part of the file, so the offset shrinks (and cannot go below the file's start)
+            const lpc::Ticks from = static_cast<lpc::Ticks>(std::llround(r->startBeats * lpc::kPPQ));
+            const lpc::Ticks to = from + static_cast<lpc::Ticks>(std::llround(deltaBeats * lpc::kPPQ));
+            // before the start of the project there is no tempo map: the tempo of the region's start goes on
+            const double frames = to >= 0 ? tempoMap_.ticksToSamples(to, sampleRate_) - tempoMap_.ticksToSamples(from, sampleRate_)
+                                          : static_cast<double>(to - from) * 60.0 * sampleRate_ / (tempoMap_.bpmAt(from) * lpc::kPPQ);
+            const std::int64_t offset = region.value("sourceOffsetFrames", std::int64_t{0}) - static_cast<std::int64_t>(std::llround(frames));
             const std::int64_t media = std::max<std::int64_t>(0, r->mediaFrames);
-            region["sourceOffsetFrames"] = std::clamp<std::int64_t>(offset, 0, media > 0 ? media - 1 : offset);
+            region["sourceOffsetFrames"] = std::clamp<std::int64_t>(offset, 0, media > 0 ? media - 1 : std::max<std::int64_t>(offset, 0));
         } else {
             const std::int64_t length = region.value("length", std::int64_t{0});
-            const std::int64_t step = static_cast<std::int64_t>(std::llround(nudgeBeats_ * lpc::kPPQ)) * direction;
+            const std::int64_t step = static_cast<std::int64_t>(std::llround(deltaBeats * lpc::kPPQ));
             nlohmann::json kept = nlohmann::json::array();
             for (auto n : region["notes"]) {
                 std::int64_t start = n.value("start", std::int64_t{0}) + step;
@@ -3181,6 +3190,27 @@ void ProjectController::slipSelectedRegions(int direction, bool rotate) {
         return;
     }
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::renameRegion(const QString& regionId, const QString& name) {
+    const RegionRow* r = regions_.find(regionId);
+    if (!host_ || !r) return;
+    nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+    if (region.is_discarded()) return;
+    const QString trimmed = name.trimmed().left(100);
+    if (trimmed == r->name) return;
+    if (trimmed.isEmpty()) region.erase("name");
+    else region["name"] = trimmed.toStdString();
+    sendCommand({{"type", "replace_region"}, {"region", region}});
+}
+
+QString ProjectController::regionName(const QString& regionId) const {
+    const RegionRow* r = regions_.find(regionId);
+    if (!r) return {};
+    if (!r->name.isEmpty()) return r->name;
+    for (const TrackRow& t : allRows_)
+        if (t.id == r->trackId) return t.name;
+    return {};
 }
 
 void ProjectController::fillWithinLocators() {

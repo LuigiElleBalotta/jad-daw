@@ -1995,6 +1995,40 @@ private slots:
         QCOMPARE(c.regionNotes(r).size(), 3);
         QCOMPARE(c.midiTrackChoices().size(), 1);
     }
+    void regionsCanBeNamedAndTheSlipToolMovesAudioAndNotesByADrag() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio) audio = r->id;
+        }
+        QVERIFY(!audio.isEmpty());
+        QVERIFY(!c.regionName(audio).isEmpty());                    // the track's name until it gets its own
+        c.renameRegion(audio, "  Lead vocal  ");
+        QTRY_COMPARE(c.regions()->find(audio)->name, QString("Lead vocal"));
+        QCOMPARE(c.regionName(audio), QString("Lead vocal"));
+        c.undo();
+        QTRY_VERIFY(c.regions()->find(audio)->name.isEmpty());
+        // Slip: content to the left (the region plays a later part of the file) and, at the start of the file, not to the right
+        const std::int64_t before = c.regions()->find(audio)->sourceOffsetFrames;
+        c.slipRegions({audio}, 1.0, false);
+        QTRY_VERIFY(c.regions()->find(audio)->sourceOffsetFrames == std::max<std::int64_t>(0, before - 24000));
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(audio)->sourceOffsetFrames, before);
+        c.slipRegions({audio}, -1.0, false);
+        QTRY_VERIFY(c.regions()->find(audio)->sourceOffsetFrames > before);
+        QVERIFY(std::abs((c.regions()->find(audio)->sourceOffsetFrames - before) - 24000) < 50);   // one beat at 120 bpm
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(audio)->sourceOffsetFrames, before);
+        c.setTool("slip");
+        QCOMPARE(c.tool(), QString("slip"));
+        c.setTool("rotate");
+        QCOMPARE(c.tool(), QString("rotate"));
+        c.setTool("pointer");
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -51,6 +51,7 @@ void InspectorModel::update(const std::vector<TrackRow>& tracks, const std::vect
                   {"startBeats", shownRegion->startBeats},
                   {"lengthBeats", shownRegion->lengthBeats},
                   {"muted", shownRegion->muted},
+                  {"name", shownRegion->name},
                   {"loopBeats", shownRegion->loopBeats},
                   {"transpose", shownRegion->transpose},
                   {"velocityOffset", shownRegion->velocityOffset},

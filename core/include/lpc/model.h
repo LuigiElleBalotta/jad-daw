@@ -45,6 +45,7 @@ struct Region {
     int transpose = 0;           // MIDI regions, played: semitones added to every note
     int velocityOffset = 0;      // MIDI regions, played: added to every velocity
     Ticks quantize = 0;          // MIDI regions, played: > 0 moves the start of every note to the nearest multiple of this many ticks
+    std::string name;  // shown on the region (Text tool, Region inspector); empty: the track's name
     std::int64_t loopLength = 0;  // > 0: the first loopLength (same unit as length, at most length) repeat until the end of the region
     std::vector<MidiNote> notes;
     std::vector<MidiControl> controls;  // MIDI regions: sorted by tick

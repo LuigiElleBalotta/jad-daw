@@ -104,6 +104,19 @@ TEST_CASE("model json: recordedAt is written only for a take and defaults to -1"
     REQUIRE(j.get<MediaItem>() == item);
 }
 
+TEST_CASE("model json: a region name is written only when set", "[model][json]") {
+    Region r;
+    r.id = Uuid::random();
+    r.length = 100;
+    nlohmann::json j = r;
+    REQUIRE_FALSE(j.contains("name"));
+    REQUIRE(j.get<Region>().name.empty());
+    r.name = "Lead vocal";
+    j = r;
+    REQUIRE(j["name"] == "Lead vocal");
+    REQUIRE(j.get<Region>() == r);
+}
+
 TEST_CASE("model json: ids are uuid strings and enums are readable", "[model][json]") {
     const Project p = makeRichProject();
     const nlohmann::json j = toJson(p);

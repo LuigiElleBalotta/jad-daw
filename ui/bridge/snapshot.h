@@ -87,6 +87,7 @@ struct RegionRow {
     int transpose = 0, velocityOffset = 0;  // MIDI region: how its notes are shaped when they play
     double quantizeBeats = 0.0;             // 0: off
     QString takeGroup;                      // regions of a track with the same group are takes of one passage
+    QString name;                           // the name of the region; empty: the track's name is shown
 };
 
 // True when `a` and `b` hold the same ids in the same order: the models then update in place (dataChanged) instead of

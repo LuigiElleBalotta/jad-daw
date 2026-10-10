@@ -26,6 +26,7 @@ Item {
     signal regionMoved(string id, real beats)
     signal automationParameterRequested(string trackId)
     signal editRequested(string id)
+    signal renameRequested(string id)
 
     focus: true
     activeFocusOnTab: true
@@ -303,6 +304,9 @@ Item {
                 gainDb: model.gainDb
                 onGainRequested: (id, db) => root.project.setRegionGain(id, db)
                 onSoloRequested: (id) => root.project.toggleSolo(model.trackId)
+                regionName: model.name
+                onRenameRequested: (id) => root.renameRequested(id)
+                onSlipRequested: (id, delta, rotate) => root.project.slipRegions(root.project.selectedRegionIds.indexOf(id) >= 0 ? root.project.selectedRegionIds : [id], delta, rotate)
                 takes: model.takes
                 onContextRequested: (id) => { root.forceActiveFocus(); regionContext.open(id) }
                 fadeInBeats: model.fadeInBeats

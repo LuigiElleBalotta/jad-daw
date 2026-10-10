@@ -26,14 +26,17 @@ Item {
     property int takes: 0                  // > 0: the region is one of that many takes of a passage
     property real gainDb: 0                // the Gain tool drags it
     property real gainDragDb: NaN          // live feedback while the Gain tool drags
+    property real slipDragPx: NaN          // live feedback while the Slip or Rotate tool drags
+    property string regionName: ""        // its own name; empty: the track's
     signal gainRequested(string id, real db)
+    signal renameRequested(string id)
+    signal slipRequested(string id, real deltaBeats, bool rotate)
     signal soloRequested(string id)
     signal contextRequested(string id)
     property real fadeInBeats: 0           // the fades of an audio region
     property real fadeOutBeats: 0
     property real fadeInPx: -1             // live feedback while a fade handle is dragged (-1: not dragged)
     property real fadeOutPx: -1
-    property string regionName
     property real dragDeltaPx: 0
     property real leftEdgePx: 0   // live feedback while an edge is dragged
     property real rightEdgePx: 0
@@ -198,7 +201,7 @@ Track: %3")
             x: 4; y: 1
             width: parent.width - 8
             elide: Text.ElideRight
-            text: root.missing ? qsTr("missing media") : (root.muted ? "\u2022 " : "")  // a dot before the name of a muted region
+            text: root.missing ? qsTr("missing media") : (root.muted ? "\u2022 " : "") + (root.regionName !== "" ? root.regionName : root.trackName)  // a dot before the name of a muted region
             color: Theme.textSecondary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontTypeCaptionSize
@@ -228,6 +231,12 @@ Track: %3")
             if (root.tool === "mute") { root.muteRequested(root.regionId); return }
             if (root.tool === "zoom") return  // the Zoom tool acts on the lane (Timeline), not on a region
             if (root.tool === "solo") { root.soloRequested(root.regionId); return }
+            if (root.tool === "text") { root.renameRequested(root.regionId); return }
+            if (root.tool === "slip" || root.tool === "rotate") {
+                toolPressX = m.x; toolAction = false; toolDrag = root.tool; root.slipDragPx = 0
+                root.selectRequested(root.regionId, false)
+                return
+            }
             if (root.tool === "gain" && root.isAudio) { toolPressY = m.y; toolPressX = m.x; toolStartDb = root.gainDb; root.gainDragDb = root.gainDb; toolAction = false; toolDrag = "gain"; root.selectRequested(root.regionId, false); return }
             if (root.tool === "fade" && root.isAudio) {
                 toolDrag = m.x < root.width / 2 ? "fadeIn" : "fadeOut"
@@ -244,6 +253,7 @@ Track: %3")
             root.selectRequested(root.regionId, (m.modifiers & Qt.ShiftModifier) !== 0)
         }
         onPositionChanged: (m) => {
+            if (pressed && (toolDrag === "slip" || toolDrag === "rotate")) { root.slipDragPx = m.x - toolPressX; return }
             if (pressed && toolDrag === "gain") { root.gainDragDb = Math.max(-96, Math.min(24, Math.round((toolStartDb + (toolPressY - m.y) * 0.25) * 10) / 10)); return }
             if (pressed && (toolDrag === "fadeIn" || toolDrag === "fadeOut")) {
                 const d = m.x - toolPressX
@@ -258,6 +268,15 @@ Track: %3")
             root.dragDeltaPx = d
         }
         onReleased: (m) => {
+            if (toolDrag === "slip" || toolDrag === "rotate") {
+                const delta = root.slipDragPx / root.pixelsPerBeat
+                const rotate = toolDrag === "rotate"
+                root.slipDragPx = NaN
+                toolDrag = ""
+                const g = root.snapBeats > 0 ? Math.round(delta / root.snapBeats) * root.snapBeats : delta
+                if (Math.abs(g) > 1e-6) root.slipRequested(root.regionId, g, rotate)
+                return
+            }
             if (toolDrag === "gain") {
                 const db = root.gainDragDb
                 root.gainDragDb = NaN

@@ -172,6 +172,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             rr.lengthFrames = r.timeBase == lpc::TimeBase::Absolute
                                   ? static_cast<std::int64_t>(std::llround(static_cast<double>(r.length) * p.sampleRate / 1e6))
                                   : static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(r.start + r.length, p.sampleRate) - p.tempoMap.ticksToSamples(r.start, p.sampleRate)));
+            rr.name = QString::fromStdString(r.name);
             rr.fadeInBeats = r.fadeIn > 0 ? toBeats(p, r, r.start + r.fadeIn) - rr.startBeats : 0.0;
             rr.fadeOutBeats = r.fadeOut > 0 ? toBeats(p, r, r.start + r.length) - toBeats(p, r, r.start + r.length - r.fadeOut) : 0.0;
             rr.audio = t.kind == lpc::TrackKind::Audio;

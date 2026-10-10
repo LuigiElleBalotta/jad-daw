@@ -11,7 +11,7 @@ class RegionModel : public QAbstractListModel {
     Q_OBJECT
     QML_ANONYMOUS
 public:
-    enum Role { RegionId = Qt::UserRole + 1, TrackId, TrackIndex, StartBeats, LengthBeats, IsAudio, Missing, MediaId, Color, Muted, FadeInBeats, FadeOutBeats, LoopBeats, Takes, GainDb };
+    enum Role { RegionId = Qt::UserRole + 1, TrackId, TrackIndex, StartBeats, LengthBeats, IsAudio, Missing, MediaId, Color, Muted, FadeInBeats, FadeOutBeats, LoopBeats, Takes, GainDb, Name };
     explicit RegionModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
     void reset(const std::vector<RegionRow>& rows);
     const RegionRow* find(const QString& regionId) const;

@@ -13,7 +13,7 @@ TestCase {
     ActionRegistry { id: reg }
     JadAction { id: pointerA; registry: reg; actionId: "tool.pointer"; handler: function () { p.tool = "pointer" }; on: p.tool === "pointer" }
     JadAction { id: scissorsA; registry: reg; actionId: "tool.scissors"; handler: function () { p.tool = "scissors" }; on: p.tool === "scissors" }
-    JadAction { id: noOverlapA; registry: reg; actionId: "tool.text" }   // a stub: no handler
+    JadAction { id: noOverlapA; registry: reg; actionId: "tool.flex" }   // a stub: no handler
     SignalSpy { id: notices; target: reg; signalName: "notImplemented" }
     Component { id: barC; ToolBar { width: 1200; project: p } }
 

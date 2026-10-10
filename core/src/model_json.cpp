@@ -104,6 +104,7 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (r.transpose != 0) j["transpose"] = r.transpose;
     if (r.velocityOffset != 0) j["velocityOffset"] = r.velocityOffset;
     if (r.quantize != 0) j["quantize"] = r.quantize;
+    if (!r.name.empty()) j["name"] = r.name;
 }
 
 void from_json(const nlohmann::json& j, Region& r) {
@@ -124,6 +125,7 @@ void from_json(const nlohmann::json& j, Region& r) {
     r.transpose = j.value("transpose", 0);
     r.velocityOffset = j.value("velocityOffset", 0);
     r.quantize = j.value("quantize", Ticks{0});
+    r.name = j.value("name", std::string());
 }
 
 void to_json(nlohmann::json& j, const MidiControl& c) { j = {{"tick", c.tick}, {"status", c.status}, {"data1", c.data1}, {"data2", c.data2}}; }

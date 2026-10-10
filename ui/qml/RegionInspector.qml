@@ -23,6 +23,16 @@ Column {
         topPadding: Theme.spacing[2]
         bottomPadding: Theme.spacing[2]
         InspectorRow {
+            label: qsTr("Name")
+            TextEntry {
+                objectName: "regionName"
+                anchors.verticalCenter: parent.verticalCenter
+                width: 150
+                text: root.region.name ?? ""
+                onEdited: (t) => root.project.renameRegion(root.region.regionId, t)
+            }
+        }
+        InspectorRow {
             label: qsTr("Mute")
             FlagCheck { objectName: "regionMute"; anchors.verticalCenter: parent.verticalCenter; on: root.region.muted === true; onFlipped: root.project.toggleMuteSelectedRegions() }
         }

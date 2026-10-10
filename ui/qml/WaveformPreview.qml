@@ -6,9 +6,11 @@ Canvas {
     id: root
     property var peaks: []
     property color color: Theme.textPrimary
+    property real zoom: 1          // vertical zoom: the bars are drawn this many times taller (View > Waveform Zoom)
 
     onPeaksChanged: requestPaint()
     onColorChanged: requestPaint()
+    onZoomChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
 
@@ -22,7 +24,7 @@ Canvas {
         const mid = height / 2
         const barW = width / n
         for (let i = 0; i < n; ++i) {
-            const h = Math.max(1, peaks[i] * height)
+            const h = Math.max(1, Math.min(1, peaks[i] * zoom) * height)
             ctx.fillRect(i * barW, mid - h / 2, Math.max(1, barW - 0.5), h)
         }
     }

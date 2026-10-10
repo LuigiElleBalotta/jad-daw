@@ -1127,6 +1127,36 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.regions()->rowCount(), before + 1);
     }
+    void trimToSelectionKeepsOnlyTheChosenFramesOfTheRegion() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio) audio = r->id;
+        }
+        const jad::RegionRow before = *c.regions()->find(audio);
+        QVERIFY(before.lengthFrames > 1000);
+        const double from = 0.25 * static_cast<double>(before.lengthFrames), to = 0.75 * static_cast<double>(before.lengthFrames);
+        c.trimRegionToFrames(audio, from, to);
+        QTRY_VERIFY(std::abs(c.regions()->find(audio)->lengthBeats - 0.5 * before.lengthBeats) < 0.05 * before.lengthBeats);
+        QVERIFY(std::abs(c.regions()->find(audio)->startBeats - (before.startBeats + 0.25 * before.lengthBeats)) < 0.05 * before.lengthBeats);
+        QVERIFY(c.regions()->find(audio)->sourceOffsetFrames > before.sourceOffsetFrames);   // it plays the same sound, from later in the file
+        c.undo();
+        QTRY_VERIFY(std::abs(c.regions()->find(audio)->lengthBeats - before.lengthBeats) < 0.01);
+    }
+    void waveformZoomAcceptsOnlyItsSteps() {
+        jad::ProjectController c(false);
+        QSignalSpy spy(&c, &jad::ProjectController::waveformZoomChanged);
+        QCOMPARE(c.waveformZoom(), 1);
+        c.setWaveformZoom(4);
+        QCOMPARE(c.waveformZoom(), 4);
+        c.setWaveformZoom(3);
+        QCOMPARE(c.waveformZoom(), 4);
+        QCOMPARE(spy.count(), 1);
+    }
     void moveToPlayheadPutsTheFirstSelectedRegionAtThePlayhead() {
         TempDir dir;
         jad::ProjectController c(false);

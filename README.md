@@ -133,6 +133,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   stopped, and are recorded into a MIDI region on the armed instrument tracks (after the count-in). Window > Show Musical Typing opens a keyboard
   window (A S D F G H J K L are the white keys, W E T Y U O P the black ones, Z/X the octave, C/V the velocity). The instrument slot of a strip
   chooses Sine or Synth (waveform, ADSR, filter); a double click on it opens the Synth's editor. Hosting VST3 instruments is not done yet.
+- **Audio editing:** fades (handles at the top corners of a selected audio region), Edit > Audio (Normalize, Reverse, Change Gain, Time Stretch, Pitch Shift,
+  Strip Silence: each makes a new file in the project and is one undo step), View > Zoom > Waveform Zoom, and in the Editors area the Track tab (the region's
+  waveform, drag to select, Trim to Selection) and the File tab (the whole file with the region marked). Region waveforms show only the region's own part of the file.
 - **File:** Save As, Save a Copy As, Import Audio File and Bounce (an offline render to a 24-bit WAV; plug-in inserts are skipped).
 
 ![Piano Roll](docs/images/piano-roll.png)

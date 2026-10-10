@@ -200,6 +200,7 @@ ApplicationWindow {
         "navigate.createMarker": () => controller.createMarkerAtPlayhead(),
         "transport.metronome": () => controller.setMetronome(!controller.metronomeOn),
         "track.newTracks": () => newTracksDialog.open(),
+        "view.waveformZoom": () => { controller.waveformZoom = controller.waveformZoom >= 8 ? 1 : controller.waveformZoom * 2 },
         "audio.normalize": () => audioDialog.show("normalize", qsTr("Normalize"), qsTr("Peak level"), "dBFS", -0.3, -24, 0),
         "audio.reverse": () => controller.processSelectedRegions("reverse", 0),
         "audio.changeGain": () => audioDialog.show("gain", qsTr("Change Gain"), qsTr("Gain"), "dB", 0, -48, 24),
@@ -430,6 +431,14 @@ ApplicationWindow {
             Layout.preferredHeight: implicitHeight
             visible: root.editorsVisible
             project: controller
+            onProcessRequested: (op) => {
+                if (op === "normalize") audioDialog.show("normalize", qsTr("Normalize"), qsTr("Peak level"), "dBFS", -0.3, -24, 0)
+                else if (op === "reverse") controller.processSelectedRegions("reverse", 0)
+                else if (op === "gain") audioDialog.show("gain", qsTr("Change Gain"), qsTr("Gain"), "dB", 0, -48, 24)
+                else if (op === "stretch") audioDialog.show("stretch", qsTr("Time Stretch"), qsTr("New length"), "%", 100, 25, 400)
+                else if (op === "pitch") audioDialog.show("pitch", qsTr("Pitch Shift"), qsTr("Semitones"), "st", 0, -24, 24)
+                else if (op === "strip") audioDialog.show("strip", qsTr("Strip Silence"), qsTr("Threshold"), "dB", -50, -80, 0)
+            }
         }
         Mixer {
             z: 100  // the lower panes sit above everything in the main area, the Mixer above all of them

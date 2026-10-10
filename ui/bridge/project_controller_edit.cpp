@@ -316,7 +316,9 @@ QVariantMap ProjectController::regionInfo(const QString& regionId) const {
     for (const TrackRow& t : allRows_)
         if (t.id == row->trackId) trackName = t.name;
     return {{"found", true}, {"trackId", row->trackId}, {"trackName", trackName}, {"startBeats", row->startBeats},
-            {"lengthBeats", row->lengthBeats}, {"audio", row->audio}, {"color", row->color}};
+            {"lengthBeats", row->lengthBeats}, {"audio", row->audio}, {"color", row->color}, {"mediaId", row->mediaId},
+            {"sourceOffsetFrames", static_cast<double>(row->sourceOffsetFrames)}, {"lengthFrames", static_cast<double>(row->lengthFrames)},
+            {"mediaFrames", static_cast<double>(row->mediaFrames)}};
 }
 
 void ProjectController::beginGesture() {
@@ -1551,6 +1553,19 @@ void ProjectController::stripSilence(double thresholdDb, double minSilenceMs) {
             }, Qt::QueuedConnection);
         });
     }
+}
+
+void ProjectController::trimRegionToFrames(const QString& regionId, double fromFrame, double toFrame) {
+    const RegionRow* r = regions_.find(regionId);
+    if (!host_ || !r || !r->audio || !std::isfinite(fromFrame) || !std::isfinite(toFrame) || toFrame <= fromFrame) return;
+    const double from = std::clamp(fromFrame, 0.0, static_cast<double>(r->lengthFrames)), to = std::clamp(toFrame, from, static_cast<double>(r->lengthFrames));
+    if (to - from < 16) return;
+    // frames after the start of the region -> beats (the tempo map: the region may cross tempo changes)
+    const auto startTick = static_cast<lpc::Ticks>(std::llround(r->startBeats * lpc::kPPQ));
+    const double startSamples = tempoMap_.ticksToSamples(startTick, sampleRate_);
+    auto beatsAt = [&](double frames) { return static_cast<double>(tempoMap_.samplesToTicks(startSamples + frames, sampleRate_)) / lpc::kPPQ; };
+    const double newStart = beatsAt(from), newEnd = beatsAt(to);
+    sendCommand(resizeCommand(*r, newStart, newEnd - newStart));
 }
 
 }  // namespace jad

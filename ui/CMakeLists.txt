@@ -54,6 +54,7 @@ qt_add_qml_module(jad_ui_lib
         qml/NewTracksDialog.qml
         qml/ParamSlider.qml
         qml/AudioProcessDialog.qml
+        qml/AudioEditor.qml
         qml/MusicalTypingWindow.qml
         qml/EffectEditorWindow.qml
         qml/PreferencesDialog.qml

@@ -212,7 +212,7 @@
  {"id":"view.zoomIn","label":"Zoom In","menu":"View/Zoom","shortcut":"+","kind":"command","status":"ready","subsep":true},
  {"id":"view.zoomOut","label":"Zoom Out","menu":"View/Zoom","shortcut":"-","kind":"command","status":"ready"},
  {"id":"view.zoomFit","label":"Zoom to Fit","menu":"View/Zoom","shortcut":"","kind":"command","status":"ready"},
- {"id":"view.waveformZoom","label":"Waveform Zoom","menu":"View/Zoom","shortcut":"","kind":"toggle","status":"stub"},
+ {"id":"view.waveformZoom","label":"Waveform Zoom (1x, 2x, 4x, 8x)","menu":"View/Zoom","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"snap.smart","label":"Smart","menu":"View/Snap","shortcut":"","kind":"command","status":"stub","group":"snap"},
  {"id":"snap.bar","label":"Bar","menu":"View/Snap","shortcut":"","kind":"command","status":"ready","group":"snap"},
  {"id":"snap.quarter","label":"Beat","menu":"View/Snap","shortcut":"","kind":"command","status":"ready","group":"snap"},

@@ -108,7 +108,7 @@ Item {
             anchors.fill: parent
             anchors.topMargin: 14
             active: root.isAudio && !root.missing && root.peaks.length > 0
-            sourceComponent: WaveformPreview { peaks: root.peaks; color: root.solid }
+            sourceComponent: WaveformPreview { peaks: root.peaks; color: root.solid; zoom: root.project ? root.project.waveformZoom : 1 }
         }
 
         // missing media: diagonal hatch

@@ -41,7 +41,8 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 ## 5. Audio editing
 - [x] Fades (in, out) on audio regions: quarter-sine ramps, handles at the top corners of a selected region, `set_region_fades` with undo. Not covered:
       crossfade curves other than that, automatic crossfades of overlapping regions, region gain handles (the Inspector has the gain).
-- [ ] Waveform zoom, Audio Track Editor (region waveform in the Editors area), Audio File Editor basics (trim, normalize, reverse).
+- [x] Waveform Zoom (View > Zoom: 1x, 2x, 4x, 8x), Audio Track Editor (the region's own waveform, selection, Trim to Selection, the Edit > Audio functions) and
+      Audio File Editor (the whole file with the region marked) in the Editors area. Region waveforms now show only the region's part of the file.
 - [x] Edit > Audio: Normalize, Reverse, Change Gain, Time Stretch (WSOLA, pitch kept), Pitch Shift (length kept) make a new file in the project and replace the
       region media in one undo step; Strip Silence cuts a region at its silences. (Region looping is not done.)
 

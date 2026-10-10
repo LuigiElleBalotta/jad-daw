@@ -142,6 +142,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
                 rr.mediaId = QString::fromStdString(r.mediaId.toString());
                 const lpc::MediaItem* item = p.findMedia(r.mediaId);
                 rr.missing = !item || !mediaPresent(*item);
+                rr.mediaFrames = item ? item->frames : 0;
             }
             s.regions.push_back(rr);
         }

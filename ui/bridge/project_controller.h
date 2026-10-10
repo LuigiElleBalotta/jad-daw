@@ -116,6 +116,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(int effectEditorIndex READ effectEditorIndex NOTIFY effectEditorChanged)
     Q_PROPERTY(QStringList midiInputsChosen READ midiInputsChosen NOTIFY midiChanged)  // the MIDI inputs in use (empty: all)
     Q_PROPERTY(int midiOpenCount READ midiOpenCount NOTIFY midiChanged)
+    Q_PROPERTY(int waveformZoom READ waveformZoom WRITE setWaveformZoom NOTIFY waveformZoomChanged)  // vertical zoom of the waveforms: 1, 2, 4 or 8
     Q_PROPERTY(int peaksRevision READ peaksRevision NOTIFY peaksChanged)  // bumps whenever a meter moved
     Q_PROPERTY(jad::TrackListModel* tracks READ tracks CONSTANT)
     Q_PROPERTY(jad::RegionModel* regions READ regions CONSTANT)
@@ -193,6 +194,8 @@ public:
     double masterPeak() const { return peak_; }
     int peaksRevision() const { return peaksRevision_; }
     bool metronomeOn() const { return metronome_; }
+    int waveformZoom() const { return waveformZoom_; }
+    void setWaveformZoom(int z) { if ((z == 1 || z == 2 || z == 4 || z == 8) && z != waveformZoom_) { waveformZoom_ = z; emit waveformZoomChanged(); } }
     QStringList midiInputsChosen() const { return midiChosen_; }
     int midiOpenCount() const;
     Q_INVOKABLE QStringList midiInputNames() const;   // the MIDI input devices of the system
@@ -407,6 +410,8 @@ public:
     Q_INVOKABLE void processSelectedRegions(const QString& op, double value);
     // Strip Silence: the selected audio regions are cut at the silences (below thresholdDb for at least minSilenceMs) and the silences go
     Q_INVOKABLE void stripSilence(double thresholdDb, double minSilenceMs);
+    // The audio editor's Trim to Selection: the region keeps only frames [from, to) of its own part (a command)
+    Q_INVOKABLE void trimRegionToFrames(const QString& regionId, double fromFrame, double toFrame);
     Q_INVOKABLE void deleteUnusedTracks();     // audio and instrument tracks without regions
     Q_INVOKABLE void deselectOutsideLocators();
     Q_INVOKABLE void selectSimilarRegions();   // the same audio file, or MIDI of the same length, as a selected region
@@ -527,6 +532,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void waveformZoomChanged();
     void midiChanged();
     void effectEditorChanged();
     void audioSettingsChanged();
@@ -672,6 +678,7 @@ private:
     bool globalTracksVisible_ = false;
     bool automationVisible_ = false;
     bool metronome_ = false;
+    int waveformZoom_ = 1;
     QStringList midiChosen_;
     QString liveTarget_;
     std::unique_ptr<lpc::IMidiSink> midiSink_;

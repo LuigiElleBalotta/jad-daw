@@ -60,11 +60,23 @@ Rectangle {
         visible: root.tab === 0 && !root.audioRegion
         project: root.project
     }
+    signal processRequested(string op)
+    AudioEditor {
+        id: audioEditor
+        y: strip.height
+        width: parent.width
+        height: parent.height - strip.height
+        visible: root.audioRegion && root.tab <= 1
+        project: root.project
+        regionId: root.regionId
+        fileMode: root.tab === 1
+        onProcessRequested: (op) => root.processRequested(op)
+    }
     Text {
         y: strip.height
         width: parent.width
         height: parent.height - strip.height
-        visible: root.tab !== 0 || root.audioRegion
+        visible: (root.tab !== 0 || root.audioRegion) && !(root.audioRegion && root.tab <= 1)
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         text: qsTr("%1 is not implemented yet").arg(root.tabs[root.tab] ?? "")

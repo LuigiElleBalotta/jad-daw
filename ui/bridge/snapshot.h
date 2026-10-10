@@ -57,6 +57,7 @@ struct RegionRow {
     QString id, trackId;
     int trackIndex = 0;  // among the shown tracks without the master: the timeline row
     double startBeats = 0.0, lengthBeats = 0.0;
+    std::int64_t mediaFrames = 0;  // the whole file (audio)
     std::int64_t sourceOffsetFrames = 0, lengthFrames = 0;  // the part of the media this region plays (audio)
     double fadeInBeats = 0.0, fadeOutBeats = 0.0;  // the fades of an audio region, in beats
     bool audio = false, missing = false, absolute = false;  // absolute: positions are in real time, not musical time

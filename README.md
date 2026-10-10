@@ -105,7 +105,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Editors** (`E`, the Ed button, or a double click on a region): the Piano Roll with the keyboard, the ruler, the region bar and the
   notes of the selected MIDI region. Pointer: click selects (Shift extends), drag moves, drag either end of a note resizes it, Option-click
   draws a note; Pencil draws a note; Eraser deletes; Delete removes the selection. Quantize (strength, swing, Dequantize), Scale Quantize
-  (scale, key, Snap to Scale), velocity lane, transpose, nudge, Mute Notes and copy/paste of notes work, and every change is one undo
+  (scale, key, Snap to Scale), a lane under the grid that shows the velocities or a controller of the region (sustain, modulation, volume, pan, expression, pitch bend, aftertouch: click adds a point, drag moves it, Option-click or right-click deletes it; recorded and imported controllers land here and reach VST3 instruments), transpose, nudge, Mute Notes and copy/paste of notes work, and every change is one undo
   step. The other tabs say they are not implemented yet.
 - **Tracks area extras:** right-click on an empty part of an instrument track offers Create MIDI Region; the Global Tracks (Track >
   Show Global Tracks, `G`) add Marker, Tempo and Signature lanes under the ruler (double-click adds, drag moves a marker, right-click

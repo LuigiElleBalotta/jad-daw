@@ -28,6 +28,18 @@ Item {
     readonly property real keysWidth: 56
     readonly property real laneHeight: 64
     property bool laneVisible: true
+    // What the lane under the grid shows: "velocity", or a controller lane of the region ("cc<n>", "bend", "touch")
+    property string laneKey: "velocity"
+    readonly property var laneChoices: [
+        { key: "velocity", label: qsTr("Velocity") }, { key: "cc64", label: qsTr("Sustain (64)") }, { key: "cc1", label: qsTr("Modulation (1)") },
+        { key: "cc7", label: qsTr("Volume (7)") }, { key: "cc10", label: qsTr("Pan (10)") }, { key: "cc11", label: qsTr("Expression (11)") },
+        { key: "bend", label: qsTr("Pitch Bend") }, { key: "touch", label: qsTr("Aftertouch") }]
+    readonly property bool controlLane: laneKey !== "velocity"
+    readonly property real laneMin: laneKey === "bend" ? -8192 : 0
+    readonly property real laneMax: laneKey === "bend" ? 8191 : 127
+    readonly property var controlPoints: { project.revision; return hasMidi && controlLane ? project.regionControls(regionId, laneKey) : [] }
+    property var workingPoints: null                // the points while a gesture is under way
+    readonly property var shownPoints: workingPoints !== null ? workingPoints : controlPoints
     property string snapMode: "smart"               // "smart", "bar", "beat", "half", "eighth", "sixteenth", "thirtysecond", "off"
     property real quantizeBeats: 0.25               // Time Quantize: the note value
     property real strength: 100
@@ -90,7 +102,7 @@ Item {
         return (bar + 1) + " " + (beat + 1) + " " + (sub + 1)
     }
 
-    onRegionIdChanged: { selected = []; working = null; if (hasMidi) scrollBeats = Math.max(0, regionStart - 1) }
+    onRegionIdChanged: { selected = []; working = null; workingPoints = null; if (hasMidi) scrollBeats = Math.max(0, regionStart - 1) }
     onHasMidiChanged: if (hasMidi) scrollBeats = Math.max(0, regionStart - 1)
 
     function copyNotes(list) { return list.map(n => ({ start: n.start, length: n.length, note: n.note, velocity: n.velocity, muted: n.muted === true })) }
@@ -838,9 +850,125 @@ Item {
             color: Theme.surfaceCanvas
             Rectangle { width: parent.width; height: 1; color: Theme.borderStrong }
             Rectangle { width: root.keysWidth; height: parent.height; color: Theme.surfacePanel
-                Text { anchors.centerIn: parent; text: qsTr("Velocity"); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize } }
+                Text {
+                    anchors.centerIn: parent
+                    width: parent.width - 6
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    text: { for (const c of root.laneChoices) if (c.key === root.laneKey) return c.label; return "" }
+                    color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize
+                }
+                MouseArea { objectName: "laneSelector"; anchors.fill: parent; onClicked: laneMenu.popup(parent, 0, parent.height) }
+            }
+            ThemedMenu {
+                id: laneMenu
+                Instantiator {
+                    model: root.laneChoices
+                    delegate: ThemedMenuItem {
+                        required property var modelData
+                        text: modelData.label
+                        checkable: true
+                        checked: root.laneKey === modelData.key
+                        onTriggered: root.laneKey = modelData.key
+                    }
+                    onObjectAdded: (index, object) => laneMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => laneMenu.removeItem(object)
+                }
+            }
+            Canvas {  // a controller lane: the points of the lane joined by steps (a hold until the next point), as the plug-in hears them
+                id: controlCanvas
+                objectName: "controlCanvas"
+                visible: root.controlLane
+                x: root.keysWidth
+                width: parent.width - root.keysWidth
+                height: parent.height
+                property var pts: root.shownPoints
+                onPtsChanged: requestPaint()
+                Connections { target: root; function onScrollBeatsChanged() { controlCanvas.requestPaint() } function onPixelsPerBeatChanged() { controlCanvas.requestPaint() } function onLaneKeyChanged() { controlCanvas.requestPaint() } }
+                function yOf(v) { return height - 3 - (v - root.laneMin) / (root.laneMax - root.laneMin) * (height - 6) }
+                onPaint: {
+                    const ctx = getContext("2d")
+                    ctx.reset()
+                    const list = pts
+                    ctx.strokeStyle = "#5aa8ff"
+                    ctx.fillStyle = "#5aa8ff"
+                    ctx.lineWidth = 1.5
+                    if (root.laneKey === "bend") { ctx.strokeStyle = "#444"; ctx.beginPath(); ctx.moveTo(0, yOf(0)); ctx.lineTo(width, yOf(0)); ctx.stroke(); ctx.strokeStyle = "#5aa8ff" }
+                    ctx.beginPath()
+                    let lastY = yOf(root.laneKey === "bend" ? 0 : 0)
+                    ctx.moveTo(0, lastY)
+                    for (const p of list) {
+                        const x = root.beatsToX(root.regionStart + p.beats) - 0
+                        ctx.lineTo(x, lastY)
+                        lastY = yOf(p.value)
+                        ctx.lineTo(x, lastY)
+                    }
+                    ctx.lineTo(width, lastY)
+                    ctx.stroke()
+                    for (const p of list) {
+                        const x = root.beatsToX(root.regionStart + p.beats)
+                        ctx.beginPath()
+                        ctx.arc(x, yOf(p.value), 3, 0, Math.PI * 2)
+                        ctx.fill()
+                    }
+                }
+                MouseArea {
+                    objectName: "controlArea"
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    property int target: -1
+                    function valueAt(y) {
+                        const f = Math.max(0, Math.min(1, (controlCanvas.height - 3 - y) / (controlCanvas.height - 6)))
+                        return Math.round(root.laneMin + f * (root.laneMax - root.laneMin))
+                    }
+                    function beatsAt(x) { return Math.max(0, root.snap(root.xToBeats(x)) - root.regionStart) }
+                    function nearest(x, y) {
+                        let best = -1, dist = 9
+                        for (let i = 0; i < root.shownPoints.length; ++i) {
+                            const p = root.shownPoints[i]
+                            const d = Math.hypot(root.beatsToX(root.regionStart + p.beats) - x, controlCanvas.yOf(p.value) - y)
+                            if (d < dist) { dist = d; best = i }
+                        }
+                        return best
+                    }
+                    function sorted(list) { return list.slice().sort((a, b) => a.beats - b.beats) }
+                    onPressed: (m) => {
+                        root.forceActiveFocus()
+                        const hit = nearest(m.x, m.y)
+                        const list = root.controlPoints.map(p => ({ beats: p.beats, value: p.value }))
+                        if (m.button === Qt.RightButton || (m.modifiers & Qt.AltModifier)) {  // delete the point under the pointer
+                            if (hit >= 0) { list.splice(hit, 1); root.project.setRegionControls(root.regionId, root.laneKey, list) }
+                            target = -1
+                            return
+                        }
+                        if (hit < 0) {
+                            list.push({ beats: Math.min(beatsAt(m.x), root.info.lengthBeats), value: valueAt(m.y) })
+                            const ordered = sorted(list)
+                            root.workingPoints = ordered
+                            target = ordered.findIndex(p => p === list[list.length - 1])
+                        } else {
+                            root.workingPoints = list
+                            target = hit
+                        }
+                    }
+                    onPositionChanged: (m) => {
+                        if (!pressed || target < 0 || root.workingPoints === null) return
+                        const list = root.workingPoints.map(p => ({ beats: p.beats, value: p.value }))
+                        list[target].value = valueAt(m.y)
+                        list[target].beats = Math.min(beatsAt(m.x), root.info.lengthBeats)
+                        root.workingPoints = list
+                    }
+                    onReleased: {
+                        if (target >= 0 && root.workingPoints !== null) root.project.setRegionControls(root.regionId, root.laneKey, sorted(root.workingPoints))
+                        root.workingPoints = null
+                        target = -1
+                    }
+                    onCanceled: { root.workingPoints = null; target = -1 }
+                }
+            }
             Repeater {
-                model: root.shown
+                visible: !root.controlLane
+                model: root.controlLane ? [] : root.shown
                 delegate: Rectangle {
                     required property var modelData
                     required property int index
@@ -854,6 +982,8 @@ Item {
                 }
             }
             MouseArea {
+                visible: !root.controlLane
+                enabled: !root.controlLane
                 x: root.keysWidth
                 width: parent.width - root.keysWidth
                 height: parent.height

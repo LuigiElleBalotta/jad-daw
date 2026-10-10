@@ -37,6 +37,25 @@ TestCase {
         compare(p.notes[0].start, 1)
     }
 
+    function test_controller_lane_click_adds_a_point_and_alt_click_removes_it() {
+        const p = setup()
+        p.laneKey = "cc64"
+        const area = findChild(p, "controlArea")
+        verify(area)
+        tryVerify(function () { return area.width > 100 })
+        const x = beatX(p, 1)
+        mouseClick(area, x, area.height / 4)
+        tryVerify(function () { return p.controlPoints.length === 1 })
+        compare(p.controlPoints[0].beats, 1)
+        verify(p.controlPoints[0].value > 64)                          // near the top of the lane: a high value
+        p.laneKey = "bend"
+        compare(p.controlPoints.length, 0)                              // the other lane is separate
+        p.laneKey = "cc64"
+        tryVerify(function () { return p.controlPoints.length === 1 })
+        mouseClick(area, x, area.height * 0.75 * 0 + (area.height - 3 - (p.controlPoints[0].value / 127) * (area.height - 6)), Qt.LeftButton, Qt.AltModifier)
+        tryVerify(function () { return p.controlPoints.length === 0 })
+    }
+
     function test_plain_click_with_the_pointer_draws_nothing() {
         const p = setup()
         p.project.tool = "pointer"

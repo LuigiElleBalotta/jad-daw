@@ -335,3 +335,29 @@ TEST_CASE("quantize moves the start of the notes to the grid when they play", "[
         }
     REQUIRE(found);
 }
+
+TEST_CASE("track delay moves the notes of an instrument track by milliseconds", "[delay][graph]") {
+    Fixture f;
+    TrackPatch patch;
+    patch.delayMs = 10.0;
+    REQUIRE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    FakePluginHost host;
+    host.instruments[kInst] = 0;
+    RenderGraph graph(48000.0);
+    for (const AudioMsg& msg : initialMessages(f.project, f.media, &host)) graph.apply(msg);
+    std::vector<float> l(256), r(256);
+    for (std::int64_t at = 0; at < Fixture::kQuarter; at += 256) graph.render(at, 256, l.data(), r.data());
+    REQUIRE(host.lastInstrument->seen.front().frame == 480);           // 10 ms at 48 kHz
+    patch.delayMs = 5000.0;
+    REQUIRE_FALSE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    patch.delayMs = -20.0;
+    REQUIRE(makeSetTrackProps(f.track.id, patch)->apply(f.project).ok());
+    Track audio;
+    audio.id = Uuid{4, 4};
+    audio.kind = TrackKind::Bus;
+    audio.name = "Bus";
+    REQUIRE(makeAddTrack(audio)->apply(f.project).ok());
+    TrackPatch onBus;
+    onBus.delayMs = 1.0;
+    REQUIRE_FALSE(makeSetTrackProps(audio.id, onBus)->apply(f.project).ok());   // a bus has no delay
+}

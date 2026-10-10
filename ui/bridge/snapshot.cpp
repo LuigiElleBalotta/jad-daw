@@ -79,6 +79,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         tr.pan = t.strip.pan;
         tr.input = t.strip.input;
         tr.automationMode = QString::fromStdString(t.automationMode);
+        tr.delayMs = t.delayMs;
         tr.transpose = t.midi.transpose;
         tr.velocity = t.midi.velocity;
         tr.keyLow = t.midi.keyLow;

@@ -223,6 +223,7 @@ MaybeError checkProject(const Project& p) {
         if (auto e = checkPatchId(t.patchId)) return e;
         if (auto e = checkShowInTracks(t.kind, t.showInTracks)) return e;
         if (auto e = checkMidiShaping(t.midi)) return e;
+        if (!(t.delayMs >= -1000.0 && t.delayMs <= 1000.0)) return CommandError{"bad_value", "track delay is -1000..1000 ms"};
         if (auto e = checkStripValues(t.strip.gainDb, t.strip.pan)) return e;
         const bool wantsInstrument = t.kind == TrackKind::Instrument;
         if (wantsInstrument != t.instrument.has_value()) return CommandError{"invalid_kind", "exactly instrument tracks need an instrument"};

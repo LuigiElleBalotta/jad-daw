@@ -111,6 +111,7 @@ struct Track {
     std::string patchId;  // the built-in patch applied to the track; empty when none
     bool showInTracks = true;  // false: a bus or aux that lives in the Mixer only, not in the Tracks area
     MidiShaping midi;  // instrument tracks
+    double delayMs = 0.0;  // audio and instrument tracks: the regions play this many milliseconds later (earlier when negative)
     std::string automationMode = "read";  // "off" (the lanes are ignored), "read", "touch", "latch" or "write" (the last three record fader moves)
     std::vector<Region> regions;
     std::vector<AutomationLane> automation;

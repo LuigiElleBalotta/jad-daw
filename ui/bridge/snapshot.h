@@ -51,6 +51,7 @@ struct TrackRow {
     bool hidden = false;       // the track is hidden but shown anyway (Track > Toggle Hide View): drawn dimmed
     QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)
     QString instrumentLabel;  // the name of a plug-in instrument
+    double delayMs = 0.0;     // Track Delay
     int transpose = 0, velocity = 0, keyLow = 0, keyHigh = 127, velocityLow = 1, velocityHigh = 127;  // the shaping of the notes of an instrument track
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
     std::vector<InsertRow> inserts;

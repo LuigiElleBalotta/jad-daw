@@ -84,3 +84,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: FLAC export (own encoder: fixed predictors + Rice, verified through the decoder); Bounce dialog offers FLAC 16/24. MP3 export still open (needs an encoder library).
 - 2026-10-10: region Loop/Unloop (audio and MIDI) and Mute Regions now real (model, playback, Inspector, L key).
 - 2026-10-10: non-destructive MIDI shaping: region Quantize/Transpose/Velocity and instrument track Transpose/Velocity/Key limit/Velocity limit (Inspector).
+- 2026-10-10: Track Delay (ms) for audio and instrument tracks.

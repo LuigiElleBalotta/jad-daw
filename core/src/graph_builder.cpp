@@ -84,7 +84,7 @@ bool stripChanged(const Track& a, const Track& b) {
 }
 
 bool configChanged(const Track& a, const Track& b) {
-    return a.kind != b.kind || a.midi != b.midi || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
+    return a.kind != b.kind || a.midi != b.midi || a.delayMs != b.delayMs || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
            a.strip.sends != b.strip.sends || a.strip.output != b.strip.output;
 }
 
@@ -191,11 +191,12 @@ PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
 
 std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
+    const std::int64_t delay = static_cast<std::int64_t>(std::llround(t.delayMs * static_cast<double>(p.sampleRate) / 1000.0));  // Track Delay, in frames
     for (const Region& r : t.regions) {
         if (r.muted) continue;  // Mute Regions: it stays in the project but does not play
         RegionPlayback rp;
-        rp.startFrame = regionFrame(p, r, r.start);
-        rp.endFrame = regionFrame(p, r, r.start + r.length);
+        rp.startFrame = regionFrame(p, r, r.start) + delay;
+        rp.endFrame = regionFrame(p, r, r.start + r.length) + delay;
         rp.gain = dbToLinear(r.gainDb);
         if (r.fadeIn > 0 || r.fadeOut > 0) {  // the fades in frames, together at most as long as the region
             const std::int64_t length = rp.endFrame - rp.startFrame;
@@ -213,6 +214,10 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             if (!src) continue;  // missing media: the region stays silent, MediaStore keeps the warning
             rp.source = src.get();
             rp.sourceOffsetFrames = r.sourceOffsetFrames;
+            if (rp.startFrame < 0) {  // an earlier track delay than the start of the project: the first part of the audio is dropped
+                rp.sourceOffsetFrames += -rp.startFrame;
+                rp.startFrame = 0;
+            }
             if (r.loopLength > 0) rp.loopFrames = std::max<std::int64_t>(1, regionFrame(p, r, r.start + r.loopLength) - rp.startFrame);
             cfg->keepAlive.push_back(std::move(src));
         } else {
@@ -229,8 +234,9 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
                     std::int64_t start = n.start;
                     if (r.quantize > 0) start = (start + r.quantize / 2) / r.quantize * r.quantize;  // Quantize: the start moves to the grid, the end stays
                     const std::int64_t end = r.loopLength > 0 ? std::min({n.start + n.length, loop, r.length - shift}) : n.start + n.length;
-                    const std::int64_t on = toFrames(p.tempoMap.ticksToSamples(r.start + shift + start, p.sampleRate));
-                    const std::int64_t off = toFrames(p.tempoMap.ticksToSamples(r.start + shift + std::max(end, start + 1), p.sampleRate));
+                    const std::int64_t on = toFrames(p.tempoMap.ticksToSamples(r.start + shift + start, p.sampleRate)) + delay;
+                    const std::int64_t off = toFrames(p.tempoMap.ticksToSamples(r.start + shift + std::max(end, start + 1), p.sampleRate)) + delay;
+                    if (off < 0) continue;
                     rp.notes.push_back(NoteSpan{on, std::max(on, off), static_cast<std::uint8_t>(pitch), static_cast<std::uint8_t>(velocity)});
                 }
             }
@@ -238,7 +244,8 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             for (std::int64_t pass = 0; pass < passes; ++pass)
                 for (const MidiControl& c : r.controls) {
                     if (r.loopLength > 0 && (c.tick >= loop || pass * loop + c.tick > r.length)) continue;
-                    rp.controls.push_back(ControlSpan{toFrames(p.tempoMap.ticksToSamples(r.start + pass * loop + c.tick, p.sampleRate)), c.status, c.data1, c.data2});
+                    const std::int64_t at = toFrames(p.tempoMap.ticksToSamples(r.start + pass * loop + c.tick, p.sampleRate)) + delay;
+                    if (at >= 0) rp.controls.push_back(ControlSpan{at, c.status, c.data1, c.data2});
                 }
             std::stable_sort(rp.controls.begin(), rp.controls.end(), [](const ControlSpan& a, const ControlSpan& b) { return a.frame < b.frame; });
         }

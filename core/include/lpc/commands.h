@@ -19,6 +19,7 @@ struct TrackPatch {
     std::optional<std::string> color;
     std::optional<bool> showInTracks;
     std::optional<std::string> automationMode;  // off, read, touch, latch or write
+    std::optional<double> delayMs;              // -1000..1000 ms (audio and instrument tracks)
     std::optional<MidiShaping> midi;            // transpose, velocity and the limits (instrument tracks)
 };
 

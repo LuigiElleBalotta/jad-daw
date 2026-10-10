@@ -162,6 +162,7 @@ void to_json(nlohmann::json& j, const Track& t) {
     if (!t.patchId.empty()) j["patchId"] = t.patchId;
     if (!t.showInTracks) j["showInTracks"] = false;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
+    if (t.delayMs != 0.0) j["delayMs"] = t.delayMs;
     if (!(t.midi == MidiShaping{})) j["midi"] = {{"transpose", t.midi.transpose}, {"velocity", t.midi.velocity}, {"keyLow", t.midi.keyLow}, {"keyHigh", t.midi.keyHigh}, {"velocityLow", t.midi.velocityLow}, {"velocityHigh", t.midi.velocityHigh}};
 }
 
@@ -177,6 +178,7 @@ void from_json(const nlohmann::json& j, Track& t) {
     t.instrument = inst.is_null() ? std::nullopt : std::optional<ProcessorRef>(inst.get<ProcessorRef>());
     t.patchId = j.value("patchId", std::string());
     t.automationMode = j.value("automationMode", std::string("read"));
+    t.delayMs = j.value("delayMs", 0.0);
     if (j.contains("midi")) {
         const auto& m = j.at("midi");
         t.midi.transpose = m.value("transpose", 0);

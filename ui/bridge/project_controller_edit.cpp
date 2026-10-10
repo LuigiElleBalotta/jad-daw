@@ -2337,4 +2337,9 @@ void ProjectController::setTrackMidi(const QString& trackId, const QString& what
                  {"midi", {{"transpose", transpose}, {"velocity", velocity}, {"keyLow", keyLow}, {"keyHigh", keyHigh}, {"velocityLow", velocityLow}, {"velocityHigh", velocityHigh}}}});
 }
 
+void ProjectController::setTrackDelay(const QString& trackId, double milliseconds) {
+    if (!host_ || !std::isfinite(milliseconds)) return;
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"delayMs", std::clamp(milliseconds, -1000.0, 1000.0)}});
+}
+
 }  // namespace jad

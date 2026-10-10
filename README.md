@@ -104,7 +104,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   follows and the sound changes at once; the whole drag is one undo step.
 - **Regions:** Loop/Unloop Regions (`L` or the Inspector's Loop box): the first loop of the region repeats until its end, for audio (the source restarts) and for MIDI (notes and controllers), with marks where each repeat
   starts; drag the right edge to repeat more. A looped region is not split, joined or resized from its left edge (turn the loop off first). Mute Regions (`Alt+M` or the Inspector's Mute box) silences them. A MIDI region has Quantize, Transpose and Velocity in the Inspector and an instrument track has Transpose, Velocity,
-  Key limit and Velocity limit: they shape the notes when they play and leave the notes themselves untouched.
+  Key limit and Velocity limit: they shape the notes when they play and leave the notes themselves untouched. An audio or instrument track has a Delay in milliseconds (plus or minus one second).
 - **Editors** (`E`, the Ed button, or a double click on a region): the Piano Roll with the keyboard, the ruler, the region bar and the
   notes of the selected MIDI region. Pointer: click selects (Shift extends), drag moves, drag either end of a note resizes it, Option-click
   draws a note; Pencil draws a note; Eraser deletes; Delete removes the selection. Quantize (strength, swing, Dequantize), Scale Quantize

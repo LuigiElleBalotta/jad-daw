@@ -121,8 +121,12 @@ Column {
                     NumberField { objectName: "trackVelocityHigh"; implicitWidth: 52; from: 1; to: 127; decimals: 0; value: root.track.velocityHigh ?? 127; onCommitted: (v) => root.project.setTrackMidi(root.track.trackId, "velocityHigh", v) }
                 }
             }
-            InspectorRow { label: qsTr("Delay"); StubValue { project: root.project; label: qsTr("Track Delay"); text: "0" } }
             InspectorRow { label: qsTr("No transpose"); StubCheck { project: root.project; label: qsTr("No Transpose"); anchors.verticalCenter: parent.verticalCenter } }
+        }
+        InspectorRow {
+            label: qsTr("Delay")
+            visible: root.track.kind === "instrument" || root.track.kind === "audio"
+            NumberField { objectName: "trackDelay"; anchors.verticalCenter: parent.verticalCenter; from: -1000; to: 1000; decimals: 0; suffix: " ms"; value: root.track.delayMs ?? 0; onCommitted: (v) => root.project.setTrackDelay(root.track.trackId, v) }
         }
         Column {
             width: parent.width

@@ -17,7 +17,7 @@ inline QVariantMap trackToMap(const TrackRow& t) {
             {"master", t.master},      {"patchId", t.patchId},     {"patchName", t.patchName}, {"instrument", t.instrument}, {"instrumentLabel", t.instrumentLabel},
             {"gainDb", t.gainDb},      {"pan", t.pan},             {"mute", t.mute},           {"solo", t.solo},
             {"outputId", t.outputId},  {"outputName", t.outputName}, {"inserts", inserts},     {"sends", sends},
-            {"transpose", t.transpose}, {"velocity", t.velocity}, {"keyLow", t.keyLow}, {"keyHigh", t.keyHigh}, {"velocityLow", t.velocityLow}, {"velocityHigh", t.velocityHigh},
+            {"delayMs", t.delayMs}, {"transpose", t.transpose}, {"velocity", t.velocity}, {"keyLow", t.keyLow}, {"keyHigh", t.keyHigh}, {"velocityLow", t.velocityLow}, {"velocityHigh", t.velocityHigh},
             {"recordArm", t.recordArm}, {"inputMonitor", t.inputMonitor}, {"soloSafe", t.soloSafe}};
 }
 

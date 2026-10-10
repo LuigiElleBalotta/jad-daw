@@ -462,6 +462,7 @@ public:
     Q_INVOKABLE void setSelectedRegionsMidi(const QString& what, double value);
     // The Inspector's track fields for an instrument track: what == "transpose", "velocity", "keyLow", "keyHigh", "velocityLow" or "velocityHigh"
     Q_INVOKABLE void setTrackMidi(const QString& trackId, const QString& what, int value);
+    Q_INVOKABLE void setTrackDelay(const QString& trackId, double milliseconds);  // Track Delay of an audio or instrument track, -1000..1000 ms
     Q_INVOKABLE void selectFollowingRegions(bool sameTrackOnly);
     Q_INVOKABLE void selectOverlappedRegions();
     Q_INVOKABLE void selectSameColoredRegions();

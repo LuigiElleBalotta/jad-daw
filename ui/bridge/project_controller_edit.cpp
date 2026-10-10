@@ -3507,4 +3507,167 @@ void ProjectController::openSelectedInExternalEditor() {
 }
 
 
+QVariantList ProjectController::midiTrackChoices() const {
+    QVariantList out;
+    for (const TrackRow& t : allRows_)
+        if (!t.master && (t.kind == "instrument" || t.kind == "midi")) out << QVariantMap{{"id", t.id}, {"name", t.name}};
+    return out;
+}
+
+void ProjectController::copyMidiEvents(const QString& mode, const QString& destTrackId) {
+    static const QStringList modes{"copyMerge", "copyReplace", "copyInsert", "moveMerge", "moveReplace", "moveInsert"};
+    if (!host_ || !modes.contains(mode)) return;
+    if (loopEndBeats_ <= loopStartBeats_) {
+        emit notice("Set the locators around the events first");
+        return;
+    }
+    const bool move = mode.startsWith("move");
+    const QString how = mode.mid(4);  // Merge, Replace or Insert
+    const std::int64_t left = static_cast<std::int64_t>(std::llround(loopStartBeats_ * lpc::kPPQ));
+    const std::int64_t right = static_cast<std::int64_t>(std::llround(loopEndBeats_ * lpc::kPPQ));
+    const std::int64_t length = right - left;
+    const std::int64_t playhead = static_cast<std::int64_t>(std::llround(std::max(0.0, positionBeats_) * lpc::kPPQ));
+    const std::int64_t delta = playhead - left;
+
+    std::vector<const RegionRow*> sources;
+    for (const RegionRow* r : selectedRegionRows())
+        if (!r->audio) sources.push_back(r);
+    if (sources.empty())
+        for (const RegionRow& r : regionRows_)
+            if (!r.audio && selectedTracks_.contains(r.trackId)) sources.push_back(&r);
+    if (sources.empty()) {
+        emit notice("Select MIDI regions or a MIDI track");
+        return;
+    }
+    QString dest = destTrackId;
+    if (dest.isEmpty())
+        for (const QString& id : selectedTracks_)
+            for (const TrackRow& t : allRows_)
+                if (t.id == id && !t.master && (t.kind == "instrument" || t.kind == "midi")) { dest = id; break; }
+    if (dest.isEmpty()) dest = sources.front()->trackId;
+
+    std::map<QString, nlohmann::json> edits;  // the regions that change, by id
+    const auto edit = [&edits](const RegionRow& r) -> nlohmann::json& {
+        auto it = edits.find(r.id);
+        if (it == edits.end()) it = edits.emplace(r.id, nlohmann::json::parse(r.json, nullptr, false)).first;
+        return it->second;
+    };
+    struct Event { bool note; nlohmann::json value; std::int64_t at; };  // `at`: where it lands on the timeline
+    std::vector<Event> events;
+    for (const RegionRow* r : sources) {
+        nlohmann::json& region = edit(*r);
+        if (region.is_discarded() || !region.contains("notes")) continue;
+        const std::int64_t base = region.value("start", std::int64_t{0});
+        nlohmann::json keptNotes = nlohmann::json::array(), keptControls = nlohmann::json::array();
+        for (const auto& n : region["notes"]) {
+            const std::int64_t abs = base + n.value("start", std::int64_t{0});
+            if (abs >= left && abs < right) {
+                events.push_back({true, n, abs + delta});
+                if (move) continue;
+            }
+            keptNotes.push_back(n);
+        }
+        if (region.contains("controls"))
+            for (const auto& c : region["controls"]) {
+                const std::int64_t abs = base + c.value("tick", std::int64_t{0});
+                if (abs >= left && abs < right) {
+                    events.push_back({false, c, abs + delta});
+                    if (move) continue;
+                }
+                keptControls.push_back(c);
+            }
+        region["notes"] = keptNotes;
+        if (!keptControls.empty() || region.contains("controls")) region["controls"] = keptControls;
+    }
+    if (events.empty()) {
+        emit notice("No MIDI events between the locators");
+        return;
+    }
+
+    std::vector<const RegionRow*> targets;
+    for (const RegionRow& r : regionRows_)
+        if (!r.audio && r.trackId == dest) targets.push_back(&r);
+    for (const RegionRow* r : targets) {
+        nlohmann::json& region = edit(*r);
+        if (region.is_discarded()) continue;
+        const std::int64_t base = region.value("start", std::int64_t{0}), regionLength = region.value("length", std::int64_t{0});
+        if (how == "Insert") {
+            if (base >= playhead) {
+                region["start"] = base + length;  // behind the insert point: it moves along
+            } else if (base + regionLength > playhead) {  // it spans the insert point: what follows moves right and the region grows
+                for (auto& n : region["notes"])
+                    if (base + n.value("start", std::int64_t{0}) >= playhead) n["start"] = n.value("start", std::int64_t{0}) + length;
+                if (region.contains("controls"))
+                    for (auto& c : region["controls"])
+                        if (base + c.value("tick", std::int64_t{0}) >= playhead) c["tick"] = c.value("tick", std::int64_t{0}) + length;
+                region["length"] = regionLength + length;
+            }
+        } else if (how == "Replace") {  // the destination range is emptied first
+            nlohmann::json notes = nlohmann::json::array(), controls = nlohmann::json::array();
+            for (const auto& n : region["notes"]) {
+                const std::int64_t abs = base + n.value("start", std::int64_t{0});
+                if (abs < playhead || abs >= playhead + length) notes.push_back(n);
+            }
+            if (region.contains("controls"))
+                for (const auto& c : region["controls"]) {
+                    const std::int64_t abs = base + c.value("tick", std::int64_t{0});
+                    if (abs < playhead || abs >= playhead + length) controls.push_back(c);
+                }
+            region["notes"] = notes;
+            if (region.contains("controls")) region["controls"] = controls;
+        }
+    }
+
+    // the events go into the destination region that holds their place; the others make a region of their own at the playhead
+    nlohmann::json orphan = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"}, {"start", playhead},
+                             {"length", length}, {"mediaId", "00000000-0000-0000-0000-000000000000"}, {"sourceOffsetFrames", 0}, {"gainDb", 0},
+                             {"notes", nlohmann::json::array()}, {"controls", nlohmann::json::array()}};
+    const auto add = [](nlohmann::json& region, const Event& e) {
+        const std::int64_t base = region.value("start", std::int64_t{0}), span = region.value("length", std::int64_t{0});
+        const std::int64_t rel = e.at - base;
+        nlohmann::json v = e.value;
+        if (e.note) {
+            v["start"] = rel;
+            v["length"] = std::max<std::int64_t>(1, std::min<std::int64_t>(v.value("length", std::int64_t{1}), span - rel));
+            region["notes"].push_back(v);
+        } else {
+            v["tick"] = rel;
+            if (!region.contains("controls")) region["controls"] = nlohmann::json::array();
+            region["controls"].push_back(v);
+        }
+    };
+    for (const Event& e : events) {
+        nlohmann::json* home = nullptr;
+        for (const RegionRow* r : targets) {
+            nlohmann::json& region = edit(*r);
+            if (region.is_discarded()) continue;
+            const std::int64_t base = region.value("start", std::int64_t{0});
+            if (e.at >= base && e.at < base + region.value("length", std::int64_t{0})) { home = &region; break; }
+        }
+        add(home ? *home : orphan, e);
+    }
+
+    nlohmann::json commands = nlohmann::json::array();
+    for (auto& [id, region] : edits) {
+        if (region.is_discarded()) continue;
+        if (region.contains("controls")) {
+            std::vector<nlohmann::json> sorted(region["controls"].begin(), region["controls"].end());
+            std::stable_sort(sorted.begin(), sorted.end(), [](const nlohmann::json& a, const nlohmann::json& b) { return a.value("tick", 0) < b.value("tick", 0); });
+            region["controls"] = sorted;
+        }
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
+    }
+    if (!orphan["notes"].empty() || !orphan["controls"].empty()) {
+        if (orphan.contains("controls")) {
+            std::vector<nlohmann::json> sorted(orphan["controls"].begin(), orphan["controls"].end());
+            std::stable_sort(sorted.begin(), sorted.end(), [](const nlohmann::json& a, const nlohmann::json& b) { return a.value("tick", 0) < b.value("tick", 0); });
+            orphan["controls"] = sorted;
+        }
+        commands.push_back({{"type", "add_region"}, {"trackId", dest.toStdString()}, {"index", -1}, {"region", orphan}});
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+    emit notice(QString("%1 %2 MIDI event%3").arg(move ? "Moved" : "Copied").arg(events.size()).arg(events.size() == 1 ? "" : "s"));
+}
+
+
 }  // namespace jad

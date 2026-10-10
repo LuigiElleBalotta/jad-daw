@@ -68,6 +68,7 @@ qt_add_qml_module(jad_ui_lib
         qml/SearchPluginDialog.qml
         qml/TextEntry.qml
         qml/MidiTransformDialog.qml
+        qml/CopyMidiEventsDialog.qml
         qml/StepSequencer.qml
         qml/ScoreView.qml
         qml/TextPromptDialog.qml

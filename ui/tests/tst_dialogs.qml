@@ -17,6 +17,7 @@ TestCase {
     Component { id: paramC; AutomationParamDialog { parent: Overlay.overlay } }
     Component { id: stepC; StepSequencer { width: 900; height: 300 } }
     Component { id: scoreC; ScoreView { width: 900; height: 300 } }
+    Component { id: copyC; CopyMidiEventsDialog { parent: Overlay.overlay } }
 
     function test_the_number_prompt_returns_a_clamped_number() {
         const d = createTemporaryObject(promptC, this)
@@ -109,6 +110,31 @@ TestCase {
         verify(canvas)
         canvas.requestPaint()
         wait(50)                                                // painting a staff with a note must not fail
+    }
+
+    function test_the_copy_midi_events_dialog_copies_from_the_locators_to_the_playhead() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        c.createRegion(c.tracks.trackIdAt(0), 0, 4)
+        tryVerify(function () { return c.regions.rowCount() === 1 })
+        const id = c.regions.regionIdAt(0)
+        c.setRegionNotes(id, [{ start: 0, length: 1, note: 60, velocity: 100 }])
+        tryVerify(function () { return c.regionNotes(id).length === 1 })
+        c.selectRegion(id, "replace")
+        c.setLoopRange(0, 1)
+        c.locateBeats(2)
+        tryVerify(function () { return Math.abs(c.positionBeats - 2) < 0.05 })
+        const d = createTemporaryObject(copyC, this, { project: c })
+        d.open()
+        tryCompare(d, "visible", true)
+        compare(d.mode, "copyMerge")
+        compare(d.tracksList.length, 1)
+        d.mode = "copyMerge"
+        const ok = findChild(d.contentItem, "okButton")
+        mouseClick(ok)
+        tryVerify(function () { return c.regionNotes(id).length === 2 })   // the copy at beat 2
     }
 
     function test_the_automation_parameter_dialog_lists_volume_pan_and_sends() {

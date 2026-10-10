@@ -491,6 +491,11 @@ public:
     Q_INVOKABLE void separateMidiByPitch();
     Q_INVOKABLE void moveSelectedToFocusedTrack();  // Edit > Move > To Focused Track: the selected track; the regions keep their time
     Q_INVOKABLE void joinPerTracks();
+    // Edit > Copy MIDI Events: the events between the locators of the selected MIDI regions (the MIDI regions of the selected track when none is selected) are
+    // copied or moved to the playhead on `destTrackId` (empty: the selected track, else the same track). `mode`: copyMerge, copyReplace, copyInsert, moveMerge,
+    // moveReplace or moveInsert. Merge blends them with what is there, Replace first clears the destination range, Insert pushes what follows to the right.
+    Q_INVOKABLE void copyMidiEvents(const QString& mode, const QString& destTrackId = QString());
+    Q_INVOKABLE QVariantList midiTrackChoices() const;  // [{id, name}] of the tracks that hold MIDI regions
     // Edit > Move > To Recorded Position: audio regions recorded in this project go back to where they were recorded.
     Q_INVOKABLE void moveSelectedToRecordedPosition();
     // Edit > Move > To Beat / First Transient to Nearest Beat: the first attack in each selected audio region is moved onto the nearest beat of the grid.

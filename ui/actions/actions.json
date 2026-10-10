@@ -104,7 +104,7 @@
  {"id":"audio.pitchShift","label":"Pitch Shift…","menu":"Edit/Audio","shortcut":"","kind":"command","status":"ready"},
  {"id":"audio.stripSilence","label":"Strip Silence…","menu":"Edit/Audio","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.timeStretch","label":"Time Stretch…","menu":"Edit/Audio","shortcut":"","kind":"command","status":"ready"},
- {"id":"edit.copyMidiEvents","label":"Copy MIDI Events…","menu":"Edit","shortcut":"","kind":"command","status":"stub","sep":true},
+ {"id":"edit.copyMidiEvents","label":"Copy MIDI Events…","menu":"Edit","shortcut":"","kind":"command","status":"ready","sep":true},
  {"id":"edit.deleteMidiEventsDuplicates","label":"Duplicates","menu":"Edit/Delete MIDI Events","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.deleteMidiEventsInside","label":"Inside Locators","menu":"Edit/Delete MIDI Events","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.deleteMidiEventsOutside","label":"Outside Locators","menu":"Edit/Delete MIDI Events","shortcut":"","kind":"command","status":"ready"},

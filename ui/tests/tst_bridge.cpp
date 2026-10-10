@@ -1943,6 +1943,58 @@ private slots:
         c.undo();
         QTRY_VERIFY(std::abs(c.regions()->find(audio)->startBeats - 40.3) < 0.01);
     }
+    void copyMidiEventsMergesReplacesAndInsertsAtThePlayheadAndMoveRemovesTheSource() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        const QString track = c.tracks()->trackIdAt(0);
+        c.createRegion(track, 0, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString r = c.regions()->regionIdAt(0);
+        auto note = [](double start, int pitch) { return QVariantMap{{"start", start}, {"length", 0.5}, {"note", pitch}, {"velocity", 100}}; };
+        c.setRegionNotes(r, {note(0, 60), note(1, 62), note(3, 65)});
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        c.selectRegions({r}, "replace");
+        c.copyMidiEvents("copyMerge", track);                        // no locators yet
+        QCOMPARE(c.regionNotes(r).size(), 3);
+        c.setLoopRange(0, 2);                                        // the notes at 0 and 1
+        c.locateBeats(8.0);
+        QTRY_VERIFY(std::abs(c.positionBeats() - 8.0) < 0.05);
+        c.copyMidiEvents("copyMerge", track);                        // nothing lies at 8: the copies make a region of their own
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        QCOMPARE(c.regionNotes(r).size(), 3);
+        QString made;
+        for (int i = 0; i < 2; ++i) if (c.regions()->regionIdAt(i) != r) made = c.regions()->regionIdAt(i);
+        QCOMPARE(c.regions()->find(made)->startBeats, 8.0);
+        QCOMPARE(c.regionNotes(made).size(), 2);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        c.locateBeats(2.0);                                          // inside the region
+        QTRY_VERIFY(std::abs(c.positionBeats() - 2.0) < 0.05);
+        c.copyMidiEvents("copyMerge", track);                        // the notes at 2 and 3 are the copies; the one at 3 was there: 3 + 2 notes
+        QTRY_COMPARE(c.regionNotes(r).size(), 5);
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        c.copyMidiEvents("copyReplace", track);                      // [2, 4) is emptied first: the note at 3 goes, two copies come
+        QTRY_COMPARE(c.regionNotes(r).size(), 4);
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        c.copyMidiEvents("copyInsert", track);                       // what is at 2 or later moves right by 2: the region grows to 6 beats
+        QTRY_COMPARE(c.regionNotes(r).size(), 5);
+        QCOMPARE(c.regions()->find(r)->lengthBeats, 6.0);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(r)->lengthBeats, 4.0);
+        c.copyMidiEvents("moveMerge", track);                        // the source events go: 0 and 1 are moved to 2 and 3
+        auto hasNoteAtStart = [&] {
+            for (const QVariant& v : c.regionNotes(r)) if (v.toMap().value("start").toDouble() < 0.01) return true;
+            return false;
+        };
+        QTRY_VERIFY(!hasNoteAtStart());
+        QCOMPARE(c.regionNotes(r).size(), 3);
+        QCOMPARE(c.midiTrackChoices().size(), 1);
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

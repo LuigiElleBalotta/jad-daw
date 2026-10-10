@@ -72,7 +72,7 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 Most stubs were never Mac-only: they are Logic features not written yet. Left out for good: Print, Page Setup, Movie, Dolby Atmos, Mastering Assistant.
 - [x] Batch 1: Record Enable / Input Monitoring (already wired), Select Tracks, Auto Set Locators, Snap Smart, Drag Mode Shuffle L/R.
 - [x] Batch 2: Overlapping MIDI/Audio Recordings (Create Take Folder / Create Tracks / Create Tracks and Mute, MIDI also Merge; the passes of a cycle are told apart by the engine), Use Musical Grid, Record Button Options (Record/Record Toggle, Record/Record Repeat), Discard Recording. Not done: Low Latency Monitoring Mode (needs an engine switch that bypasses latent inserts on monitored tracks) and Play/Stop Button Options (the guide does not describe them).
-- [ ] Batch 3: Edit: Trim Fill within Locators, Cut/Insert Time, Delete/Separate/Copy MIDI Events, Move to Beat / Recorded Position / Focused Track.
+- [x] Batch 3: Edit: Trim > Fill within Locators; Cut/Insert Time (Insert Silence / Cut Section Between Locators: regions only, markers, tempo and automation stay); Delete MIDI Events (duplicates, inside, outside locators); Separate MIDI Events by Note Pitch (by event channel needs a channel in the notes: no); Copy MIDI Events dialog (copy/move x merge/replace/insert, no Rotate); Move > To Recorded Position (media remember `recordedAt`), To Beat / First Transient to Nearest Beat (an onset finder), To Focused Track; Join per Tracks; Open in External Sample Editor. Left: Copy/Insert Section, SMPTE-locked regions, Convert and Tempo submenus.
 - [ ] Batch 4: tools (Text, Automation Select/Curve, Marquee, Slip, Rotate) and floats (Transport, Event, Region Inspector, Step Input Keyboard).
 - [ ] Batch 5: Track: Assign Icon, Configure Header, Show Output Track, External MIDI track, stacks (Flatten, Convert Folder Stack).
 - [ ] Batch 6: Mix: Automation Settings, Convert Automation, Quick Access, Autoselect in Read; File: Project Alternatives, Project Management, Share.
@@ -119,3 +119,4 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - 2026-10-10: Edit > Move > Slip/Rotate Left/Right and Set Nudge Value.
 - 2026-10-10: stub actions batch 1 (Select Tracks, Auto Set Locators, Snap Smart, Shuffle L/R drag modes).
 - 2026-10-10: stub actions batch 2 (overlapping recordings, musical grid, record button options, discard recording).
+- 2026-10-10: stub actions batch 3 (edit menu: locators, cut/insert time, MIDI events, move to recorded position and beat).

@@ -136,6 +136,7 @@ ApplicationWindow {
         onAccepted2: (v) => controller.setNudgeBeats(v)
     }
     MidiTransformDialog { id: midiTransform; project: controller }
+    CopyMidiEventsDialog { id: copyMidiEvents; project: controller }
     TextPromptDialog {
         id: templateName
         heading: qsTr("Save as Template")
@@ -268,6 +269,7 @@ ApplicationWindow {
         "edit.deleteMidiEventsOutside": () => controller.deleteMidiEvents("outside"),
         "edit.separateMidiEventsByPitch": () => controller.separateMidiByPitch(),
         "edit.moveToFocusedTrack": () => controller.moveSelectedToFocusedTrack(),
+        "edit.copyMidiEvents": () => copyMidiEvents.open(),
         "edit.moveToRecordedPosition": () => controller.moveSelectedToRecordedPosition(),
         "edit.moveToBeat": () => controller.moveFirstTransientToNearestBeat(),
         "edit.moveFirstTransientToNearestBeat": () => controller.moveFirstTransientToNearestBeat(),

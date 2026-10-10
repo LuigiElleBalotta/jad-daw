@@ -535,6 +535,7 @@ public:
     // Controller lanes of a MIDI region: lane is "cc<n>" (control change n, value 0..127), "bend" (pitch bend, -8192..8191) or "touch" (aftertouch,
     // 0..127). regionControls lists {beats, value}; setRegionControls replaces that lane's points (the other lanes stay), one undo step.
     Q_INVOKABLE QVariantList regionControls(const QString& regionId, const QString& lane) const;
+    Q_INVOKABLE QVariantList regionControlEvents(const QString& regionId) const;  // every controller event of a MIDI region: {beats, status, data1, data2}
     Q_INVOKABLE void setRegionControls(const QString& regionId, const QString& lane, const QVariantList& points);
     Q_INVOKABLE QVariantMap regionInfo(const QString& regionId) const;  // {trackName, trackId, startBeats, lengthBeats, audio, found}
     Q_PROPERTY(int revision READ revision NOTIFY projectChanged)  // grows with every snapshot: bindings on regionNotes() follow it

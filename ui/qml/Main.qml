@@ -97,6 +97,7 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    ListEditorsWindow { id: listEditors; project: controller }
     NumberPromptDialog {
         id: repeatDialog
         heading: qsTr("Repeat Multiple")
@@ -270,6 +271,9 @@ ApplicationWindow {
         "window.showKeyboard": () => { musicalTyping.visible = !musicalTyping.visible },
         "track.searchAndSelectTrack": () => searchTrackDialog.open(),
         "mix.bounceInPlace": () => controller.bounceInPlace(),
+        "view.listEditors": () => { listEditors.tab = 0; listEditors.open() },
+        "window.openEventList": () => { listEditors.tab = 0; listEditors.open() },
+        "window.openSignatureList": () => { listEditors.tab = 3; listEditors.open() },
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

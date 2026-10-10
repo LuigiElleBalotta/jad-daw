@@ -2543,4 +2543,15 @@ void ProjectController::bounceInPlace() {
     });
 }
 
+QVariantList ProjectController::regionControlEvents(const QString& regionId) const {
+    QVariantList out;
+    const RegionRow* row = regions_.find(regionId);
+    if (!row || row->audio) return out;
+    const nlohmann::json j = nlohmann::json::parse(row->json, nullptr, false);
+    if (j.is_discarded() || !j.contains("controls") || !j["controls"].is_array()) return out;
+    for (const auto& c : j["controls"])
+        out.append(QVariantMap{{"beats", c.value("tick", 0) / static_cast<double>(lpc::kPPQ)}, {"status", c.value("status", 0)}, {"data1", c.value("data1", 0)}, {"data2", c.value("data2", 0)}});
+    return out;
+}
+
 }  // namespace jad

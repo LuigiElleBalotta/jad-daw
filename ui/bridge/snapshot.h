@@ -110,6 +110,7 @@ struct MarkerRow {
 struct Snapshot {
     std::uint64_t revision = 0;
     QString name;
+    QString key;  // "C major"
     int sampleRate = 48000;
     double bpm = 120.0;
     int beatsPerBar = 4;

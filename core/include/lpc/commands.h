@@ -39,6 +39,7 @@ CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<Autom
 CommandPtr makeSetGroups(std::vector<Group> groups);
 // Puts the tracks in this order (every track but the master, once each; the master stays first). The undo restores the previous order.
 CommandPtr makeSetTrackOrder(std::vector<Uuid> order);
+CommandPtr makeSetProjectKey(std::string key);  // "C major" ... "B minor" (sharps, no flats)
 CommandPtr makeSetProjectName(std::string name);  // 1 to 128 characters without control characters
 CommandPtr makeSetMarkers(std::vector<Marker> markers);  // replaces the whole list (sorted by tick, unique ids); the undo is the previous list
 CommandPtr makeAddMedia(MediaItem item, int index = -1);  // index -1 appends

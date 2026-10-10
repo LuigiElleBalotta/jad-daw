@@ -213,3 +213,20 @@ TEST_CASE("set_track_props: an icon is a short plain key, undo restores, json ke
     REQUIRE(res.inverse->apply(p).ok());
     REQUIRE(p == before);
 }
+
+TEST_CASE("set_project_key: a key is a tonic with a sharp and a mode, undo restores, json keeps it", "[commands][props]") {
+    Project p{Uuid::random(gRng)};
+    REQUIRE(p.key == "C major");
+    const Project before = p;
+    REQUIRE_FALSE(makeSetProjectKey("Bb major")->apply(p).ok());
+    REQUIRE_FALSE(makeSetProjectKey("C dorian")->apply(p).ok());
+    REQUIRE_FALSE(makeSetProjectKey("")->apply(p).ok());
+    REQUIRE(p == before);
+    auto res = makeSetProjectKey("F# minor")->apply(p);
+    REQUIRE(res.ok());
+    REQUIRE(p.key == "F# minor");
+    REQUIRE(projectFromJson(toJson(p)) == p);
+    REQUIRE_FALSE(toJson(before).contains("key"));
+    REQUIRE(res.inverse->apply(p).ok());
+    REQUIRE(p == before);
+}

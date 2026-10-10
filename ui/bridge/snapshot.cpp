@@ -46,6 +46,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
     Snapshot s;
     s.revision = revision;
     s.name = QString::fromStdString(p.name);
+    s.key = QString::fromStdString(p.key);
     s.sampleRate = p.sampleRate;
     s.bpm = p.tempoMap.tempos().empty() ? 120.0 : p.tempoMap.tempos().front().bpm;
     s.beatsPerBar = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().numerator;

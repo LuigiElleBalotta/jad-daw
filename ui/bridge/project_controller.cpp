@@ -360,6 +360,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     mediaPaths_ = s.mediaPaths;
     sampleRate_ = s.sampleRate;
     name_ = s.name;
+    key_ = s.key;
     bpm_ = s.bpm;
     beatsPerBar_ = s.beatsPerBar;
     beatUnit_ = s.beatUnit;

@@ -158,6 +158,7 @@ struct MediaItem {
 
 struct Project {
     std::string name = "Untitled";
+    std::string key = "C major";  // the key of the project as shown in the LCD: a tonic (C, C#, D, ... B) and "major" or "minor"
     int sampleRate = 48000;
     TempoMap tempoMap;
     std::vector<Marker> markers;

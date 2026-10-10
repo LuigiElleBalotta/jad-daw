@@ -286,6 +286,25 @@ private:
     std::string name_;
 };
 
+class SetProjectKeyCmd final : public Command {
+public:
+    explicit SetProjectKeyCmd(std::string key) : key_(std::move(key)) {}
+    std::string type() const override { return "set_project_key"; }
+    json toJson() const override { return {{"type", type()}, {"key", key_}}; }
+    ApplyResult apply(Project& p) const override {
+        static const char* const tonics[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        bool known = false;
+        for (const char* t : tonics) known = known || key_ == std::string(t) + " major" || key_ == std::string(t) + " minor";
+        if (!known) return fail("bad_value", "a key is a tonic with sharps (C, C#, ... B) and major or minor");
+        std::string previous = p.key;
+        p.key = key_;
+        return success(makeSetProjectKey(std::move(previous)));
+    }
+
+private:
+    std::string key_;
+};
+
 class SetMarkersCmd final : public Command {
 public:
     explicit SetMarkersCmd(std::vector<Marker> markers) : markers_(std::move(markers)) {}
@@ -943,6 +962,7 @@ CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTem
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
 CommandPtr makeSetTrackOrder(std::vector<Uuid> order) { return std::make_unique<SetTrackOrderCmd>(std::move(order)); }
+CommandPtr makeSetProjectKey(std::string key) { return std::make_unique<SetProjectKeyCmd>(std::move(key)); }
 CommandPtr makeSetProjectName(std::string name) { return std::make_unique<SetProjectNameCmd>(std::move(name)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
@@ -983,6 +1003,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());
         if (type == "set_groups") return makeSetGroups(j.at("groups").get<std::vector<Group>>());
         if (type == "set_track_order") return makeSetTrackOrder(j.at("order").get<std::vector<Uuid>>());
+        if (type == "set_project_key") return makeSetProjectKey(j.at("key").get<std::string>());
         if (type == "set_project_name") return makeSetProjectName(j.at("name").get<std::string>());
         if (type == "set_markers") return makeSetMarkers(j.at("markers").get<std::vector<Marker>>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());

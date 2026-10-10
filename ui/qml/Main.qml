@@ -139,6 +139,7 @@ ApplicationWindow {
     CopyMidiEventsDialog { id: copyMidiEvents; project: controller }
     TrackIconDialog { id: trackIconDialog; project: controller }
     AutomationSettingsDialog { id: automationSettings; project: controller }
+    AlternativesDialog { id: alternativesDialog; project: controller }
     TextPromptDialog {
         id: regionNameDialog
         property string regionId
@@ -268,6 +269,14 @@ ApplicationWindow {
         "file.importMidi": () => importMidiDialog.open(),
         "file.exportMidi": () => exportMidiDialog.open(),
         "file.bounce": () => bounceOptions.open(),
+        "file.share": () => bounceOptions.open(),
+        "file.projectAlternatives": () => alternativesDialog.open(),
+        "file.pmShowFolder": () => controller.showProjectFolder(),
+        "file.pmCleanUp": () => {
+            const u = controller.unusedMedia()
+            if (u.count === 0) { toast.show(qsTr("Every audio file of the project is in use")); return }
+            confirm.ask(qsTr("Clean Up Project"), qsTr("%1 unused audio file(s), %2 MB, are removed from the project and the disk. The undo history is deleted.").arg(u.count).arg((u.bytes / 1048576).toFixed(1)), qsTr("Clean Up"), () => controller.cleanUpProject())
+        },
         "file.quit": () => Qt.quit(),
         "edit.undo": () => controller.undo(),
         "edit.redo": () => controller.redo(),
@@ -349,6 +358,7 @@ ApplicationWindow {
         "transport.barBack": () => controller.barBack(),
         "transport.barForward": () => controller.barForward(),
         "transport.goToPosition": () => controlBar.lcd.editPosition(),
+        "lcd.key": () => controlBar.lcd.editKey(),
         "view.mixer": () => root.showLowerPane("mixer"),
         "window.openMixer": () => { controller.mixerDetached = true },
         "view.editors": () => root.showLowerPane("editors"),

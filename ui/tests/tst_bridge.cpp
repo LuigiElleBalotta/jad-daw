@@ -2124,6 +2124,50 @@ private slots:
         c.setAutoselectAutomationParam(false);
         c.setAutomationVisible(false);
     }
+    void theProjectKeyIsTypedInTheLcdAndAlternativesAndCleanUpWorkOnTheProjectFolder() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QCOMPARE(c.projectKey(), QString("C maj"));
+        QVERIFY(c.setProjectKey("F#m"));
+        QTRY_COMPARE(c.projectKey(), QString("F# min"));
+        QVERIFY(c.setProjectKey("Bb maj"));                          // flats are written as sharps
+        QTRY_COMPARE(c.projectKey(), QString("A# maj"));
+        QVERIFY(c.setProjectKey("e"));
+        QTRY_COMPARE(c.projectKey(), QString("E maj"));
+        QVERIFY(!c.setProjectKey("H"));
+        QVERIFY(!c.setProjectKey("C dorian"));
+        QCOMPARE(c.projectKey(), QString("E maj"));
+        // alternatives
+        QVERIFY(c.projectAlternatives().isEmpty());
+        QVERIFY(!c.newProjectAlternative("../bad"));
+        c.clearError();
+        QVERIFY(c.newProjectAlternative("Take 1"));
+        QCOMPARE(c.projectAlternatives(), QStringList({"Take 1"}));
+        QVERIFY(c.setProjectKey("G min"));
+        QTRY_COMPARE(c.projectKey(), QString("G min"));
+        QVERIFY(c.openProjectAlternative("Take 1"));                 // back to E maj; what was open is kept as "Before Take 1"
+        QTRY_COMPARE(c.projectKey(), QString("E maj"));
+        QVERIFY(c.projectAlternatives().contains("Before Take 1"));
+        c.deleteProjectAlternative("Take 1");
+        QVERIFY(!c.projectAlternatives().contains("Take 1"));
+        // clean up: a deleted audio region leaves its file unused
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        QString audio;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio) audio = r->id;
+        }
+        QVERIFY(!audio.isEmpty());
+        QCOMPARE(c.unusedMedia().value("count").toInt(), 0);
+        c.deleteRegions({audio});
+        QTRY_VERIFY(c.regions()->find(audio) == nullptr);
+        QTRY_COMPARE(c.unusedMedia().value("count").toInt(), 1);
+        QVERIFY(c.unusedMedia().value("bytes").toDouble() > 0);
+        c.cleanUpProject();
+        QTRY_COMPARE(c.unusedMedia().value("count").toInt(), 0);
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -165,3 +165,29 @@ TEST_CASE("io: an autosave is newer than the saved file until the next save, and
     discardAutosave(dir.path);
     REQUIRE_FALSE(fs::exists(dir.path / "project.autosave.json"));
 }
+
+TEST_CASE("io: alternatives are named copies that can be listed, restored and deleted", "[io][alternatives]") {
+    test::TempDir tmp;
+    const fs::path dir = tmp.path / "alt.lpc";
+    Project p = smallProject();
+    saveProject(p, dir);
+    REQUIRE(listAlternatives(dir).empty());
+    REQUIRE(validAlternativeName("Mix 2.1_final"));
+    REQUIRE_FALSE(validAlternativeName(""));
+    REQUIRE_FALSE(validAlternativeName("../evil"));
+    REQUIRE_FALSE(validAlternativeName(" lead"));
+    REQUIRE_THROWS(saveAlternative(dir, "a/b"));
+    saveAlternative(dir, "Verse");
+    p.name = "Changed";
+    saveProject(p, dir);
+    saveAlternative(dir, "Chorus");
+    REQUIRE(listAlternatives(dir) == std::vector<std::string>{"Chorus", "Verse"});
+    restoreAlternative(dir, "Verse");
+    REQUIRE(loadProject(dir).name == smallProject().name);
+    REQUIRE(readAll(dir / "project.json.bak").find("Changed") != std::string::npos);  // what was there is kept
+    writeAll(dir / "alternatives" / "Broken.json", "{ not json");
+    REQUIRE_THROWS(restoreAlternative(dir, "Broken"));
+    REQUIRE(loadProject(dir).name == smallProject().name);  // a damaged one changes nothing
+    deleteAlternative(dir, "Chorus");
+    REQUIRE(listAlternatives(dir) == std::vector<std::string>{"Broken", "Verse"});
+}

@@ -3863,4 +3863,131 @@ void ProjectController::autoselectLane(const QString& trackId, const QString& pa
     if (t && !t->master && t->automationMode == "read" && automationParamFor(trackId) != param) setTrackAutomationParam(trackId, param);
 }
 
+bool ProjectController::setProjectKey(const QString& text) {
+    static const QStringList sharps{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    QString t = text.trimmed();
+    t.replace(QChar(0x266F), '#').replace(QChar(0x266D), 'b');
+    if (t.isEmpty() || !host_) return false;
+    const int letter = QStringLiteral("CDEFGAB").indexOf(t[0].toUpper());
+    if (letter < 0) return false;
+    static const int semitone[] = {0, 2, 4, 5, 7, 9, 11};
+    int pitch = semitone[letter];
+    int i = 1;
+    if (i < t.size() && t[i] == '#') { ++pitch; ++i; }
+    else if (i < t.size() && t[i] == 'b') { --pitch; ++i; }
+    pitch = (pitch % 12 + 12) % 12;
+    const QString rest = t.mid(i).trimmed();
+    bool minor = false;
+    if (!rest.isEmpty()) {
+        if (rest.startsWith("maj", Qt::CaseInsensitive) || rest == "M") minor = false;
+        else if (rest.startsWith("min", Qt::CaseInsensitive) || rest == "m") minor = true;
+        else return false;
+    }
+    sendCommand({{"type", "set_project_key"}, {"key", (sharps[pitch] + (minor ? " minor" : " major")).toStdString()}});
+    return true;
+}
+
+QStringList ProjectController::projectAlternatives() const {
+    QStringList out;
+    if (dir_.empty()) return out;
+    for (const std::string& n : lpc::listAlternatives(dir_)) out << QString::fromStdString(n);
+    return out;
+}
+
+bool ProjectController::newProjectAlternative(const QString& name) {
+    if (!host_ || dir_.empty()) return false;
+    const std::string n = name.trimmed().toStdString();
+    if (!lpc::validAlternativeName(n)) {
+        setError("An alternative name has 1 to 60 letters, digits, spaces, dots, dashes or underscores");
+        return false;
+    }
+    if (!saveProject()) return false;
+    try {
+        lpc::saveAlternative(dir_, n);
+    } catch (const std::exception& e) {
+        setError(QString("Cannot save the alternative: ") + QString::fromUtf8(e.what()));
+        return false;
+    }
+    emit notice(QString("Saved the alternative \"%1\"").arg(QString::fromStdString(n)));
+    return true;
+}
+
+bool ProjectController::openProjectAlternative(const QString& name) {
+    if (!host_ || dir_.empty()) return false;
+    const std::string n = name.toStdString();
+    if (!lpc::validAlternativeName(n)) return false;
+    const std::filesystem::path dir = dir_;
+    if (!saveProject()) return false;
+    try {
+        lpc::saveAlternative(dir, "Before " + n);  // what is open now is not lost
+        lpc::restoreAlternative(dir, n);
+    } catch (const std::exception& e) {
+        setError(QString("Cannot open the alternative: ") + QString::fromUtf8(e.what()));
+        return false;
+    }
+    return openProject(QUrl::fromLocalFile(QString::fromStdWString(dir.wstring())));
+}
+
+void ProjectController::deleteProjectAlternative(const QString& name) {
+    if (!dir_.empty()) lpc::deleteAlternative(dir_, name.toStdString());
+}
+
+void ProjectController::showProjectFolder() {
+    if (dir_.empty()) return;
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdU16String(dir_.u16string())))) emit notice("The system could not open the folder");
+}
+
+QVariantMap ProjectController::unusedMedia() const {
+    if (!host_) return {{"count", 0}, {"bytes", 0.0}};
+    const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+    std::set<std::string> used;
+    for (const lpc::Track& t : project.tracks) {
+        for (const lpc::Region& r : t.regions) used.insert(r.mediaId.toString());
+        if (t.freeze) used.insert(t.freeze->mediaId.toString());
+    }
+    int count = 0;
+    double bytes = 0;
+    for (const lpc::MediaItem& m : project.mediaPool) {
+        if (used.count(m.id.toString())) continue;
+        ++count;
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(mediaFile(dir_, QString::fromStdString(m.path)), ec);
+        if (!ec) bytes += static_cast<double>(size);
+    }
+    return {{"count", count}, {"bytes", bytes}};
+}
+
+void ProjectController::cleanUpProject() {
+    if (!host_) return;
+    const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+    std::set<std::string> used;
+    for (const lpc::Track& t : project.tracks) {
+        for (const lpc::Region& r : t.regions) used.insert(r.mediaId.toString());
+        if (t.freeze) used.insert(t.freeze->mediaId.toString());
+    }
+    nlohmann::json commands = nlohmann::json::array();
+    std::vector<std::filesystem::path> files;
+    for (const lpc::MediaItem& m : project.mediaPool) {
+        if (used.count(m.id.toString())) continue;
+        commands.push_back({{"type", "remove_media"}, {"mediaId", m.id.toString()}});
+        files.push_back(mediaFile(dir_, QString::fromStdString(m.path)));
+    }
+    if (commands.empty()) {
+        emit notice("Every audio file of the project is in use");
+        return;
+    }
+    const std::filesystem::path dir = dir_;
+    QPointer<ProjectController> self(this);
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}}, [self, files, dir](bool accepted) {
+        if (!accepted || !self || self->dir_ != dir) return;
+        for (const std::filesystem::path& f : files) {
+            std::error_code ec;
+            std::filesystem::remove(f, ec);
+        }
+        self->clearUndoHistory();  // the removed files could not come back with an undo
+        emit self->notice(QString("Removed %1 unused audio file%2").arg(files.size()).arg(files.size() == 1 ? "" : "s"));
+    });
+}
+
+
 }  // namespace jad

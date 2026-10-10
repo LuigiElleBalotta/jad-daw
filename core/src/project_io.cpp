@@ -120,4 +120,42 @@ void restoreAutosave(const fs::path& dir) {
     discardAutosave(dir);
 }
 
+bool validAlternativeName(const std::string& name) {
+    if (name.empty() || name.size() > 60 || name.front() == ' ' || name.back() == ' ' || name.front() == '.') return false;
+    for (const unsigned char c : name)
+        if (!(std::isalnum(c) || c == ' ' || c == '.' || c == '-' || c == '_')) return false;
+    return true;
+}
+
+std::vector<std::string> listAlternatives(const fs::path& dir) {
+    std::vector<std::string> out;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(dir / "alternatives", ec))
+        if (entry.is_regular_file() && entry.path().extension() == ".json") out.push_back(pathText(entry.path().stem()));
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+void saveAlternative(const fs::path& dir, const std::string& name) {
+    if (!validAlternativeName(name)) throw std::runtime_error("an alternative name has 1 to 60 letters, digits, spaces, dots, dashes or underscores");
+    fs::create_directories(dir / "alternatives");
+    fs::copy_file(dir / "project.json", dir / "alternatives" / (name + ".json"), fs::copy_options::overwrite_existing);
+}
+
+void deleteAlternative(const fs::path& dir, const std::string& name) {
+    if (!validAlternativeName(name)) return;
+    std::error_code ec;
+    fs::remove(dir / "alternatives" / (name + ".json"), ec);
+}
+
+void restoreAlternative(const fs::path& dir, const std::string& name) {
+    if (!validAlternativeName(name)) throw std::runtime_error("no such alternative");
+    const fs::path alternative = dir / "alternatives" / (name + ".json");
+    (void)loadProjectFile(alternative);  // a damaged alternative must not replace a good project
+    const fs::path target = dir / "project.json";
+    if (fs::exists(target)) fs::copy_file(target, dir / "project.json.bak", fs::copy_options::overwrite_existing);
+    fs::copy_file(alternative, target, fs::copy_options::overwrite_existing);
+    discardAutosave(dir);
+}
+
 }  // namespace lpc

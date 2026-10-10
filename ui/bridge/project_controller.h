@@ -66,6 +66,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(int beatsPerBar READ beatsPerBar NOTIFY projectChanged)
     Q_PROPERTY(double barBeats READ barBeats NOTIFY projectChanged)  // quarter-note beats in a bar: numerator * 4 / denominator
     Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
+    Q_PROPERTY(QString projectKey READ projectKey NOTIFY projectChanged)  // as the LCD shows it: "C maj", "A min"
     Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
     Q_PROPERTY(QString snap READ snap WRITE setSnap NOTIFY snapChanged)
     // Mix > Automation Settings. Quick Access: one MIDI controller (a CC) writes the active automation parameter (volume or pan) of the selected track. Turning it
@@ -183,6 +184,7 @@ public:
     double bpm() const { return bpm_; }
     int beatsPerBar() const { return beatsPerBar_; }
     double barBeats() const { return beatsPerBar_ * 4.0 / beatUnit_; }
+    QString projectKey() const { return key_.endsWith(" major") ? key_.chopped(5) + "maj" : (key_.endsWith(" minor") ? key_.chopped(5) + "min" : key_); }
     QString signatureText() const { return QStringLiteral("%1/%2").arg(beatsPerBar_).arg(beatUnit_); }
     double masterGainDb() const { return masterGain_; }
     bool mixerVisible() const { return mixerVisible_; }
@@ -503,6 +505,18 @@ public:
     Q_INVOKABLE void separateMidiByPitch();
     Q_INVOKABLE void moveSelectedToFocusedTrack();  // Edit > Move > To Focused Track: the selected track; the regions keep their time
     Q_INVOKABLE void joinPerTracks();
+    // LCD > Key: "C", "c#", "Am", "F# min", "Bb major" ... (flats become sharps); false when the text is no key.
+    Q_INVOKABLE bool setProjectKey(const QString& text);
+    // File > Project Alternatives: named copies of the saved project. New saves the project first; Open saves it and the current state as "Before <name>", then
+    // replaces the project by the alternative.
+    Q_INVOKABLE QStringList projectAlternatives() const;
+    Q_INVOKABLE bool newProjectAlternative(const QString& name);
+    Q_INVOKABLE bool openProjectAlternative(const QString& name);
+    Q_INVOKABLE void deleteProjectAlternative(const QString& name);
+    // File > Project Management
+    Q_INVOKABLE void showProjectFolder();
+    Q_INVOKABLE QVariantMap unusedMedia() const;  // {count, bytes} of the audio files that no region and no frozen track uses
+    Q_INVOKABLE void cleanUpProject();            // removes them from the project and from the disk; the undo history goes (the files would be missing)
     // Track > Assign Track Icon: the picture in the header of the selected tracks ("" removes it). The keys are those of trackIconChoices().
     Q_INVOKABLE void setSelectedTracksIcon(const QString& icon);
     Q_INVOKABLE QStringList trackIconChoices() const;
@@ -916,6 +930,7 @@ private:
     lpc::TempoMap tempoMap_;
     int sampleRate_ = 48000;
     QString name_;
+    QString key_ = QStringLiteral("C major");
     double bpm_ = 120.0;
     int beatsPerBar_ = 4;
     int beatUnit_ = 4;

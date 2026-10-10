@@ -227,6 +227,7 @@ nlohmann::json toJson(const Project& p) {
     nlohmann::json j = {{"name", p.name},         {"sampleRate", p.sampleRate}, {"tempoMap", p.tempoMap},
                         {"markers", p.markers},   {"tracks", p.tracks},         {"mediaPool", p.mediaPool}};
     if (!p.groups.empty()) j["groups"] = p.groups;  // only when there are some: older files stay as they were
+    if (p.key != "C major") j["key"] = p.key;
     return j;
 }
 
@@ -235,6 +236,7 @@ Project projectFromJson(const nlohmann::json& j) {
     Project p;
     p.tracks.clear();
     j.at("name").get_to(p.name);
+    p.key = j.value("key", std::string("C major"));
     j.at("sampleRate").get_to(p.sampleRate);
     j.at("tempoMap").get_to(p.tempoMap);
     j.at("markers").get_to(p.markers);

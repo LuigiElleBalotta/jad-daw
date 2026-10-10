@@ -12,9 +12,11 @@ Rectangle {
     readonly property alias positionCell: posCell
     readonly property alias tempoCell: tempoCell
     readonly property alias signatureCell: sigCell
+    readonly property alias keyCell: keyCell
     signal message(string text)
 
     function editPosition() { posCell.begin() }
+    function editKey() { keyCell.begin() }
 
     implicitWidth: row.implicitWidth + Theme.spacing[6] * 2
     implicitHeight: Theme.sizeControlLarge
@@ -142,9 +144,10 @@ Rectangle {
         }
         LcdCell {
             minWidth: 40
-            shown: "C maj"
+            id: keyCell
+            shown: root.project.projectKey
             caption: qsTr("KEY")
-            onSingleClicked: if (ActionHub.registry) ActionHub.registry.stubTriggered("lcd.key", false)
+            onCommit: (text) => { if (!root.project.setProjectKey(text)) root.message(qsTr("Invalid key (for example C, F# min, Bb maj)")) }
         }
     }
 }

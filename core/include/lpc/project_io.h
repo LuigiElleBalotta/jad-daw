@@ -28,4 +28,12 @@ void discardAutosave(const std::filesystem::path& dir);
 // Puts the autosave in place of project.json (the saved file is kept as project.json.bak) and removes the autosave. Throws on a damaged autosave.
 void restoreAutosave(const std::filesystem::path& dir);
 
+// Project alternatives: named copies of project.json in <project>/alternatives/<name>.json. A name is 1 to 60 letters, digits, spaces, dots, dashes or underscores.
+bool validAlternativeName(const std::string& name);
+std::vector<std::string> listAlternatives(const std::filesystem::path& dir);  // sorted
+void saveAlternative(const std::filesystem::path& dir, const std::string& name);  // the project.json on disk, copied; replaces one of that name
+void deleteAlternative(const std::filesystem::path& dir, const std::string& name);
+// The alternative becomes project.json (the saved file is kept as project.json.bak). Throws when it is missing or damaged.
+void restoreAlternative(const std::filesystem::path& dir, const std::string& name);
+
 }  // namespace lpc

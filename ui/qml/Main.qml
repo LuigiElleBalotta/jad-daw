@@ -125,6 +125,16 @@ ApplicationWindow {
     }
     AutomationParamDialog { id: automationParamDialog; project: controller }
     SearchPluginDialog { id: searchPluginDialog; project: controller }
+    NumberPromptDialog {
+        id: nudgeDialog
+        heading: qsTr("Set Nudge Value")
+        prompt: qsTr("Nudge in beats")
+        value: controller.nudgeBeats
+        from: 0.0078125
+        to: 64
+        decimals: 4
+        onAccepted2: (v) => controller.setNudgeBeats(v)
+    }
     MidiTransformDialog { id: midiTransform; project: controller }
     TextPromptDialog {
         id: templateName
@@ -332,6 +342,11 @@ ApplicationWindow {
         "mix.moveTrackAutomationWithRegions": () => { controller.automationFollowsRegions = !controller.automationFollowsRegions },
         "track.freeze": () => controller.toggleFreezeSelected(),
         "mix.searchAndAddPlugIn": () => searchPluginDialog.open(),
+        "edit.moveSlipLeft": () => controller.slipSelectedRegions(-1, false),
+        "edit.moveSlipRight": () => controller.slipSelectedRegions(1, false),
+        "edit.moveRotateLeft": () => controller.slipSelectedRegions(-1, true),
+        "edit.moveRotateRight": () => controller.slipSelectedRegions(1, true),
+        "edit.moveSetNudgeValueTo": () => nudgeDialog.open(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),

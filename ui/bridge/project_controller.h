@@ -593,6 +593,10 @@ public:
     Q_INVOKABLE void doubleSelectedRegions();
     Q_INVOKABLE void nudgeSelectedRegions(int direction);  // by the nudge value
     Q_INVOKABLE void setNudgeBeats(double beats);
+    // Edit > Move > Slip Left/Right (-1/+1): what the selected regions play moves by the nudge value while the regions stay where they are (audio: the part of the
+    // file that plays; MIDI: the notes inside the region, those pushed out are dropped). Rotate Left/Right moves the notes of a MIDI region the same way but what
+    // leaves at one end comes back at the other. One undo step.
+    Q_INVOKABLE void slipSelectedRegions(int direction, bool rotate);
     // Piano Roll: the notes of a MIDI region, in beats from the region start: [{start, length, note, velocity}]
     Q_INVOKABLE QVariantList regionNotes(const QString& regionId) const;
     Q_INVOKABLE void setRegionNotes(const QString& regionId, const QVariantList& notes);  // one undo step

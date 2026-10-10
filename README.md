@@ -102,6 +102,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   filters and then Single | Tracks | All from its bar and scrolls sideways.
 - **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
   follows and the sound changes at once; the whole drag is one undo step.
+- **Slip, Rotate and the nudge value** (Edit > Move): Slip Left/Right moves what a region plays by the nudge value without moving the region (the part of the file for audio, the notes for MIDI); Rotate Left/Right does the same for MIDI notes but what leaves one end comes back at the other; Set Nudge Value to changes the step.
 - **More tools** (Edit > Tool): the Gain tool (drag an audio region up or down to change its gain, a quarter of a dB per pixel), the Fade tool (press on the left or the right half of an audio region and drag to set that fade) and the Solo tool (click a region to solo its track).
 - **Unsaved changes and autosave**: closing the window, closing or replacing the project (New, Open, Open Recent, Close) asks whether to save when there are changes that are not saved; every two minutes a project with unsaved
   changes is copied to `project.autosave.json` beside `project.json` (not while recording or bouncing); if the app stops without saving, the next time the project is opened it offers to restore the autosave.

@@ -1851,7 +1851,9 @@ private slots:
             QVERIFY(!c.dirty());
             c.autosaveNow();                                         // nothing to keep
             QVERIFY(!std::filesystem::exists(proj / "project.autosave.json"));
+            const int start = c.tracks()->rowCount();
             c.addTrack("audio");
+            QTRY_COMPARE(c.tracks()->rowCount(), start + 1);
             QTRY_VERIFY(c.dirty());
             c.autosaveNow();
             QVERIFY(std::filesystem::exists(proj / "project.autosave.json"));
@@ -1875,6 +1877,33 @@ private slots:
         QTRY_COMPARE(again.tracks()->rowCount(), expected);
         QVERIFY(!std::filesystem::exists(proj / "project.autosave.json"));
         QVERIFY(!again.dirty());
+    }
+    void slipAndRotateMoveWhatARegionPlaysByTheNudgeValue() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        c.createRegion(c.tracks()->trackIdAt(0), 0, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString id = c.regions()->regionIdAt(0);
+        c.setRegionNotes(id, {QVariantMap{{"start", 0.0}, {"length", 1.0}, {"note", 60}, {"velocity", 100}}, QVariantMap{{"start", 3.0}, {"length", 1.0}, {"note", 64}, {"velocity", 100}}});
+        QTRY_COMPARE(c.regionNotes(id).size(), 2);
+        c.setNudgeBeats(1.0);
+        c.selectRegion(id, "replace");
+        c.slipSelectedRegions(1, false);                              // slip right: the notes move one beat inside; the one that leaves is dropped
+        QTRY_COMPARE(c.regionNotes(id).size(), 1);
+        QCOMPARE(c.regionNotes(id).first().toMap().value("start").toDouble(), 1.0);
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(id).size(), 2);
+        c.slipSelectedRegions(1, true);                               // rotate right: the note at 3 comes back at 0
+        auto startOf64 = [&] {
+            for (const QVariant& v : c.regionNotes(id)) if (v.toMap().value("note").toInt() == 64) return v.toMap().value("start").toDouble();
+            return -1.0;
+        };
+        QTRY_COMPARE(startOf64(), 0.0);
+        QCOMPARE(c.regionNotes(id).size(), 2);
+        c.setNudgeBeats(0.25);
     }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;

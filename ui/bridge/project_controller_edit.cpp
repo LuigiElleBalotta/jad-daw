@@ -3057,4 +3057,62 @@ void ProjectController::discardAutosave() {
     if (!dir_.empty()) lpc::discardAutosave(dir_);
 }
 
+void ProjectController::slipSelectedRegions(int direction, bool rotate) {
+    if (!host_ || direction == 0) return;
+    nlohmann::json commands = nlohmann::json::array();
+    bool skippedAudio = false;
+    for (const RegionRow* r : selectedRegionRows()) {
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded()) continue;
+        if (r->audio) {
+            if (rotate) {
+                skippedAudio = true;
+                continue;
+            }
+            // the audio plays from a later part of the file when the content moves left: the offset changes by the nudge in frames
+            const double from = r->startBeats, to = r->startBeats + direction * nudgeBeats_;
+            const double frames = tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(std::max(0.0, to) * lpc::kPPQ)), sampleRate_) -
+                                  tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(from * lpc::kPPQ)), sampleRate_);
+            const std::int64_t offset = region.value("sourceOffsetFrames", std::int64_t{0}) + static_cast<std::int64_t>(std::llround(frames));
+            const std::int64_t media = std::max<std::int64_t>(0, r->mediaFrames);
+            region["sourceOffsetFrames"] = std::clamp<std::int64_t>(offset, 0, media > 0 ? media - 1 : offset);
+        } else {
+            const std::int64_t length = region.value("length", std::int64_t{0});
+            const std::int64_t step = static_cast<std::int64_t>(std::llround(nudgeBeats_ * lpc::kPPQ)) * direction;
+            nlohmann::json kept = nlohmann::json::array();
+            for (auto n : region["notes"]) {
+                std::int64_t start = n.value("start", std::int64_t{0}) + step;
+                const std::int64_t len = n.value("length", std::int64_t{1});
+                if (rotate && length > 0) {
+                    start = ((start % length) + length) % length;
+                } else if (start < 0 || start >= length) {
+                    continue;  // pushed out of the region
+                }
+                n["start"] = start;
+                n["length"] = std::min(len, std::max<std::int64_t>(1, length - start));
+                kept.push_back(n);
+            }
+            region["notes"] = kept;
+            if (region.contains("controls")) {
+                nlohmann::json controls = nlohmann::json::array();
+                for (auto c : region["controls"]) {
+                    std::int64_t tick = c.value("tick", std::int64_t{0}) + step;
+                    if (rotate && length > 0) tick = ((tick % length) + length) % length;
+                    else if (tick < 0 || tick > length) continue;
+                    c["tick"] = tick;
+                    controls.push_back(c);
+                }
+                std::stable_sort(controls.begin(), controls.end(), [](const nlohmann::json& a, const nlohmann::json& b) { return a.value("tick", 0) < b.value("tick", 0); });
+                region["controls"] = controls;
+            }
+        }
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
+    }
+    if (commands.empty()) {
+        if (skippedAudio) emit notice("Rotate works on MIDI regions");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 }  // namespace jad

@@ -165,6 +165,7 @@ Dialog {
                             value: row.isNote ? row.modelData.note.length : 0
                             onCommitted: (v) => root.setNote(row.modelData.index, "length", v)
                         }
+                        Item { Layout.fillWidth: true }
                         IconButton { implicitHeight: 26; visible: row.isNote; label: qsTr("Delete"); onClicked: root.removeNote(row.modelData.index) }
                     }
                 }
@@ -220,6 +221,7 @@ Dialog {
                             value: trow.modelData.bpm
                             onCommitted: (v) => root.project.setTempoAt(trow.modelData.beats, v)
                         }
+                        Item { Layout.fillWidth: true }
                         IconButton { implicitHeight: 26; visible: trow.index > 0; label: qsTr("Delete"); onClicked: root.project.removeTempoAt(trow.modelData.beats) }
                     }
                 }
@@ -261,6 +263,7 @@ Dialog {
                             value: srow.modelData.denominator
                             onChosen: (d) => root.project.setSignatureAt(srow.modelData.beats, srow.modelData.numerator, d)
                         }
+                        Item { Layout.fillWidth: true }
                         IconButton { implicitHeight: 26; visible: srow.index > 0; label: qsTr("Delete"); onClicked: root.project.removeSignatureAt(srow.modelData.beats) }
                     }
                 }

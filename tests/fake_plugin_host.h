@@ -47,8 +47,56 @@ private:
     std::size_t pos_ = 0;
 };
 
+// An instrument that remembers every event it is given (with the block's running frame count) and sounds a constant tone while a note is held.
+class FakeInstrument final : public audio::IInstrument {
+public:
+    struct Seen {
+        long long frame;
+        audio::MidiEvent event;
+    };
+    explicit FakeInstrument(int latency = 0) : latency_(latency) {}
+    int latencySamples() const override { return latency_; }
+    void render(float* l, float* r, int frames, const audio::MidiEvent* events, int count) noexcept override {
+        int next = 0;
+        for (int i = 0; i < frames; ++i) {
+            while (next < count && events[next].offset == i) {
+                seen.push_back({done_ + i, events[next]});
+                if ((events[next].status & 0xf0) == 0x90 && events[next].data2 > 0) ++held_;
+                if ((events[next].status & 0xf0) == 0x80 || ((events[next].status & 0xf0) == 0x90 && events[next].data2 == 0)) held_ = held_ > 0 ? held_ - 1 : 0;
+                ++next;
+            }
+            l[i] = r[i] = held_ > 0 ? 0.5f : 0.0f;
+        }
+        done_ += frames;
+    }
+    nlohmann::json describe() const override { return {{"fakeInstrument", true}}; }
+    std::vector<Seen> seen;
+
+private:
+    int latency_;
+    long long done_ = 0;
+    int held_ = 0;
+};
+
 class FakePluginHost final : public IPluginHost {
 public:
+    std::map<std::string, int> instruments;  // instrument ids this host can load -> their latency
+    int createdInstruments = 0;
+    std::shared_ptr<FakeInstrument> lastInstrument;
+
+    std::shared_ptr<audio::IInstrument> acquireInstrument(const InsertSlot& slot, const ProcessorRef& ref, double, int) override {
+        std::lock_guard lock(mutex_);
+        const auto known = instruments.find(ref.processorId);
+        if (known == instruments.end()) return nullptr;
+        const std::string key = keyOf(slot);
+        if (auto it = liveInstruments_.find(key); it != liveInstruments_.end() && it->second.first == ref.processorId + "|" + ref.state) return it->second.second;
+        ++createdInstruments;
+        auto inst = std::make_shared<FakeInstrument>(known->second);
+        liveInstruments_[key] = {ref.processorId + "|" + ref.state, inst};
+        lastInstrument = inst;
+        return inst;
+    }
+
     std::map<std::string, FakeSpec> known;  // ids this host can load; any other id is "missing"
     bool deferLoads = false;                // true: acquire returns nullptr until finishLoads()
     int created = 0;
@@ -132,6 +180,7 @@ private:
     }
 
     mutable std::mutex mutex_;
+    std::map<std::string, std::pair<std::string, std::shared_ptr<FakeInstrument>>> liveInstruments_;
     std::map<std::string, Live> live_;
     std::vector<std::pair<InsertSlot, ProcessorRef>> pending_;
     std::function<void(const InsertSlot&)> listener_;

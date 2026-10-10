@@ -23,6 +23,7 @@ Panel {
     property bool showSlots: true
     property bool longFader: false    // View > Long Faders
     property var pluginGroups: []      // [{vendor, plugins: [{id, name}]}], from the plug-in catalogue
+    property var instrumentPluginGroups: []  // the same for the plug-in instruments
     property var knownPluginIds: []    // ids of the plug-ins that are installed
     property bool selected: false      // the track is selected in the project (the name is drawn in the accent colour)
 
@@ -98,6 +99,7 @@ Panel {
     signal effectEditorRequested(string id, int index)         // a double click on a built-in effect
     signal eqRequested(string id)                               // a click on the EQ box
     signal instrumentChosen(string id, string processorId)      // the instrument slot's menu
+    signal instrumentPluginChosen(string id, string pluginId, string name)  // a VST3 instrument from the same menu
     signal instrumentEditorRequested(string id)                 // a double click on the instrument slot
     signal groupChosen(string id, string groupId)             // the Group slot's menu: "" none, "new" a new group, else a group
     signal groupSettingsRequested(string id)
@@ -241,6 +243,29 @@ Panel {
             }
             onObjectAdded: (index, object) => instrumentMenu.insertItem(index, object)
             onObjectRemoved: (index, object) => instrumentMenu.removeItem(object)
+        }
+        MenuSeparator {}
+        Instantiator {
+            model: root.instrumentPluginGroups
+            delegate: ThemedMenu {
+                id: instVendorMenu
+                required property var modelData
+                title: modelData.vendor
+                Instantiator {
+                    model: instVendorMenu.modelData.plugins
+                    delegate: ThemedMenuItem {
+                        required property var modelData
+                        text: modelData.name
+                        checkable: true
+                        checked: root.info.instrument === modelData.id
+                        onTriggered: root.instrumentPluginChosen(root.trackId, modelData.id, modelData.name)
+                    }
+                    onObjectAdded: (index, object) => instVendorMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => instVendorMenu.removeItem(object)
+                }
+            }
+            onObjectAdded: (index, object) => instrumentMenu.insertMenu(root.instrumentChoices.length + 1 + index, object)
+            onObjectRemoved: (index, object) => instrumentMenu.removeMenu(object)
         }
         MenuSeparator {}
         ThemedMenuItem { text: qsTr("Open the Library"); onTriggered: root.libraryRequested() }
@@ -422,7 +447,7 @@ Panel {
                 id: instrumentSlot
                 anchors.fill: parent
                 visible: root.slotsVisible && root.kind === "instrument"
-                text: { for (const c of root.instrumentChoices) if (c.id === root.info.instrument) return c.name; return root.info.instrument ?? "" }
+                text: { for (const c of root.instrumentChoices) if (c.id === root.info.instrument) return c.name; return (root.info.instrumentLabel ?? "") !== "" ? root.info.instrumentLabel : (root.info.instrument ?? "") }
                 filled: true
                 fillColor: Theme.statePlay
                 onClicked: instrumentMenu.popup(instrumentSlot, 0, instrumentSlot.height)

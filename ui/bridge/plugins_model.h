@@ -9,6 +9,7 @@ namespace jad {
 
 struct PluginRow {
     QString id, name, vendor, status, path, reason;  // status: "ok" or "failed"
+    bool instrument = false;                         // a software instrument, not an effect
 };
 
 // The plug-in catalogue as the UI sees it: the Plug-in Manager table, the insert menu and the "is it installed" check.
@@ -16,7 +17,8 @@ class PluginsModel : public QAbstractListModel {
     Q_OBJECT
     QML_ANONYMOUS
     Q_PROPERTY(QStringList knownIds READ knownIds NOTIFY changed)
-    Q_PROPERTY(QVariantList menu READ menu NOTIFY changed)
+    Q_PROPERTY(QVariantList menu READ menu NOTIFY changed)                      // the effects by manufacturer
+    Q_PROPERTY(QVariantList instrumentMenu READ instrumentMenu NOTIFY changed)  // the instruments by manufacturer
     Q_PROPERTY(bool scanning READ scanning NOTIFY changed)
     Q_PROPERTY(QString scanText READ scanText NOTIFY changed)
     Q_PROPERTY(bool supported READ supported NOTIFY changed)
@@ -29,6 +31,7 @@ public:
 
     QStringList knownIds() const { return knownIds_; }
     QVariantList menu() const { return menu_; }
+    QVariantList instrumentMenu() const { return instrumentMenu_; }
     bool scanning() const { return scanning_; }
     QString scanText() const;
     bool supported() const { return supported_; }
@@ -51,7 +54,7 @@ private:
 
     std::vector<PluginRow> rows_;
     QStringList knownIds_;
-    QVariantList menu_;
+    QVariantList menu_, instrumentMenu_;
     bool scanning_ = false;
     bool supported_ = false;
     int done_ = 0, total_ = 0;

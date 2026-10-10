@@ -45,7 +45,7 @@ public:
         Track* t = p.findTrack(id_);
         if (!t) return fail("not_found", "no such track");
         if (t->kind != TrackKind::Instrument || !t->instrument) return fail("invalid_kind", "only instrument tracks have an instrument");
-        if (!isKnownInstrument(instrument_.processorId)) return fail("bad_value", "unknown instrument: " + instrument_.processorId);
+        if (auto e = checkInstrument(instrument_)) return fail(*e);
         ProcessorRef previous = std::move(*t->instrument);
         t->instrument = instrument_;
         return success(makeSetInstrument(id_, std::move(previous)));
@@ -254,6 +254,29 @@ private:
     std::string state_;
 };
 
+class SetInstrumentStateCmd final : public Command {
+public:
+    SetInstrumentStateCmd(Uuid trackId, std::string state) : trackId_(trackId), state_(std::move(state)) {}
+    std::string type() const override { return "set_instrument_state"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"state", state_}}; }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        if (t->kind != TrackKind::Instrument || !t->instrument) return fail("invalid_kind", "only instrument tracks have an instrument");
+        if (!isVst3Id(t->instrument->processorId)) return fail("bad_value", "only plug-in instruments have a state");
+        ProcessorRef next = *t->instrument;
+        std::string previous = std::move(next.state);
+        next.state = state_;
+        if (auto e = checkInstrument(next)) return fail(*e);
+        t->instrument = std::move(next);
+        return success(makeSetInstrumentState(trackId_, std::move(previous)));
+    }
+
+private:
+    Uuid trackId_;
+    std::string state_;
+};
+
 class MoveInsertCmd final : public Command {
 public:
     MoveInsertCmd(Uuid trackId, int from, int to, Uuid toTrackId) : trackId_(trackId), from_(from), to_(to), toTrackId_(toTrackId) {}
@@ -333,6 +356,7 @@ CommandPtr makeSetInsertParam(Uuid trackId, int index, std::string param, std::o
 }
 
 CommandPtr makeSetPatchId(Uuid trackId, std::string patchId) { return std::make_unique<SetPatchIdCmd>(trackId, std::move(patchId)); }
+CommandPtr makeSetInstrumentState(Uuid trackId, std::string state) { return std::make_unique<SetInstrumentStateCmd>(trackId, std::move(state)); }
 CommandPtr makeSetInstrument(Uuid trackId, ProcessorRef instrument) { return std::make_unique<SetInstrumentCmd>(trackId, std::move(instrument)); }
 CommandPtr makeSetOutput(Uuid trackId, Uuid output) { return std::make_unique<SetOutputCmd>(trackId, output); }
 

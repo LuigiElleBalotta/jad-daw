@@ -73,9 +73,9 @@ private:
                 return CommandError{"bad_output", "output must be an existing bus or aux track (or null for master)"};
         }
         const bool wantsInstrument = track_.kind == TrackKind::Instrument;
-        if (wantsInstrument != track_.instrument.has_value() ||
-            (wantsInstrument && !isKnownInstrument(track_.instrument->processorId)))
-            return CommandError{"invalid_kind", "exactly instrument tracks need a known instrument"};
+        if (wantsInstrument != track_.instrument.has_value()) return CommandError{"invalid_kind", "exactly instrument tracks need an instrument"};
+        if (wantsInstrument)
+            if (auto e = checkInstrument(*track_.instrument)) return e;
         for (const ProcessorRef& ins : track_.strip.inserts)
             if (auto e = checkInsert(ins)) return e;
         auto sendIds = allSendIds(p);
@@ -937,6 +937,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "remove_send") return makeRemoveSend(j.at("sendId").get<Uuid>());
         if (type == "set_inserts") return makeSetInserts(j.at("trackId").get<Uuid>(), j.at("inserts").get<std::vector<ProcessorRef>>());
         if (type == "set_patch_id") return makeSetPatchId(j.at("trackId").get<Uuid>(), j.at("patchId").get<std::string>());
+        if (type == "set_instrument_state") return makeSetInstrumentState(j.at("trackId").get<Uuid>(), j.at("state").get<std::string>());
         if (type == "set_instrument") return makeSetInstrument(j.at("trackId").get<Uuid>(), j.at("instrument").get<ProcessorRef>());
         if (type == "set_output") return makeSetOutput(j.at("trackId").get<Uuid>(), j.at("output").get<Uuid>());
         if (type == "set_send") {

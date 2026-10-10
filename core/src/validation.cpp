@@ -96,6 +96,13 @@ MaybeError checkInsert(const ProcessorRef& insert) {
     return std::nullopt;
 }
 
+MaybeError checkInstrument(const ProcessorRef& instrument) {
+    if (isVst3Id(instrument.processorId)) return checkInsert(instrument);
+    if (instrument.processorId.rfind("vst3:", 0) == 0) return CommandError{"bad_value", "malformed plug-in id: " + instrument.processorId};
+    if (!isKnownInstrument(instrument.processorId)) return CommandError{"bad_value", "unknown instrument: " + instrument.processorId};
+    return std::nullopt;
+}
+
 bool isKnownTrackColor(const std::string& color) {
     static const char* const names[] = {"purple", "indigo", "blue", "teal", "green", "yellow", "orange", "red", "pink", "magenta"};
     if (color.empty()) return true;
@@ -199,8 +206,9 @@ MaybeError checkProject(const Project& p) {
         if (auto e = checkShowInTracks(t.kind, t.showInTracks)) return e;
         if (auto e = checkStripValues(t.strip.gainDb, t.strip.pan)) return e;
         const bool wantsInstrument = t.kind == TrackKind::Instrument;
-        if (wantsInstrument != t.instrument.has_value() || (wantsInstrument && !isKnownInstrument(t.instrument->processorId)))
-            return CommandError{"invalid_kind", "exactly instrument tracks need a known instrument"};
+        if (wantsInstrument != t.instrument.has_value()) return CommandError{"invalid_kind", "exactly instrument tracks need an instrument"};
+        if (wantsInstrument)
+            if (auto e = checkInstrument(*t.instrument)) return e;
         for (const ProcessorRef& ins : t.strip.inserts)
             if (auto e = checkInsert(ins)) return e;
         if (!t.strip.output.isNull()) {

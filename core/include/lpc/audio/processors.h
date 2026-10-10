@@ -23,6 +23,36 @@ public:
     virtual nlohmann::json describe() const = 0;  // not real-time; used by tests
 };
 
+// A raw MIDI message for an instrument: `offset` frames from the start of the block.
+struct MidiEvent {
+    int offset = 0;
+    std::uint8_t status = 0, data1 = 0, data2 = 0;
+};
+
+// A plug-in instrument (the built-in synth is separate, see Synth): makes its sound from MIDI events. Hosts implement it.
+class IInstrument {
+public:
+    virtual ~IInstrument() = default;
+    // Latency in frames, read on the project thread when the graph is built.
+    virtual int latencySamples() const { return 0; }
+    // Audio thread. Overwrites l and r with `frames` frames. The events are sorted by offset and all lie inside the block.
+    virtual void render(float* l, float* r, int frames, const MidiEvent* events, int count) noexcept = 0;
+    virtual nlohmann::json describe() const = 0;  // not real-time; used by tests
+};
+
+// Stands in for an instrument plug-in that is not available (missing, still loading, failed, bypassed): silence.
+class SilentInstrument final : public IInstrument {
+public:
+    explicit SilentInstrument(bool missing = true) : missing_(missing) {}
+    void render(float* l, float* r, int frames, const MidiEvent*, int) noexcept override {
+        for (int i = 0; i < frames; ++i) l[i] = r[i] = 0.0f;
+    }
+    nlohmann::json describe() const override { return {{"silent", true}, {"missing", missing_}}; }
+
+private:
+    bool missing_;
+};
+
 class GainProcessor final : public IProcessor {
 public:
     explicit GainProcessor(float gainDb);

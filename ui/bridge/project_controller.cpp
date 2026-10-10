@@ -1507,7 +1507,7 @@ void ProjectController::refreshPluginRows() {
         if (e.status == lpc::ScanStatus::Ok) {
             for (const lpc::PluginDescriptor& d : e.descriptors)
                 rows.push_back({QString::fromStdString(d.id), QString::fromStdString(d.name), QString::fromStdString(d.vendor), "ok",
-                                QString::fromStdString(e.path), QString()});
+                                QString::fromStdString(e.path), QString(), d.instrument});
         } else {
             const QString file = QFileInfo(QString::fromStdString(e.path)).completeBaseName();
             rows.push_back({QString(), file, QString(), "failed", QString::fromStdString(e.path), QString::fromStdString(e.reason)});
@@ -1522,6 +1522,12 @@ void ProjectController::addPlugin(const QString& trackId, const QString& pluginI
     sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
                  {"insert", {{"processorId", pluginId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""},
                              {"label", label.left(128).toStdString()}}}});
+}
+
+void ProjectController::setInstrumentPlugin(const QString& trackId, const QString& pluginId, const QString& label) {
+    if (!host_ || !pluginId.startsWith("vst3:")) return;
+    sendCommand({{"type", "set_instrument"}, {"trackId", trackId.toStdString()},
+                 {"instrument", {{"processorId", pluginId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}, {"label", label.left(128).toStdString()}}}});
 }
 
 void ProjectController::setInsertState(const QString& trackId, int index, const QString& state) {
@@ -1549,10 +1555,14 @@ void ProjectController::commitPluginState(const lpc::InsertSlot& slot) {
     const int index = slot.index;
     const bool changed = host_->read([track, index, &state](const lpc::Project& p) {
         const lpc::Track* t = p.findTrack(track);
+        if (index == lpc::kInstrumentSlot) return t && t->instrument && lpc::isVst3Id(t->instrument->processorId) && t->instrument->state != state;
         return t && index >= 0 && index < static_cast<int>(t->strip.inserts.size()) &&
                t->strip.inserts[static_cast<std::size_t>(index)].state != state;
     }).get();
-    if (changed) setInsertState(QString::fromStdString(track.toString()), index, QString::fromStdString(state));
+    if (changed && index == lpc::kInstrumentSlot)
+        sendCommand({{"type", "set_instrument_state"}, {"trackId", track.toString()}, {"state", state}});
+    else if (changed)
+        setInsertState(QString::fromStdString(track.toString()), index, QString::fromStdString(state));
 #else
     Q_UNUSED(slot)
 #endif
@@ -1566,6 +1576,8 @@ void ProjectController::commitPluginStates() {
         for (const lpc::Track& t : p.tracks)
             for (std::size_t i = 0; i < t.strip.inserts.size(); ++i)
                 if (lpc::isVst3Id(t.strip.inserts[i].processorId)) out.push_back({t.id, static_cast<int>(i)});
+        for (const lpc::Track& t : p.tracks)
+            if (t.instrument && lpc::isVst3Id(t.instrument->processorId)) out.push_back({t.id, lpc::kInstrumentSlot});
         return out;
     }).get();
     for (const lpc::InsertSlot& s : pluginSlots) commitPluginState(s);

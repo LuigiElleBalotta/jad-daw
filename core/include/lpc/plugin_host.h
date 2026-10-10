@@ -15,8 +15,11 @@ struct PluginDescriptor {
     std::string id;       // "vst3:<32 hex>"
     std::string name, vendor, version, path;
     std::string native;   // opaque data of the host that found it (JUCE: the plug-in description as XML)
+    bool instrument = false;  // a software instrument (notes in, sound out), not an effect
     bool operator==(const PluginDescriptor&) const = default;
 };
+
+inline constexpr int kInstrumentSlot = -1;  // InsertSlot{track, kInstrumentSlot}: the instrument of an instrument track
 
 struct InsertSlot {
     Uuid track;
@@ -43,6 +46,12 @@ public:
     // live plug-in whose state is legitimately empty.
     virtual std::optional<std::string> captureState(const InsertSlot& slot) = 0;
     virtual void setReadyListener(std::function<void(const InsertSlot&)> listener) = 0;  // any thread
+    // The instrument of an instrument track lives in the slot with index kInstrumentSlot. Same contract as acquire(): never blocks,
+    // nullptr while the plug-in is loading, missing or failed.
+    virtual std::shared_ptr<audio::IInstrument> acquireInstrument(const InsertSlot& /*slot*/, const ProcessorRef& /*ref*/, double /*sampleRate*/,
+                                                                  int /*maxBlock*/) {
+        return nullptr;
+    }
 };
 
 // Builds one insert. Built-ins as before; "vst3:" ids come from the host and are a pass-through (MissingPluginProcessor)

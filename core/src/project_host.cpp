@@ -129,6 +129,8 @@ std::vector<std::pair<InsertSlot, ProcessorRef>> ProjectHost::liveInserts() cons
     for (const Track& t : project_.tracks)
         for (std::size_t i = 0; i < t.strip.inserts.size(); ++i)
             if (isVst3Id(t.strip.inserts[i].processorId)) live.push_back({InsertSlot{t.id, static_cast<int>(i)}, t.strip.inserts[i]});
+    for (const Track& t : project_.tracks)
+        if (t.instrument && isVst3Id(t.instrument->processorId)) live.push_back({InsertSlot{t.id, kInstrumentSlot}, *t.instrument});
     return live;
 }
 

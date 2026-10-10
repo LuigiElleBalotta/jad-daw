@@ -17,7 +17,9 @@ ChannelStrip {
     onGroupSettingsRequested: (id) => project.openGroupSettings(id)
     instrumentChoices: project.instrumentSpecs().map(s => ({ id: s.id, name: s.name }))
     onInstrumentChosen: (id, processorId) => project.setInstrument(id, processorId)
-    onInstrumentEditorRequested: (id) => project.openEffectEditor(id, -2)
+    instrumentPluginGroups: project.plugins.instrumentMenu
+    onInstrumentPluginChosen: (id, pluginId, name) => project.setInstrumentPlugin(id, pluginId, name)
+    onInstrumentEditorRequested: (id) => { if ((info.instrument ?? "").startsWith("vst3:")) project.openPluginEditor(id, -1); else project.openEffectEditor(id, -2) }
     effectGroups: {
         const groups = {}, order = []
         for (const s of project.effectSpecs()) {

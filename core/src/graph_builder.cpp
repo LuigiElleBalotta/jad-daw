@@ -67,6 +67,9 @@ int clampLatency(int v) { return std::clamp(v, 0, kMaxPdcFrames); }
 int trackLatency(const Project& p, const Track& t, IPluginHost* plugins) {
     if (!plugins) return 0;
     long long sum = 0;
+    if (t.instrument && isVst3Id(t.instrument->processorId) && !t.instrument->bypass)
+        if (auto live = plugins->acquireInstrument(InsertSlot{t.id, kInstrumentSlot}, *t.instrument, static_cast<double>(p.sampleRate), kMaxBlock))
+            sum += clampLatency(live->latencySamples());
     for (std::size_t i = 0; i < t.strip.inserts.size(); ++i) {
         const ProcessorRef& ref = t.strip.inserts[i];
         if (!isVst3Id(ref.processorId)) continue;
@@ -222,6 +225,12 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         cfg->regions.push_back(std::move(rp));
     }
     if (t.instrument) cfg->synthParams = synthParamsOf(*t.instrument);
+    if (t.instrument && isVst3Id(t.instrument->processorId)) {  // the notes go to a plug-in; silence while it is missing, loading or bypassed
+        std::shared_ptr<IInstrument> live;
+        if (plugins && !t.instrument->bypass)
+            live = plugins->acquireInstrument(InsertSlot{t.id, kInstrumentSlot}, *t.instrument, static_cast<double>(p.sampleRate), kMaxBlock);
+        cfg->instrument = live ? live : std::make_shared<SilentInstrument>(true);
+    }
     for (const AutomationLane& lane : t.automation) {
         if (t.automationMode == "off") break;  // the fader and the pan stay where the strip has them
         std::vector<AutoPoint>& out = lane.target == "volume" ? cfg->volumeAuto : cfg->panAuto;

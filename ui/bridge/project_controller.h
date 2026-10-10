@@ -255,6 +255,8 @@ public:
     // An instrument track's instrument: the choice (params start at their defaults) and one parameter of it (one undo step each)
     Q_INVOKABLE void setInstrument(const QString& trackId, const QString& processorId);
     Q_INVOKABLE void setInstrumentParam(const QString& trackId, const QString& param, double value);
+    // A VST3 instrument for an instrument track (its window is openPluginEditor(trackId, -1)); label is the name shown in the slot
+    Q_INVOKABLE void setInstrumentPlugin(const QString& trackId, const QString& pluginId, const QString& label);
     Q_INVOKABLE QVariantMap trackInstrument(const QString& trackId) const;  // {processorId, params}
     Q_INVOKABLE QVariantList trackInserts(const QString& trackId) const;  // the inserts of a track, with their parameters
     Q_INVOKABLE QString trackName(const QString& trackId) const;

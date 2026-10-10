@@ -70,7 +70,7 @@ struct JucePluginHost::Impl {
               std::uint64_t generation) {
         juce::String error;
         std::unique_ptr<juce::AudioPluginInstance> instance = formats.createPluginInstance(desc, sampleRate, maxBlock, error);
-        std::shared_ptr<PluginProcessor> proc = PluginProcessor::create(std::move(instance), ref.state, sampleRate, maxBlock);
+        std::shared_ptr<PluginProcessor> proc = PluginProcessor::create(std::move(instance), ref.state, sampleRate, maxBlock, desc.isInstrument);
         bool published = false;
         {
             std::lock_guard lock(mutex);
@@ -196,6 +196,11 @@ std::shared_ptr<audio::IProcessor> JucePluginHost::acquire(const InsertSlot& slo
         });
     }
     return adopted;
+}
+
+std::shared_ptr<audio::IInstrument> JucePluginHost::acquireInstrument(const InsertSlot& slot, const ProcessorRef& ref, double sampleRate,
+                                                                    int maxBlock) {
+    return std::dynamic_pointer_cast<PluginProcessor>(acquire(slot, ref, sampleRate, maxBlock));
 }
 
 void JucePluginHost::setWanted(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) {

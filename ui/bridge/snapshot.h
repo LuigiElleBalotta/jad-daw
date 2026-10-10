@@ -50,6 +50,7 @@ struct TrackRow {
     bool showInTracks = true;  // false: hidden from the Tracks area (listed in the Mixer only)
     bool hidden = false;       // the track is hidden but shown anyway (Track > Toggle Hide View): drawn dimmed
     QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)
+    QString instrumentLabel;  // the name of a plug-in instrument
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
     std::vector<InsertRow> inserts;
     std::vector<SendRow> sends;

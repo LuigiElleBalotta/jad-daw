@@ -10,7 +10,7 @@ bool isSource(TrackKind k) { return k == TrackKind::Audio || k == TrackKind::Mid
 }  // namespace
 
 TrackNode::TrackNode(Uuid id_, TrackKind kind_, const StripParams& strip_, TrackConfig* config_, double sampleRate)
-    : id(id_), kind(kind_), strip(strip_), config(config_), l(kMaxBlock, 0.0f), r(kMaxBlock, 0.0f), synth(sampleRate) {}
+    : id(id_), kind(kind_), strip(strip_), config(config_), l(kMaxBlock, 0.0f), r(kMaxBlock, 0.0f), synth(sampleRate), tailMax(static_cast<int>(sampleRate * 2.0)) {}
 
 RenderGraph::RenderGraph(double sampleRate)
     : sampleRate_(sampleRate), scratchL_(kMaxBlock), scratchR_(kMaxBlock), preL_(kMaxBlock), preR_(kMaxBlock), dlyL_(kMaxBlock), dlyR_(kMaxBlock) {}
@@ -65,6 +65,8 @@ Owned RenderGraph::apply(const AudioMsg& m) noexcept {
             TrackConfig* old = n->config;
             n->config = cfg;
             n->synth.releaseAll();  // the new config only knows its own note-offs: do not leave held notes droning
+            n->stopPending = n->held[0] != 0 || n->held[1] != 0;
+            n->liveCount = 0;
             return Owned{old, &RenderGraph::deleteConfig};
         }
         case MsgKind::Reorder: {
@@ -96,7 +98,70 @@ Owned RenderGraph::apply(const AudioMsg& m) noexcept {
 }
 
 void RenderGraph::allNotesOff() noexcept {
-    for (int i = 0; i < count_; ++i) nodes_[static_cast<std::size_t>(i)]->synth.allNotesOff();
+    for (int i = 0; i < count_; ++i) {
+        TrackNode& t = *nodes_[static_cast<std::size_t>(i)];
+        t.synth.allNotesOff();
+        if (t.config && t.config->instrument) {  // what Logic sends when the music stops; the next block that is rendered carries it
+            t.stopPending = true;
+            t.tailFrames = t.tailMax;
+        }
+    }
+}
+
+namespace {
+void trackHeld(TrackNode& t, const MidiEvent& e) noexcept {
+    if ((e.status & 0xf0) != 0x90 && (e.status & 0xf0) != 0x80) return;
+    const bool on = (e.status & 0xf0) == 0x90 && e.data2 > 0;
+    std::uint64_t& word = t.held[(e.data1 & 0x7f) >> 6];
+    const std::uint64_t bit = std::uint64_t{1} << (e.data1 & 0x3f);
+    word = on ? (word | bit) : (word & ~bit);
+}
+}  // namespace
+
+// A plug-in instrument: the notes of the regions in this block and what is waiting (live notes, the stop messages) go to it in one call.
+void RenderGraph::renderPluginInstrument(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n, bool withRegions) noexcept {
+    MidiEvent events[kMaxBlockEvents];
+    int count = 0;
+    const auto push = [&](int offset, std::uint8_t status, std::uint8_t a, std::uint8_t b) {
+        if (count < kMaxBlockEvents) events[count++] = MidiEvent{offset, status, a, b};
+    };
+    if (t.stopPending) {
+        t.stopPending = false;
+        for (int note = 0; note < 128; ++note)
+            if (t.held[note >> 6] & (std::uint64_t{1} << (note & 0x3f))) push(0, 0x80, static_cast<std::uint8_t>(note), 0);
+        t.held[0] = t.held[1] = 0;
+        push(0, 0xb0, 64, 0);  // sustain off, then the modulation, expression and breath controllers, aftertouch and the pitch wheel back to rest
+        push(0, 0xb0, 4, 0);
+        push(0, 0xb0, 2, 0);
+        push(0, 0xb0, 1, 0);
+        push(0, 0xd0, 0, 0);
+        push(0, 0xe0, 0x00, 0x40);
+    }
+    for (int i = 0; i < t.liveCount; ++i) {
+        const MidiEvent& e = t.live[i];
+        if (count < kMaxBlockEvents) events[count++] = e;
+    }
+    t.liveCount = 0;
+    const int fixed = count;  // the events above are at offset 0 already, in order
+    if (withRegions) {
+        const std::int64_t blockEnd = blockStart + n;
+        for (const RegionPlayback& reg : cfg.regions)
+            for (const NoteSpan& s : reg.notes) {
+                if (s.onFrame >= blockStart && s.onFrame < blockEnd) push(static_cast<int>(s.onFrame - blockStart), 0x90, s.note, s.velocity);
+                if (s.offFrame >= blockStart && s.offFrame < blockEnd) push(static_cast<int>(s.offFrame - blockStart), 0x80, s.note, 0);
+            }
+        for (int i = fixed + 1; i < count; ++i) {  // stable insertion sort by offset: the few region events behind the ones at offset 0
+            const MidiEvent key = events[i];
+            int j = i - 1;
+            while (j >= fixed && events[j].offset > key.offset) {
+                events[j + 1] = events[j];
+                --j;
+            }
+            events[j + 1] = key;
+        }
+    }
+    for (int i = 0; i < count; ++i) trackHeld(t, events[i]);
+    cfg.instrument->render(t.l.data(), t.r.data(), n, events, count);
 }
 
 void RenderGraph::renderAudio(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n) noexcept {
@@ -184,7 +249,13 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     if (cfg) {
         if (withRegions) {
             if (t.kind == TrackKind::Audio) renderAudio(t, *cfg, blockStart, n);
+            else if (t.kind == TrackKind::Instrument && cfg->instrument) renderPluginInstrument(t, *cfg, blockStart, n, true);
             else if (t.kind == TrackKind::Instrument) renderInstrument(t, *cfg, blockStart, n);
+        } else if (t.kind == TrackKind::Instrument && cfg->instrument) {  // stopped: the live notes, the stop messages and whatever still rings
+            if (t.tailFrames > 0 || t.liveCount > 0 || t.stopPending) {
+                renderPluginInstrument(t, *cfg, blockStart, n, false);
+                t.tailFrames = std::max(0, t.tailFrames - n);
+            }
         } else if (t.kind == TrackKind::Instrument) {  // stopped: only the notes played live
             t.synth.setParams(cfg->synthParams);
             t.synth.render(l, r, n);
@@ -272,6 +343,11 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
 bool RenderGraph::liveNote(const Uuid& track, bool on, std::uint8_t note, std::uint8_t velocity) noexcept {
     TrackNode* n = find(track);
     if (!n || n->kind != TrackKind::Instrument) return false;
+    if (n->config && n->config->instrument) {
+        if (n->liveCount < 64) n->live[n->liveCount++] = MidiEvent{0, static_cast<std::uint8_t>(on ? 0x90 : 0x80), note, on ? velocity : std::uint8_t{0}};
+        n->tailFrames = n->tailMax;
+        return true;
+    }
     if (on) n->synth.noteOn(note, velocity);
     else n->synth.noteOff(note);
     return true;
@@ -280,7 +356,7 @@ bool RenderGraph::liveNote(const Uuid& track, bool on, std::uint8_t note, std::u
 bool RenderGraph::liveNeeded() const noexcept {
     for (int i = 0; i < count_; ++i) {
         const TrackNode& t = *nodes_[static_cast<std::size_t>(i)];
-        if (t.monitorL >= 0 || t.synth.active()) return true;
+        if (t.monitorL >= 0 || t.synth.active() || t.tailFrames > 0 || t.liveCount > 0 || t.stopPending) return true;
     }
     return false;
 }

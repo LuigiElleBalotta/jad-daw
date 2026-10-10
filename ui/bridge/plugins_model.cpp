@@ -49,20 +49,25 @@ void PluginsModel::setSupported(bool supported) {
 
 void PluginsModel::rebuild() {
     knownIds_.clear();
-    QMap<QString, QList<PluginRow>> byVendor;  // QMap keeps the vendors sorted
+    QMap<QString, QList<PluginRow>> effects, instruments;  // QMap keeps the manufacturers sorted
     for (const PluginRow& r : rows_) {
         if (r.status != "ok") continue;
         knownIds_.push_back(r.id);
-        byVendor[r.vendor.isEmpty() ? QString("Other") : r.vendor].append(r);
+        (r.instrument ? instruments : effects)[r.vendor.isEmpty() ? QString("Other") : r.vendor].append(r);
     }
-    menu_.clear();
-    for (auto it = byVendor.begin(); it != byVendor.end(); ++it) {
-        QList<PluginRow> list = it.value();
-        std::sort(list.begin(), list.end(), [](const PluginRow& a, const PluginRow& b) { return a.name.toLower() < b.name.toLower(); });
-        QVariantList plugins;
-        for (const PluginRow& p : list) plugins.append(QVariantMap{{"id", p.id}, {"name", p.name}});
-        menu_.append(QVariantMap{{"vendor", it.key()}, {"plugins", plugins}});
-    }
+    const auto build = [](QMap<QString, QList<PluginRow>>& byVendor) {
+        QVariantList menu;
+        for (auto it = byVendor.begin(); it != byVendor.end(); ++it) {
+            QList<PluginRow> list = it.value();
+            std::sort(list.begin(), list.end(), [](const PluginRow& a, const PluginRow& b) { return a.name.toLower() < b.name.toLower(); });
+            QVariantList plugins;
+            for (const PluginRow& p : list) plugins.append(QVariantMap{{"id", p.id}, {"name", p.name}});
+            menu.append(QVariantMap{{"vendor", it.key()}, {"plugins", plugins}});
+        }
+        return menu;
+    };
+    menu_ = build(effects);
+    instrumentMenu_ = build(instruments);
 }
 
 }  // namespace jad

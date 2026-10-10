@@ -47,6 +47,24 @@ PluginDescriptor testPlugin() {
     return d;
 }
 
+PluginDescriptor testSynth() {
+    ensureJuce();
+    juce::VST3PluginFormat format;
+    juce::OwnedArray<juce::PluginDescription> found;
+    const juce::File bundle = juce::File(LPC_TEST_SYNTH_VST3_DIR).getChildFile("LPC Test Synth.vst3");
+    format.findAllTypesForFile(found, bundle.getFullPathName());
+    REQUIRE(found.size() == 1);
+    REQUIRE(found[0]->isInstrument);
+    PluginDescriptor d;
+    d.id = "vst3:00000000000000000000000000000002";
+    d.name = found[0]->name.toStdString();
+    d.vendor = found[0]->manufacturerName.toStdString();
+    d.path = bundle.getFullPathName().toStdString();
+    d.native = found[0]->createXml()->toString().toStdString();
+    d.instrument = true;
+    return d;
+}
+
 // JUCE_MODAL_LOOPS_PERMITTED is 0, so MessageManager::runDispatchLoopUntil does not exist: run the thread's Win32 queue, which is
 // where JUCE's hidden message window gets its messages.
 void pump(int ms) {
@@ -302,4 +320,39 @@ TEST_CASE("juce host: identical inserts on two tracks never share an instance", 
     REQUIRE(b);
     REQUIRE(a != b);
     REQUIRE(host.acquire(one, refOf(d), 48000.0, 512) == a);  // and they stay where they are
+}
+
+TEST_CASE("juce host: a VST3 instrument sounds the note events at their offsets", "[juce][plugin][instrument]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testSynth();
+    host.setCatalogue({d});
+    const InsertSlot slot{Uuid{3, 1}, kInstrumentSlot};
+    auto inst = host.acquireInstrument(slot, refOf(d), 48000.0, 512);
+    REQUIRE(inst);
+    std::vector<float> l(256, 1.0f), r(256, 1.0f);
+    const audio::MidiEvent on{100, 0x90, 69, 127};
+    inst->render(l.data(), r.data(), 256, &on, 1);
+    for (int i = 0; i < 100; ++i) REQUIRE(l[static_cast<size_t>(i)] == 0.0f);                    // silence before the note
+    float peak = 0.0f;
+    for (int i = 100; i < 256; ++i) peak = std::max(peak, std::abs(l[static_cast<size_t>(i)]));
+    REQUIRE(peak > 0.05f);                                                                         // then the tone, on both channels
+    REQUIRE(r[200] == l[200]);
+
+    const audio::MidiEvent off{20, 0x80, 69, 0};
+    inst->render(l.data(), r.data(), 256, &off, 1);
+    REQUIRE(std::abs(l[5]) > 0.0f);                                                                // still sounding until the note-off
+    for (int i = 21; i < 256; ++i) REQUIRE(l[static_cast<size_t>(i)] == 0.0f);                    // silent after it
+    const auto state = host.captureState(slot);                                                    // its state is saved like an insert's
+    REQUIRE(state);
+    REQUIRE(validBase64(*state));
+}
+
+TEST_CASE("juce host: the instrument slot keeps its instance while id and state stay", "[juce][plugin][instrument]") {
+    JucePluginHost host;
+    const PluginDescriptor synth = testSynth();
+    host.setCatalogue({synth});
+    const Uuid track{3, 2};
+    auto inst = host.acquireInstrument(InsertSlot{track, kInstrumentSlot}, refOf(synth), 48000.0, 512);
+    REQUIRE(inst);
+    REQUIRE(host.acquireInstrument(InsertSlot{track, kInstrumentSlot}, refOf(synth), 48000.0, 512) == inst);  // reused while id and state stay
 }

@@ -15,3 +15,21 @@ target_link_libraries(lpc_test_gain PRIVATE
     juce::juce_audio_utils
     juce::juce_recommended_config_flags)
 set(LPC_TEST_VST3_DIR "${CMAKE_CURRENT_BINARY_DIR}/lpc_test_gain_artefacts/$<CONFIG>/VST3" PARENT_SCOPE)
+
+juce_add_plugin(lpc_test_synth
+    PRODUCT_NAME "LPC Test Synth"
+    COMPANY_NAME "JAD"
+    PLUGIN_MANUFACTURER_CODE JadD
+    PLUGIN_CODE TsyA
+    FORMATS VST3
+    IS_SYNTH TRUE
+    NEEDS_MIDI_INPUT TRUE
+    NEEDS_MIDI_OUTPUT FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE)
+target_sources(lpc_test_synth PRIVATE TestSynthPlugin.cpp)
+target_compile_definitions(lpc_test_synth PUBLIC
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
+target_link_libraries(lpc_test_synth PRIVATE
+    juce::juce_audio_utils
+    juce::juce_recommended_config_flags)
+set(LPC_TEST_SYNTH_VST3_DIR "${CMAKE_CURRENT_BINARY_DIR}/lpc_test_synth_artefacts/$<CONFIG>/VST3" PARENT_SCOPE)

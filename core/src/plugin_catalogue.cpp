@@ -14,7 +14,7 @@ namespace lpc {
 namespace {
 
 nlohmann::json toJson(const PluginDescriptor& d) {
-    return {{"id", d.id}, {"name", d.name}, {"vendor", d.vendor}, {"version", d.version}, {"path", d.path}, {"native", d.native}};
+    return {{"id", d.id}, {"name", d.name}, {"vendor", d.vendor}, {"version", d.version}, {"path", d.path}, {"native", d.native}, {"instrument", d.instrument}};
 }
 PluginDescriptor descriptorFrom(const nlohmann::json& j) {
     PluginDescriptor d;
@@ -24,6 +24,7 @@ PluginDescriptor descriptorFrom(const nlohmann::json& j) {
     j.at("version").get_to(d.version);
     j.at("path").get_to(d.path);
     j.at("native").get_to(d.native);
+    d.instrument = j.value("instrument", false);
     return d;
 }
 
@@ -61,7 +62,7 @@ PluginCatalogue PluginCatalogue::load(const std::filesystem::path& file) {
         std::ifstream in(file, std::ios::binary);
         if (!in) return c;
         const nlohmann::json doc = nlohmann::json::parse(in);
-        if (doc.at("version").get<int>() != 1) return c;
+        if (doc.at("version").get<int>() != 2) return c;  // version 1 had no instruments: it is scanned again
         std::vector<ScanEntry> entries;
         for (const auto& j : doc.at("entries")) {
             ScanEntry e;
@@ -92,7 +93,7 @@ void PluginCatalogue::save(const std::filesystem::path& file) const {
                            {"reason", e.reason},
                            {"descriptors", descriptors}});
     }
-    const nlohmann::json doc = {{"version", 1}, {"entries", entries}};
+    const nlohmann::json doc = {{"version", 2}, {"entries", entries}};
     std::error_code ec;
     if (file.has_parent_path()) std::filesystem::create_directories(file.parent_path(), ec);
     std::filesystem::path tmp = file;

@@ -144,6 +144,7 @@ ScanEntry PluginScanner::scanFile(const FileInfo& file) {
                 pd.vendor = d.at("vendor").get<std::string>();
                 pd.version = d.at("version").get<std::string>();
                 pd.native = d.at("native").get<std::string>();
+                pd.instrument = d.value("instrument", false);
                 pd.path = file.path;
                 entry.descriptors.push_back(std::move(pd));
             }

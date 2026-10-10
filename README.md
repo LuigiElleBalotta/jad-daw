@@ -132,7 +132,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **MIDI:** File > Preferences > MIDI chooses the input devices; the notes play the selected (or armed) instrument track, also with the transport
   stopped, and are recorded into a MIDI region on the armed instrument tracks (after the count-in). Window > Show Musical Typing opens a keyboard
   window (A S D F G H J K L are the white keys, W E T Y U O P the black ones, Z/X the octave, C/V the velocity). The instrument slot of a strip
-  chooses Sine or Synth (waveform, ADSR, filter); a double click on it opens the Synth's editor. Hosting VST3 instruments is not done yet.
+  chooses Sine or Synth (waveform, ADSR, filter); a double click on it opens the Synth's editor. VST3 instruments are hosted too: the slot menu lists them by manufacturer, the notes of
+  the regions and of the live keyboard reach the plug-in with sample-accurate offsets, the stop sends Logic's controller resets, the plug-in latency is compensated, a double click opens
+  its window and its state is saved with the project (one undo step when the window closes). A missing plug-in leaves the track silent.
 - **Audio editing:** fades (handles at the top corners of a selected audio region), Edit > Audio (Normalize, Reverse, Change Gain, Time Stretch, Pitch Shift,
   Strip Silence: each makes a new file in the project and is one undo step), View > Zoom > Waveform Zoom, and in the Editors area the Track tab (the region's
   waveform, drag to select, Trim to Selection) and the File tab (the whole file with the region marked). Region waveforms show only the region's own part of the file.
@@ -158,7 +160,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 Known limits: the macOS bundle has no icon yet, several
 buttons use text labels because there are no icons for them yet, and the panels behind Quick Help, Editors and Loops do
 not exist yet. The engine has one effect (gain) and one synth (sine), so the built-in patches and Smart Controls are
-small; plug-ins are VST3 effects only (no instruments, MIDI, sidechain or automation of plug-in parameters), stereo in and out, Windows only, and a plug-in that crashes while playing takes the app down; changes made inside a plug-in window become one undo step when it closes. A project with a track name that is empty, longer than 64 characters or has
+small; plug-ins are VST3 effects and instruments with a stereo or mono output (no multi-output, sidechain or automation of plug-in parameters), stereo in and out, Windows only, and a plug-in that crashes while playing takes the app down; changes made inside a plug-in window become one undo step when it closes. A project with a track name that is empty, longer than 64 characters or has
 control characters, or with an unknown track colour is rejected on load.
 
 Design: `docs/superpowers/specs/2026-10-07-core-engine-design.md`, UI: `docs/superpowers/specs/2026-10-07-ui-shell-design.md` `docs/superpowers/specs/2026-10-08-ui-a-frame-design.md` and `docs/superpowers/specs/2026-10-08-ui-b-panels-design.md`. Third-party licences: `THIRD_PARTY.md`.

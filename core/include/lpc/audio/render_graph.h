@@ -87,7 +87,8 @@ struct AutoPoint {
 };
 
 struct TrackConfig {
-    SynthParams synthParams;            // an instrument track: how its synth sounds
+    SynthParams synthParams;            // an instrument track: how its built-in synth sounds
+    std::shared_ptr<IInstrument> instrument;  // a plug-in instrument (the notes go to it); null: the built-in synth sounds
     std::vector<AutoPoint> volumeAuto;  // linear gain
     std::vector<AutoPoint> panAuto;
     std::vector<RegionPlayback> regions;
@@ -110,6 +111,13 @@ struct TrackNode {
     TrackConfig* config;  // owned; replaced through SetConfig messages
     std::vector<float> l, r;
     Synth synth;
+    // A plug-in instrument (config->instrument): the notes held, what to send when the music stops, live notes waiting for the next block, and how
+    // long the stopped graph keeps rendering so that tails ring out.
+    std::uint64_t held[2] = {0, 0};
+    bool stopPending = false;
+    int tailFrames = 0, tailMax = 0;
+    MidiEvent live[64];
+    int liveCount = 0;
     int monitorL = -1, monitorR = -1;  // the input channels heard on this track (-1: none)
     float smoothL = 1.0f;
     float blockPeak = 0.0f;  // after the fader, this block
@@ -155,6 +163,7 @@ private:
     void processNode(TrackNode& t, std::int64_t blockStart, int n, bool anySolo, bool withRegions) noexcept;
     void renderAudio(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n) noexcept;
     void renderInstrument(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n) noexcept;
+    void renderPluginInstrument(TrackNode& t, const TrackConfig& cfg, std::int64_t blockStart, int n, bool withRegions) noexcept;
     static void deleteNode(void* p);
     static void deleteConfig(void* p);
 

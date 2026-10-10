@@ -53,10 +53,6 @@ int main(int argc, char** argv) {
     nlohmann::json descriptors = nlohmann::json::array();
     std::string firstProblem;
     for (const juce::PluginDescription* desc : found) {
-        if (desc->isInstrument) {
-            if (firstProblem.empty()) firstProblem = "instruments are not supported yet";
-            continue;
-        }
         juce::String error;
         std::unique_ptr<juce::AudioPluginInstance> instance = formats.createPluginInstance(*desc, 48000.0, 512, error);
         if (!instance) {
@@ -64,19 +60,38 @@ int main(int argc, char** argv) {
             continue;
         }
         juce::AudioProcessor::BusesLayout layout;
-        for (int i = 0; i < instance->getBusCount(true); ++i)
-            layout.inputBuses.add(i == 0 ? juce::AudioChannelSet::stereo() : juce::AudioChannelSet::disabled());
-        for (int i = 0; i < instance->getBusCount(false); ++i)
-            layout.outputBuses.add(i == 0 ? juce::AudioChannelSet::stereo() : juce::AudioChannelSet::disabled());
-        if (instance->getBusCount(true) < 1 || instance->getBusCount(false) < 1 || !instance->checkBusesLayoutSupported(layout)) {
-            if (firstProblem.empty()) firstProblem = "unsupported layout (needs stereo in and out)";
-            continue;
+        if (desc->isInstrument) {  // no audio input needed; a stereo or mono first output
+            bool ok = false;
+            for (const juce::AudioChannelSet& main : {juce::AudioChannelSet::stereo(), juce::AudioChannelSet::mono()}) {
+                layout.inputBuses.clear();
+                layout.outputBuses.clear();
+                for (int i = 0; i < instance->getBusCount(true); ++i) layout.inputBuses.add(juce::AudioChannelSet::disabled());
+                for (int i = 0; i < instance->getBusCount(false); ++i) layout.outputBuses.add(i == 0 ? main : juce::AudioChannelSet::disabled());
+                if (instance->getBusCount(false) >= 1 && instance->checkBusesLayoutSupported(layout)) {
+                    ok = true;
+                    break;
+                }
+            }
+            if (!ok) {
+                if (firstProblem.empty()) firstProblem = "unsupported layout (an instrument needs a stereo or mono output)";
+                continue;
+            }
+        } else {
+            for (int i = 0; i < instance->getBusCount(true); ++i)
+                layout.inputBuses.add(i == 0 ? juce::AudioChannelSet::stereo() : juce::AudioChannelSet::disabled());
+            for (int i = 0; i < instance->getBusCount(false); ++i)
+                layout.outputBuses.add(i == 0 ? juce::AudioChannelSet::stereo() : juce::AudioChannelSet::disabled());
+            if (instance->getBusCount(true) < 1 || instance->getBusCount(false) < 1 || !instance->checkBusesLayoutSupported(layout)) {
+                if (firstProblem.empty()) firstProblem = "unsupported layout (needs stereo in and out)";
+                continue;
+            }
         }
         descriptors.push_back({{"id", md5Id(*desc)},
                                {"name", desc->name.toStdString()},
                                {"vendor", desc->manufacturerName.toStdString()},
                                {"version", desc->version.toStdString()},
-                               {"native", desc->createXml()->toString().toStdString()}});
+                               {"native", desc->createXml()->toString().toStdString()},
+                               {"instrument", desc->isInstrument}});
     }
     if (descriptors.empty()) return fail(firstProblem.empty() ? "no usable plug-in" : firstProblem);
     std::cout << nlohmann::json{{"ok", true}, {"descriptors", descriptors}}.dump() << std::endl;

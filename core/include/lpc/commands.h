@@ -51,6 +51,7 @@ CommandPtr makeAddSend(Uuid trackId, Send send, int index = -1);
 CommandPtr makeRemoveSend(Uuid sendId);
 CommandPtr makeSetInserts(Uuid trackId, std::vector<ProcessorRef> inserts);
 CommandPtr makeSetPatchId(Uuid trackId, std::string patchId);          // "" clears the patch
+CommandPtr makeSetInstrumentState(Uuid trackId, std::string state);  // the saved state (base64) of a plug-in instrument
 CommandPtr makeSetInstrument(Uuid trackId, ProcessorRef instrument);   // instrument tracks only
 CommandPtr makeSetOutput(Uuid trackId, Uuid output);                   // null output = master
 struct SendPatch {

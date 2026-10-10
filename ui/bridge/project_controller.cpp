@@ -1410,34 +1410,44 @@ void ProjectController::setOverlapMidi(const QString& mode) {
     emit recordingChanged();
 }
 
+// A track made like `base` (instrument, channel strip without inserts and sends, input, colour) with no regions, next to it. The command is added to `commands`.
+QString ProjectController::cloneTrackCommand(const QString& base, const QString& name, int after, nlohmann::json& commands) {
+    const auto baseId = lpc::Uuid::parse(base.toStdString());
+    if (!baseId || !host_) return {};
+    std::optional<lpc::Track> source = host_->read([id = *baseId](const lpc::Project& p) -> std::optional<lpc::Track> {
+        const lpc::Track* t = p.findTrack(id);
+        return t ? std::optional<lpc::Track>(*t) : std::nullopt;
+    }).get();
+    if (!source) return {};
+    int at = -1, i = 0;
+    for (const TrackRow& t : allRows_) {
+        if (t.id == base) at = i;
+        ++i;
+    }
+    lpc::Track track = *source;
+    const lpc::Uuid id = lpc::Uuid::random();
+    track.id = id;
+    track.name = name.toStdString();
+    track.regions.clear();
+    track.automation.clear();
+    track.freeze.reset();
+    track.strip.inserts.clear();
+    track.strip.sends.clear();
+    track.strip.mute = track.strip.solo = false;
+    commands.push_back({{"type", "add_track"}, {"index", at < 0 ? -1 : at + 1 + after}, {"track", track}});
+    return QString::fromStdString(id.toString());
+}
+
 QString ProjectController::trackForPass(const QString& base, int pass, QMap<QString, QStringList>& made, nlohmann::json& commands) {
     if (pass <= 0) return base;
     QStringList& list = made[base];
+    QString baseName;
+    for (const TrackRow& t : allRows_)
+        if (t.id == base) baseName = t.name;
     while (list.size() < pass) {
-        const auto baseId = lpc::Uuid::parse(base.toStdString());
-        if (!baseId) return base;
-        std::optional<lpc::Track> source = host_->read([id = *baseId](const lpc::Project& p) -> std::optional<lpc::Track> {
-            const lpc::Track* t = p.findTrack(id);
-            return t ? std::optional<lpc::Track>(*t) : std::nullopt;
-        }).get();
-        if (!source) return base;
-        int at = -1, i = 0;
-        for (const TrackRow& t : allRows_) {
-            if (t.id == base) at = i;
-            ++i;
-        }
-        lpc::Track track = *source;
-        const lpc::Uuid id = lpc::Uuid::random();
-        track.id = id;
-        track.name = source->name + " (" + std::to_string(list.size() + 2) + ")";
-        track.regions.clear();
-        track.automation.clear();
-        track.freeze.reset();
-        track.strip.inserts.clear();
-        track.strip.sends.clear();
-        track.strip.mute = track.strip.solo = false;
-        commands.push_back({{"type", "add_track"}, {"index", at < 0 ? -1 : at + 1 + static_cast<int>(list.size())}, {"track", track}});
-        list << QString::fromStdString(id.toString());
+        const QString id = cloneTrackCommand(base, QStringLiteral("%1 (%2)").arg(baseName).arg(list.size() + 2), static_cast<int>(list.size()), commands);
+        if (id.isEmpty()) return base;
+        list << id;
     }
     return list[pass - 1];
 }

@@ -1823,6 +1823,93 @@ private slots:
         QCOMPARE(c.snap(), QString("smart"));
         c.setSnap("quarter");
     }
+    void fillCutAndInsertTimeBetweenLocatorsMoveTheRegionsAndUndoInOneStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        const QString track = c.tracks()->trackIdAt(0);
+        QStringList ids;
+        for (double start : {0.0, 4.0, 10.0}) {
+            c.createRegion(track, start, 2);
+            QTRY_COMPARE(c.regions()->rowCount(), ids.size() + 1);
+            for (int i = 0; i < c.regions()->rowCount(); ++i) if (!ids.contains(c.regions()->regionIdAt(i))) { ids << c.regions()->regionIdAt(i); break; }
+        }
+        const QString a = ids[0], b = ids[1], d = ids[2];
+        c.selectRegions({a, b}, "replace");
+        c.setLoopRange(0, 8);
+        c.fillWithinLocators();                                      // a grows up to b; b, the last one, stays
+        QTRY_COMPARE(c.regions()->find(a)->lengthBeats, 4.0);
+        QCOMPARE(c.regions()->find(b)->lengthBeats, 2.0);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(a)->lengthBeats, 2.0);
+        c.selectRegions({}, "replace");
+        c.setLoopRange(2, 5);                                        // the section [2, 5) goes
+        c.cutSectionBetweenLocators();
+        QTRY_COMPARE(c.regions()->find(d)->startBeats, 7.0);         // after it: three beats to the left
+        QCOMPARE(c.regions()->find(a)->startBeats, 0.0);             // before it: untouched
+        QCOMPARE(c.regions()->find(b)->startBeats, 2.0);             // [4, 6) loses its first beat and closes up to the locator
+        QCOMPARE(c.regions()->find(b)->lengthBeats, 1.0);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(d)->startBeats, 10.0);
+        QCOMPARE(c.regions()->find(b)->startBeats, 4.0);
+        c.setLoopRange(1, 3);                                        // room of two beats at 1: a [0, 2) is cut, its right part moves
+        c.insertSilenceBetweenLocators();
+        QTRY_COMPARE(c.regions()->rowCount(), 4);
+        QCOMPARE(c.regions()->find(d)->startBeats, 12.0);
+        QCOMPARE(c.regions()->find(b)->startBeats, 6.0);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), 3);
+    }
+    void midiEventsAreDeletedSeparatedByPitchAndRegionsMoveToTheFocusedTrackOrJoinPerTrack() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 2);
+        const QString t0 = c.tracks()->trackIdAt(0), t1 = c.tracks()->trackIdAt(1);
+        c.createRegion(t0, 0, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString r = c.regions()->regionIdAt(0);
+        auto note = [](double start, int pitch, int velocity) { return QVariantMap{{"start", start}, {"length", 0.5}, {"note", pitch}, {"velocity", velocity}}; };
+        c.setRegionNotes(r, {note(0, 60, 100), note(0, 60, 90), note(1, 62, 100)});
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        c.selectRegions({r}, "replace");
+        c.deleteMidiEvents("duplicates");                            // the same pitch at the same place twice: one stays
+        QTRY_COMPARE(c.regionNotes(r).size(), 2);
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        c.setLoopRange(0.5, 2);
+        c.deleteMidiEvents("outside");                               // only the note at 1 starts inside
+        QTRY_COMPARE(c.regionNotes(r).size(), 1);
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        c.deleteMidiEvents("inside");
+        QTRY_COMPARE(c.regionNotes(r).size(), 2);
+        c.undo();
+        QTRY_COMPARE(c.regionNotes(r).size(), 3);
+        c.separateMidiByPitch();                                     // 60 and 62: two new tracks, the region goes
+        QTRY_COMPARE(c.tracks()->rowCount(), 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        QVERIFY(c.regions()->find(r) == nullptr);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), 2);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        c.selectRegions({r}, "replace");
+        c.selectTrack(t1, "replace");
+        c.moveSelectedToFocusedTrack();
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        QTRY_COMPARE(c.regions()->find(c.regions()->regionIdAt(0))->trackId, t1);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(c.regions()->regionIdAt(0))->trackId, t0);
+        c.createRegion(t0, 4, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 2);
+        c.selectRegions({c.regions()->regionIdAt(0), c.regions()->regionIdAt(1)}, "replace");
+        c.joinPerTracks();
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+    }
     void templatesAreSavedListedAndOpenedAsNewProjects() {
         TempDir dir;
         jad::ProjectController c(false);

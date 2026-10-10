@@ -479,6 +479,18 @@ public:
     Q_INVOKABLE void setLocatorsBySelection(bool rounded);
     // Navigate > Auto Set Locators: the cycle is set to the selected regions, or to everything on the tracks when none is selected.
     Q_INVOKABLE void autoSetLocators();
+    // Edit > Trim > Fill within Locators: the selected regions inside the locators are lengthened up to the next selected region of their track (the last one stays).
+    Q_INVOKABLE void fillWithinLocators();
+    // Edit > Cut/Insert Time: the section between the locators is cut out (the rest moves left) or made room for with silence (the rest moves right). The
+    // selected regions only, or all of them when none is selected. Markers, tempo and automation stay where they are.
+    Q_INVOKABLE void cutSectionBetweenLocators();
+    Q_INVOKABLE void insertSilenceBetweenLocators();
+    // Edit > Delete MIDI Events: kind "duplicates" (same position and pitch: one stays), "inside" or "outside" the locators; in the selected MIDI regions (all when none).
+    Q_INVOKABLE void deleteMidiEvents(const QString& kind);
+    // Edit > Separate MIDI Events > by Note Pitch: each pitch of the selected MIDI regions goes to a region of its own on a new track made like the first.
+    Q_INVOKABLE void separateMidiByPitch();
+    Q_INVOKABLE void moveSelectedToFocusedTrack();  // Edit > Move > To Focused Track: the selected track; the regions keep their time
+    Q_INVOKABLE void joinPerTracks();               // Edit > Bounce and Join > Join per Tracks
     Q_INVOKABLE void selectAllTracks();  // Edit > Select Tracks
     Q_INVOKABLE void moveLocators(int direction);
     Q_INVOKABLE void deleteMarkerAtPlayhead();
@@ -964,6 +976,7 @@ private:
     bool musicalGrid_ = false;
     QString overlapAudio_ = QStringLiteral("takes"), overlapMidi_ = QStringLiteral("takes");
     // The track that pass `pass` (0 = the first) of a cycle recording on `base` is put on: `base` itself, or a track made like it (commands are added to make it).
+    QString cloneTrackCommand(const QString& base, const QString& name, int after, nlohmann::json& commands);
     QString trackForPass(const QString& base, int pass, QMap<QString, QStringList>& made, nlohmann::json& commands);
     // Create Tracks and Mute: the tracks of the earlier passes do not play.
     void mutePreviousPasses(const QMap<QString, QStringList>& made, nlohmann::json& commands) const;

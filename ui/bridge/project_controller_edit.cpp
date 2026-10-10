@@ -14,6 +14,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <set>
 #include <filesystem>
 #include <cmath>
 #include <limits>
@@ -3180,5 +3181,212 @@ void ProjectController::slipSelectedRegions(int direction, bool rotate) {
     }
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
+
+void ProjectController::fillWithinLocators() {
+    if (!host_ || loopEndBeats_ <= loopStartBeats_) return;
+    std::map<QString, std::vector<const RegionRow*>> byTrack;
+    for (const RegionRow* r : selectedRegionRows())
+        if (r->startBeats >= loopStartBeats_ - kEps && r->startBeats + r->lengthBeats <= loopEndBeats_ + kEps) byTrack[r->trackId].push_back(r);
+    nlohmann::json commands = nlohmann::json::array();
+    for (auto& [track, list] : byTrack) {
+        std::sort(list.begin(), list.end(), [](const RegionRow* a, const RegionRow* b) { return a->startBeats < b->startBeats; });
+        for (std::size_t i = 0; i + 1 < list.size(); ++i) {
+            const double gap = list[i + 1]->startBeats - (list[i]->startBeats + list[i]->lengthBeats);
+            if (gap > kEps) commands.push_back(resizeCommand(*list[i], list[i]->startBeats, list[i + 1]->startBeats - list[i]->startBeats));
+        }
+    }
+    if (commands.empty()) {
+        emit notice("No gaps between the selected regions inside the locators");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::cutSectionBetweenLocators() {
+    if (!host_ || loopEndBeats_ <= loopStartBeats_) return;
+    const double from = loopStartBeats_, to = loopEndBeats_, width = to - from;
+    std::vector<const RegionRow*> targets = selectedRegionRows();
+    if (targets.empty())
+        for (const RegionRow& r : regionRows_) targets.push_back(&r);
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow* r : targets) {
+        const double s = r->startBeats, e = s + r->lengthBeats;
+        if (e <= from + kEps) continue;                                              // before the section
+        if (s >= to - kEps) {                                                        // after it: moves left
+            commands.push_back(moveCommand(*r, s - width));
+        } else if (s >= from - kEps && e <= to + kEps) {                             // inside it: gone
+            commands.push_back({{"type", "remove_region"}, {"regionId", r->id.toStdString()}});
+        } else if (s < from - kEps && e <= to + kEps) {                              // its end is in the section
+            commands.push_back(resizeCommand(*r, s, from - s));
+        } else if (s >= from - kEps) {                                               // its start is in the section: what is left of it closes up to the left locator
+            commands.push_back(resizeCommand(*r, to, e - to));
+            commands.push_back(moveCommand(*r, from));
+        } else {                                                                     // it spans the section: two regions, the right one closes up
+            const QString right = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            commands.push_back({{"type", "split_region"}, {"regionId", r->id.toStdString()}, {"at", regionPosition(*r, from)}, {"newRegionId", right.toStdString()}});
+            RegionRow part = *r;
+            part.id = right;
+            part.startBeats = from;
+            part.lengthBeats = e - from;
+            commands.push_back(resizeCommand(part, to, e - to));
+            part.startBeats = to;
+            part.lengthBeats = e - to;
+            commands.push_back(moveCommand(part, from));
+        }
+    }
+    if (commands.empty()) {
+        emit notice("Nothing to cut");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::insertSilenceBetweenLocators() {
+    if (!host_ || loopEndBeats_ <= loopStartBeats_) return;
+    const double from = loopStartBeats_, width = loopEndBeats_ - loopStartBeats_;
+    std::vector<const RegionRow*> targets = selectedRegionRows();
+    if (targets.empty())
+        for (const RegionRow& r : regionRows_) targets.push_back(&r);
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow* r : targets) {
+        const double s = r->startBeats, e = s + r->lengthBeats;
+        if (e <= from + kEps) continue;                                              // before the left locator
+        if (s >= from - kEps) {
+            commands.push_back(moveCommand(*r, s + width));
+        } else {                                                                     // it crosses the left locator: cut there, the right part moves
+            const QString right = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            commands.push_back({{"type", "split_region"}, {"regionId", r->id.toStdString()}, {"at", regionPosition(*r, from)}, {"newRegionId", right.toStdString()}});
+            RegionRow part = *r;
+            part.id = right;
+            part.startBeats = from;
+            part.lengthBeats = e - from;
+            commands.push_back(moveCommand(part, from + width));
+        }
+    }
+    if (commands.empty()) {
+        emit notice("Nothing to move");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::deleteMidiEvents(const QString& kind) {
+    if (!host_ || (kind != "duplicates" && kind != "inside" && kind != "outside")) return;
+    if (kind != "duplicates" && loopEndBeats_ <= loopStartBeats_) {
+        emit notice("Set the locators first");
+        return;
+    }
+    std::vector<const RegionRow*> targets = selectedRegionRows();
+    if (targets.empty())
+        for (const RegionRow& r : regionRows_) targets.push_back(&r);
+    const std::int64_t left = static_cast<std::int64_t>(std::llround(loopStartBeats_ * lpc::kPPQ)), right = static_cast<std::int64_t>(std::llround(loopEndBeats_ * lpc::kPPQ));
+    nlohmann::json commands = nlohmann::json::array();
+    int removed = 0;
+    for (const RegionRow* r : targets) {
+        if (r->audio) continue;
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded() || !region.contains("notes")) continue;
+        const std::int64_t base = region.value("start", std::int64_t{0});
+        std::set<std::pair<std::int64_t, int>> seen;
+        nlohmann::json kept = nlohmann::json::array();
+        for (const auto& n : region["notes"]) {
+            const std::int64_t start = n.value("start", std::int64_t{0});
+            const int note = n.value("note", 0);
+            bool drop = false;
+            if (kind == "duplicates") drop = !seen.insert({start, note}).second;
+            else {
+                const std::int64_t at = base + start;
+                const bool in = at >= left && at < right;
+                drop = kind == "inside" ? in : !in;
+            }
+            if (drop) ++removed;
+            else kept.push_back(n);
+        }
+        if (kept.size() == region["notes"].size()) continue;
+        region["notes"] = kept;
+        commands.push_back({{"type", "replace_region"}, {"region", region}});
+    }
+    if (commands.empty()) {
+        emit notice("No MIDI events to delete");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+    emit notice(QString("Deleted %1 MIDI event%2").arg(removed).arg(removed == 1 ? "" : "s"));
+}
+
+void ProjectController::separateMidiByPitch() {
+    if (!host_) return;
+    nlohmann::json commands = nlohmann::json::array();
+    static const char* const names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    QMap<QString, int> madeFor;  // the tracks made next to each source track
+    int regions = 0;
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (r->audio) continue;
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded() || !region.contains("notes") || region["notes"].empty()) continue;
+        std::map<int, nlohmann::json> byPitch;
+        for (const auto& n : region["notes"]) byPitch[n.value("note", 0)].push_back(n);
+        if (byPitch.size() < 2) continue;
+        QString trackName;
+        for (const TrackRow& t : allRows_)
+            if (t.id == r->trackId) trackName = t.name;
+        for (const auto& [pitch, notes] : byPitch) {
+            const QString name = QStringLiteral("%1 %2%3").arg(trackName, names[pitch % 12]).arg(pitch / 12 - 2);
+            const QString track = cloneTrackCommand(r->trackId, name, madeFor[r->trackId]++, commands);
+            if (track.isEmpty()) continue;
+            nlohmann::json part = region;
+            part["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+            part["notes"] = notes;
+            part["controls"] = nlohmann::json::array();
+            part.erase("takeGroup");
+            commands.push_back({{"type", "add_region"}, {"trackId", track.toStdString()}, {"index", -1}, {"region", part}});
+            ++regions;
+        }
+        commands.push_back({{"type", "remove_region"}, {"regionId", r->id.toStdString()}});
+    }
+    if (commands.empty()) {
+        emit notice("Select a MIDI region with more than one pitch");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+    emit notice(QString("Separated into %1 region%2").arg(regions).arg(regions == 1 ? "" : "s"));
+}
+
+void ProjectController::moveSelectedToFocusedTrack() {
+    if (!host_ || selectedTracks_.isEmpty()) return;
+    const QString target = selectedTracks_.first();
+    QString kind;
+    for (const TrackRow& t : allRows_)
+        if (t.id == target && !t.master) kind = t.kind;
+    if (kind.isEmpty()) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (r->trackId == target || !fitsTrack(*r, kind)) continue;
+        nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+        if (region.is_discarded()) continue;
+        commands.push_back({{"type", "remove_region"}, {"regionId", r->id.toStdString()}});
+        commands.push_back({{"type", "add_region"}, {"trackId", target.toStdString()}, {"index", -1}, {"region", region}});
+    }
+    if (commands.empty()) {
+        emit notice("Select regions that fit the selected track");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::joinPerTracks() {
+    if (!host_) return;
+    std::map<QString, nlohmann::json> byTrack;
+    for (const RegionRow* r : selectedRegionRows()) byTrack[r->trackId].push_back(r->id.toStdString());
+    nlohmann::json commands = nlohmann::json::array();
+    for (const auto& [track, ids] : byTrack)
+        if (ids.size() >= 2) commands.push_back({{"type", "join_regions"}, {"regionIds", ids}});
+    if (commands.empty()) {
+        emit notice("Select at least two regions on a track to join");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 
 }  // namespace jad

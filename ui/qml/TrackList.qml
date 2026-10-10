@@ -85,6 +85,7 @@ Rectangle {
             required solo
             required recordArm
             required inputMonitor
+            required frozen
             required gainDb
             required pan
             width: ListView.view.width

@@ -65,7 +65,7 @@ AudioMsg reorderMsg(const Project& p) {
 int clampLatency(int v) { return std::clamp(v, 0, kMaxPdcFrames); }
 
 int trackLatency(const Project& p, const Track& t, IPluginHost* plugins) {
-    if (!plugins) return 0;
+    if (!plugins || t.freeze) return 0;
     long long sum = 0;
     if (t.instrument && isVst3Id(t.instrument->processorId) && !t.instrument->bypass)
         if (auto live = plugins->acquireInstrument(InsertSlot{t.id, kInstrumentSlot}, *t.instrument, static_cast<double>(p.sampleRate), kMaxBlock))
@@ -84,7 +84,7 @@ bool stripChanged(const Track& a, const Track& b) {
 }
 
 bool configChanged(const Track& a, const Track& b) {
-    return a.kind != b.kind || a.midi != b.midi || a.delayMs != b.delayMs || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
+    return a.kind != b.kind || a.midi != b.midi || a.delayMs != b.delayMs || a.freeze != b.freeze || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
            a.strip.sends != b.strip.sends || a.strip.output != b.strip.output;
 }
 
@@ -191,6 +191,35 @@ PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
 
 std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
+    if (t.freeze) {  // the rendered audio replaces the instrument, the regions and the inserts; the strip, the sends and the output stay live
+        cfg->frozen = true;
+        if (const MediaItem* item = p.findMedia(t.freeze->mediaId))
+            if (std::shared_ptr<IFrameSource> src = media.open(*item)) {
+                RegionPlayback rp;
+                rp.startFrame = t.freeze->startFrame;
+                rp.endFrame = t.freeze->startFrame + item->frames;
+                rp.source = src.get();
+                cfg->regions.push_back(rp);
+                cfg->keepAlive.push_back(std::move(src));
+            }
+        for (const AutomationLane& lane : t.automation) {
+            if (t.automationMode == "off") break;
+            std::vector<AutoPoint>& out = lane.target == "volume" ? cfg->volumeAuto : cfg->panAuto;
+            if (lane.target != "volume" && lane.target != "pan") continue;
+            for (const AutomationPoint& pt : lane.points)
+                out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)),
+                                        lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value)});
+        }
+        for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}});
+        cfg->output = t.strip.output;
+        if (pdc) {
+            if (const auto it = pdc->edges.find(t.id); it != pdc->edges.end()) {
+                cfg->outputDelay = DelayLine(it->second.output);
+                for (std::size_t i = 0; i < cfg->sends.size() && i < it->second.sends.size(); ++i) cfg->sends[i].delay = DelayLine(it->second.sends[i]);
+            }
+        }
+        return cfg;
+    }
     const std::int64_t delay = static_cast<std::int64_t>(std::llround(t.delayMs * static_cast<double>(p.sampleRate) / 1000.0));  // Track Delay, in frames
     for (const Region& r : t.regions) {
         if (r.muted) continue;  // Mute Regions: it stays in the project but does not play

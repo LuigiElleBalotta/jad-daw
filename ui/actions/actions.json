@@ -279,7 +279,7 @@
  {"id":"track.showInTracks","label":"Show in Tracks Area","menu":"","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"track.recordArm","label":"Record Enable","menu":"","shortcut":"","kind":"toggle","status":"stub"},
  {"id":"track.inputMonitor","label":"Input Monitoring","menu":"","shortcut":"","kind":"toggle","status":"stub"},
- {"id":"track.freeze","label":"Freeze","menu":"","shortcut":"","kind":"toggle","status":"stub"},
+ {"id":"track.freeze","label":"Freeze","menu":"Track","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"mix.bounceInPlace","label":"Bounce in Place","menu":"Track","shortcut":"","kind":"command","status":"ready"},
  {"id":"lcd.key","label":"Key Display","menu":"","shortcut":"","kind":"command","status":"stub"},
  {"id":"track.color.purple","label":"Purple","menu":"","shortcut":"","kind":"command","status":"ready"},

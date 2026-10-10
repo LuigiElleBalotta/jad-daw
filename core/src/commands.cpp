@@ -992,6 +992,16 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "remove_send") return makeRemoveSend(j.at("sendId").get<Uuid>());
         if (type == "set_inserts") return makeSetInserts(j.at("trackId").get<Uuid>(), j.at("inserts").get<std::vector<ProcessorRef>>());
         if (type == "set_patch_id") return makeSetPatchId(j.at("trackId").get<Uuid>(), j.at("patchId").get<std::string>());
+        if (type == "set_track_freeze") {
+            std::optional<Freeze> freeze;
+            if (j.contains("freeze") && j["freeze"].is_object()) {
+                Freeze f;
+                j["freeze"].at("mediaId").get_to(f.mediaId);
+                f.startFrame = j["freeze"].value("startFrame", std::int64_t{0});
+                freeze = f;
+            }
+            return makeSetTrackFreeze(j.at("trackId").get<Uuid>(), freeze);
+        }
         if (type == "set_region_loop") return makeSetRegionLoop(j.at("regionId").get<Uuid>(), j.at("loopLength").get<std::int64_t>());
         if (type == "set_instrument_state") return makeSetInstrumentState(j.at("trackId").get<Uuid>(), j.at("state").get<std::string>());
         if (type == "set_instrument") return makeSetInstrument(j.at("trackId").get<Uuid>(), j.at("instrument").get<ProcessorRef>());

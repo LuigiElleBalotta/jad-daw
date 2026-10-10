@@ -224,6 +224,11 @@ MaybeError checkProject(const Project& p) {
         if (auto e = checkPatchId(t.patchId)) return e;
         if (auto e = checkShowInTracks(t.kind, t.showInTracks)) return e;
         if (auto e = checkMidiShaping(t.midi)) return e;
+        if (t.freeze) {
+            if (t.kind != TrackKind::Audio && t.kind != TrackKind::Instrument) return CommandError{"invalid_kind", "only audio and instrument tracks can be frozen"};
+            if (t.freeze->mediaId.isNull() || !p.findMedia(t.freeze->mediaId) || t.freeze->startFrame < 0 || t.freeze->startFrame > kMaxPosition)
+                return CommandError{"bad_value", "a frozen track needs its rendered audio in the media pool"};
+        }
         if (!(t.delayMs >= -1000.0 && t.delayMs <= 1000.0)) return CommandError{"bad_value", "track delay is -1000..1000 ms"};
         if (auto e = checkStripValues(t.strip.gainDb, t.strip.pan)) return e;
         const bool wantsInstrument = t.kind == TrackKind::Instrument;

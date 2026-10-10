@@ -165,6 +165,7 @@ void to_json(nlohmann::json& j, const Track& t) {
     if (!t.showInTracks) j["showInTracks"] = false;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
     if (t.delayMs != 0.0) j["delayMs"] = t.delayMs;
+    if (t.freeze) j["freeze"] = {{"mediaId", t.freeze->mediaId}, {"startFrame", t.freeze->startFrame}};
     if (!(t.midi == MidiShaping{})) j["midi"] = {{"transpose", t.midi.transpose}, {"velocity", t.midi.velocity}, {"keyLow", t.midi.keyLow}, {"keyHigh", t.midi.keyHigh}, {"velocityLow", t.midi.velocityLow}, {"velocityHigh", t.midi.velocityHigh}};
 }
 
@@ -181,6 +182,12 @@ void from_json(const nlohmann::json& j, Track& t) {
     t.patchId = j.value("patchId", std::string());
     t.automationMode = j.value("automationMode", std::string("read"));
     t.delayMs = j.value("delayMs", 0.0);
+    if (j.contains("freeze") && j["freeze"].is_object()) {
+        Freeze f;
+        j["freeze"].at("mediaId").get_to(f.mediaId);
+        f.startFrame = j["freeze"].value("startFrame", std::int64_t{0});
+        t.freeze = f;
+    }
     if (j.contains("midi")) {
         const auto& m = j.at("midi");
         t.midi.transpose = m.value("transpose", 0);

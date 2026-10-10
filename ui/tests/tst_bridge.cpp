@@ -1761,6 +1761,28 @@ private slots:
         QTRY_COMPARE(c.automationPoints(track, "volume").first().toMap().value("beats").toDouble(), 1.0);
         c.setAutomationFollowsRegions(false);
     }
+    void freezeRendersTheTrackAndUnfreezeGivesItBack() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        QString instrument;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "instrument") instrument = c.tracks()->trackIdAt(i);
+        QVERIFY(!instrument.isEmpty());
+        QVERIFY(!trackFlag(c, instrument, "frozen"));
+        c.toggleFreezeSelected();                                    // nothing selected: a notice only
+        c.selectTrack(instrument, "replace");
+        c.toggleFreezeSelected();
+        QTRY_VERIFY_WITH_TIMEOUT(trackFlag(c, instrument, "frozen"), 20000);
+        QVERIFY(c.selectedFrozen());
+        c.toggleFreezeSelected();                                    // all frozen: unfreeze
+        QTRY_VERIFY(!trackFlag(c, instrument, "frozen"));
+        c.undo();                                                    // back to frozen: one undo step
+        QTRY_VERIFY(trackFlag(c, instrument, "frozen"));
+        c.undo();
+        QTRY_VERIFY(!trackFlag(c, instrument, "frozen"));
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

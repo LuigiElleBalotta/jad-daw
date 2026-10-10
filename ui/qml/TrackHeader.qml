@@ -17,6 +17,7 @@ Item {
     property bool solo: false
     property bool recordArm: false
     property bool inputMonitor: false
+    property bool frozen: false          // plays its rendered audio
     property bool selected: false
 
     readonly property bool slidersVisible: height >= 56
@@ -43,7 +44,7 @@ Item {
     signal trackToggled(string trackId, string actionId, bool on)
 
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
-    readonly property string kindLabel: ({ "audio": "Au", "instrument": "Inst", "midi": "MIDI", "bus": "Bus", "aux": "Aux" })[kind] ?? kind
+    readonly property string kindLabel: (({ "audio": "Au", "instrument": "Inst", "midi": "MIDI", "bus": "Bus", "aux": "Aux" })[kind] ?? kind) + (frozen ? " ❄" : "")  // a snowflake: frozen
 
     function modeFor(modifiers) {
         if (modifiers & Qt.ControlModifier) return "toggle"

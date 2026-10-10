@@ -62,6 +62,8 @@ struct SendPatch {
 };
 CommandPtr makeSetSend(Uuid sendId, SendPatch patch);  // a patch changes only the fields it carries
 // Loops the region: its first `loopLength` (unit of the region, at most the length; 0 = off) repeat until the end.
+// Freezes the track: it plays `freeze` (rendered audio, already in the media pool) instead of its instrument, regions and inserts; nullopt unfreezes.
+CommandPtr makeSetTrackFreeze(Uuid trackId, std::optional<Freeze> freeze);
 CommandPtr makeSetRegionLoop(Uuid regionId, std::int64_t loopLength);
 CommandPtr makeSetRegionFades(Uuid regionId, std::int64_t fadeIn, std::int64_t fadeOut);  // the unit of the region's start; 0 = none; each at most the length
 CommandPtr makeSetRegionGain(Uuid regionId, float gainDb);

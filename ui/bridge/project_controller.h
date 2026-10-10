@@ -76,6 +76,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QStringList selectedRegionIds READ selectedRegionIds NOTIFY selectionChanged)
     Q_PROPERTY(bool selectedRecordArm READ selectedRecordArm NOTIFY trackTogglesChanged)  // of the first selected track
     Q_PROPERTY(bool selectedInputMonitor READ selectedInputMonitor NOTIFY trackTogglesChanged)
+    Q_PROPERTY(bool selectedFrozen READ selectedFrozen NOTIFY trackFlagsChanged)  // the first selected track plays its frozen audio
     Q_PROPERTY(bool selectedShowInTracks READ selectedShowInTracks NOTIFY trackFlagsChanged)  // of the first selected track
     Q_PROPERTY(bool selectedCanHide READ selectedCanHide NOTIFY trackFlagsChanged)            // the first selected track is a bus or aux
     Q_PROPERTY(int trackHeightIndex READ trackHeightIndex WRITE setTrackHeightIndex NOTIFY trackHeightChanged)
@@ -152,6 +153,10 @@ public:
     bool selectedRecordArm() const { return selectedToggle(QStringLiteral("track.recordArm")); }
     bool selectedInputMonitor() const { return selectedToggle(QStringLiteral("track.inputMonitor")); }
     int routingRevision() const { return routingRevision_; }
+    bool selectedFrozen() const {
+        const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
+        return t && t->frozen;
+    }
     bool selectedShowInTracks() const {
         const TrackRow* t = selectedTracks_.isEmpty() ? nullptr : tracks_.find(selectedTracks_.first());
         return !t || t->showInTracks;
@@ -495,7 +500,10 @@ public:
     Q_INVOKABLE void openAllPluginWindows();
     // Bounce in Place: each selected audio or instrument track (with its inserts, sends and the buses it feeds) is rendered to a new audio track
     // named after it, from its first region to its last plus a tail. The original stays as it is.
-    Q_INVOKABLE void bounceInPlace();  // Mix > Show All Plug-in Windows
+    Q_INVOKABLE void bounceInPlace();
+    // Track > Freeze: the selected audio and instrument tracks are rendered (instrument, regions and inserts, before the fader) and play that audio instead
+    // of making the sound again, which spares the processor; when they are all frozen already, they are unfrozen. One undo step.
+    Q_INVOKABLE void toggleFreezeSelected();  // Mix > Show All Plug-in Windows
     Q_INVOKABLE void toggleMuteSelectedRegions();
     Q_INVOKABLE void toggleLoopSelectedRegions();
     // Takes: the regions of one take group on a track, in time order ({id, active, label}); one of them plays

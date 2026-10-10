@@ -134,6 +134,31 @@ private:
     float gainDb_;
 };
 
+class SetTrackFreezeCmd final : public Command {
+public:
+    SetTrackFreezeCmd(Uuid id, std::optional<Freeze> freeze) : id_(id), freeze_(std::move(freeze)) {}
+    std::string type() const override { return "set_track_freeze"; }
+    json toJson() const override {
+        json j = {{"type", type()}, {"trackId", id_}};
+        j["freeze"] = freeze_ ? json{{"mediaId", freeze_->mediaId}, {"startFrame", freeze_->startFrame}} : json(nullptr);
+        return j;
+    }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(id_);
+        if (!t) return fail("not_found", "no such track");
+        if (t->kind != TrackKind::Audio && t->kind != TrackKind::Instrument) return fail("invalid_kind", "only audio and instrument tracks can be frozen");
+        if (freeze_ && (freeze_->mediaId.isNull() || !p.findMedia(freeze_->mediaId) || freeze_->startFrame < 0 || freeze_->startFrame > kMaxPosition))
+            return fail("bad_value", "a frozen track needs its rendered audio in the media pool");
+        std::optional<Freeze> previous = t->freeze;
+        t->freeze = freeze_;
+        return success(makeSetTrackFreeze(id_, std::move(previous)));
+    }
+
+private:
+    Uuid id_;
+    std::optional<Freeze> freeze_;
+};
+
 class SetRegionLoopCmd final : public Command {
 public:
     SetRegionLoopCmd(Uuid id, std::int64_t loopLength) : id_(id), loop_(loopLength) {}
@@ -377,6 +402,7 @@ CommandPtr makeSetInsertParam(Uuid trackId, int index, std::string param, std::o
 }
 
 CommandPtr makeSetPatchId(Uuid trackId, std::string patchId) { return std::make_unique<SetPatchIdCmd>(trackId, std::move(patchId)); }
+CommandPtr makeSetTrackFreeze(Uuid trackId, std::optional<Freeze> freeze) { return std::make_unique<SetTrackFreezeCmd>(trackId, std::move(freeze)); }
 CommandPtr makeSetRegionLoop(Uuid regionId, std::int64_t loopLength) { return std::make_unique<SetRegionLoopCmd>(regionId, loopLength); }
 CommandPtr makeSetInstrumentState(Uuid trackId, std::string state) { return std::make_unique<SetInstrumentStateCmd>(trackId, std::move(state)); }
 CommandPtr makeSetInstrument(Uuid trackId, ProcessorRef instrument) { return std::make_unique<SetInstrumentCmd>(trackId, std::move(instrument)); }

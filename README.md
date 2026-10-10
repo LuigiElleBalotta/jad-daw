@@ -112,6 +112,9 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - **Step Sequencer and Score** (Editors area tabs for a MIDI region): the Step Sequencer is a grid of eight General MIDI drum rows by 16th-note steps (a click adds or removes a note of one 16th); the Score shows the
   notes on a grand staff (view only: no beams, rests or ties).
 - **List Editors** (View menu, Window > Open Event List / Open Signature List): tables of the notes and controller events of the selected MIDI region (pitch, velocity and length can be typed, an event deleted), the markers, the tempo changes and the time signatures.
+- **Freeze** (Track menu): the selected audio or instrument tracks are rendered (instrument, regions, inserts and VST3 plug-ins, before the fader) to a file in the project and then play that
+  file instead of making the sound again (the track name shows a snowflake; its plug-in instances are let go); Freeze again unfreezes. The fader, pan, sends and automation stay live. Editing the regions of a frozen
+  track does not change what plays: unfreeze first.
 - **Bounce in Place** (Track menu): each selected audio or instrument track is rendered offline, with its inserts, VST3 plug-ins, sends and the buses it feeds, to a new audio track "<name> Bounce"
   starting where its first region starts, with two seconds of tail; the original track is left as it is.
 - **Takes:** recording with the Cycle on makes one audio region per pass; the passes of a track are takes of one passage (a take group): the last pass plays, the others are muted and the region says "n takes".
@@ -175,7 +178,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   `jad-daw --project demo.lpc --no-audio --screenshot out.png --size 1280x800 [--tool scissors] [--select-track 2] [--select-region 1] [--open-menu 2] [--panels library,inspector,smart,mixer,editors,global,automation] [--apply-patch audio.bright-vocal]`.
 
 Known limits: the app has only been run on Windows (the macOS and Linux builds are written but never run, and the CI configure step fails on macOS); several buttons use text labels because
-there are no icons for them yet; the Score is view only; there are no Flex tools, Smart Tempo, Drummer or Session Players, no Freeze, no folder stacks and no quick-swipe comping;
+there are no icons for them yet; the Score is view only; there are no Flex tools, Smart Tempo, Drummer or Session Players, no folder stacks and no quick-swipe comping;
 automation targets are the fader and the pan (not sends or plug-in parameters); the Browser has no audition and there are no Apple Loops; export has no MP3. Plug-ins are VST3 effects
 and instruments with a stereo or mono output (no multi-output instruments, sidechain or MIDI effects), and a plug-in that crashes while playing takes the app down; changes made inside
 a plug-in window become one undo step when it closes. Menu entries that are not done say so when chosen (`docs/roadmap-autonomous.md` lists what was done and what was not). A project

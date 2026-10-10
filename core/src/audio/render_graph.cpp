@@ -261,9 +261,11 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     TrackConfig* cfg = t.config;
     if (cfg) {
         if (withRegions) {
-            if (t.kind == TrackKind::Audio) renderAudio(t, *cfg, blockStart, n);
+            if (t.kind == TrackKind::Audio || cfg->frozen) renderAudio(t, *cfg, blockStart, n);
             else if (t.kind == TrackKind::Instrument && cfg->instrument) renderPluginInstrument(t, *cfg, blockStart, n, true);
             else if (t.kind == TrackKind::Instrument) renderInstrument(t, *cfg, blockStart, n);
+        } else if (cfg->frozen) {
+            // stopped: a frozen track makes no sound of its own
         } else if (t.kind == TrackKind::Instrument && cfg->instrument) {  // stopped: the live notes, the stop messages and whatever still rings
             if (t.tailFrames > 0 || t.liveCount > 0 || t.stopPending) {
                 renderPluginInstrument(t, *cfg, blockStart, n, false);
@@ -355,7 +357,7 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
 
 bool RenderGraph::liveNote(const Uuid& track, bool on, std::uint8_t note, std::uint8_t velocity) noexcept {
     TrackNode* n = find(track);
-    if (!n || n->kind != TrackKind::Instrument) return false;
+    if (!n || n->kind != TrackKind::Instrument || (n->config && n->config->frozen)) return false;
     if (n->config && n->config->instrument) {
         if (n->liveCount < 64) n->live[n->liveCount++] = MidiEvent{0, static_cast<std::uint8_t>(on ? 0x90 : 0x80), note, on ? velocity : std::uint8_t{0}};
         n->tailFrames = n->tailMax;

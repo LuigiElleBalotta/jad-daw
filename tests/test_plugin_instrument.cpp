@@ -7,6 +7,9 @@
 #include "lpc/commands.h"
 #include "lpc/graph_builder.h"
 #include "lpc/validation.h"
+#include "lpc/model_json.h"
+#include "lpc/wav.h"
+#include "temp_dir.h"
 
 using namespace lpc;
 using namespace lpc::audio;
@@ -360,4 +363,56 @@ TEST_CASE("track delay moves the notes of an instrument track by milliseconds", 
     TrackPatch onBus;
     onBus.delayMs = 1.0;
     REQUIRE_FALSE(makeSetTrackProps(audio.id, onBus)->apply(f.project).ok());   // a bus has no delay
+}
+
+TEST_CASE("freeze: a frozen track plays its rendered audio and lets go of its instrument", "[freeze][graph]") {
+    lpc::test::TempDir dir;
+    std::filesystem::create_directories(dir.path / "audio");
+    writeWav(dir.path / "audio" / "frozen.wav", 48000, 2, std::vector<float>(2 * 24000, 0.25f), WavFormat::Float32);
+    Fixture f;
+    MediaStore media(dir.path, false);
+    MediaItem item;
+    item.id = Uuid{7, 7};
+    item.path = "audio/frozen.wav";
+    item.sampleRate = 48000;
+    item.channels = 2;
+    item.frames = 24000;
+    REQUIRE(makeAddMedia(item)->apply(f.project).ok());
+
+    REQUIRE_FALSE(makeSetTrackFreeze(f.track.id, Freeze{Uuid{9, 9}, 0})->apply(f.project).ok());        // the audio must be in the pool
+    REQUIRE_FALSE(makeSetTrackFreeze(f.track.id, Freeze{item.id, -1})->apply(f.project).ok());
+    auto frozen = makeSetTrackFreeze(f.track.id, Freeze{item.id, 4800})->apply(f.project);
+    REQUIRE(frozen.ok());
+    REQUIRE(f.project.findTrack(f.track.id)->freeze->startFrame == 4800);
+    REQUIRE(projectFromJson(toJson(f.project)).findTrack(f.track.id)->freeze == f.project.findTrack(f.track.id)->freeze);   // saved and loaded
+
+    FakePluginHost host;
+    host.instruments[kInst] = 0;
+    RenderGraph graph(48000.0);
+    for (const AudioMsg& m : initialMessages(f.project, media, &host)) graph.apply(m);
+    std::vector<float> l(256), r(256);
+    float before = 0, during = 0;
+    for (std::int64_t at = 0; at < 12000; at += 256) {
+        graph.render(at, 256, l.data(), r.data());
+        for (int i = 0; i < 256; ++i) {
+            if (at + i < 4800) before = std::max(before, std::abs(l[static_cast<std::size_t>(i)]));
+            if (at + i >= 4900 && at + i < 9000) during = std::max(during, std::abs(l[static_cast<std::size_t>(i)]));
+        }
+    }
+    REQUIRE(before == 0.0f);
+    REQUIRE(during == Catch::Approx(0.25f).margin(0.002));                // the rendered audio, through the strip
+    REQUIRE(host.createdInstruments == 0);                               // the plug-in was never asked for
+    REQUIRE_FALSE(graph.liveNote(f.track.id, true, 60, 100));            // a frozen track does not play live notes
+    REQUIRE(frozen.inverse->apply(f.project).ok());                      // unfreezing
+    REQUIRE_FALSE(f.project.findTrack(f.track.id)->freeze.has_value());
+    host.lastInstrument.reset();
+    RenderGraph again(48000.0);
+    for (const AudioMsg& m : initialMessages(f.project, media, &host)) again.apply(m);
+    REQUIRE(host.createdInstruments == 1);                               // the instrument is back
+    Track audio;
+    audio.id = Uuid{5, 5};
+    audio.kind = TrackKind::Bus;
+    audio.name = "Bus";
+    REQUIRE(makeAddTrack(audio)->apply(f.project).ok());
+    REQUIRE_FALSE(makeSetTrackFreeze(audio.id, Freeze{item.id, 0})->apply(f.project).ok());   // a bus is not frozen
 }

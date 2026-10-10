@@ -2753,4 +2753,135 @@ void ProjectController::transformNotes(const QString& op, double a, double b) {
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
+void ProjectController::toggleFreezeSelected() {
+    if (!host_) return;
+    std::vector<QString> toFreeze, toThaw;
+    for (const QString& id : std::as_const(selectedTracks_)) {
+        const TrackRow* t = tracks_.find(id);
+        if (!t || (t->kind != QLatin1String("audio") && t->kind != QLatin1String("instrument"))) continue;
+        if (t->frozen) toThaw.push_back(id);
+        else if (t->regionCount > 0) toFreeze.push_back(id);
+    }
+    if (toFreeze.empty() && toThaw.empty()) {
+        emit notice("Select audio or instrument tracks that have regions");
+        return;
+    }
+    if (toFreeze.empty()) {  // all of them are frozen: unfreeze
+        nlohmann::json commands = nlohmann::json::array();
+        for (const QString& id : toThaw) commands.push_back({{"type", "set_track_freeze"}, {"trackId", id.toStdString()}, {"freeze", nullptr}});
+        sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+        return;
+    }
+    if (bouncing_->exchange(true)) {
+        setError("A bounce is already running");
+        return;
+    }
+    if (playing_) stop();
+    const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+    lpc::IPluginHost* plugins = nullptr;
+#ifdef JAD_HAVE_JUCE
+    plugins = pluginHost_.get();
+#endif
+    std::vector<QString> names;
+    for (const QString& id : toFreeze) names.push_back(trackName(id));
+    emit notice("Freezing…");
+    const std::filesystem::path root = dir_;
+    const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
+    QPointer<ProjectController> self(this);
+    (void)QtConcurrent::run([self, flag, project, plugins, root, toFreeze, names] {
+        struct Done {
+            QString trackId, relative, hash;
+            std::int64_t frames = 0, startFrame = 0;
+        };
+        std::vector<Done> done;
+        QString failure;
+        try {
+            for (std::size_t k = 0; k < toFreeze.size(); ++k) {
+                const auto trackId = lpc::Uuid::parse(toFreeze[k].toStdString()).value_or(lpc::Uuid{});
+                lpc::Project copy = project;
+                std::int64_t first = std::numeric_limits<std::int64_t>::max(), last = 0;
+                for (lpc::Track& t : copy.tracks) {
+                    t.strip.solo = false;
+                    if (t.kind == lpc::TrackKind::Master) {
+                        t.strip.gainDb = 0.0f;  // the master adds nothing: the result is the track as it leaves its inserts
+                        t.strip.pan = 0.0f;
+                        t.strip.inserts.clear();
+                    } else if (t.id == trackId) {
+                        t.strip.gainDb = 0.0f;
+                        t.strip.pan = 0.0f;
+                        t.strip.mute = false;
+                        t.strip.sends.clear();
+                        t.strip.output = lpc::Uuid{};
+                        t.automation.clear();
+                        t.freeze.reset();
+                        for (const lpc::Region& r : t.regions) {
+                            auto frame = [&](std::int64_t v) {
+                                return r.timeBase == lpc::TimeBase::Musical ? static_cast<std::int64_t>(std::llround(copy.tempoMap.ticksToSamples(v, copy.sampleRate)))
+                                                                            : static_cast<std::int64_t>(std::llround(static_cast<double>(v) * copy.sampleRate / 1e6));
+                            };
+                            first = std::min(first, frame(r.start));
+                            last = std::max(last, frame(r.start + r.length));
+                        }
+                    } else if (t.kind == lpc::TrackKind::Audio || t.kind == lpc::TrackKind::Instrument) {
+                        t.strip.mute = true;
+                    }
+                }
+                if (last <= first) continue;
+                first = std::max<std::int64_t>(0, first + static_cast<std::int64_t>(std::llround(0.0)));
+                lpc::RenderOptions options;
+                options.startFrame = first;
+                options.frames = last - first + static_cast<std::int64_t>(2.0 * copy.sampleRate);
+                options.plugins = plugins;
+                lpc::MediaStore media(root, /*streaming=*/false);
+                const lpc::RenderResult r = lpc::renderOffline(copy, media, options);
+                QString safe;
+                for (const QChar ch : names[k]) safe.append(QStringLiteral("\\/:*?\"<>|").contains(ch) ? QLatin1Char('_') : ch);
+                const std::filesystem::path audioDir = root / "audio";
+                std::filesystem::create_directories(audioDir);
+                std::filesystem::path target;
+                for (int n = 1;; ++n) {
+                    target = audioDir / (safe + (n == 1 ? QStringLiteral(" Freeze.wav") : QStringLiteral(" Freeze (%1).wav").arg(n))).toStdU16String();
+                    if (!std::filesystem::exists(target)) break;
+                }
+                lpc::writeWav(target, r.sampleRate, 2, r.interleaved, lpc::WavFormat::Pcm24);
+                QString hash;
+                QFile f(QString::fromStdU16String(target.u16string()));
+                QCryptographicHash h(QCryptographicHash::Sha256);
+                if (f.open(QIODevice::ReadOnly) && h.addData(&f)) hash = QString::fromLatin1(h.result().toHex());
+                const std::u8string rel = (std::filesystem::path("audio") / target.filename()).generic_u8string();
+                done.push_back({toFreeze[k], QString::fromUtf8(reinterpret_cast<const char*>(rel.data()), static_cast<qsizetype>(rel.size())), hash, r.frames, first});
+            }
+        } catch (const std::exception& e) {
+            failure = QString::fromUtf8(e.what());
+        }
+        flag->store(false);
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self, done, failure] {
+            if (!self) return;
+            if (!failure.isEmpty()) {
+                self->setError("Freeze failed: " + failure);
+                return;
+            }
+            if (done.empty()) {
+                emit self->notice("Nothing to freeze");
+                return;
+            }
+            nlohmann::json commands = nlohmann::json::array();
+            for (const Done& d : done) {
+                lpc::MediaItem item;
+                item.id = lpc::Uuid::random();
+                item.path = d.relative.toStdString();
+                item.hash = d.hash.toStdString();
+                item.sampleRate = self->sampleRate_;
+                item.channels = 2;
+                item.frames = d.frames;
+                commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
+                commands.push_back({{"type", "set_track_freeze"}, {"trackId", d.trackId.toStdString()}, {"freeze", {{"mediaId", item.id.toString()}, {"startFrame", d.startFrame}}}});
+            }
+            self->sendCommand({{"type", "transaction"}, {"commands", commands}});
+            emit self->notice(QString("Froze %1 track%2").arg(static_cast<int>(done.size())).arg(done.size() == 1 ? "" : "s"));
+        }, Qt::QueuedConnection);
+    });
+}
+
 }  // namespace jad

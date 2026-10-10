@@ -3,6 +3,7 @@
 #include <catch2/reporters/catch_reporter_event_listener.hpp>
 #include <catch2/reporters/catch_reporter_registrars.hpp>
 #include <atomic>
+#include <random>
 #include <chrono>
 #include <thread>
 
@@ -11,6 +12,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "juce_plugin_host.h"
+#include "lpc/commands.h"
+#include "lpc/media_store.h"
+#include "lpc/offline_render.h"
 #include "lpc/validation.h"
 #include "plugin_processor.h"
 
@@ -355,4 +359,40 @@ TEST_CASE("juce host: the instrument slot keeps its instance while id and state 
     auto inst = host.acquireInstrument(InsertSlot{track, kInstrumentSlot}, refOf(synth), 48000.0, 512);
     REQUIRE(inst);
     REQUIRE(host.acquireInstrument(InsertSlot{track, kInstrumentSlot}, refOf(synth), 48000.0, 512) == inst);  // reused while id and state stay
+}
+
+TEST_CASE("juce host: an offline render (the bounce) plays a VST3 instrument", "[juce][plugin][instrument][bounce]") {
+    JucePluginHost host;
+    const PluginDescriptor d = testSynth();
+    host.setCatalogue({d});
+    std::mt19937_64 rng(2);
+    Project project;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Instrument;
+    t.name = "Synth";
+    t.instrument = refOf(d);
+    Region region;
+    region.id = Uuid::random(rng);
+    region.timeBase = TimeBase::Musical;
+    region.start = 0;
+    region.length = 4 * kPPQ;
+    region.notes.push_back(MidiNote{kPPQ, kPPQ, 69, 127, false});   // an A from the second beat for one beat
+    t.regions.push_back(region);
+    REQUIRE(makeAddTrack(t)->apply(project).ok());
+
+    MediaStore media(std::filesystem::temp_directory_path(), false);
+    RenderOptions options;
+    options.plugins = &host;
+    options.tailSeconds = 0.0;
+    const RenderResult result = renderOffline(project, media, options);
+    const std::int64_t beat = 24000;                                  // 120 bpm at 48 kHz
+    REQUIRE(result.frames >= 4 * beat);
+    float before = 0.0f, during = 0.0f, after = 0.0f;
+    for (std::int64_t i = 0; i < beat - 64; ++i) before = std::max(before, std::abs(result.interleaved[static_cast<std::size_t>(i * 2)]));
+    for (std::int64_t i = beat + 64; i < 2 * beat - 64; ++i) during = std::max(during, std::abs(result.interleaved[static_cast<std::size_t>(i * 2)]));
+    for (std::int64_t i = 2 * beat + 64; i < 3 * beat; ++i) after = std::max(after, std::abs(result.interleaved[static_cast<std::size_t>(i * 2)]));
+    REQUIRE(before == 0.0f);
+    REQUIRE(during > 0.05f);
+    REQUIRE(after == 0.0f);
 }

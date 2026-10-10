@@ -142,7 +142,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   Active); the Automation slot sets Off / Read / Touch / Latch / Write, and the writing modes record fader and pan moves into the lanes while the project plays;
   Track > Create Track Stack makes an aux that sums the selected tracks; Mix > I/O Labels names the inputs; Mix > Pre-Fader Metering.
 - **File:** Save As, Save a Copy As, Import Audio File and Bounce (a dialog: WAV 16/24/32-bit float or AIFF 16/24, whole project or the cycle area, normalize, tail,
-  dither on 16 bit; an offline render that includes the built-in effects but skips VST3 plug-ins), Import > MIDI File (one instrument track per channel, one undo step)
+  dither on 16 bit; an offline render with the built-in effects and the loaded VST3 effects and instruments, aligned for their latency; the transport stops and cannot play while it renders), Import > MIDI File (one instrument track per channel, one undo step)
   and Export > Selected Regions as MIDI File (format 1 with tempo and signature).
 
 ![Piano Roll](docs/images/piano-roll.png)

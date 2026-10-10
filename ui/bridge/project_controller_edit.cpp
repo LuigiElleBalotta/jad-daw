@@ -20,6 +20,7 @@
 #include "bridge/project_controller.h"
 #ifdef JAD_HAVE_JUCE
 #include "juce_device.h"
+#include "juce_plugin_host.h"
 #endif
 #include "lpc/model_json.h"
 #include "lpc/media_store.h"
@@ -724,14 +725,24 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
         render.startFrame = toFrames(loopStartBeats_);
         render.frames = toFrames(loopEndBeats_) - render.startFrame;
     }
+    if (bouncing_->exchange(true)) {
+        setError("A bounce is already running");
+        return;
+    }
+    if (playing_) stop();  // the plug-ins are rendered by the bounce: the live engine must not touch them meanwhile
+#ifdef JAD_HAVE_JUCE
+    render.plugins = pluginHost_.get();  // VST3 effects and instruments sound in the bounce, aligned for their latency
+#endif
     emit notice("Bouncing…");
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, project, root, out, render, aiff, bits, normalizeOn, dither] {
+    const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
+    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, bits, normalizeOn, dither] {
         QString message;
         try {
             lpc::MediaStore media(root, /*streaming=*/false);
             const lpc::RenderResult r = lpc::renderOffline(project, media, render);
+            flag->store(false);  // the plug-ins are free again: only the files are left to write
             lpc::WavData data;
             data.sampleRate = r.sampleRate;
             data.channels = 2;
@@ -744,6 +755,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
         } catch (const std::exception& e) {
             message = QString("Bounce failed: ") + QString::fromUtf8(e.what());
         }
+        flag->store(false);  // the files are written: playback may use the plug-ins again
         if (self) QMetaObject::invokeMethod(self, [self, message] { if (self) emit self->notice(message); }, Qt::QueuedConnection);
     });
 }

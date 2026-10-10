@@ -1180,6 +1180,10 @@ QVariantList ProjectController::waveformPeaks(const QString& mediaId, int bucket
 
 void ProjectController::play() {
     if (!host_) return;
+    if (bouncing_->load()) {
+        emit notice("Wait for the bounce to finish");
+        return;
+    }
     if (degraded()) {
         setError("Audio engine not running: playback is unavailable until it recovers");
         return;

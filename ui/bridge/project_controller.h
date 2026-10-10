@@ -721,6 +721,7 @@ private:
     std::unique_ptr<JuceInit> juce_;
 #ifdef JAD_HAVE_JUCE
     std::shared_ptr<lpc::JucePluginHost> pluginHost_;  // after juce_: destroyed first
+    std::shared_ptr<std::atomic<bool>> bouncing_ = std::make_shared<std::atomic<bool>>(false);  // a bounce is rendering with the live plug-in instances: nothing may play meanwhile
     std::unique_ptr<lpc::PluginScanner> scanner_;
 #endif
     std::unique_ptr<lpc::audio::AudioEngine> engine_;

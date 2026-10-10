@@ -23,20 +23,22 @@ Dialog {
         Text { text: root.section === "cb" ? qsTr("Customize Control Bar and Display") : qsTr("Customize Toolbar"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeTitleSize; font.weight: Theme.fontTypeTitleWeight }
         Repeater {
             model: root.parts
-            delegate: CheckBox {
+            delegate: RowLayout {
                 required property var modelData
-                objectName: "part_" + modelData.key
-                text: modelData.label
-                checked: { root.project.barItemsRevision; return root.project.barItem(modelData.key) }
-                onToggled: root.project.setBarItem(modelData.key, checked)
-                contentItem: Text { leftPadding: 26; text: parent.text; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
+                spacing: Theme.spacing[2]
+                FlagCheck {
+                    objectName: "part_" + modelData.key
+                    on: { root.project.barItemsRevision; return root.project.barItem(modelData.key) }
+                    onFlipped: root.project.setBarItem(modelData.key, !on)
+                }
+                Text { text: modelData.label; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }
             }
         }
         RowLayout {
             Layout.fillWidth: true
-            Button { text: qsTr("Reset"); onClicked: root.project.resetBarItems() }
+            IconButton { implicitHeight: 26; label: qsTr("Reset"); onClicked: root.project.resetBarItems() }
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Close"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
         }
     }
 }

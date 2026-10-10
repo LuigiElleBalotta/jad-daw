@@ -76,16 +76,23 @@ Dialog {
     contentItem: ColumnLayout {
         spacing: Theme.spacing[2]
         Text { text: qsTr("List Editors"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeTitleSize; font.weight: Theme.fontTypeTitleWeight }
-        TabBar {
-            id: tabs
-            objectName: "listTabs"
+        Row {
             Layout.fillWidth: true
-            currentIndex: root.tab
-            onCurrentIndexChanged: root.tab = currentIndex
-            TabButton { text: qsTr("Event") }
-            TabButton { text: qsTr("Marker") }
-            TabButton { text: qsTr("Tempo") }
-            TabButton { text: qsTr("Signature") }
+            spacing: 0
+            Repeater {
+                model: [qsTr("Event"), qsTr("Marker"), qsTr("Tempo"), qsTr("Signature")]
+                delegate: IconButton {
+                    required property string modelData
+                    required property int index
+                    objectName: "listTab" + index
+                    implicitHeight: 24
+                    label: modelData
+                    active: root.tab === index
+                    fillActive: true
+                    fillText: Theme.textPrimary
+                    onClicked: root.tab = index
+                }
+            }
         }
         StackLayout {
             Layout.fillWidth: true
@@ -127,6 +134,7 @@ Dialog {
                             Layout.preferredWidth: 80
                             text: row.modelData.c && row.modelData.kind === "cc" ? String(row.modelData.c.data1) : ""
                         }
+                        Item { visible: !row.isNote; Layout.preferredWidth: 40 }  // where a note shows its name
                         NumberField {
                             visible: row.isNote
                             objectName: "eventPitch"
@@ -157,7 +165,7 @@ Dialog {
                             value: row.isNote ? row.modelData.note.length : 0
                             onCommitted: (v) => root.setNote(row.modelData.index, "length", v)
                         }
-                        Button { visible: row.isNote; text: qsTr("Delete"); onClicked: root.removeNote(row.modelData.index) }
+                        IconButton { implicitHeight: 26; visible: row.isNote; label: qsTr("Delete"); onClicked: root.removeNote(row.modelData.index) }
                     }
                 }
             }
@@ -179,11 +187,11 @@ Dialog {
                         width: ListView.view.width - 10
                         spacing: Theme.spacing[2]
                         Cell { Layout.preferredWidth: 90; text: root.position(mrow.modelData.beats) }
-                        TextField { Layout.fillWidth: true; text: mrow.modelData.name; selectByMouse: true; onEditingFinished: if (text !== mrow.modelData.name) root.project.renameMarker(mrow.modelData.id, text) }
-                        Button { text: qsTr("Delete"); onClicked: root.project.removeMarker(mrow.modelData.id) }
+                        TextEntry { Layout.fillWidth: true; text: mrow.modelData.name; onEdited: (t) => { if (t !== mrow.modelData.name) root.project.renameMarker(mrow.modelData.id, t) } }
+                        IconButton { implicitHeight: 26; label: qsTr("Delete"); onClicked: root.project.removeMarker(mrow.modelData.id) }
                     }
                 }
-                Button { text: qsTr("New Marker at Playhead"); onClicked: root.project.createMarkerAtPlayhead() }
+                IconButton { implicitHeight: 26; label: qsTr("New Marker at Playhead"); onClicked: root.project.createMarkerAtPlayhead() }
             }
 
             // ---- Tempo
@@ -212,12 +220,12 @@ Dialog {
                             value: trow.modelData.bpm
                             onCommitted: (v) => root.project.setTempoAt(trow.modelData.beats, v)
                         }
-                        Button { visible: trow.index > 0; text: qsTr("Delete"); onClicked: root.project.removeTempoAt(trow.modelData.beats) }
+                        IconButton { implicitHeight: 26; visible: trow.index > 0; label: qsTr("Delete"); onClicked: root.project.removeTempoAt(trow.modelData.beats) }
                     }
                 }
                 RowLayout {
                     spacing: Theme.spacing[2]
-                    Button { text: qsTr("New Tempo at Playhead"); onClicked: root.project.setTempoAt(Math.round(root.project.positionBeats), root.project.bpm) }
+                    IconButton { implicitHeight: 26; label: qsTr("New Tempo at Playhead"); onClicked: root.project.setTempoAt(Math.round(root.project.positionBeats), root.project.bpm) }
                 }
             }
 
@@ -253,16 +261,16 @@ Dialog {
                             value: srow.modelData.denominator
                             onChosen: (d) => root.project.setSignatureAt(srow.modelData.beats, srow.modelData.numerator, d)
                         }
-                        Button { visible: srow.index > 0; text: qsTr("Delete"); onClicked: root.project.removeSignatureAt(srow.modelData.beats) }
+                        IconButton { implicitHeight: 26; visible: srow.index > 0; label: qsTr("Delete"); onClicked: root.project.removeSignatureAt(srow.modelData.beats) }
                     }
                 }
-                Button { text: qsTr("New Signature at Playhead"); onClicked: root.project.setSignatureAt(Math.ceil(root.project.positionBeats / root.project.barBeats) * root.project.barBeats, root.project.beatsPerBar, 4) }
+                IconButton { implicitHeight: 26; label: qsTr("New Signature at Playhead"); onClicked: root.project.setSignatureAt(Math.ceil(root.project.positionBeats / root.project.barBeats) * root.project.barBeats, root.project.beatsPerBar, 4) }
             }
         }
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Close"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
         }
     }
 }

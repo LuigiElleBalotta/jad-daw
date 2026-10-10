@@ -48,8 +48,8 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Cancel"); onClicked: root.close() }
-            Button { objectName: "chooseButton"; text: qsTr("Choose Folder…"); enabled: root.picked !== ""; onClicked: { root.chosen(root.picked); root.close() } }
+            IconButton { implicitHeight: 26; label: qsTr("Cancel"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; objectName: "chooseButton"; label: qsTr("Choose Folder…"); enabled: root.picked !== ""; onClicked: { root.chosen(root.picked); root.close() } }
         }
     }
 }

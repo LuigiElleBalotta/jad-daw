@@ -36,7 +36,7 @@ Dialog {
         Text { text: qsTr("Browser"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeTitleSize; font.weight: Theme.fontTypeTitleWeight }
         RowLayout {
             Layout.fillWidth: true
-            Button { text: qsTr("Up"); enabled: root.parentPath !== ""; onClicked: root.go(root.parentPath) }
+            IconButton { implicitHeight: 26; label: qsTr("Up"); enabled: root.parentPath !== ""; onClicked: root.go(root.parentPath) }
             Text { Layout.fillWidth: true; text: root.path; elide: Text.ElideMiddle; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }
         }
         RowLayout {
@@ -93,9 +93,9 @@ Dialog {
         }
         RowLayout {
             Layout.fillWidth: true
-            Button { objectName: "importButton"; text: qsTr("Import"); enabled: root.picked !== ""; onClicked: root.importPicked() }
+            IconButton { implicitHeight: 26; objectName: "importButton"; label: qsTr("Import"); enabled: root.picked !== ""; onClicked: root.importPicked() }
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Close"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
         }
     }
 }

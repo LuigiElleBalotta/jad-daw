@@ -42,22 +42,21 @@ Dialog {
                     text: Math.floor(row.modelData.beats / 4) + 1 + "." + (Math.floor(row.modelData.beats % 4) + 1)
                     color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize
                 }
-                TextField {
+                TextEntry {
                     objectName: "markerName"
                     Layout.fillWidth: true
                     text: row.modelData.name
-                    selectByMouse: true
-                    onEditingFinished: if (text !== row.modelData.name) root.project.renameMarker(row.modelData.id, text)
+                    onEdited: (t) => { if (t !== row.modelData.name) root.project.renameMarker(row.modelData.id, t) }
                 }
-                Button { text: qsTr("Go"); onClicked: root.project.locateBeats(row.modelData.beats) }
-                Button { text: qsTr("Delete"); onClicked: root.project.removeMarker(row.modelData.id) }
+                IconButton { implicitHeight: 26; label: qsTr("Go"); onClicked: root.project.locateBeats(row.modelData.beats) }
+                IconButton { implicitHeight: 26; label: qsTr("Delete"); onClicked: root.project.removeMarker(row.modelData.id) }
             }
         }
         RowLayout {
             Layout.fillWidth: true
-            Button { text: qsTr("New Marker"); onClicked: root.project.createMarkerAtPlayhead() }
+            IconButton { implicitHeight: 26; label: qsTr("New Marker"); onClicked: root.project.createMarkerAtPlayhead() }
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Close"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
         }
     }
 }

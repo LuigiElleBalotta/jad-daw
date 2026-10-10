@@ -51,8 +51,8 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Close"); onClicked: root.close() }
-            Button { objectName: "applyButton"; text: qsTr("Apply"); enabled: root.project.selectedRegionIds.length > 0; onClicked: root.project.transformNotes(root.op, first.value, second.value) }
+            IconButton { implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; objectName: "applyButton"; label: qsTr("Apply"); enabled: root.project.selectedRegionIds.length > 0; onClicked: root.project.transformNotes(root.op, first.value, second.value) }
         }
     }
 }

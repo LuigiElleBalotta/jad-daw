@@ -56,13 +56,8 @@ Dialog {
         }
         Row2 {
             label: qsTr("Recording")
-            CheckBox {
-                objectName: "autoInputMonitoring"
-                text: qsTr("Auto input monitoring")
-                checked: root.project.autoInputMonitoring
-                onToggled: root.project.autoInputMonitoring = checked
-                contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
-            }
+            FlagCheck { objectName: "autoInputMonitoring"; on: root.project.autoInputMonitoring; onFlipped: root.project.autoInputMonitoring = !on }
+            Text { text: qsTr("Auto input monitoring"); color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }
         }
         RowLayout {
             spacing: Theme.spacing[2]

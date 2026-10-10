@@ -64,7 +64,7 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Close"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
         }
     }
 }

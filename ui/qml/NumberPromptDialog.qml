@@ -54,8 +54,8 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
-            Button { text: qsTr("Cancel"); onClicked: root.close() }
-            Button { objectName: "okButton"; text: qsTr("OK"); onClicked: root.commit() }
+            IconButton { implicitHeight: 26; label: qsTr("Cancel"); onClicked: root.close() }
+            IconButton { implicitHeight: 26; objectName: "okButton"; label: qsTr("OK"); onClicked: root.commit() }
         }
     }
 }

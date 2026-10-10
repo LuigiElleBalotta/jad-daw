@@ -896,6 +896,54 @@ void ProjectController::setDragMode(const QString& mode) {
     emit dragModeChanged();
 }
 
+nlohmann::json ProjectController::automationFollowCommands(const std::vector<std::pair<const RegionRow*, double>>& moved) const {
+    nlohmann::json out = nlohmann::json::array();
+    if (!automationFollows_) return out;
+    struct Lane {
+        QString track, target;
+        std::vector<AutoRow> points;
+        bool changed = false;
+    };
+    std::vector<Lane> lanes;
+    for (const auto& [row, newStart] : moved) {
+        const double delta = std::max(0.0, newStart) - row->startBeats;
+        if (std::abs(delta) < 1e-9) continue;
+        const TrackRow* t = nullptr;
+        for (const TrackRow& r : allRows_)
+            if (r.id == row->trackId) t = &r;
+        if (!t) continue;
+        for (const char* target : {"volume", "pan"}) {
+            auto it = std::find_if(lanes.begin(), lanes.end(), [&](const Lane& l) { return l.track == t->id && l.target == target; });
+            if (it == lanes.end()) {
+                lanes.push_back({t->id, target, std::string(target) == "pan" ? t->panAuto : t->volumeAuto, false});
+                it = std::prev(lanes.end());
+            }
+            const double s = row->startBeats, e = row->startBeats + row->lengthBeats;
+            std::vector<AutoRow> moving, rest;
+            for (const AutoRow& p : it->points) (p.beats >= s - 1e-9 && p.beats < e - 1e-9 ? moving : rest).push_back(p);
+            if (moving.empty()) continue;
+            const double ds = s + delta, de = e + delta;
+            std::vector<AutoRow> kept;
+            for (const AutoRow& p : rest)
+                if (!(p.beats >= ds - 1e-9 && p.beats < de - 1e-9)) kept.push_back(p);  // the span it lands on is overwritten
+            for (AutoRow p : moving) {
+                p.beats += delta;
+                kept.push_back(p);
+            }
+            std::stable_sort(kept.begin(), kept.end(), [](const AutoRow& a, const AutoRow& b) { return a.beats < b.beats; });
+            it->points = kept;
+            it->changed = true;
+        }
+    }
+    for (const Lane& l : lanes) {
+        if (!l.changed) continue;
+        nlohmann::json pts = nlohmann::json::array();
+        for (const AutoRow& p : l.points) pts.push_back({{"tick", static_cast<std::int64_t>(std::llround(std::max(0.0, p.beats) * lpc::kPPQ))}, {"value", p.value}});
+        out.push_back({{"type", "set_automation"}, {"trackId", l.track.toStdString()}, {"target", l.target.toStdString()}, {"points", pts}});
+    }
+    return out;
+}
+
 nlohmann::json ProjectController::overlapCommands(const std::vector<std::pair<const RegionRow*, double>>& moved) const {
     nlohmann::json out = nlohmann::json::array();
     if (dragMode_ == "overlap") return out;
@@ -960,6 +1008,7 @@ void ProjectController::moveRegion(const QString& regionId, double startBeats) {
     const RegionRow* row = regions_.find(regionId);
     if (!row) return;
     nlohmann::json commands = overlapCommands({{row, startBeats}});
+    for (const auto& c : automationFollowCommands({{row, startBeats}})) commands.push_back(c);
     if (commands.empty()) {
         sendCommand(moveCommand(*row, startBeats));
         return;
@@ -990,7 +1039,8 @@ void ProjectController::moveSelectedRegions(const QString& regionId, double star
     std::vector<std::pair<const RegionRow*, double>> moved;
     for (const QString& id : std::as_const(selectedRegions_))
         if (const RegionRow* r = regions_.find(id)) moved.emplace_back(r, r->startBeats + delta);
-    const nlohmann::json trims = overlapCommands(moved);
+    nlohmann::json trims = overlapCommands(moved);
+    for (const auto& c : automationFollowCommands(moved)) trims.push_back(c);
     for (const auto& c : trims)
         if (c.value("type", "") != "set_region_fades") commands.push_back(c);
     for (const auto& m : moved) commands.push_back(moveCommand(*m.first, m.second));
@@ -1438,6 +1488,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     toolbarVisible_ = s.value("panels/toolbar", true).toBool();
     quickHelp_ = s.value("panels/quickHelp", false).toBool();
     dragMode_ = s.value("edit/dragMode", "overlap").toString();
+    automationFollows_ = s.value("edit/automationFollows", false).toBool();
     for (const QString& k : s.value("panels/barItemsOff").toStringList()) barItemsOff_.insert(k);
     autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();
     loadClickSettings(s);

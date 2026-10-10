@@ -1734,6 +1734,33 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.regionNotes(id).first().toMap().value("note").toInt(), 60);
     }
+    void automationCanFollowTheRegionsThatMove() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProjectInTempForTest());
+        c.addTrack("instrument");
+        QTRY_COMPARE(c.tracks()->rowCount(), 1);
+        const QString track = c.tracks()->trackIdAt(0);
+        c.createRegion(track, 0, 4);
+        QTRY_COMPARE(c.regions()->rowCount(), 1);
+        const QString region = c.regions()->regionIdAt(0);
+        c.setAutomationPoints(track, "volume", {QVariantMap{{"beats", 1.0}, {"value", -6.0}}, QVariantMap{{"beats", 20.0}, {"value", 0.0}}});
+        QTRY_COMPARE(c.automationPoints(track, "volume").size(), 2);
+        c.moveRegion(region, 4);                                      // off: the automation stays
+        QTRY_COMPARE(c.regions()->find(region)->startBeats, 4.0);
+        QCOMPARE(c.automationPoints(track, "volume").first().toMap().value("beats").toDouble(), 1.0);
+        c.moveRegion(region, 0);
+        QTRY_COMPARE(c.regions()->find(region)->startBeats, 0.0);
+        c.setAutomationFollowsRegions(true);
+        c.moveRegion(region, 8);                                      // on: the point inside the region goes with it, the one outside stays
+        QTRY_COMPARE(c.regions()->find(region)->startBeats, 8.0);
+        QTRY_VERIFY(c.automationPoints(track, "volume").first().toMap().value("beats").toDouble() >= 8.9);
+        QCOMPARE(c.automationPoints(track, "volume").size(), 2);
+        c.undo();                                                     // the move and the automation are one undo step
+        QTRY_COMPARE(c.regions()->find(region)->startBeats, 0.0);
+        QTRY_COMPARE(c.automationPoints(track, "volume").first().toMap().value("beats").toDouble(), 1.0);
+        c.setAutomationFollowsRegions(false);
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -68,6 +68,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString signatureText READ signatureText NOTIFY projectChanged)
     Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
     Q_PROPERTY(QString snap READ snap WRITE setSnap NOTIFY snapChanged)
+    Q_PROPERTY(bool automationFollowsRegions READ automationFollowsRegions WRITE setAutomationFollowsRegions NOTIFY dragModeChanged)  // Mix > Move Track Automation with Regions
     Q_PROPERTY(QString dragMode READ dragMode WRITE setDragMode NOTIFY dragModeChanged)  // "overlap", "noOverlap" or "xfade"
     Q_PROPERTY(double snapBeats READ snapBeats NOTIFY snapChanged)
     Q_PROPERTY(bool followPlayhead READ followPlayhead WRITE setFollowPlayhead NOTIFY followPlayheadChanged)
@@ -170,6 +171,8 @@ public:
     void setTool(const QString& tool);  // pointer, pencil, eraser, scissors or glue; anything else is ignored
     QString snap() const { return snap_; }
     QString dragMode() const { return dragMode_; }
+    bool automationFollowsRegions() const { return automationFollows_; }
+    void setAutomationFollowsRegions(bool on) { if (on == automationFollows_) return; automationFollows_ = on; QSettings().setValue("edit/automationFollows", on); emit dragModeChanged(); }
     void setDragMode(const QString& mode);
     void setSnap(const QString& snap);  // off, bar, half, quarter, eighth or sixteenth; anything else is ignored
     double snapBeats() const;           // the grid in beats (quarter notes); 0 when snapping is off
@@ -734,6 +737,9 @@ private:
     // regions into a crossfade; `moved` is (region, new start in beats). Empty in the Overlap mode.
     nlohmann::json overlapCommands(const std::vector<std::pair<const RegionRow*, double>>& moved) const;
     QString dragMode_ = QStringLiteral("overlap");
+    bool automationFollows_ = false;
+    // set_automation commands that carry the automation of the moved regions' spans with them (Mix > Move Track Automation with Regions)
+    nlohmann::json automationFollowCommands(const std::vector<std::pair<const RegionRow*, double>>& moved) const;
     nlohmann::json resizeCommand(const RegionRow& row, double startBeats, double lengthBeats) const;
     nlohmann::json moveCommand(const RegionRow& row, double startBeats) const;
     void setError(const QString& message);

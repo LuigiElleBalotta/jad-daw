@@ -92,3 +92,4 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - 2026-10-10: Customize Control Bar and Display / Customize Toolbar.
 - 2026-10-10: Browsers / Loop Browser (file browser, import on double click; no audition).
 - 2026-10-10: Drag modes No Overlap and X-Fade.
+- 2026-10-10: File > Save as Template / New from Template.

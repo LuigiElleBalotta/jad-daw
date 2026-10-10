@@ -1654,6 +1654,26 @@ private slots:
         QVERIFY(c.regions()->find(small) == nullptr || c.regions()->find(small)->startBeats >= 34.0 || c.regions()->find(small)->lengthBeats < 4.0);
         c.setDragMode("overlap");
     }
+    void templatesAreSavedListedAndOpenedAsNewProjects() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        c.setTemplatesFolderForTest(QString::fromStdU16String((dir.path() / "templates").u16string()));
+        QVERIFY(c.templates().isEmpty());
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        const int tracks = c.tracks()->rowCount();
+        QVERIFY(!c.saveAsTemplate("bad/name"));
+        QVERIFY(!c.lastError().isEmpty());
+        QVERIFY(c.saveAsTemplate("My band"));
+        QCOMPARE(c.templates(), QStringList{"My band"});
+        QVERIFY(!c.saveAsTemplate("My band"));                       // the name is taken
+        const auto target = dir.path() / "from template";
+        QVERIFY(c.newFromTemplate("My band", url(target)));
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks);                // the new project is the template
+        QVERIFY(std::filesystem::exists(target / "audio") || std::filesystem::exists(target));
+        QVERIFY(!c.newFromTemplate("My band", url(target)));        // not an empty folder
+        QVERIFY(!c.newFromTemplate("Nope", url(dir.path() / "other")));
+    }
     void hiddenTracksLeaveTheTracksAreaUntilShownAndTheirRegionsGoWithThem() {
         TempDir dir;
         jad::ProjectController c(false);

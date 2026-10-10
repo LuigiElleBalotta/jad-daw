@@ -97,6 +97,19 @@ ApplicationWindow {
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }
     RecentProjectsDialog { id: recentDialog; project: controller }
     ColorsDialog { id: colorsDialog; project: controller }
+    TextPromptDialog {
+        id: templateName
+        heading: qsTr("Save as Template")
+        prompt: qsTr("Name of the template")
+        onAccepted2: (t) => controller.saveAsTemplate(t)
+    }
+    TemplatesDialog { id: templatesDialog; project: controller; onChosen: (name) => { templateFolderDialog.template = name; templateFolderDialog.open() } }
+    FolderDialog {
+        id: templateFolderDialog
+        property string template
+        title: qsTr("Folder of the new project")
+        onAccepted: controller.newFromTemplate(template, selectedFolder)
+    }
     BrowserWindow { id: browserWindow; project: controller }
     CustomizeBarsDialog { id: customizeBars; project: controller }
     ListEditorsWindow { id: listEditors; project: controller }
@@ -280,6 +293,8 @@ ApplicationWindow {
         "view.customizeToolbar": () => { customizeBars.section = "tb"; customizeBars.open() },
         "view.loops": () => browserWindow.open(),
         "view.browsers": () => browserWindow.open(),
+        "file.newFromTemplate": () => templatesDialog.open(),
+        "file.saveAsTemplate": () => templateName.open(),
         "track.sortByName": () => controller.sortTracks("name"),
         "track.sortByType": () => controller.sortTracks("type"),
         "track.sortByColor": () => controller.sortTracks("color"),
@@ -438,6 +453,7 @@ ApplicationWindow {
         "file.saveACopyAs": !controller.hasProject,
         "file.importAudio": !controller.hasProject,
         "file.importMidi": !controller.hasProject,
+        "file.saveAsTemplate": !controller.hasProject,
         "file.exportMidi": !controller.hasProject,
         "file.bounce": !controller.hasProject,
         "track.showInTracks": !controller.selectedCanHide,

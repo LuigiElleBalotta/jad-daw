@@ -1,6 +1,6 @@
 [
  {"id":"file.new","label":"New…","menu":"File","shortcut":"Ctrl+Shift+N","kind":"command","status":"ready"},
- {"id":"file.newFromTemplate","label":"New from Template…","menu":"File","shortcut":"Ctrl+N","kind":"command","status":"stub"},
+ {"id":"file.newFromTemplate","label":"New from Template…","menu":"File","shortcut":"Ctrl+N","kind":"command","status":"ready"},
  {"id":"file.open","label":"Open…","menu":"File","shortcut":"Ctrl+O","kind":"command","status":"ready"},
  {"id":"file.openRecent","label":"Open Recent…","menu":"File","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.close","label":"Close","menu":"File","shortcut":"Ctrl+W","kind":"command","status":"ready"},
@@ -8,7 +8,7 @@
  {"id":"file.save","label":"Save","menu":"File","shortcut":"Ctrl+S","kind":"command","status":"ready","sep":true},
  {"id":"file.saveAs","label":"Save As…","menu":"File","shortcut":"Ctrl+Shift+S","kind":"command","status":"ready"},
  {"id":"file.saveACopyAs","label":"Save A Copy As…","menu":"File","shortcut":"","kind":"command","status":"ready"},
- {"id":"file.saveAsTemplate","label":"Save as Template…","menu":"File","shortcut":"","kind":"command","status":"stub"},
+ {"id":"file.saveAsTemplate","label":"Save as Template…","menu":"File","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.revert","label":"Revert to Saved…","menu":"File","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.projectAlternatives","label":"Project Alternatives","menu":"File","shortcut":"","kind":"command","status":"stub"},
  {"id":"file.projectManagement","label":"Project Management","menu":"File","shortcut":"","kind":"command","status":"stub"},

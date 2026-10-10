@@ -102,6 +102,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   filters and then Single | Tracks | All from its bar and scrolls sideways.
 - **Live drags:** while a fader, a pan knob or the volume slider of a track header is dragged, every other strip, field and header
   follows and the sound changes at once; the whole drag is one undo step.
+- **Templates** (File menu): Save as Template keeps a copy of the open project (audio included) under the application's config folder; New from Template lists them and copies one into a new folder, which opens.
 - **Drag mode** (toolbar): Overlap leaves regions where they land (the audio adds up), No Overlap cuts, shortens or removes what lies under the region you drop (one undo step), X-Fade makes the overlap of two audio regions a crossfade.
 - **Browsers / Loop Browser** (View menu, `F` and `O`): a file browser with a sidebar (project, project audio, home, music, desktop, documents, downloads); a double click on a folder enters it and on an audio file brings it in at the playhead (on the selected audio track, or on a new track named after the file). There is no audition and no Apple Loops content.
 - **Customize Control Bar and Display / Customize Toolbar** (View menu): switch the parts of the two bars on and off (panel buttons, transport, LCD, metronome group, master volume; menus, tools, snap and drag, heights, zoom, undo); kept in the settings.

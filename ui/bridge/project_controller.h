@@ -474,6 +474,12 @@ public:
     Q_INVOKABLE QVariantMap browseFolder(const QString& path) const;
     Q_INVOKABLE QVariantList standardLocations() const;
     Q_INVOKABLE void importAudioPath(const QString& path) { importAudioFilesHere({QUrl::fromLocalFile(path)}); }
+    // Templates: projects kept in the application's config folder (Templates/<name>). saveAsTemplate keeps a copy of the open project,
+    // newFromTemplate copies a template into an empty or new folder and opens it.
+    Q_INVOKABLE QStringList templates() const;
+    Q_INVOKABLE bool saveAsTemplate(const QString& name);
+    Q_INVOKABLE bool newFromTemplate(const QString& name, const QUrl& folder);
+    void setTemplatesFolderForTest(const QString& folder) { templatesFolder_ = folder; }
     Q_INVOKABLE void openAllPluginWindows();
     // Bounce in Place: each selected audio or instrument track (with its inserts, sends and the buses it feeds) is rendered to a new audio track
     // named after it, from its first region to its last plus a tail. The original stays as it is.
@@ -813,6 +819,8 @@ private:
     bool globalTracksVisible_ = false;
     bool controlBarVisible_ = true, toolbarVisible_ = true;
     QSet<QString> barItemsOff_;
+    QString templatesFolder_;  // empty: the default one
+    std::filesystem::path templatesDir() const;
     int barItemsRevision_ = 0;
     bool automationVisible_ = false;
     bool metronome_ = false;

@@ -3,6 +3,7 @@
 #include <QSettings>
 #include <QDateTime>
 #include <QFile>
+#include <QRegularExpression>
 #include <QDir>
 #include <QStandardPaths>
 #include <QCryptographicHash>
@@ -30,6 +31,7 @@
 #include "lpc/offline_render.h"
 #include "lpc/audio/effects.h"
 #include "lpc/aiff.h"
+#include "lpc/plugin_catalogue.h"
 #include "lpc/flac.h"
 #include "lpc/midi_file.h"
 #include "lpc/audio_ops.h"
@@ -2604,6 +2606,66 @@ QVariantList ProjectController::standardLocations() const {
     add(QStringLiteral("Documents"), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
     add(QStringLiteral("Downloads"), QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
     return out;
+}
+
+std::filesystem::path ProjectController::templatesDir() const {
+    if (!templatesFolder_.isEmpty()) return std::filesystem::path(templatesFolder_.toStdWString());
+    return lpc::appConfigDir() / "Templates";
+}
+
+QStringList ProjectController::templates() const {
+    QStringList out;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(templatesDir(), ec))
+        if (entry.is_directory(ec)) out << QString::fromStdWString(entry.path().filename().wstring());
+    out.sort(Qt::CaseInsensitive);
+    return out;
+}
+
+bool ProjectController::saveAsTemplate(const QString& name) {
+    const QString clean = name.trimmed();
+    if (!host_) return false;
+    if (clean.isEmpty() || clean.size() > 80 || clean.contains(QRegularExpression("[\\\\/:*?\"<>|]")) || clean.startsWith('.')) {
+        setError("A template name has 1 to 80 characters and none of \\ / : * ? \" < > |");
+        return false;
+    }
+    const std::filesystem::path target = templatesDir() / clean.toStdWString();
+    std::error_code ec;
+    if (std::filesystem::exists(target, ec)) {
+        setError("There is already a template with that name");
+        return false;
+    }
+    if (!saveProject()) return false;
+    std::filesystem::create_directories(target, ec);
+    std::filesystem::copy(dir_, target, std::filesystem::copy_options::recursive, ec);
+    if (ec) {
+        std::filesystem::remove_all(target, ec);
+        setError("Cannot save the template");
+        return false;
+    }
+    emit notice(QString("Saved the template %1").arg(clean));
+    return true;
+}
+
+bool ProjectController::newFromTemplate(const QString& name, const QUrl& folder) {
+    const std::filesystem::path source = templatesDir() / name.toStdWString();
+    std::error_code ec;
+    if (name.isEmpty() || !std::filesystem::is_directory(source, ec)) {
+        setError("That template does not exist");
+        return false;
+    }
+    const std::filesystem::path target = folder.toLocalFile().toStdWString();
+    if (std::filesystem::exists(target, ec) && !std::filesystem::is_empty(target, ec)) {
+        setError("Choose an empty or new folder");
+        return false;
+    }
+    std::filesystem::create_directories(target, ec);
+    std::filesystem::copy(source, target, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+        setError(QString("Cannot copy the template: ") + QString::fromStdString(ec.message()));
+        return false;
+    }
+    return openProject(QUrl::fromLocalFile(QString::fromStdWString(target.wstring())));
 }
 
 }  // namespace jad

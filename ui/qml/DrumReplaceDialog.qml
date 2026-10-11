@@ -11,6 +11,7 @@ Dialog {
     modal: true
     anchors.centerIn: parent
     width: 460
+    height: 380    // fixed: the rows that come and go with the mode must not move the buttons
     property string mode: "replace"
     property string sound: "kick"
     property url file
@@ -93,6 +94,7 @@ Dialog {
                 }
             }
         }
+        Item { Layout.fillHeight: true }
         RowLayout {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spacing[2]

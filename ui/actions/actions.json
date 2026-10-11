@@ -142,7 +142,7 @@
  {"id":"track.flattenStack","label":"Flatten Stack","menu":"Track","shortcut":"Ctrl+Shift+U","kind":"command","status":"ready"},
  {"id":"track.convertFolderStackToSummingStack","label":"Convert Folder Stack to Summing Stack","menu":"Track","shortcut":"","kind":"command","status":"ready"},
  {"id":"track.globalTracks","label":"Show Global Tracks","menu":"Track","shortcut":"G","kind":"toggle","status":"ready","sep":true},
- {"id":"track.showTrackAlternatives","label":"Show Track Alternatives","menu":"Track","shortcut":"","kind":"command","status":"ready"},
+ {"id":"track.showTrackAlternatives","label":"Show Track Alternatives","menu":"Track","shortcut":"","kind":"toggle","status":"ready"},
  {"id":"track.showOutputTrack","label":"Show Output Track","menu":"Track","shortcut":"Ctrl+Shift+M","kind":"command","status":"ready"},
  {"id":"track.replaceOrDoubleDrumTrack","label":"Replace or Double Drum Track…","menu":"Track","shortcut":"","kind":"command","status":"ready","sep":true},
  {"id":"track.convertRegionsToNewSamplerTrack","label":"Convert Regions to New Sampler Track…","menu":"Track","shortcut":"","kind":"command","status":"stub"},

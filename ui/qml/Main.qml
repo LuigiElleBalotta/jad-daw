@@ -603,6 +603,7 @@ ApplicationWindow {
         "view.editors": root.editorsVisible,
         "view.library": controller.libraryVisible,
         "track.globalTracks": controller.globalTracksVisible,
+        "track.showTrackAlternatives": controller.trackAlternativesShown,
         "track.toggleHideView": controller.showHiddenTracks,
         "view.controlBar": controller.controlBarVisible,
         "view.quickHelp": controller.quickHelpVisible,

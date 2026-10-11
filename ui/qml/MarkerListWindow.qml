@@ -25,6 +25,7 @@ Dialog {
         textArea.forceActiveFocus()
     }
     onAboutToShow: reload()
+    onAboutToHide: textArea.commit()
     Connections { target: root.project; function onProjectChanged() { if (root.visible) root.reload() } }
     background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
     header: Item { height: 0 }
@@ -82,7 +83,11 @@ Dialog {
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontTypeBodySize
                 background: Rectangle { color: Theme.surfaceRaised; radius: Theme.radiusControl - 2; border.color: textArea.activeFocus ? Theme.accentPrimary : Theme.borderSubtle }
-                onActiveFocusChanged: if (!activeFocus && root.selected && text !== root.selected.text) root.project.setMarkerText(root.selectedId, text)
+                function commit() { if (root.selected && text !== root.selected.text) root.project.setMarkerText(root.selectedId, text) }
+                onActiveFocusChanged: if (!activeFocus) commit()
+                onTextChanged: if (activeFocus) commitTimer.restart()    // what is typed is kept after a short pause, not only when the area loses the focus
+                Timer { id: commitTimer; interval: 700; onTriggered: textArea.commit() }
+                Component.onDestruction: commit()
             }
         }
         RowLayout {

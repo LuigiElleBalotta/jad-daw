@@ -232,7 +232,7 @@ Item {
                 id: altButton
                 objectName: "alternativeButton"
                 visible: root.altShown && (root.kind === "audio" || root.kind === "instrument" || root.kind === "midi")
-                implicitWidth: Math.min(70, 16 + altLabel.implicitWidth); implicitHeight: 20
+                implicitWidth: Math.min(46, 12 + altLabel.implicitWidth); implicitHeight: 20
                 label: root.alternative
                 onClicked: altMenu.popup()
                 Text { id: altLabel; visible: false; text: root.alternative; font.pixelSize: Theme.fontTypeCaptionSize }

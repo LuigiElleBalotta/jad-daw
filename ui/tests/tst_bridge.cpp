@@ -1529,6 +1529,8 @@ private slots:
         QVERIFY(std::abs(c.regions()->find(id)->beatsBpm - 100.0) < 2.0);
         QVERIFY(c.regions()->find(id)->flexMarkers.size() >= 10);
         const int beatCount = c.regions()->find(id)->beatFracs.size();
+        c.smartHint(id, c.regions()->find(id)->beatFracs[5].toDouble(), true);        // hints: that beat opens a bar
+        QTRY_COMPARE_WITH_TIMEOUT(c.flexBusy(), 0, 60000);
         c.smartDeleteBeat(id, 4);                                                     // beat markers can be edited
         QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->beatFracs.size() == beatCount - 1, 60000);
         const double beat2 = c.regions()->find(id)->beatFracs[2].toDouble();

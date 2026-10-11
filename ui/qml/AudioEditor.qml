@@ -158,6 +158,18 @@ Rectangle {
                     label: (root.info.followTempo ?? false) ? qsTr("Following %1 bpm").arg(Math.round((root.info.beatsBpm ?? 0) * 10) / 10) : qsTr("Follow Tempo")
                     onClicked: root.project.smartFollowRegion(root.regionId, !(root.info.followTempo ?? false))
                 }
+                IconButton {
+                    visible: root.info.beatsBpm > 0
+                    implicitHeight: 22
+                    label: qsTr("Downbeat Here")
+                    onClicked: root.project.smartHint(root.regionId, (root.project.positionBeats - root.info.startBeats) / Math.max(0.0001, root.info.lengthBeats), true)
+                }
+                IconButton {
+                    visible: root.info.beatsBpm > 0
+                    implicitHeight: 22
+                    label: qsTr("Beat Here")
+                    onClicked: root.project.smartHint(root.regionId, (root.project.positionBeats - root.info.startBeats) / Math.max(0.0001, root.info.lengthBeats), false)
+                }
                 IconButton { visible: root.flexMode !== ""; implicitHeight: 22; label: qsTr("Reset All"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexResetEdits() } }
                 IconButton { visible: root.pitchMode; implicitHeight: 22; label: qsTr("Create MIDI Track"); onClicked: root.project.flexCreateMidiTrack(root.regionId) }
                 Text {

@@ -46,12 +46,23 @@ struct FlexNoteData {  // a note of the Flex Pitch analysis and what was done to
     bool operator==(const FlexNoteData&) const = default;
 };
 
+struct FlexBeats {  // Smart Tempo: the beats found in the sound, and whether the region follows the project tempo with them (Flex & Follow)
+    bool follow = false;
+    double bpm = 0.0;             // the tempo of the sound as analysed
+    int beatsPerBar = 4;
+    int firstDownbeat = 0;        // the index in `beats` of the first beat that opens a bar
+    double anchor = 0.0;          // Flex & Follow: where the first beat plays on the project's beats, counted from the start of the region
+    std::vector<std::int64_t> beats;  // in the flexed part of the source, strictly rising
+    bool operator==(const FlexBeats&) const = default;
+};
+
 struct FlexData {
     Uuid sourceMediaId;
     std::int64_t sourceOffset = 0;  // the frame of that media where the flexed part begins
     std::int64_t sourceLength = 0;  // how many frames of it
     std::vector<FlexMarker> markers;  // by src (and dst), both strictly rising
     std::vector<FlexNoteData> notes;
+    std::optional<FlexBeats> beats;
     bool operator==(const FlexData&) const = default;
 };
 

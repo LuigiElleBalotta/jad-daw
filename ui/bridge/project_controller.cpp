@@ -377,6 +377,11 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     applyMonitoring();
     applyLiveTarget();
     pruneSelection();
+    for (const RegionRow& r : regionRows_)  // Flex & Follow: a change of tempo or place moves the beats of the regions that follow
+        if (r.followTempo) {
+            QTimer::singleShot(0, this, [this] { smartRefollow(); });
+            break;
+        }
     refreshPanels();
 }
 

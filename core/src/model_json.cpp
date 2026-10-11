@@ -120,6 +120,12 @@ void to_json(nlohmann::json& j, const FlexData& f) {
         if (n.formantCents != 0.0) e["formantCents"] = n.formantCents;
         j["notes"].push_back(std::move(e));
     }
+    if (f.beats) {
+        nlohmann::json b = {{"follow", f.beats->follow}, {"bpm", f.beats->bpm}, {"beatsPerBar", f.beats->beatsPerBar}, {"firstDownbeat", f.beats->firstDownbeat}};
+        if (f.beats->anchor != 0.0) b["anchor"] = f.beats->anchor;
+        b["beats"] = f.beats->beats;
+        j["beats"] = std::move(b);
+    }
 }
 
 void from_json(const nlohmann::json& j, FlexData& f) {
@@ -146,6 +152,18 @@ void from_json(const nlohmann::json& j, FlexData& f) {
         n.gainDb = e.value("gainDb", 0.0);
         n.formantCents = e.value("formantCents", 0.0);
         f.notes.push_back(n);
+    }
+    f.beats.reset();
+    if (j.contains("beats") && !j["beats"].is_null()) {
+        const auto& b = j.at("beats");
+        FlexBeats v;
+        v.follow = b.value("follow", false);
+        v.bpm = b.value("bpm", 0.0);
+        v.beatsPerBar = b.value("beatsPerBar", 4);
+        v.firstDownbeat = b.value("firstDownbeat", 0);
+        v.anchor = b.value("anchor", 0.0);
+        b.at("beats").get_to(v.beats);
+        f.beats = std::move(v);
     }
 }
 

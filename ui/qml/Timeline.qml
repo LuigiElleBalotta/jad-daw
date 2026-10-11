@@ -262,6 +262,8 @@ Item {
             ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Reset All Flex Edits"); onTriggered: root.project.flexResetEdits() }
             ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Slice at Transient Markers"); onTriggered: root.project.flexSlice(false) }
             ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Slice at Flex Markers"); onTriggered: root.project.flexSlice(true) }
+            ThemedMenuItem { text: qsTr("Follow the Project Tempo"); onTriggered: root.project.smartFollow(true) }
+            ThemedMenuItem { text: qsTr("Apply Region Tempo to Project Tempo"); onTriggered: root.project.smartApplyRegionTempo(regionContext.regionId) }
             ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Create MIDI Track from Flex Pitch Data"); onTriggered: root.project.flexCreateMidiTrack(regionContext.regionId) }
             MenuSeparator { }
             ThemedMenuItem { text: qsTr("Delete"); onTriggered: root.project.deleteRegions(root.project.selectedRegionIds) }

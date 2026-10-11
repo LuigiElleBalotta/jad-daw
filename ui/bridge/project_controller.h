@@ -548,6 +548,10 @@ public:
     Q_INVOKABLE void flexSlice(bool atMarkers);                                                  // the selected regions are cut at their transients (or flex markers)
     Q_INVOKABLE void flexQuantize(double gridBeats, double strengthPercent);                     // the transients of the selected regions move towards the grid
     Q_INVOKABLE void flexQuantizeGroup(double gridBeats, double strengthPercent);                // Q-Reference: the first selected region goes to the grid, the others follow its hits
+    Q_INVOKABLE void smartFollow(bool on);                                                       // Flex & Follow for the selected audio regions: their beats conform to the project tempo (Flex is turned on for their track)
+    Q_INVOKABLE void smartFollowRegion(const QString& regionId, bool on);
+    Q_INVOKABLE void smartApplyRegionTempo(const QString& regionId);                             // the project tempo becomes the tempo found in the region
+    Q_INVOKABLE void smartShiftDownbeat(const QString& regionId, int beats);                     // the bars of the region begin `beats` beats later (or earlier)
     Q_INVOKABLE QVariantList flexPitchCurves(const QString& regionId);                           // {index, points: [x0, y0, x1, y1, ...]} of each note: where it plays (0..1 of the region) and its pitch as edited
     Q_INVOKABLE QVariantList flexPitchNotes(const QString& regionId);                            // the notes {index, start, end, pitch, original, edits...}; empty until analysed
     Q_INVOKABLE void flexNoteEdit(const QString& regionId, int index, const QVariantMap& edit);  // keys: semitones, fineCents, correct, vibrato, driftIn, driftOut, gainDb, formantCents
@@ -1126,6 +1130,10 @@ private:
     void flexAnalyse(const QString& regionId);
     void flexApply(std::vector<FlexEdit> edits, const nlohmann::json& prefix, const QString& what);
     void flexApplyOne(const QString& regionId, const lpc::FlexData& data, const QString& what);
+    void smartAnalyse(const QString& regionId);
+    bool smartMarkers(const RegionRow& row, lpc::FlexData& data) const;  // the markers that put the beats of the sound on the project's beats
+    void smartRefollow();                                                // after a change of tempo or position: the regions that follow conform again
+    bool refollowQueued_ = false;
     bool moveMarkerData(const QString& regionId, lpc::FlexData& data, int index, double fraction, bool slide) const;
     void flexMarkerPreviewRun(const QString& regionId, int index, double fraction, bool slide);
     bool flexPrepare(const QString& regionId, lpc::FlexData& data, bool needNotes);  // the flex data of a region (made from the analysis when it has none yet)

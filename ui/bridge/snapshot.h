@@ -95,6 +95,9 @@ struct RegionRow {
     QString name;                           // the name of the region; empty: the track's name is shown
     bool flexed = false;                    // the region has flex data
     QVariantList flexMarkers;               // {index, frac (where it plays, 0..1 of the region), srcFrac (where it was)}
+    bool followTempo = false;               // Flex & Follow: the region conforms to the project tempo
+    double beatsBpm = 0.0;                  // the tempo analysed in the sound (0: not analysed)
+    QVariantList beatFracs;                 // where the analysed beats play, 0..1 of the region
     QVariantList flexNotes;                 // the Flex Pitch notes: {index, start, end (0..1 of the region), pitch (as it plays), original, and the edits}
 };
 

@@ -131,3 +131,10 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - 2026-10-10: stub actions batches 4-6 (tools, floats, track icons and header, automation settings, project key, alternatives, project management).
 - 2026-10-10: Low Latency Monitoring Mode, Automation Curve and Select tools, Marquee tool, Add Audio File… in the track shortcut menu; 74 stub actions became 29 (what is left is Apple-only, needs hardware or is a large feature of its own).
 - 2026-10-11: Flex Time and Flex Pitch (item 11): core DSP (pYIN, MonoNote notes, WSOLA with kept attacks, phase vocoder with identity phase locking, slicing, rhythmic, tempophone, speed, TD-PSOLA note editing), flex data on regions and tracks (with split, trim and join), an audition voice in the engine, markers, notes, Flex button, Flex tool, Flex Pitch editor.
+
+## 12. What item 11 left out (the owner: "Finisci le cose lasciate fuori")
+
+- [x] A marker drag is heard while it moves; six hotspots on the selected Flex Pitch note; Q-Reference (the first selected region leads the quantize of the others).
+- [x] Smart Tempo analysis (`core/src/tempo_analysis.cpp`: onset curve, tempo from autocorrelation, dynamic-programming beats, downbeat guess) and Flex & Follow: beats kept in the flex data, markers put every beat on the project's beats (bars on bars), conformed again when the tempo or place changes; Apply Region Tempo to Project Tempo; move the downbeat; beats drawn in the Flex view.
+- [ ] Not done: the Smart Tempo Editor (hints, beat-marker editing), hotspot handles on Flex Time markers, Flex Pitch tried on a real voice (Fish Audio, the owner agreed).
+

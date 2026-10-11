@@ -6,7 +6,7 @@
 namespace lpc {
 
 namespace {
-constexpr std::size_t kMaxMarkers = 4096, kMaxNotes = 4096;
+constexpr std::size_t kMaxMarkers = 4096, kMaxNotes = 4096, kMaxBeats = 65536;
 constexpr std::int64_t kLimit = std::int64_t{1} << 40;
 bool finite(double v) { return std::isfinite(v); }
 }  // namespace
@@ -86,6 +86,20 @@ std::optional<FlexData> flexWindow(const FlexData& f, std::int64_t total, std::i
         if (n.length <= 0) continue;
         out.notes.push_back(n);
     }
+    if (f.beats) {
+        FlexBeats& nb = *out.beats;
+        nb.beats.clear();
+        std::int64_t removed = 0;
+        for (std::int64_t t : f.beats->beats) {
+            const std::int64_t src = t - srcFrom;
+            if (src < 0) { ++removed; continue; }
+            if (src >= out.sourceLength) continue;
+            nb.beats.push_back(src);
+        }
+        const int bpb = std::max(1, f.beats->beatsPerBar);
+        nb.firstDownbeat = static_cast<int>((((f.beats->firstDownbeat - removed) % bpb) + bpb) % bpb);
+        if (nb.beats.empty()) out.beats.reset();
+    }
     return out;
 }
 
@@ -105,6 +119,16 @@ std::optional<FlexData> flexJoin(const FlexData& a, std::int64_t aTotal, const F
     for (FlexNoteData n : b.notes) {
         n.start += a.sourceLength;
         out.notes.push_back(n);
+    }
+    if (b.beats) {
+        if (!out.beats) {
+            out.beats = FlexBeats{};
+            out.beats->follow = b.beats->follow;
+            out.beats->bpm = b.beats->bpm;
+            out.beats->beatsPerBar = b.beats->beatsPerBar;
+            out.beats->firstDownbeat = b.beats->firstDownbeat;
+        }
+        for (std::int64_t t : b.beats->beats) out.beats->beats.push_back(t + a.sourceLength);
     }
     return out;
 }
@@ -127,6 +151,16 @@ std::string flexProblem(const FlexData& f, std::int64_t mediaFrames) {
             !finite(n.vibrato) || n.vibrato < 0 || n.vibrato > 4 || !finite(n.driftIn) || n.driftIn < 0 || n.driftIn > 1 || !finite(n.driftOut) || n.driftOut < 0 || n.driftOut > 1 ||
             !finite(n.gainDb) || std::abs(n.gainDb) > 24 || !finite(n.formantCents) || std::abs(n.formantCents) > 1200)
             return "a flex note edit is out of range";
+    }
+    if (f.beats) {
+        const FlexBeats& b = *f.beats;
+        if (b.beats.size() > kMaxBeats) return "a region holds at most 65536 beats";
+        if (!finite(b.bpm) || b.bpm < 0 || b.bpm > 1000 || b.beatsPerBar < 1 || b.beatsPerBar > 32 || b.firstDownbeat < 0 || b.firstDownbeat >= b.beatsPerBar || !finite(b.anchor) || std::abs(b.anchor) > 1e7) return "the beats of a flex region are out of range";
+        std::int64_t last = -1;
+        for (std::int64_t t : b.beats) {
+            if (t <= last || t >= f.sourceLength) return "beats must be in order and inside the sound";
+            last = t;
+        }
     }
     return {};
 }

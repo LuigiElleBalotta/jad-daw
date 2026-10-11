@@ -151,6 +151,13 @@ Rectangle {
                 }
                 IconButton { visible: root.timeFlex; implicitHeight: 22; label: qsTr("Slice at Transients"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexSlice(false) } }
                 IconButton { visible: root.timeFlex; implicitHeight: 22; label: qsTr("Quantize"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexQuantize(root.project.snapBeats > 0 ? root.project.snapBeats : 0.25, 100) } }
+                IconButton {
+                    objectName: "followTempoButton"
+                    implicitHeight: 22
+                    active: root.info.followTempo ?? false
+                    label: (root.info.followTempo ?? false) ? qsTr("Following %1 bpm").arg(Math.round((root.info.beatsBpm ?? 0) * 10) / 10) : qsTr("Follow Tempo")
+                    onClicked: root.project.smartFollowRegion(root.regionId, !(root.info.followTempo ?? false))
+                }
                 IconButton { visible: root.flexMode !== ""; implicitHeight: 22; label: qsTr("Reset All"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexResetEdits() } }
                 IconButton { visible: root.pitchMode; implicitHeight: 22; label: qsTr("Create MIDI Track"); onClicked: root.project.flexCreateMidiTrack(root.regionId) }
                 Text {
@@ -339,6 +346,7 @@ Rectangle {
                     mode: root.flexMode
                     markers: root.info.flexMarkers ?? []
                     transients: root.flexTransients
+                    beats: root.info.beatFracs ?? []
                     tint: Theme.textPrimary
                     onMarkerMoved: (index, fraction, slide) => root.project.flexMoveMarker(root.regionId, index, fraction, slide)
                     onMarkerDeleted: (index) => root.project.flexDeleteMarker(root.regionId, index)

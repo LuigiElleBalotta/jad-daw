@@ -11,6 +11,7 @@ Item {
     property var markers: []               // {index, frac}: where the flex markers play, 0..1 of the region
     property var notes: []                 // {index, start, end, pitch, ...}
     property var transients: []            // fractions of the region
+    property var beats: []                 // Smart Tempo: where the beats of the sound play, as fractions of the region
     property color tint: Theme.textPrimary
     readonly property bool pitchMode: mode === "pitch"
     property int dragIndex: -1             // the marker being dragged, and where it is now
@@ -34,6 +35,19 @@ Item {
             height: Math.min(12, root.height - 14)
             color: root.tint
             opacity: 0.35
+        }
+    }
+
+    Repeater {  // the beats found in the sound (Smart Tempo)
+        model: root.pitchMode ? [] : root.beats
+        delegate: Rectangle {
+            required property real modelData
+            x: Math.round(modelData * root.width)
+            y: root.height - 10
+            width: 1
+            height: 10
+            color: "#7fd08a"
+            opacity: 0.8
         }
     }
 

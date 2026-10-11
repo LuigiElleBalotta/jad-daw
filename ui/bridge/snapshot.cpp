@@ -188,6 +188,11 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
                     rr.flexMarkers.append(QVariantMap{{"index", static_cast<int>(i)},
                                                       {"frac", static_cast<double>(f.markers[i].dst) / total},
                                                       {"srcFrac", static_cast<double>(f.markers[i].src) / static_cast<double>(std::max<std::int64_t>(1, f.sourceLength))}});
+                if (f.beats) {
+                    rr.followTempo = f.beats->follow;
+                    rr.beatsBpm = f.beats->bpm;
+                    for (std::int64_t b : f.beats->beats) rr.beatFracs.append(map.toDest(static_cast<double>(b)) / total);
+                }
                 for (std::size_t i = 0; i < f.notes.size(); ++i) {
                     const lpc::FlexNoteData& n = f.notes[i];
                     rr.flexNotes.append(QVariantMap{{"index", static_cast<int>(i)},

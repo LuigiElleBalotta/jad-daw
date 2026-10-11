@@ -26,6 +26,7 @@
 #include "lpc/flex_time.h"
 #include "lpc/model_json.h"
 #include "lpc/project_host.h"
+#include "lpc/tempo_analysis.h"
 #include "lpc/wav.h"
 
 namespace jad {
@@ -223,7 +224,10 @@ struct ProjectController::FlexState {
         double sensitivity = -1.0;
         std::vector<std::int64_t> transients;
         std::shared_ptr<lpc::PitchAnalysis> pitch;
+        std::shared_ptr<lpc::TempoAnalysis> tempo;
+        bool tempoDone = false, tempoRunning = false;
     };
+    QHash<QString, int> wanted;     // by region: what to do when its tempo is known (1 follow, 2 apply the tempo to the project)
     QHash<QString, Entry> entries;  // by the window of the source they describe
     QHash<QString, int> tokens;     // by region: the rendering asked for last
     QString audioKey;               // the sound the preview works on
@@ -557,7 +561,7 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
                     region["mediaId"] = j.data.sourceMediaId.toString();
                     region["sourceOffsetFrames"] = j.data.sourceOffset;
                 }
-                if (!j.data.markers.empty() || !j.data.notes.empty()) region["flex"] = j.data;
+                if (!j.data.markers.empty() || !j.data.notes.empty() || j.data.beats) region["flex"] = j.data;
                 else region.erase("flex");
                 commands.push_back({{"type", "replace_region"}, {"region", region}});
             }
@@ -886,6 +890,206 @@ void ProjectController::flexQuantizeGroup(double gridBeats, double strengthPerce
         edits.push_back(FlexEdit{r->id, std::move(data), false, {}, {}});
     }
     flexApply(std::move(edits), nlohmann::json::array(), "Quantizing to the reference");
+}
+
+// ---------------------------------------------------------------- Smart Tempo and Flex & Follow
+//
+// The beats of a recording are found once (lpc::analyseTempo) and kept in the region's flex data. A region that follows the project tempo
+// gets one flex marker on every beat, each at the place where that beat of the project falls: the sound is stretched to the grid, and
+// again whenever the tempo of the project (or the place of the region) changes.
+
+void ProjectController::smartAnalyse(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || !row->audio || row->missing || row->lengthFrames <= 0) return;
+    const lpc::FlexData data = flexDataOf(*row);
+    const QString key = windowKey(data);
+    FlexState& st = flexState();
+    FlexState::Entry& entry = st.entries[key];
+    if (entry.tempoDone) {
+        emit flexAnalysisReady(regionId);
+        return;
+    }
+    if (entry.tempoRunning) return;
+    entry.tempoRunning = true;
+    emit notice("Analysing the tempo…");
+    const std::filesystem::path file = mediaPath(dir_, mediaPaths_.value(QString::fromStdString(data.sourceMediaId.toString())));
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    (void)QtConcurrent::run([self, key, regionId, file, data, generation] {
+        std::shared_ptr<lpc::TempoAnalysis> result;
+        try {
+            result = std::make_shared<lpc::TempoAnalysis>(lpc::analyseTempo(readWindow(file, data.sourceOffset, data.sourceLength)));
+        } catch (const std::exception&) {
+        }
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self, key, regionId, result, generation]() mutable {
+            if (!self || generation != self->generation_) return;
+            FlexState& st = self->flexState();
+            FlexState::Entry& e = st.entries[key];
+            e.tempoRunning = false;
+            if (!result) {
+                st.wanted.remove(regionId);
+                return;
+            }
+            e.tempo = result;
+            e.tempoDone = true;
+            const int what = st.wanted.take(regionId);
+            if (result->bpm <= 0.0 || result->beats.size() < 3) {
+                if (what) emit self->notice("No steady tempo was found in this region");
+                return;
+            }
+            emit self->flexAnalysisReady(regionId);
+            if (what == 1) self->smartFollowRegion(regionId, true);
+            else if (what == 2) self->smartApplyRegionTempo(regionId);
+        }, Qt::QueuedConnection);
+    });
+}
+
+// The markers that put every beat of the sound on a beat of the project (the bars on the project's bars). The anchor is kept when the beats
+// still lie on the grid; otherwise (the first time, or the region was moved or cut) it is found again from where the sound plays now.
+bool ProjectController::smartMarkers(const RegionRow& row, lpc::FlexData& data) const {
+    if (!data.beats || data.beats->beats.size() < 2 || row.lengthFrames <= 0) return false;
+    lpc::FlexBeats& b = *data.beats;
+    const double bar = std::max(1, beatsPerBar_) * 4.0 / std::max(1, beatUnit_);  // in quarter-note beats
+    const lpc::Ticks startTick = static_cast<lpc::Ticks>(std::llround(row.startBeats * lpc::kPPQ));
+    const double startSamples = tempoMap_.ticksToSamples(startTick, sampleRate_);
+    const int d = std::clamp(b.firstDownbeat, 0, static_cast<int>(b.beats.size()) - 1);
+    // the bar line the first downbeat falls on
+    auto onGrid = [&](double anchor) {
+        const double at = row.startBeats + anchor + d;
+        return std::abs(at / bar - std::round(at / bar)) < 0.001;
+    };
+    if (!onGrid(b.anchor)) {
+        const double natural = static_cast<double>(tempoMap_.samplesToTicks(startSamples + static_cast<double>(b.beats[static_cast<std::size_t>(d)]), sampleRate_)) / lpc::kPPQ;
+        b.anchor = std::round(natural / bar) * bar - d - row.startBeats;
+    }
+    data.markers.clear();
+    std::int64_t lastSrc = 0, lastDst = 0;
+    for (std::size_t i = 0; i < b.beats.size(); ++i) {
+        const std::int64_t src = b.beats[i];
+        const double beat = row.startBeats + b.anchor + static_cast<double>(i);
+        const double frames = tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(beat * lpc::kPPQ)), sampleRate_) - startSamples;
+        const std::int64_t dst = static_cast<std::int64_t>(std::llround(frames));
+        if (src <= lastSrc || src >= data.sourceLength || dst <= lastDst || dst >= row.lengthFrames) continue;
+        data.markers.push_back({src, dst});
+        lastSrc = src;
+        lastDst = dst;
+    }
+    return true;
+}
+
+void ProjectController::smartFollow(bool on) {
+    bool any = false;
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (!r->audio || r->missing) continue;
+        any = true;
+        smartFollowRegion(r->id, on);
+    }
+    if (!any) emit notice("Select an audio region first");
+}
+
+void ProjectController::smartFollowRegion(const QString& regionId, bool on) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || !row->audio || row->missing || row->lengthFrames <= 0) return;
+    const TrackRow* track = tracks_.find(row->trackId);
+    if (!track) return;
+    lpc::FlexData data = flexDataOf(*row);
+    FlexState& st = flexState();
+    if (!on) {
+        if (!data.beats || !data.beats->follow) return;
+        data.beats->follow = false;
+        data.markers.clear();
+        flexApplyOne(regionId, data, "Leaving the project tempo");
+        return;
+    }
+    if (!data.beats || data.beats->beats.empty()) {
+        const FlexState::Entry entry = st.entries.value(windowKey(data));
+        if (!entry.tempoDone || !entry.tempo) {
+            st.wanted[regionId] = 1;
+            smartAnalyse(regionId);
+            return;
+        }
+        if (entry.tempo->bpm <= 0.0 || entry.tempo->beats.size() < 3) {
+            emit notice("No steady tempo was found in this region");
+            return;
+        }
+        lpc::FlexBeats b;
+        b.bpm = entry.tempo->bpm;
+        b.beatsPerBar = entry.tempo->beatsPerBar;
+        b.firstDownbeat = entry.tempo->firstDownbeat;
+        b.beats = entry.tempo->beats;
+        data.beats = std::move(b);
+    }
+    data.beats->follow = true;
+    if (!smartMarkers(*row, data)) return;
+    if (track->flexMode.isEmpty()) {  // Flex & Follow needs Flex on the track: it gets the automatic algorithm
+        nlohmann::json prefix = nlohmann::json::array();
+        prefix.push_back({{"type", "set_track_props"}, {"trackId", row->trackId.toStdString()}, {"flexMode", "automatic"}});
+        flexApply({FlexEdit{regionId, std::move(data), true, "automatic", paramsOf(*track)}}, prefix, "Conforming to the project tempo");
+        return;
+    }
+    flexApplyOne(regionId, data, "Conforming to the project tempo");
+}
+
+void ProjectController::smartShiftDownbeat(const QString& regionId, int beats) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || !row->audio) return;
+    lpc::FlexData data = flexDataOf(*row);
+    if (!data.beats || data.beats->beats.empty()) return;
+    const int bpb = std::max(1, data.beats->beatsPerBar);
+    data.beats->firstDownbeat = ((data.beats->firstDownbeat + beats) % bpb + bpb) % bpb;
+    data.beats->anchor = 0.0;  // found again, for the new downbeat
+    if (data.beats->follow && !smartMarkers(*row, data)) return;
+    flexApplyOne(regionId, data, data.beats->follow ? "Moving the downbeat" : "");
+}
+
+// Apply Region Tempo to Project Tempo: the project plays at the tempo found in the sound, and the sound is left as recorded.
+void ProjectController::smartApplyRegionTempo(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || !row->audio || row->missing) return;
+    const lpc::FlexData data = flexDataOf(*row);
+    FlexState& st = flexState();
+    const FlexState::Entry entry = st.entries.value(windowKey(data));
+    double bpm = data.beats ? data.beats->bpm : 0.0;
+    if (bpm <= 0.0) {
+        if (!entry.tempoDone || !entry.tempo) {
+            st.wanted[regionId] = 2;
+            smartAnalyse(regionId);
+            return;
+        }
+        bpm = entry.tempo->bpm;
+    }
+    if (bpm <= 0.0) {
+        emit notice("No steady tempo was found in this region");
+        return;
+    }
+    sendCommand({{"type", "set_tempo"}, {"tick", 0}, {"bpm", std::clamp(std::round(bpm * 100.0) / 100.0, 20.0, 999.0)}});
+}
+
+void ProjectController::smartRefollow() {
+    if (!host_) return;
+    if (flexBusy_ > 0) {
+        if (refollowQueued_) return;
+        refollowQueued_ = true;
+        QTimer::singleShot(400, this, [this] {
+            refollowQueued_ = false;
+            smartRefollow();
+        });
+        return;
+    }
+    std::vector<FlexEdit> edits;
+    for (const RegionRow& r : regionRows_) {
+        if (!r.followTempo || !r.audio || r.missing) continue;
+        lpc::FlexData data = flexDataOf(r);
+        const lpc::FlexData before = data;
+        if (!smartMarkers(r, data)) continue;
+        bool same = before.markers.size() == data.markers.size();
+        for (std::size_t i = 0; same && i < data.markers.size(); ++i)
+            same = before.markers[i].src == data.markers[i].src && std::llabs(before.markers[i].dst - data.markers[i].dst) <= 1;
+        if (same) continue;
+        edits.push_back(FlexEdit{r.id, std::move(data), false, {}, {}});
+    }
+    if (!edits.empty()) flexApply(std::move(edits), nlohmann::json::array(), QString());
 }
 
 // ---------------------------------------------------------------- Flex Pitch: the notes

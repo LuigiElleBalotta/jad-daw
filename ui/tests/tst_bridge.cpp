@@ -1504,6 +1504,33 @@ private slots:
         c.flexQuantizeGroup(1.5, 100.0);
         QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(ids[0])->flexMarkers.size() >= 3 && c.regions()->find(ids[1])->flexMarkers.size() >= 3, 40000);
     }
+    void smartTempoFollowPutsTheBeatsOnTheProjectGrid() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        // 20 s of noise hits at 100 bpm over a quiet tone
+        const int rate = 48000, n = 20 * rate;
+        std::vector<float> v(static_cast<std::size_t>(n), 0.0f);
+        unsigned seed = 3;
+        for (int i = 0; i < n; ++i) v[static_cast<std::size_t>(i)] = 0.02f * std::sin(0.05f * static_cast<float>(i));
+        for (double t = 0.3; t < 19.5; t += 0.6)
+            for (int i = 0; i < 2400; ++i) {
+                seed = seed * 1664525u + 1013904223u;
+                v[static_cast<std::size_t>(static_cast<int>(t * rate) + i)] += 0.7f * (static_cast<float>(seed >> 8) / 8388608.0f - 1.0f) * std::exp(-i / 380.0f);
+            }
+        lpc::writeWav(other.path() / "pulse.wav", rate, 1, v, lpc::WavFormat::Float32);
+        const QString track = firstAudioTrackId(c);
+        c.importAudio(url(other.path() / "pulse.wav"), track, 100.0);
+        QString id;
+        QTRY_VERIFY_WITH_TIMEOUT([&] { for (int i = 0; i < c.regions()->rowCount(); ++i) { const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i)); if (r && r->audio && r->startBeats > 99.0) { id = r->id; return true; } } return false; }(), 20000);
+        c.smartFollowRegion(id, true);
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->followTempo, 120000);
+        QVERIFY(std::abs(c.regions()->find(id)->beatsBpm - 100.0) < 2.0);
+        QVERIFY(c.regions()->find(id)->flexMarkers.size() >= 10);
+        c.smartFollowRegion(id, false);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.regions()->find(id)->followTempo, 60000);
+    }
     void flexMarkerPreviewDoesNotBreakAnything() {
         TempDir dir, other;
         jad::ProjectController c(false);

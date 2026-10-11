@@ -1,5 +1,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <cmath>
 #include "lpc/fft.h"
 #include "lpc/flex_pitch.h"
@@ -222,4 +223,59 @@ TEST_CASE("flex pitch: a real voice recording (LPC_VOICE_WAV)", "[flex][pitch][v
     for (const FlexNote& n : a.notes) WARN("note start " << n.start / double(wav.sampleRate) << "s len " << n.length / double(wav.sampleRate) << "s pitch " << n.pitch);
     CHECK(!a.notes.empty());
     for (const FlexNote& n : a.notes) CHECK((n.pitch > 28 && n.pitch < 90));
+    // edit the longest note: up 3 semitones, with its vibrato flattened; the rest of the recording must stay as it was
+    std::size_t best = 0;
+    for (std::size_t i = 0; i < a.notes.size(); ++i)
+        if (a.notes[i].length > a.notes[best].length) best = i;
+    const FlexNote& n = a.notes[best];
+    std::vector<NoteEdit> edits(a.notes.size());
+    edits[best].semitones = 3.0;
+    const WavData out = renderFlexPitch(wav, a, edits);
+    REQUIRE(out.frames() == wav.frames());                                           // the length is kept
+    // outside the note (well away from it) nothing changed
+    double diff = 0.0;
+    const std::int64_t guard = wav.sampleRate / 10;
+    for (std::int64_t i = 0; i < wav.frames(); ++i) {
+        if (i > n.start - guard && i < n.start + n.length + guard) continue;
+        // other notes are neutral, so their frames are copied
+        for (int c = 0; c < wav.channels; ++c) diff += std::abs(out.samples[static_cast<std::size_t>(i * wav.channels + c)] - wav.samples[static_cast<std::size_t>(i * wav.channels + c)]);
+    }
+    CHECK(diff < 1e-3);
+    // inside it the pitch moved by three semitones
+    const PitchAnalysis after = analysePitch(out);
+    std::vector<double> before, now;
+    for (std::int64_t i = n.start + n.length / 4; i < n.start + 3 * n.length / 4; i += a.hop) {
+        const double b = a.midiAt(i), c = after.midiAt(i);
+        if (b > 0 && c > 0) { before.push_back(b); now.push_back(c); }
+    }
+    REQUIRE(before.size() > 5);
+    std::sort(before.begin(), before.end());
+    std::sort(now.begin(), now.end());
+    WARN("note " << n.pitch << " -> median " << now[now.size() / 2] << " (was " << before[before.size() / 2] << ")");
+    CHECK(std::abs((now[now.size() / 2] - before[before.size() / 2]) - 3.0) < 0.6);
+    // gain and formant leave the pitch alone; the gain changes the level by what was asked
+    std::vector<NoteEdit> other(a.notes.size());
+    other[best].gainDb = 6.0;
+    other[best].formantCents = 300.0;
+    const WavData out2 = renderFlexPitch(wav, a, other);
+    const PitchAnalysis after2 = analysePitch(out2);
+    std::vector<double> kept;
+    double e1 = 0.0, e2 = 0.0;
+    for (std::int64_t i = n.start + n.length / 4; i < n.start + 3 * n.length / 4; ++i) {
+        for (int c = 0; c < wav.channels; ++c) {
+            const double x = wav.samples[static_cast<std::size_t>(i * wav.channels + c)], y = out2.samples[static_cast<std::size_t>(i * wav.channels + c)];
+            e1 += x * x;
+            e2 += y * y;
+        }
+    }
+    for (std::int64_t i = n.start + n.length / 4; i < n.start + 3 * n.length / 4; i += a.hop) {
+        const double c = after2.midiAt(i), b2 = a.midiAt(i);
+        if (b2 > 0 && c > 0) kept.push_back(c - b2);
+    }
+    REQUIRE(kept.size() > 5);
+    std::sort(kept.begin(), kept.end());
+    CHECK(std::abs(kept[kept.size() / 2]) < 0.5);
+    const double gainSeen = 10.0 * std::log10(e2 / std::max(e1, 1e-12));
+    WARN("gain 6 dB asked, " << gainSeen << " dB seen; pitch change " << kept[kept.size() / 2]);
+    CHECK(std::abs(gainSeen - 6.0) < 2.5);
 }

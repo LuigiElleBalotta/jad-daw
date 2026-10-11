@@ -186,7 +186,21 @@ Window {
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontTypeLabelSize
                         }
+                        readonly property bool isSwitch: modelData.min === 0 && modelData.max === 1   // Excite, Bypass, Ping-Pong...: on or off
+                        Item {
+                            visible: row.isSwitch
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 22
+                            IconButton {
+                                objectName: "paramSwitch_" + row.modelData.name
+                                implicitHeight: 22
+                                label: row.current >= 0.5 ? qsTr("On") : qsTr("Off")
+                                active: row.current >= 0.5
+                                onClicked: { root.flush(); root.setParam(row.modelData.name, row.current >= 0.5 ? 0 : 1) }
+                            }
+                        }
                         ParamSlider {
+                            visible: !row.isSwitch
                             Layout.fillWidth: true
                             from: row.modelData.min
                             to: row.modelData.max
@@ -207,6 +221,7 @@ Window {
                             }
                         }
                         Text {
+                            visible: !row.isSwitch
                             Layout.preferredWidth: 80
                             horizontalAlignment: Text.AlignRight
                             text: (Math.abs(row.current) >= 100 ? row.current.toFixed(0) : (Math.abs(row.current) >= 10 ? row.current.toFixed(1) : row.current.toFixed(2))) + (row.modelData.unit !== "" ? " " + row.modelData.unit : "")

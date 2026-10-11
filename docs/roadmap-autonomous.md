@@ -146,5 +146,5 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 
 - [x] Mastering Assistant: loudness measurement (BS.1770), mix analysis, `builtin.mastering` insert (correction EQ, characters, excite, loudness, limiter at -1 dB, bypass, compensation), Mix menu entry, window with Reanalyze, tests.
 - [x] Drum Replacement: hits found with the transient detector, built-in synthesized sounds or a chosen file, Replace (ducking the original) or Double, sensitivity, level, velocity response; audio-to-audio in one undo step (there is no sampler instrument to play MIDI hits).
-- [ ] Left for later: Session Players.
+- [x] Session Players: chord parser, rule-based Drummer / Bass / Keys generators with styles, intensity, swing and seeds, a Drum Kit instrument (General MIDI drums made in the program), dialog and track creation in one undo step. Not done: a Session Player Editor, a Chord Track.
 

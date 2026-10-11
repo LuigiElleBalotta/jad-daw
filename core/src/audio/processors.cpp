@@ -4,6 +4,8 @@
 #include <cmath>
 
 #include "lpc/audio/effects.h"
+#include "lpc/drum_replace.h"
+#include "lpc/wav.h"
 #include "lpc/processor_ids.h"
 
 namespace lpc::audio {
@@ -24,7 +26,7 @@ void GainProcessor::process(float* l, float* r, int frames) noexcept {
 
 nlohmann::json GainProcessor::describe() const { return {{"id", kProcGain}, {"gain", gain_}}; }
 
-Synth::Synth(double sampleRate) : sampleRate_(sampleRate) { updateRates(); }
+
 
 void Synth::updateRates() noexcept {
     attackStep_ = static_cast<float>(1.0 / (std::max(0.05, static_cast<double>(params_.attackMs)) * 0.001 * sampleRate_));
@@ -43,10 +45,54 @@ void Synth::setParams(const SynthParams& p) noexcept {
 bool Synth::active() const noexcept {
     for (const Voice& v : voices_)
         if (v.active) return true;
+    for (const DrumVoice& v : drumVoices_)
+        if (v.active) return true;
     return false;
 }
 
+namespace {
+// The kit: five sounds made once (at 44.1 kHz), played back resampled. Built on first use, on the project thread (a Synth is made there).
+const std::array<WavData, 5>& drumKit() {
+    static const std::array<WavData, 5> kit = {synthDrum(DrumSound::Kick, 44100), synthDrum(DrumSound::Snare, 44100), synthDrum(DrumSound::Tom, 44100),
+                                               synthDrum(DrumSound::HiHat, 44100), synthDrum(DrumSound::Clap, 44100)};
+    return kit;
+}
+// General MIDI percussion note -> index in the kit (-1: not played) and a level
+int drumOf(std::uint8_t note, float& level) {
+    level = 1.0f;
+    switch (note) {
+        case 35: case 36: return 0;
+        case 37: case 38: case 40: return 1;
+        case 39: return 4;
+        case 41: case 43: case 45: case 47: case 48: case 50: return 2;
+        case 42: case 44: level = 0.8f; return 3;
+        case 46: level = 1.0f; return 3;
+        case 49: case 51: case 52: case 53: case 55: case 57: case 59: level = 0.7f; return 3;
+        default: return -1;
+    }
+}
+}  // namespace
+
+Synth::Synth(double sampleRate) : sampleRate_(sampleRate) {
+    updateRates();
+    (void)drumKit();  // made here, on the project thread, so that the audio thread never has to
+}
+
 void Synth::noteOn(std::uint8_t note, std::uint8_t velocity) noexcept {
+    if (params_.drums) {
+        float level;
+        const int kind = drumOf(note, level);
+        if (kind < 0) return;
+        DrumVoice* v = nullptr;
+        for (DrumVoice& d : drumVoices_)
+            if (!d.active) { v = &d; break; }
+        if (!v) { v = &drumVoices_[drumNext_]; drumNext_ = (drumNext_ + 1) % drumVoices_.size(); }
+        v->active = true;
+        v->kind = static_cast<std::uint8_t>(kind);
+        v->amp = params_.level * level * static_cast<float>(velocity) / 127.0f;
+        v->pos = 0.0;
+        return;
+    }
     Voice* v = nullptr;
     for (Voice& candidate : voices_) {
         if (!candidate.active) {
@@ -83,6 +129,7 @@ void Synth::releaseAll() noexcept {
 
 void Synth::allNotesOff() noexcept {
     for (Voice& v : voices_) v = Voice{};
+    for (DrumVoice& v : drumVoices_) v = DrumVoice{};
     filterState_ = 0.0f;
 }
 
@@ -99,6 +146,21 @@ void Synth::render(float* l, float* r, int frames) noexcept {
     float mix[512];
     const int n = std::min(frames, 512);
     std::fill_n(mix, n, 0.0f);
+    if (params_.drums) {
+        const std::array<WavData, 5>& kit = drumKit();
+        const double step = 44100.0 / sampleRate_;
+        for (DrumVoice& v : drumVoices_) {
+            if (!v.active) continue;
+            const std::vector<float>& s = kit[v.kind].samples;
+            for (int i = 0; i < n; ++i) {
+                const std::size_t a = static_cast<std::size_t>(v.pos);
+                if (a + 1 >= s.size()) { v.active = false; break; }
+                const float f = static_cast<float>(v.pos - static_cast<double>(a));
+                mix[i] += v.amp * (s[a] * (1.0f - f) + s[a + 1] * f);
+                v.pos += step;
+            }
+        }
+    }
     for (Voice& v : voices_) {
         if (!v.active) continue;
         for (int i = 0; i < n; ++i) {

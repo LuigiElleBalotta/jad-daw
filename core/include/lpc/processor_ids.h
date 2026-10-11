@@ -8,6 +8,7 @@ namespace lpc {
 inline constexpr const char* kProcGain = "builtin.gain";
 inline constexpr const char* kProcSine = "builtin.sine";
 inline constexpr const char* kProcSynth = "builtin.synth";
+inline constexpr const char* kProcDrums = "builtin.drums";
 inline constexpr const char* kProcEq = "builtin.eq";
 inline constexpr const char* kProcCompressor = "builtin.compressor";
 inline constexpr const char* kProcLimiter = "builtin.limiter";

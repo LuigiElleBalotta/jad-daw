@@ -1541,6 +1541,22 @@ private slots:
         c.smartFollowRegion(id, false);
         QTRY_VERIFY_WITH_TIMEOUT(!c.regions()->find(id)->followTempo, 60000);
     }
+    void sessionPlayersMakeATrackWithAPartInOneUndoStep() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        const int tracks = c.tracks()->rowCount();
+        c.newSessionPlayer({{"kind", "drummer"}, {"style", "funk"}, {"chords", "Am F C G"}, {"repeats", 2}});
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks + 1);
+        c.newSessionPlayer({{"kind", "bass"}, {"style", "walking"}, {"chords", "Am7 D7 Gmaj7 Cmaj7"}});
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks + 2);
+        c.newSessionPlayer({{"kind", "keys"}, {"chords", "Zz"}});                   // a chord that is not one: nothing is made
+        QTest::qWait(200);
+        QCOMPARE(c.tracks()->rowCount(), tracks + 2);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks + 1);
+    }
     void drumReplacementPutsASoundOnEachHitInOneUndoStep() {
         TempDir dir, other;
         jad::ProjectController c(false);

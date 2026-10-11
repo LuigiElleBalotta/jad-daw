@@ -210,6 +210,7 @@ ApplicationWindow {
     IoLabelsDialog { id: ioLabelsDialog; project: controller }
     BounceDialog { id: bounceOptions; project: controller }
     DrumReplaceDialog { id: drumDialog; project: controller }
+    SessionPlayerDialog { id: sessionDialog; project: controller }
     GroupSettingsWindow { id: groupSettings; project: controller }
     AudioProcessDialog { id: audioDialog; project: controller }
     PreferencesDialog { id: preferencesDialog; project: controller }
@@ -552,6 +553,7 @@ ApplicationWindow {
         "edit.flexSliceAtTransients": () => controller.flexSlice(false),
         "edit.flexSliceAtMarkers": () => controller.flexSlice(true),
         "edit.flexQuantize": () => controller.flexQuantize(controller.snapBeats > 0 ? controller.snapBeats : 0.25, 100),
+        "track.newSessionPlayerSiTrack": () => sessionDialog.open(),
         "track.replaceOrDoubleDrumTrack": () => drumDialog.open(),
         "mix.masteringAssistant": () => controller.addMasteringAssistant(),
         "edit.smartFollowOn": () => controller.smartFollow(true),

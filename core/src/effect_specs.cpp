@@ -51,6 +51,7 @@ std::vector<EffectSpec> build() {
 std::vector<EffectSpec> buildInstruments() {
     std::vector<EffectSpec> v;
     v.push_back({kProcSine, "Sine", "Instruments", {}});
+    v.push_back({kProcDrums, "Drum Kit", "Instruments", {p("level", "Level", "dB", -24, 6, -6)}});
     v.push_back({kProcSynth, "Synth", "Instruments",
                  {p("wave", "Waveform (0 sine, 1 triangle, 2 saw, 3 square)", "", 0, 3, 2), p("attack", "Attack", "ms", 0.5, 2000, 5, true),
                   p("decay", "Decay", "ms", 1, 5000, 200, true), p("sustain", "Sustain", "%", 0, 100, 70), p("release", "Release", "ms", 1, 5000, 150, true),

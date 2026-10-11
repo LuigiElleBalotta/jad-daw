@@ -565,6 +565,8 @@ public:
     Q_INVOKABLE void flexMarkerPreview(const QString& regionId, int index, double fraction, bool slide);  // while a marker is dragged: the stretch around it is heard (repeating) until flexStopPreview
     Q_INVOKABLE void flexStopPreview();
     // Track > Replace or Double Drum Track: options mode (replace|double), sound (kick|snare|tom|hihat|clap|file), file, mix %, levelDb, velocity %, sensitivity %, minGapMs
+    // Track > New Session Player Track: options kind (drummer|bass|keys), style, chords ("Am F C G"), repeats, intensity %, swing %, seed
+    Q_INVOKABLE void newSessionPlayer(const QVariantMap& options);
     Q_INVOKABLE void drumReplace(const QVariantMap& options);
     // Mastering Assistant (on the stereo output): adding it analyses the project; Reanalyze does it again (the cycle only, when one is set)
     Q_PROPERTY(bool masteringBusy READ masteringBusy NOTIFY masteringBusyChanged)

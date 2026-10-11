@@ -95,6 +95,7 @@ struct SynthParams {
     float attackMs = 2.0f, decayMs = 0.0f, sustain = 1.0f, releaseMs = 5.0f;  // sustain 0..1
     float cutoffHz = 20000.0f;  // one-pole low-pass on the sum of the voices (20 kHz: open)
     float level = 0.2f;         // linear
+    bool drums = false;         // "builtin.drums": the notes are General MIDI drums (kick, snare, toms, hats, clap) played from sounds made in the program
     bool operator==(const SynthParams&) const = default;
 };
 
@@ -122,7 +123,15 @@ private:
         double inc = 0.0;    // phase per sample
     };
     void updateRates() noexcept;
+    struct DrumVoice {
+        bool active = false;
+        std::uint8_t kind = 0;
+        float amp = 0.0f;
+        double pos = 0.0;
+    };
     std::array<Voice, 16> voices_{};
+    std::array<DrumVoice, 12> drumVoices_{};
+    std::size_t drumNext_ = 0;
     std::size_t stealNext_ = 0;
     double sampleRate_;
     SynthParams params_;

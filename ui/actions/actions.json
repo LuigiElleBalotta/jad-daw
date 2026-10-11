@@ -129,7 +129,7 @@
  {"id":"track.newTracks","label":"New Tracks…","menu":"Track","shortcut":"Ctrl+Alt+N","kind":"command","status":"ready"},
  {"id":"track.newAudio","label":"New Audio Track","menu":"Track","shortcut":"Ctrl+Alt+A","kind":"command","status":"ready"},
  {"id":"track.newInstrument","label":"New Software Instrument Track","menu":"Track","shortcut":"Ctrl+Alt+S","kind":"command","status":"ready"},
- {"id":"track.newSessionPlayerSiTrack","label":"New Session Player SI Track…","menu":"Track","shortcut":"Ctrl+Alt+U","kind":"command","status":"stub"},
+ {"id":"track.newSessionPlayerSiTrack","label":"New Session Player SI Track…","menu":"Track","shortcut":"Ctrl+Alt+U","kind":"command","status":"ready"},
  {"id":"track.newExternalMidiTrack","label":"New External MIDI Track","menu":"Track","shortcut":"Ctrl+Alt+X","kind":"command","status":"stub"},
  {"id":"track.newBus","label":"New Aux Track","menu":"Track","shortcut":"","kind":"command","status":"ready"},
  {"id":"track.other","label":"Other","menu":"Track","shortcut":"","kind":"command","status":"stub"},

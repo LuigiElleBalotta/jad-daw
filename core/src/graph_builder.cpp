@@ -92,6 +92,12 @@ bool configChanged(const Track& a, const Track& b) {
 
 audio::SynthParams synthParamsOf(const ProcessorRef& ref) {
     audio::SynthParams sp;  // the defaults are the sine instrument: a 2 ms attack, a 5 ms release
+    if (ref.processorId == kProcDrums) {
+        sp.drums = true;
+        const auto it = ref.params.find("level");
+        sp.level = dbToLinear(static_cast<float>(std::clamp(it == ref.params.end() ? -6.0 : it->second, -24.0, 6.0)));
+        return sp;
+    }
     if (ref.processorId != kProcSynth) return sp;
     const EffectSpec* spec = findInstrumentSpec(kProcSynth);
     auto get = [&](const char* name) {

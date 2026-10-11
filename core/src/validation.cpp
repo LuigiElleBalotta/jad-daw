@@ -268,6 +268,14 @@ MaybeError checkProject(const Project& p) {
             if (auto e = checkRegion(p, t.kind, r)) return e;
             if (!regionIds.insert(r.id).second) return CommandError{"duplicate_id", "region id used twice"};
         }
+        if (t.alternative.size() > 60 || t.alternatives.size() > 64) return CommandError{"bad_value", "a track has at most 65 alternatives with names of at most 60 bytes"};
+        for (const TrackAlternative& alt : t.alternatives) {
+            if (alt.name.empty() || alt.name.size() > 60) return CommandError{"bad_value", "an alternative name has 1 to 60 bytes"};
+            for (const Region& r : alt.regions) {
+                if (auto e = checkRegion(p, t.kind, r)) return e;
+                if (!regionIds.insert(r.id).second) return CommandError{"duplicate_id", "region id used twice"};
+            }
+        }
     }
 
     for (const Track& t : p.tracks) {

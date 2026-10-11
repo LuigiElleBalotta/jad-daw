@@ -483,7 +483,7 @@ void ProjectController::setGlobalTracksVisible(bool on) {
 
 QVariantList ProjectController::markers() const {
     QVariantList out;
-    for (const MarkerRow& m : markerRows_) out.append(QVariantMap{{"id", m.id}, {"beats", m.beats}, {"name", m.name}});
+    for (const MarkerRow& m : markerRows_) out.append(QVariantMap{{"id", m.id}, {"beats", m.beats}, {"name", m.name}, {"text", m.text}});
     return out;
 }
 
@@ -505,7 +505,8 @@ void ProjectController::sendMarkers(const std::vector<MarkerRow>& rows) {
     for (const MarkerRow& m : rows)
         list.push_back({{"id", m.id.toStdString()},
                         {"tick", static_cast<std::int64_t>(std::llround(std::clamp(m.beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))},
-                        {"name", m.name.left(200).toStdString()}});
+                        {"name", m.name.left(200).toStdString()},
+                        {"text", m.text.left(4000).toStdString()}});
     sendCommand({{"type", "set_markers"}, {"markers", list}});
 }
 
@@ -531,6 +532,21 @@ void ProjectController::renameMarker(const QString& id, const QString& name) {
     auto rows = markerRows_;
     for (MarkerRow& m : rows)
         if (m.id == id) m.name = name;
+    sendMarkers(rows);
+}
+
+QString ProjectController::markerAtOrBefore(double beats) const {
+    const MarkerRow* best = nullptr;
+    for (const MarkerRow& m : markerRows_)
+        if (m.beats <= beats + 1e-6 && (!best || m.beats > best->beats)) best = &m;
+    return best ? best->id : QString();
+}
+
+void ProjectController::setMarkerText(const QString& id, const QString& text) {
+    if (!host_) return;
+    auto rows = markerRows_;
+    for (MarkerRow& m : rows)
+        if (m.id == id) m.text = text.left(4000);
     sendMarkers(rows);
 }
 
@@ -4010,6 +4026,11 @@ QVariantMap ProjectController::unusedMedia() const {
             used.insert(r.mediaId.toString());
             if (r.flex) used.insert(r.flex->sourceMediaId.toString());
         }
+        for (const lpc::TrackAlternative& alt : t.alternatives)  // the other alternatives of a track need their files too
+            for (const lpc::Region& r : alt.regions) {
+                used.insert(r.mediaId.toString());
+                if (r.flex) used.insert(r.flex->sourceMediaId.toString());
+            }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
     }
     int count = 0;
@@ -4033,6 +4054,11 @@ void ProjectController::cleanUpProject() {
             used.insert(r.mediaId.toString());
             if (r.flex) used.insert(r.flex->sourceMediaId.toString());
         }
+        for (const lpc::TrackAlternative& alt : t.alternatives)  // the other alternatives of a track need their files too
+            for (const lpc::Region& r : alt.regions) {
+                used.insert(r.mediaId.toString());
+                if (r.flex) used.insert(r.flex->sourceMediaId.toString());
+            }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
     }
     nlohmann::json commands = nlohmann::json::array();

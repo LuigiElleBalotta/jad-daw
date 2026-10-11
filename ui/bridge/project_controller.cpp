@@ -938,6 +938,14 @@ nlohmann::json ProjectController::moveCommand(const RegionRow& row, double start
     return {{"type", "move_region"}, {"regionId", row.id.toStdString()}, {"start", start}};
 }
 
+void ProjectController::selectAbsoluteRegions() {
+    QStringList ids;
+    for (const RegionRow& r : regions_.rows())
+        if (r.absolute) ids.append(r.id);
+    if (ids.isEmpty()) emit notice("No region is locked to time (SMPTE): all of them follow the bars");
+    selectRegions(ids, "replace");
+}
+
 void ProjectController::selectAllTracks() {
     QStringList all;
     for (const TrackRow& t : allRows_)

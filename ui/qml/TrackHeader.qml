@@ -30,6 +30,11 @@ Item {
     property bool showSolo: true
     property bool showSliders: true
     property bool selected: false
+    property bool altShown: false         // Track > Show Track Alternatives: the button with the alternative that plays
+    property string alternative: "Main"
+    property var alternativeNames: []     // the others
+    signal alternativeChosen(string trackId, string name)
+    signal alternativeAction(string trackId, string action)   // new, duplicate, delete
     property int depth: 0                // Track Stacks: how many stacks the track is in (it is indented)
     property string stackKind: ""        // this track is a stack: folder or summing
     property bool stackOpen: true
@@ -59,6 +64,24 @@ Item {
     signal panReleased(string id, real pan)
     signal trackToggled(string trackId, string actionId, bool on)
     signal flexModeRequested(string trackId, string mode)
+    ThemedMenu {
+        id: altMenu
+        Instantiator {
+            model: [root.alternative].concat(root.alternativeNames)
+            delegate: ThemedMenuItem {
+                required property string modelData
+                required property int index
+                text: (index === 0 ? "✓ " : "    ") + modelData
+                onTriggered: if (index > 0) root.alternativeChosen(root.trackId, modelData)
+            }
+            onObjectAdded: (index, object) => altMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => altMenu.removeItem(object)
+        }
+        MenuSeparator { }
+        ThemedMenuItem { text: qsTr("New Alternative"); onTriggered: root.alternativeAction(root.trackId, "new") }
+        ThemedMenuItem { text: qsTr("Duplicate Alternative"); onTriggered: root.alternativeAction(root.trackId, "duplicate") }
+        ThemedMenuItem { text: qsTr("Delete Alternative"); enabled: root.alternativeNames.length > 0; onTriggered: root.alternativeAction(root.trackId, "delete") }
+    }
     readonly property alias flexButton: flexButton
     readonly property var flexModes: [{ id: "", label: qsTr("Off") }, { id: "slicing", label: qsTr("Slicing") }, { id: "rhythmic", label: qsTr("Rhythmic") },
                                       { id: "monophonic", label: qsTr("Monophonic") }, { id: "polyphonic", label: qsTr("Polyphonic") },
@@ -205,6 +228,15 @@ Item {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.spacing[1]
+            IconButton {
+                id: altButton
+                objectName: "alternativeButton"
+                visible: root.altShown && (root.kind === "audio" || root.kind === "instrument" || root.kind === "midi")
+                implicitWidth: Math.min(70, 16 + altLabel.implicitWidth); implicitHeight: 20
+                label: root.alternative
+                onClicked: altMenu.popup()
+                Text { id: altLabel; visible: false; text: root.alternative; font.pixelSize: Theme.fontTypeCaptionSize }
+            }
             IconButton {
                 id: flexButton
                 objectName: "flexButton"

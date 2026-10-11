@@ -434,6 +434,8 @@ public:
     Q_INVOKABLE void createMarkerAtPlayhead();
     Q_INVOKABLE void moveMarker(const QString& id, double beats);
     Q_INVOKABLE void renameMarker(const QString& id, const QString& name);
+    Q_INVOKABLE void setMarkerText(const QString& id, const QString& text);   // Marker Text: the text kept with a marker
+    Q_INVOKABLE QString markerAtOrBefore(double beats) const;                  // the id of the marker the playhead is in (the last at or before it), "" when none
     Q_INVOKABLE void removeMarker(const QString& id);
     Q_INVOKABLE void setTempoAt(double beats, double bpm);
     Q_INVOKABLE void removeTempoAt(double beats);
@@ -579,6 +581,11 @@ public:
     Q_PROPERTY(bool masteringBusy READ masteringBusy NOTIFY masteringBusyChanged)
     Q_INVOKABLE QString masterTrackId() const { return masterId_; }
     // Track Stacks (Track > Create Folder Stack / Summing Stack from the selected tracks)
+    // Track Alternatives: another set of regions for a track (Track > Show Track Alternatives puts a button in the track headers)
+    Q_PROPERTY(bool trackAlternativesShown READ trackAlternativesShown WRITE setTrackAlternativesShown NOTIFY trackAlternativesShownChanged)
+    Q_INVOKABLE void newTrackAlternative(const QString& trackId, bool duplicate);   // empty, or a copy of the one that plays; it plays now
+    Q_INVOKABLE void selectTrackAlternative(const QString& trackId, const QString& name);
+    Q_INVOKABLE void deleteTrackAlternative(const QString& trackId);                // the one that plays goes; the first of the others plays instead
     Q_INVOKABLE void createStack(const QString& kind);               // "folder" or "summing"
     Q_INVOKABLE void flattenStack(const QString& trackId);           // the tracks stay, the stack goes
     Q_INVOKABLE void convertFolderStackToSummingStack(const QString& trackId);
@@ -610,6 +617,7 @@ public:
     // Edit > Move > To Beat / First Transient to Nearest Beat: the first attack in each selected audio region is moved onto the nearest beat of the grid.
     Q_INVOKABLE void moveFirstTransientToNearestBeat();
     Q_INVOKABLE void openSelectedInExternalEditor();   // Edit > Open in External Sample Editor: the audio file in the program the system opens it with               // Edit > Bounce and Join > Join per Tracks
+    Q_INVOKABLE void selectAbsoluteRegions();  // Edit > Select > SMPTE-Locked Regions: the regions that keep their place in time, not in bars
     Q_INVOKABLE void selectAllTracks();  // Edit > Select Tracks
     Q_INVOKABLE void moveLocators(int direction);
     Q_INVOKABLE void deleteMarkerAtPlayhead();
@@ -882,6 +890,7 @@ signals:
     void flexBusyChanged();
     void flexAnalysisReady(const QString& regionId);
     void masteringBusyChanged();
+    void trackAlternativesShownChanged();
     void masteringAnalysed();
     void audioEnabledChanged();
     void mixerVisibleChanged();
@@ -1171,6 +1180,9 @@ private:
     QHash<QString, QList<QPair<double, bool>>> hints_;  // taps waiting to be applied together (fraction of the region, downbeat)
     int hintSerial_ = 0;
     void ensureJuce();  // starts JUCE (the MIDI and plug-in code of the platform layer needs it)
+    bool trackAlternativesShown() const { return trackAlternativesShown_; }
+    void setTrackAlternativesShown(bool on) { if (on != trackAlternativesShown_) { trackAlternativesShown_ = on; emit trackAlternativesShownChanged(); } }
+    bool trackAlternativesShown_ = false;
     bool masteringBusy() const { return masteringBusy_; }
     bool moveMarkerData(const QString& regionId, lpc::FlexData& data, int index, double fraction, bool slide) const;
     void flexMarkerPreviewRun(const QString& regionId, int index, double fraction, bool slide);

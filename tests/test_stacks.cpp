@@ -74,3 +74,79 @@ TEST_CASE("track stacks: a bus becomes a stack, tracks join it, and it cannot go
     REQUIRE(patch(stack.id, closed).ok());
     CHECK(projectFromJson(toJson(p)).findTrack(stack.id)->stackOpen == false);
 }
+
+TEST_CASE("marker text: it is kept with the marker, in JSON, with a size limit and undo", "[markers]") {
+    Project p{Uuid::random(gRng)};
+    Marker m;
+    m.id = Uuid::random(gRng);
+    m.tick = kPPQ;
+    m.name = "Verse";
+    m.text = "La la la\nsecond line";
+    ApplyResult r = makeSetMarkers({m})->apply(p);
+    REQUIRE(r.ok());
+    CHECK(projectFromJson(toJson(p)).markers[0].text == m.text);
+    nlohmann::json j = toJson(p);
+    j["markers"][0].erase("text");
+    CHECK(projectFromJson(j).markers[0].text.empty());          // an old file without text
+    Marker big = m;
+    big.text.assign(4001, 'x');
+    CHECK_FALSE(makeSetMarkers({big})->apply(p).ok());
+    REQUIRE(r.inverse->apply(p).ok());
+    CHECK(p.markers.empty());
+}
+
+TEST_CASE("track alternatives: another set of regions replaces the one that plays, and undo brings it back", "[alternatives]") {
+    Project p{Uuid::random(gRng)};
+    Track t = makeTrack(TrackKind::Instrument, "Keys");
+    t.instrument = ProcessorRef{"builtin.sine", {}, ""};
+    Region a;
+    a.id = Uuid::random(gRng);
+    a.start = 0;
+    a.length = 4 * kPPQ;
+    a.notes.push_back({0, kPPQ, 60, 90});
+    t.regions.push_back(a);
+    REQUIRE(makeAddTrack(t)->apply(p).ok());
+    const Project original = p;
+    // a new, empty alternative: the old regions are kept aside
+    ApplyResult made = makeSetTrackAlternatives(t.id, "Take 2", {TrackAlternative{"Main", {a}}}, {})->apply(p);
+    REQUIRE(made.ok());
+    CHECK(p.findTrack(t.id)->regions.empty());
+    CHECK(p.findTrack(t.id)->alternative == "Take 2");
+    REQUIRE(p.findTrack(t.id)->alternatives.size() == 1);
+    CHECK(!checkProject(p).has_value());
+    // the kept regions do not count as playing, but their ids stay taken
+    Region clash = a;
+    CHECK_FALSE(makeAddRegion(t.id, clash, -1)->apply(p).ok());
+    // JSON keeps the alternatives
+    const Project again = projectFromJson(toJson(p));
+    CHECK(again.findTrack(t.id)->alternatives[0].regions[0].id == a.id);
+    CHECK(again.findTrack(t.id)->alternative == "Take 2");
+    // switching back: the two sets trade places
+    ApplyResult back = makeSetTrackAlternatives(t.id, "Main", {TrackAlternative{"Take 2", {}}}, {a})->apply(p);
+    REQUIRE(back.ok());
+    CHECK(p.findTrack(t.id)->regions.size() == 1);
+    REQUIRE(back.inverse->apply(p).ok());
+    REQUIRE(made.inverse->apply(p).ok());
+    CHECK(p == original);
+    // media of a region in an alternative that does not play is still in use
+    MediaItem m{Uuid::random(gRng), "audio/x.wav", "h", 48000, 1, 48000};
+    REQUIRE(makeAddMedia(m)->apply(p).ok());
+    Track au = makeTrack(TrackKind::Audio, "Voice");
+    Region ar;
+    ar.id = Uuid::random(gRng);
+    ar.mediaId = m.id;
+    ar.length = kPPQ;
+    au.regions.push_back(ar);
+    REQUIRE(makeAddTrack(au)->apply(p).ok());
+    REQUIRE(makeSetTrackAlternatives(au.id, "Second", {TrackAlternative{"Main", {ar}}}, {})->apply(p).ok());
+    CHECK_FALSE(makeRemoveMedia(m.id)->apply(p).ok());
+    // a duplicate region id between alternatives is refused
+    Region twin = ar;
+    CHECK_FALSE(makeSetTrackAlternatives(au.id, "Second", {TrackAlternative{"Main", {ar}}}, {twin})->apply(p).ok());
+    // bad names
+    CHECK_FALSE(makeSetTrackAlternatives(au.id, "x", {TrackAlternative{"", {}}}, {})->apply(p).ok());
+    // a bus has no alternatives
+    Track bus = makeTrack(TrackKind::Bus, "Bus");
+    REQUIRE(makeAddTrack(bus)->apply(p).ok());
+    CHECK_FALSE(makeSetTrackAlternatives(bus.id, "x", {}, {})->apply(p).ok());
+}

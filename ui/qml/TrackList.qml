@@ -90,6 +90,11 @@ Rectangle {
             required icon
             required flexMode
             required depth
+            required alternative
+            required alternativeNames
+            altShown: root.project.trackAlternativesShown
+            onAlternativeChosen: (id, name) => root.project.selectTrackAlternative(id, name)
+            onAlternativeAction: (id, action) => { if (action === "delete") root.project.deleteTrackAlternative(id); else root.project.newTrackAlternative(id, action === "duplicate") }
             required stackKind
             required stackOpen
             onStackToggled: (id) => root.project.toggleStackOpen(id)

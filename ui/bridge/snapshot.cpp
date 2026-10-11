@@ -63,7 +63,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         s.groups.push_back(gr);
     }
     for (const lpc::Marker& m : p.markers)
-        s.markers.push_back({QString::fromStdString(m.id.toString()), QString::fromStdString(m.name), static_cast<double>(m.tick) / lpc::kPPQ});
+        s.markers.push_back({QString::fromStdString(m.id.toString()), QString::fromStdString(m.name), static_cast<double>(m.tick) / lpc::kPPQ, QString::fromStdString(m.text)});
     for (const lpc::MediaItem& m : p.mediaPool) s.mediaPaths.insert(QString::fromStdString(m.id.toString()), QString::fromStdString(m.path));
 
     int row = 0;       // colour rotation: counts every non-master track
@@ -93,6 +93,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         for (const lpc::Group& g : p.groups)
             if (std::find(g.members.begin(), g.members.end(), t.id) != g.members.end()) tr.groupId = QString::fromStdString(g.id.toString());
         tr.regionCount = static_cast<int>(t.regions.size());
+        tr.alternative = t.alternative.empty() ? QStringLiteral("Main") : QString::fromStdString(t.alternative);
+        for (const lpc::TrackAlternative& alt : t.alternatives) tr.alternativeNames << QString::fromStdString(alt.name);
         tr.stack = QString::fromStdString(t.stack);
         tr.stackOpen = t.stackOpen;
         bool folded = false;  // inside a closed stack

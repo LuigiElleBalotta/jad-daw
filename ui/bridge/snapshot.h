@@ -58,6 +58,8 @@ struct TrackRow {
     bool frozen = false;      // plays its rendered audio
     int transpose = 0, velocity = 0, keyLow = 0, keyHigh = 127, velocityLow = 1, velocityHigh = 127;  // the shaping of the notes of an instrument track
     QString icon;  // the key of the header picture ("" none)
+    QString alternative = QStringLiteral("Main");  // Track Alternatives: the name of the alternative that plays
+    QStringList alternativeNames;  // the other alternatives
     QString parentId;          // Track Stacks: the stack it is in (empty: none)
     int depth = 0;             // how many stacks it is inside
     QString stack;             // this track is a stack: folder or summing
@@ -121,6 +123,7 @@ bool sameIds(const std::vector<Row>& a, const std::vector<Row>& b) {
 struct MarkerRow {
     QString id, name;
     double beats = 0;
+    QString text;  // Marker Text
 };
 
 struct Snapshot {

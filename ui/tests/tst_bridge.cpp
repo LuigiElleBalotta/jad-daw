@@ -1571,6 +1571,51 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.tracks()->rowCount(), rows + 1);
     }
+    void trackAlternativesSwapTheRegionsOfATrackInOneUndoStepEach() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString keys;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->kindAt(i) == "instrument") keys = c.tracks()->trackIdAt(i);
+        QVERIFY(!keys.isEmpty());
+        const int regions = c.regions()->rowCount();
+        c.newTrackAlternative(keys, false);                                             // an empty alternative plays now
+        QTRY_COMPARE(c.regions()->rowCount(), regions - 1);
+        QCOMPARE(c.tracks()->find(keys)->alternative, QStringLiteral("Alt 1"));
+        QCOMPARE(c.tracks()->find(keys)->alternativeNames, QStringList{"Main"});
+        c.selectTrackAlternative(keys, "Main");                                         // back to the first
+        QTRY_COMPARE(c.regions()->rowCount(), regions);
+        QCOMPARE(c.tracks()->find(keys)->alternativeNames, QStringList{"Alt 1"});
+        c.newTrackAlternative(keys, true);                                              // a copy of it plays: the same regions, other ids
+        QTRY_COMPARE(c.tracks()->find(keys)->alternativeNames.size(), 2);
+        QCOMPARE(c.regions()->rowCount(), regions);
+        c.deleteTrackAlternative(keys);                                                 // the copy goes, another one plays
+        QTRY_COMPARE(c.tracks()->find(keys)->alternativeNames.size(), 1);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->find(keys)->alternativeNames.size(), 2);
+    }
+    void markerTextIsKeptWithTheMarkerAndTheSmallSelectionsWork() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        c.addMarker(4.0, "Verse");
+        QTRY_COMPARE(c.markers().size(), 1);
+        const QString id = c.markers().first().toMap().value("id").toString();
+        QCOMPARE(c.markerAtOrBefore(3.0), QString());                                 // before the first marker
+        QCOMPARE(c.markerAtOrBefore(5.0), id);
+        c.setMarkerText(id, "Lyrics of the verse");
+        QTRY_COMPARE(c.markers().first().toMap().value("text").toString(), QStringLiteral("Lyrics of the verse"));
+        c.undo();
+        QTRY_VERIFY(c.markers().first().toMap().value("text").toString().isEmpty());
+        // SMPTE-locked regions: none in the demo, so nothing is selected and the user is told
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        c.selectAbsoluteRegions();
+        QVERIFY(notices.count() >= 1);
+        QVERIFY(c.selectedRegionIds().isEmpty());
+    }
     void anExternalMidiTrackReachesARealPortWhenThereIsOne() {
         TempDir dir;
         jad::ProjectController c(false);

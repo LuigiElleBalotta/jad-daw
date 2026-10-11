@@ -266,6 +266,11 @@ void to_json(nlohmann::json& j, const Track& t) {
     if (!t.parent.isNull()) j["parent"] = t.parent;
     if (!t.stack.empty()) j["stack"] = t.stack;
     if (!t.stackOpen) j["stackOpen"] = false;
+    if (!t.alternative.empty()) j["alternative"] = t.alternative;
+    if (!t.alternatives.empty()) {
+        j["alternatives"] = nlohmann::json::array();
+        for (const TrackAlternative& a : t.alternatives) j["alternatives"].push_back({{"name", a.name}, {"regions", a.regions}});
+    }
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
     if (t.delayMs != 0.0) j["delayMs"] = t.delayMs;
     if (t.freeze) j["freeze"] = {{"mediaId", t.freeze->mediaId}, {"startFrame", t.freeze->startFrame}};
@@ -314,6 +319,15 @@ void from_json(const nlohmann::json& j, Track& t) {
     t.stack = j.value("stack", std::string());
     if (t.stack.size() > 10) throw std::runtime_error("a stack is folder or summing");
     t.stackOpen = j.value("stackOpen", true);
+    t.alternative = j.value("alternative", std::string());
+    t.alternatives.clear();
+    if (j.contains("alternatives"))
+        for (const auto& a : j.at("alternatives")) {
+            TrackAlternative alt;
+            alt.name = a.at("name").get<std::string>();
+            a.at("regions").get_to(alt.regions);
+            t.alternatives.push_back(std::move(alt));
+        }
 }
 
 nlohmann::json toJson(const Project& p) {

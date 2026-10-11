@@ -148,6 +148,12 @@ struct Freeze {
     bool operator==(const Freeze&) const = default;
 };
 
+struct TrackAlternative {  // Track Alternatives: another set of regions the track can play instead of the one it plays now
+    std::string name;
+    std::vector<Region> regions;
+    bool operator==(const TrackAlternative&) const = default;
+};
+
 struct Track {
     Uuid id;
     TrackKind kind = TrackKind::Audio;
@@ -167,7 +173,9 @@ struct Track {
     std::optional<Freeze> freeze;  // audio and instrument tracks
     double delayMs = 0.0;  // audio and instrument tracks: the regions play this many milliseconds later (earlier when negative)
     std::string automationMode = "read";  // "off" (the lanes are ignored), "read", "touch", "latch" or "write" (the last three record fader moves)
-    std::vector<Region> regions;
+    std::vector<Region> regions;  // the regions of the alternative that plays now
+    std::string alternative;      // its name (empty: it has not been named, "Main" is shown)
+    std::vector<TrackAlternative> alternatives;  // the other alternatives: their regions do not play
     std::vector<AutomationLane> automation;
     bool operator==(const Track&) const = default;
 };
@@ -176,6 +184,7 @@ struct Marker {
     Uuid id;
     Ticks tick = 0;
     std::string name;
+    std::string text;  // Marker Text: free text kept with the marker (lyrics, notes), up to 4000 bytes
     bool operator==(const Marker&) const = default;
 };
 

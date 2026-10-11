@@ -32,8 +32,11 @@ ApplyResult success(CommandPtr inverse) {
 
 std::unordered_set<Uuid> allRegionIds(const Project& p) {
     std::unordered_set<Uuid> ids;
-    for (const Track& t : p.tracks)
+    for (const Track& t : p.tracks) {
         for (const Region& r : t.regions) ids.insert(r.id);
+        for (const TrackAlternative& alt : t.alternatives)  // the regions of the other alternatives keep their ids
+            for (const Region& r : alt.regions) ids.insert(r.id);
+    }
     return ids;
 }
 
@@ -319,6 +322,7 @@ public:
         for (std::size_t i = 0; i < markers_.size(); ++i) {
             if (markers_[i].tick < 0 || markers_[i].tick > kMaxPosition) return fail("bad_marker", "a marker position is out of range");
             if (markers_[i].name.size() > 200) return fail("bad_marker", "a marker name is longer than 200 bytes");
+            if (markers_[i].text.size() > 4000) return fail("bad_marker", "a marker text is longer than 4000 bytes");
             for (std::size_t k = 0; k < i; ++k)
                 if (markers_[k].id == markers_[i].id) return fail("bad_marker", "marker ids must be unique");
         }
@@ -516,6 +520,40 @@ private:
     TrackPatch patch_;
 };
 
+// Track Alternatives: the regions that play, the name of that alternative and the other alternatives are replaced together; the inverse is the
+// same command with what was there.
+class SetTrackAlternativesCmd final : public Command {
+public:
+    SetTrackAlternativesCmd(Uuid id, std::string active, std::vector<TrackAlternative> others, std::vector<Region> regions)
+        : id_(id), active_(std::move(active)), others_(std::move(others)), regions_(std::move(regions)) {}
+    std::string type() const override { return "set_track_alternatives"; }
+    json toJson() const override {
+        json alts = json::array();
+        for (const TrackAlternative& a : others_) alts.push_back({{"name", a.name}, {"regions", a.regions}});
+        return {{"type", type()}, {"trackId", id_}, {"active", active_}, {"alternatives", alts}, {"regions", regions_}};
+    }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(id_);
+        if (!t) return fail("not_found", "no such track");
+        if (t->kind != TrackKind::Audio && t->kind != TrackKind::Instrument && t->kind != TrackKind::Midi) return fail("invalid_kind", "only audio, instrument and MIDI tracks have alternatives");
+        Track before = *t;
+        t->regions = regions_;
+        t->alternative = active_;
+        t->alternatives = others_;
+        if (auto e = checkProject(p)) {
+            *t = std::move(before);
+            return fail(e->code, e->message);
+        }
+        return success(std::make_unique<SetTrackAlternativesCmd>(id_, std::move(before.alternative), std::move(before.alternatives), std::move(before.regions)));
+    }
+
+private:
+    Uuid id_;
+    std::string active_;
+    std::vector<TrackAlternative> others_;
+    std::vector<Region> regions_;
+};
+
 class SetSignatureCmd final : public Command {
 public:
     SetSignatureCmd(Ticks tick, int num, int den) : tick_(tick), num_(num), den_(den) {}
@@ -585,9 +623,13 @@ public:
     ApplyResult apply(Project& p) const override {
         auto it = std::find_if(p.mediaPool.begin(), p.mediaPool.end(), [&](const MediaItem& m) { return m.id == id_; });
         if (it == p.mediaPool.end()) return fail("not_found", "no such media");
-        for (const Track& t : p.tracks)
+        for (const Track& t : p.tracks) {
             for (const Region& r : t.regions)
                 if (r.mediaId == id_ || (r.flex && r.flex->sourceMediaId == id_)) return fail("in_use", "a region still uses this media");
+            for (const TrackAlternative& alt : t.alternatives)
+                for (const Region& r : alt.regions)
+                    if (r.mediaId == id_ || (r.flex && r.flex->sourceMediaId == id_)) return fail("in_use", "a region of another alternative still uses this media");
+        }
         MediaItem removed = *it;
         const int index = static_cast<int>(it - p.mediaPool.begin());
         p.mediaPool.erase(it);
@@ -1053,6 +1095,9 @@ CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTem
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
 CommandPtr makeSetTrackOrder(std::vector<Uuid> order) { return std::make_unique<SetTrackOrderCmd>(std::move(order)); }
+CommandPtr makeSetTrackAlternatives(Uuid trackId, std::string active, std::vector<TrackAlternative> others, std::vector<Region> regions) {
+    return std::make_unique<SetTrackAlternativesCmd>(trackId, std::move(active), std::move(others), std::move(regions));
+}
 CommandPtr makeSetProjectKey(std::string key) { return std::make_unique<SetProjectKeyCmd>(std::move(key)); }
 CommandPtr makeSetProjectName(std::string name) { return std::make_unique<SetProjectNameCmd>(std::move(name)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
@@ -1093,6 +1138,16 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());
         if (type == "set_groups") return makeSetGroups(j.at("groups").get<std::vector<Group>>());
+        if (type == "set_track_alternatives") {
+            std::vector<TrackAlternative> others;
+            for (const auto& a : j.at("alternatives")) {
+                TrackAlternative alt;
+                alt.name = a.at("name").get<std::string>();
+                a.at("regions").get_to(alt.regions);
+                others.push_back(std::move(alt));
+            }
+            return makeSetTrackAlternatives(j.at("trackId").get<Uuid>(), j.at("active").get<std::string>(), std::move(others), j.at("regions").get<std::vector<Region>>());
+        }
         if (type == "set_track_order") return makeSetTrackOrder(j.at("order").get<std::vector<Uuid>>());
         if (type == "set_project_key") return makeSetProjectKey(j.at("key").get<std::string>());
         if (type == "set_project_name") return makeSetProjectName(j.at("name").get<std::string>());

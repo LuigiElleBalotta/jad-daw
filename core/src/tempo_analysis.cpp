@@ -76,25 +76,17 @@ std::vector<double> onsetStrength(const Mono& m) {
     return out;
 }
 
-}  // namespace
-
-TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm) {
-    TempoAnalysis result;
-    if (audio.frames() < audio.sampleRate || audio.channels < 1 || audio.sampleRate <= 0) return result;
-    const Mono mono = toMono(audio);
-    const std::vector<double> onset = onsetStrength(mono);
-    if (onset.size() < 64) return result;
-    const double fps = mono.rate / kHop;  // onset frames per second
-    const std::size_t n = onset.size();
-
-    // tempo: the autocorrelation of the onset curve, weighted towards 120 bpm
+// The beat period (in onset frames) of the stretch [from, to) of the onset curve: the autocorrelation, weighted towards 120 bpm, with a
+// parabola through its peak. 0 when nothing stands out.
+double estimatePeriod(const std::vector<double>& onset, std::size_t from, std::size_t to, double fps, double minBpm, double maxBpm, double* confidenceOut) {
+    const std::size_t n = to - from;
     const int lagLo = std::max(2, static_cast<int>(std::floor(60.0 * fps / maxBpm)));
     const int lagHi = std::min(static_cast<int>(n / 2), static_cast<int>(std::ceil(60.0 * fps / minBpm)));
-    if (lagHi <= lagLo + 2) return result;
+    if (lagHi <= lagLo + 2) return 0.0;
     std::vector<double> ac(static_cast<std::size_t>(lagHi * 2 + 2), 0.0);
     for (int lag = 1; lag < static_cast<int>(ac.size()) && lag < static_cast<int>(n); ++lag) {
         double s = 0.0;
-        for (std::size_t t = static_cast<std::size_t>(lag); t < n; ++t) s += onset[t] * onset[t - static_cast<std::size_t>(lag)];
+        for (std::size_t t = static_cast<std::size_t>(lag); t < n; ++t) s += onset[from + t] * onset[from + t - static_cast<std::size_t>(lag)];
         ac[static_cast<std::size_t>(lag)] = s / static_cast<double>(n - static_cast<std::size_t>(lag));
     }
     const double t0 = 60.0 * fps / 120.0;
@@ -110,29 +102,78 @@ TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm) {
         mean += score[static_cast<std::size_t>(lag)];
         if (score[static_cast<std::size_t>(lag)] > best) { best = score[static_cast<std::size_t>(lag)]; bestLag = lag; }
     }
-    if (bestLag == 0 || best <= 0.0) return result;
+    if (bestLag == 0 || best <= 0.0) return 0.0;
     mean /= (lagHi - lagLo + 1);
-    result.confidence = std::clamp((best / std::max(mean, 1e-9) - 1.0) / 6.0, 0.0, 1.0);
-    // a parabola through the peak and its neighbours for a period finer than a frame
+    if (confidenceOut) *confidenceOut = std::clamp((best / std::max(mean, 1e-9) - 1.0) / 6.0, 0.0, 1.0);
     double period = bestLag;
     if (bestLag > lagLo && bestLag < lagHi) {
         const double a = score[static_cast<std::size_t>(bestLag - 1)], b = score[static_cast<std::size_t>(bestLag)], c = score[static_cast<std::size_t>(bestLag + 1)];
         const double den = a - 2 * b + c;
         if (std::abs(den) > 1e-12) period += std::clamp(0.5 * (a - c) / den, -0.5, 0.5);
     }
+    return period;
+}
 
-    // the beats: dynamic programming (Ellis 2007)
+}  // namespace
+
+TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm, int beatsPerBar) {
+    TempoAnalysis result;
+    if (audio.frames() < audio.sampleRate || audio.channels < 1 || audio.sampleRate <= 0) return result;
+    const Mono mono = toMono(audio);
+    const std::vector<double> onset = onsetStrength(mono);
+    if (onset.size() < 64) return result;
+    const double fps = mono.rate / kHop;  // onset frames per second
+    const std::size_t n = onset.size();
+
+    // tempo: the autocorrelation of the onset curve, weighted towards 120 bpm; first over the whole recording, then over windows of ten seconds
+    // so that a recording that speeds up or slows down gets a period that follows it
+    double confidence = 0.0;
+    const double globalPeriod = estimatePeriod(onset, 0, n, fps, minBpm, maxBpm, &confidence);
+    if (globalPeriod <= 0.0) return result;
+    result.confidence = confidence;
+    std::vector<double> centres;  // the local period every second
+    const std::size_t hopFrames = std::max<std::size_t>(1, static_cast<std::size_t>(fps));
+    const std::size_t winReach = static_cast<std::size_t>(5.0 * fps);
+    if (n > 2 * winReach + hopFrames) {
+        for (std::size_t c = 0; c < n + hopFrames; c += hopFrames) {
+            const std::size_t from = c > winReach ? c - winReach : 0, to = std::min(n, c + winReach);
+            double conf = 0.0;
+            double per = to > from + 4 * winReach / 5 ? estimatePeriod(onset, from, to, fps, minBpm, maxBpm, &conf) : 0.0;
+            if (per <= 0.0 || conf < 0.15) per = globalPeriod;
+            centres.push_back(std::clamp(per, 0.7 * globalPeriod, 1.4 * globalPeriod));
+        }
+        std::vector<double> smoothed = centres;  // the median of five: one wrong window does not bend the track
+        for (std::size_t k = 0; k < centres.size(); ++k) {
+            std::vector<double> w;
+            for (std::size_t m = (k >= 2 ? k - 2 : 0); m <= std::min(centres.size() - 1, k + 2); ++m) w.push_back(centres[m]);
+            std::nth_element(w.begin(), w.begin() + static_cast<std::ptrdiff_t>(w.size() / 2), w.end());
+            smoothed[k] = w[w.size() / 2];
+        }
+        centres = std::move(smoothed);
+    }
+    auto periodAt = [&](std::size_t t) {
+        if (centres.empty()) return globalPeriod;
+        const double pos = static_cast<double>(t) / static_cast<double>(hopFrames);
+        const std::size_t k = std::min(centres.size() - 1, static_cast<std::size_t>(pos));
+        const std::size_t k2 = std::min(centres.size() - 1, k + 1);
+        const double f = std::clamp(pos - static_cast<double>(k), 0.0, 1.0);
+        return centres[k] * (1.0 - f) + centres[k2] * f;
+    };
+    const double period = globalPeriod;
+
+    // the beats: dynamic programming (Ellis 2007), with the period of the place
     const double alpha = 100.0;
     std::vector<double> cum(n, 0.0);
     std::vector<int> back(n, -1);
     for (std::size_t t = 0; t < n; ++t) {
-        const int from = static_cast<int>(std::lround(static_cast<double>(t) - 2.0 * period)), to = static_cast<int>(std::lround(static_cast<double>(t) - period / 2.0));
+        const double per = periodAt(t);
+        const int from = static_cast<int>(std::lround(static_cast<double>(t) - 2.0 * per)), to = static_cast<int>(std::lround(static_cast<double>(t) - per / 2.0));
         double bestPrev = 0.0;
         int arg = -1;
         bool any = false;
         for (int p = std::max(0, from); p <= to; ++p) {
             if (p < 0 || p >= static_cast<int>(t)) continue;
-            const double d = std::log(static_cast<double>(t - static_cast<std::size_t>(p)) / period);
+            const double d = std::log(static_cast<double>(t - static_cast<std::size_t>(p)) / per);
             const double v = cum[static_cast<std::size_t>(p)] - alpha * d * d;
             if (!any || v > bestPrev) { bestPrev = v; arg = p; any = true; }
         }
@@ -185,15 +226,32 @@ TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm) {
     }
     if (beats.size() < 3) return result;
 
-    // a bar of four: the phase whose beats carry the most onset strength opens the bars
-    result.beatsPerBar = 4;
-    double bestPhase = -1.0;
-    for (int p = 0; p < 4; ++p) {
-        double sum = 0.0;
-        int count = 0;
-        for (std::size_t i = static_cast<std::size_t>(p); i < frames.size(); i += 4, ++count) sum += onset[frames[i]];
-        const double avg = count ? sum / count : 0.0;
-        if (avg > bestPhase + 1e-9) { bestPhase = avg; result.firstDownbeat = p; }
+    // the bar: for a bar of 3 or of 4 beats, the phase whose beats carry the most onset strength opens the bars, and the better the
+    // accents repeat at that length the more likely it is the meter (four unless three is clearly better)
+    auto accent = [&](int bpb, int& phaseOut) {
+        std::vector<double> avg(static_cast<std::size_t>(bpb), 0.0);
+        std::vector<int> count(static_cast<std::size_t>(bpb), 0);
+        for (std::size_t i = 0; i < frames.size(); ++i) {
+            avg[i % static_cast<std::size_t>(bpb)] += onset[frames[i]];
+            ++count[i % static_cast<std::size_t>(bpb)];
+        }
+        double all = 0.0, top = -1.0;
+        for (int k = 0; k < bpb; ++k) {
+            avg[static_cast<std::size_t>(k)] /= std::max(1, count[static_cast<std::size_t>(k)]);
+            all += avg[static_cast<std::size_t>(k)];
+            if (avg[static_cast<std::size_t>(k)] > top + 1e-9) { top = avg[static_cast<std::size_t>(k)]; phaseOut = k; }
+        }
+        const double mean = all / bpb;
+        return mean > 1e-9 ? (top - mean) / mean : 0.0;  // how much the opening beat stands out
+    };
+    int phase3 = 0, phase4 = 0;
+    const double d3 = accent(3, phase3), d4 = accent(4, phase4);
+    if (beatsPerBar == 3 || (beatsPerBar == 0 && d3 > 1.3 * d4 + 0.05)) {
+        result.beatsPerBar = 3;
+        result.firstDownbeat = phase3;
+    } else {
+        result.beatsPerBar = 4;
+        result.firstDownbeat = phase4;
     }
     // the tempo from the beats found (their median distance), which is finer than the period on the onset curve
     std::vector<double> gaps;

@@ -1688,6 +1688,45 @@ private slots:
         c.undo();                                                                    // the findings are one step; the insert another
         QTRY_VERIFY(std::abs(c.trackInserts(master).last().toMap().value("params").toMap().value("gain").toDouble()) < 0.001);
     }
+    void smartTempoWritesTempoEventsAlongARecordingThatSpeedsUp() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        // hits that speed up from 90 to 130 bpm over about 40 s
+        const int rate = 48000, n = 42 * rate;
+        std::vector<float> v(static_cast<std::size_t>(n), 0.0f);
+        unsigned seed = 11;
+        for (int i = 0; i < n; ++i) v[static_cast<std::size_t>(i)] = 0.02f * std::sin(0.05f * static_cast<float>(i));
+        double t = 0.3;
+        while (t < 40.5) {
+            for (int i = 0; i < 2400; ++i) {
+                seed = seed * 1664525u + 1013904223u;
+                v[static_cast<std::size_t>(static_cast<int>(t * rate) + i)] += 0.7f * (static_cast<float>(seed >> 8) / 8388608.0f - 1.0f) * std::exp(-i / 380.0f);
+            }
+            const double bpm = 90.0 + 40.0 * t / 40.0;
+            t += 60.0 / bpm;
+        }
+        lpc::writeWav(other.path() / "accel.wav", rate, 1, v, lpc::WavFormat::Float32);
+        const QString track = firstAudioTrackId(c);
+        c.importAudio(url(other.path() / "accel.wav"), track, 0.0);
+        QString id;
+        QTRY_VERIFY_WITH_TIMEOUT([&] { for (int i = 0; i < c.regions()->rowCount(); ++i) { const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i)); if (r && r->audio && r->lengthBeats > 40) { id = r->id; return true; } } return false; }(), 30000);
+        c.smartApplyRegionTempo(id);
+        QTRY_VERIFY_WITH_TIMEOUT(c.tempoEvents().size() >= 4, 120000);                // tempo events along the recording
+        const QVariantList events = c.tempoEvents();
+        double first = 0, last = 0;
+        for (const QVariant& e : events) {
+            const double b = e.toMap().value("beats").toDouble(), bpm = e.toMap().value("bpm").toDouble();
+            if (b < 10.0) first = bpm;
+            if (b > 40.0 && b < 80.0) last = std::max(last, bpm);
+        }
+        QString all; for (const QVariant& e : events) all += QString(" %1@%2").arg(e.toMap().value("bpm").toDouble(), 0, 'f', 1).arg(e.toMap().value("beats").toDouble(), 0, 'f', 1);
+        QVERIFY2(std::abs(first - 90.0) < 12.0, qPrintable(QString("first %1 events:%2").arg(first).arg(all)));
+        QVERIFY2(last > 110.0, qPrintable(QString("last %1").arg(last)));           // it ended near 130
+        c.undo();
+        QTRY_VERIFY(c.tempoEvents().size() < events.size());
+    }
     void flexMarkerPreviewDoesNotBreakAnything() {
         TempDir dir, other;
         jad::ProjectController c(false);
@@ -1881,19 +1920,21 @@ private slots:
         QVERIFY(c.openProject(url(makeDemo(dir))));
         QTRY_VERIFY(c.regions()->rowCount() > 0);
         const auto aiff = other.path() / "mix.aif";
+        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        auto bounced = [&] { for (const auto& n : notices) if (n.at(0).toString().startsWith("Bounced")) return true; return false; };   // the file is complete when this arrives
         c.bounceProjectAs(url(aiff), {{"format", "aiff16"}, {"normalize", true}, {"tail", 0.0}});
-        QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(aiff) && std::filesystem::file_size(aiff) > 1000, 20000);
+        QTRY_VERIFY_WITH_TIMEOUT(bounced(), 20000);
         const lpc::WavData d = lpc::decodeAudioFile(aiff);
         QCOMPARE(d.channels, 2);
         QVERIFY(std::abs(lpc::peakOf(d) - std::pow(10.0f, -0.3f / 20.0f)) < 0.01f);   // normalized to -0.3 dBFS
-        QSignalSpy notices(&c, &jad::ProjectController::notice);
+        notices.clear();
         c.bounceProjectAs(url(other.path() / "cycle.wav"), {{"range", "cycle"}});
         QVERIFY(!c.lastError().isEmpty());                                              // no cycle area set
         c.setLoopBeats(0, 2);
         c.setLoopBeats(0, 0);                                                           // the area stays when the cycle is off
         c.clearError();
         c.bounceProjectAs(url(other.path() / "cycle.wav"), {{"range", "cycle"}, {"tail", 0.0}});
-        QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(other.path() / "cycle.wav"), 20000);
+        QTRY_VERIFY_WITH_TIMEOUT(bounced(), 20000);
         const lpc::WavData cycle = lpc::decodeAudioFile(other.path() / "cycle.wav");
         QVERIFY(std::abs(cycle.frames() - 2 * 24000) < 600);                            // 2 beats at 120 bpm = 1 s
     }

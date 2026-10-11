@@ -17,6 +17,7 @@ struct TempoAnalysis {
     int beatsPerBar = 4;
 };
 
-TempoAnalysis analyseTempo(const WavData& audio, double minBpm = 60.0, double maxBpm = 200.0);
+// `beatsPerBar`: 0 finds out whether the bars have three or four beats; 3 or 4 sets it.
+TempoAnalysis analyseTempo(const WavData& audio, double minBpm = 60.0, double maxBpm = 200.0, int beatsPerBar = 0);
 
 }  // namespace lpc

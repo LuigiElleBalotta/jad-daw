@@ -73,6 +73,20 @@ TEST_CASE("tempo: the accented hit opens the bars", "[tempo]") {
     CHECK(static_cast<int>(nearest % 4) == a.firstDownbeat);
 }
 
+TEST_CASE("tempo: a waltz (accent every third beat) reads as three beats a bar", "[tempo]") {
+    const std::vector<double> hits = grid(110.0, 0.2, 29.5);
+    const TempoAnalysis a = analyseTempo(pulses(30.0, hits, 3, 1));   // the accent on hits 1, 4, 7...
+    REQUIRE(a.bpm > 0);
+    CHECK(a.beatsPerBar == 3);
+    const std::int64_t frame = static_cast<std::int64_t>(hits[1] * kRate);
+    std::size_t nearest = 0;
+    for (std::size_t i = 0; i < a.beats.size(); ++i)
+        if (std::abs(a.beats[i] - frame) < std::abs(a.beats[nearest] - frame)) nearest = i;
+    CHECK(static_cast<int>(nearest % 3) == a.firstDownbeat);
+    // and four stays four
+    CHECK(analyseTempo(pulses(30.0, grid(120.0, 0.2, 29.5), 4, 2)).beatsPerBar == 4);
+}
+
 TEST_CASE("tempo: silence and a very short sound have no tempo", "[tempo]") {
     WavData quiet;
     quiet.sampleRate = kRate;
@@ -169,4 +183,28 @@ TEST_CASE("analyses on a real recording (LPC_REAL_AUDIO)", "[real]") {
     std::cout << "mastered: " << after.integrated << " LUFS, range " << after.range << " LU, true peak " << after.truePeakDb << " dBTP" << std::endl;
     CHECK(after.truePeakDb <= -0.7);
     CHECK(after.integrated > m.before.integrated + 3.0);   // louder; -14 itself needs a peak-to-loudness ratio of about 13 dB, this recording has 22
+}
+
+TEST_CASE("tempo: a recording that speeds up from 90 to 130 bpm is followed by its beats", "[tempo]") {
+    std::vector<double> hits;
+    for (double t = 0.3; t < 40.5;) {
+        hits.push_back(t);
+        t += 60.0 / (90.0 + 40.0 * t / 40.0);
+    }
+    const TempoAnalysis a = analyseTempo(pulses(42.0, hits, 4, 0));
+    REQUIRE(a.beats.size() > 40);
+    // the tempo between beats in the first quarter and in the last quarter of the recording
+    auto local = [&](double fromSec, double toSec) {
+        std::vector<double> v;
+        for (std::size_t i = 1; i < a.beats.size(); ++i) {
+            const double at = static_cast<double>(a.beats[i]) / kRate;
+            if (at >= fromSec && at < toSec) v.push_back(60.0 * kRate / static_cast<double>(a.beats[i] - a.beats[i - 1]));
+        }
+        std::sort(v.begin(), v.end());
+        return v.empty() ? 0.0 : v[v.size() / 2];
+    };
+    const double early = local(0.0, 10.0), late = local(30.0, 41.0);
+    WARN("early " << early << " bpm, late " << late << " bpm");
+    CHECK(std::abs(early - 95.0) < 8.0);   // 90 at the start, 100 at ten seconds
+    CHECK(std::abs(late - 125.0) < 8.0);   // 120 to 130
 }

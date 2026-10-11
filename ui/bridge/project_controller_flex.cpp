@@ -12,6 +12,7 @@
 #include <QtConcurrent>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -1148,7 +1149,55 @@ void ProjectController::smartApplyRegionTempo(const QString& regionId) {
         emit notice("No steady tempo was found in this region");
         return;
     }
-    sendCommand({{"type", "set_tempo"}, {"tick", 0}, {"bpm", std::clamp(std::round(bpm * 100.0) / 100.0, 20.0, 999.0)}});
+    // the beats: from the flex data, or from the analysis that was just made
+    std::vector<std::int64_t> beats = data.beats ? data.beats->beats : std::vector<std::int64_t>();
+    if (beats.empty() && entry.tempo) beats = entry.tempo->beats;
+    // the tempo between every two beats, smoothed (the median of three), to see whether the recording keeps its tempo
+    std::vector<double> perBeat;
+    for (std::size_t i = 0; i + 1 < beats.size(); ++i) perBeat.push_back(60.0 * sampleRate_ / static_cast<double>(std::max<std::int64_t>(1, beats[i + 1] - beats[i])));
+    std::vector<double> smooth = perBeat;
+    for (std::size_t i = 1; i + 1 < perBeat.size(); ++i) {
+        std::array<double, 3> w{perBeat[i - 1], perBeat[i], perBeat[i + 1]};
+        std::sort(w.begin(), w.end());
+        smooth[i] = w[1];
+    }
+    double lo = 1e9, hi = 0.0;
+    for (double v : smooth) { lo = std::min(lo, v); hi = std::max(hi, v); }
+    if (smooth.size() < 8 || (hi - lo) / std::max(1.0, bpm) < 0.04) {  // a steady recording: one tempo
+        sendCommand({{"type", "set_tempo"}, {"tick", 0}, {"bpm", std::clamp(std::round(bpm * 100.0) / 100.0, 20.0, 999.0)}});
+        return;
+    }
+    // a recording that speeds up or slows down: tempo events along its beats, put where each beat falls on the project's beats
+    lpc::FlexData probe = data;
+    if (!probe.beats) {
+        lpc::FlexBeats b;
+        b.bpm = bpm;
+        b.beatsPerBar = entry.tempo ? entry.tempo->beatsPerBar : 4;
+        b.firstDownbeat = entry.tempo ? entry.tempo->firstDownbeat : 0;
+        b.beats = beats;
+        probe.beats = b;
+    }
+    if (!smartMarkers(*row, probe)) return;  // finds where the first beat lands (the anchor)
+    const double anchor = probe.beats->anchor;
+    nlohmann::json commands = nlohmann::json::array();
+    double written = -1.0;
+    lpc::Ticks lastTick = 0;
+    for (std::size_t i = 0; i < smooth.size(); ++i) {
+        const lpc::Ticks tick = static_cast<lpc::Ticks>(std::llround((row->startBeats + anchor + static_cast<double>(i)) * lpc::kPPQ));
+        if (tick < 0) continue;
+        if (written < 0.0 || std::abs(smooth[i] - written) > 0.5) {
+            const double v = std::clamp(std::round(smooth[i] * 100.0) / 100.0, 20.0, 999.0);
+            commands.push_back({{"type", "set_tempo"}, {"tick", tick}, {"bpm", v}});
+            written = v;
+        }
+        lastTick = tick;
+    }
+    // after the recording the tempo it had before comes back
+    const double before = tempoMap_.bpmAt(lastTick + lpc::kPPQ);
+    if (std::abs(before - written) > 0.01) commands.push_back({{"type", "set_tempo"}, {"tick", lastTick + lpc::kPPQ}, {"bpm", before}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+    emit notice(QString("The tempo follows the recording (%1 to %2 bpm)").arg(lo, 0, 'f', 1).arg(hi, 0, 'f', 1));
 }
 
 void ProjectController::smartRefollow() {

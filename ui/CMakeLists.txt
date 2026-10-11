@@ -1,4 +1,4 @@
-find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickControls2 QuickTest Test Concurrent)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickControls2 QuickTest Test Concurrent Network)
 qt_standard_project_setup(REQUIRES 6.8)
 
 set_source_files_properties(qml/Theme.qml qml/ActionHub.qml qml/InsertDrag.qml qml/StripMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -20,6 +20,8 @@ qt_add_qml_module(jad_ui_lib
         bridge/project_controller_flex.cpp
         bridge/project_controller_mastering.cpp
         bridge/project_controller_stacks.cpp
+        bridge/project_controller_live.cpp
+        bridge/live_link.cpp
         bridge/waveform_cache.cpp
         bridge/lcd_parse.cpp
         bridge/inspector_model.cpp
@@ -175,7 +177,7 @@ qt_add_qml_module(jad_ui_lib
         actions/actions.json
         ${CMAKE_SOURCE_DIR}/core/data/patches.json
 )
-target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent lpc_core)
+target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent Qt6::Network lpc_core)
 target_include_directories(jad_ui_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bridge ${CMAKE_CURRENT_SOURCE_DIR}/actions)
 if(TARGET lpc_juce_device)
     target_link_libraries(jad_ui_lib PUBLIC lpc_juce_device)

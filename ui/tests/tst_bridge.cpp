@@ -1,12 +1,16 @@
 #include <QSettings>
 #include <QDir>
 #include <QSignalSpy>
+#include <QStandardPaths>
+#include <QTcpSocket>
 #include <QtTest>
 #include <cmath>
 #include <fstream>
 #include <limits>
 
+#include "bridge/live_link.h"
 #include "bridge/project_controller.h"
+#include <nlohmann/json.hpp>
 #include "lpc/audio/engine.h"
 #include "lpc/demo_project.h"
 #include "lpc/project_io.h"
@@ -3693,6 +3697,70 @@ private slots:
         QVERIFY(e.inspectorVisible());
         QVERIFY(!e.libraryVisible());
         QCOMPARE(e.leftColumnWidth(), 240.0);
+    }
+    void liveLinkAnswersAnAssistant() {
+        QStandardPaths::setTestModeEnabled(true);  // the port file goes to a test location, not to the user's
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QVERIFY(!c.liveLinkOn());
+        c.setLiveLink(true);
+        QVERIFY(c.liveLinkOn());
+        QFile info(jad::LiveLink::infoFilePath());
+        QVERIFY(info.open(QIODevice::ReadOnly));
+        const auto access = nlohmann::json::parse(info.readAll().toStdString());
+        info.close();
+        QTcpSocket socket;
+        socket.connectToHost(QHostAddress::LocalHost, static_cast<quint16>(access["port"].get<int>()));
+        QVERIFY(socket.waitForConnected(3000));
+        int nextId = 0;
+        auto ask = [&](const std::string& text, bool withToken = true) {
+            nlohmann::json request = nlohmann::json::parse(text);
+            request["id"] = ++nextId;
+            if (withToken) request["token"] = access["token"];
+            socket.write(QByteArray::fromStdString(request.dump() + "\n"));
+            [&] { QTRY_VERIFY2_WITH_TIMEOUT(socket.canReadLine(), "no answer", 5000); }();
+            const nlohmann::json answer = nlohmann::json::parse(socket.readLine().toStdString());
+            [&] { QCOMPARE(answer["id"].get<int>(), nextId); }();
+            return answer;
+        };
+        QVERIFY(!ask(R"({"op":"state"})", false)["ok"].get<bool>());  // no token: refused
+        const auto hello = ask(R"({"op":"hello"})");
+        QVERIFY(hello["ok"].get<bool>());
+        QVERIFY(hello["hasProject"].get<bool>());
+        const auto state = ask(R"({"op":"state"})");
+        QVERIFY(state["ok"].get<bool>());
+        QVERIFY(state["project"]["tracks"].size() >= 2);
+        QVERIFY(ask(R"({"op":"meters"})")["ok"].get<bool>());
+        // two changes, one undo step
+        std::string trackId;
+        for (const auto& t : state["project"]["tracks"])
+            if (t["kind"] != "master") { trackId = t["id"].get<std::string>(); break; }
+        QVERIFY(!trackId.empty());
+        const auto applied = ask(R"({"op":"apply","commands":[{"type":"set_strip","trackId":")" + trackId + R"(","gainDb":-7.5},{"type":"set_strip","trackId":")" + trackId + R"(","pan":0.25}]})");
+        QVERIFY2(applied["ok"].get<bool>(), applied.dump().c_str());
+        QTRY_VERIFY([&] {
+            const auto now = ask(R"({"op":"state"})");
+            for (const auto& t : now["project"]["tracks"])
+                if (t["id"] == trackId) return std::abs(t["gainDb"].get<double>() + 7.5) < 1e-6 && std::abs(t["pan"].get<double>() - 0.25) < 1e-6;
+            return false;
+        }());
+        const auto refused = ask(R"({"op":"apply","commands":[{"type":"set_strip","trackId":"00000000-0000-0000-0000-000000000001","gainDb":1}]})");
+        QVERIFY(!refused["ok"].get<bool>());
+        QVERIFY(!refused["error"].get<std::string>().empty());
+        // export: a copy of the project as it is now, with the change
+        const auto copy = dir.path() / "copy.lpc";
+        QVERIFY(ask(nlohmann::json{{"op", "export"}, {"dir", copy.string()}}.dump())["ok"].get<bool>());
+        const lpc::Project exported = lpc::loadProject(copy);
+        bool found = false;
+        for (const lpc::Track& t : exported.tracks)
+            if (t.id.toString() == trackId) { found = true; QCOMPARE(t.strip.gainDb, -7.5f); }
+        QVERIFY(found);
+        QVERIFY(!ask(R"({"op":"nonsense"})")["ok"].get<bool>());
+        c.setLiveLink(false);
+        QVERIFY(!c.liveLinkOn());
+        QVERIFY(!QFile::exists(jad::LiveLink::infoFilePath()));
     }
     void announceStubEmitsANotice() {
         jad::ProjectController c(false);

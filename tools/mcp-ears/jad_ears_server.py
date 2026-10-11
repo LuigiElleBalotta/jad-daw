@@ -84,7 +84,8 @@ def is_session(path):
 
 def log(project, tool, args, result):
     try:
-        with open(os.path.join(norm(project), ".ai-log.jsonl"), "a", encoding="utf-8") as f:
+        logfile = os.path.join(tempfile.gettempdir(), "jad-live-ai-log.jsonl") if is_live(project) else os.path.join(norm(project), ".ai-log.jsonl")
+        with open(logfile, "a", encoding="utf-8") as f:
             f.write(json.dumps({"time": datetime.datetime.now().isoformat(timespec="seconds"), "tool": tool, "arguments": args, "result": result}, ensure_ascii=False) + "\n")
     except OSError:
         pass
@@ -104,13 +105,68 @@ def save_history(project):
 
 
 def require_writable(project):
-    if is_session(project) or os.environ.get("JAD_MCP_WRITE_ORIGINAL") == "1":
-        return norm(project)
+    if is_live(project) or is_session(project) or os.environ.get("JAD_MCP_WRITE_ORIGINAL") == "1":
+        return norm(project) if not is_live(project) else LIVE
     raise ToolError("this tool changes the project: call open_project first and use the session it returns (the original stays untouched), "
                     "or set JAD_MCP_WRITE_ORIGINAL=1")
 
 
+# ------------------------------------------------------------------------------------------------- the running app ("live")
+# With the live link on (Help > AI Assistant Link) the project "live" is the one open in the app: reads come from it, changes are commands in the app
+# (one undo step each, which the user can undo there), and listening is done on a copy of the project as it is now.
+
+LIVE = "live"
+LIVE_COPY = os.path.join(tempfile.gettempdir(), "jad-live-copy")
+
+
+def is_live(project):
+    return str(project).strip().lower() == LIVE
+
+
+def live_info_path():
+    env = os.environ.get("JAD_LIVE_LINK_FILE")
+    if env:
+        return env
+    base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "JAD", "JAD Daw", "live-link.json")
+
+
+def live_request(op, timeout=60, **fields):
+    import socket
+    try:
+        with open(live_info_path(), encoding="utf-8") as f:
+            info = json.load(f)
+    except (OSError, ValueError):
+        raise ToolError("the app is not linked: open JAD Daw and switch on Help > AI Assistant Link")
+    try:
+        with socket.create_connection(("127.0.0.1", int(info["port"])), timeout=5) as s:
+            s.settimeout(timeout)
+            s.sendall((json.dumps(dict(fields, op=op, token=info["token"], id=1)) + "\n").encode("utf-8"))
+            buf = b""
+            while not buf.endswith(b"\n"):
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+    except OSError:
+        raise ToolError("the app does not answer: is JAD Daw still open with the AI Assistant Link on?")
+    reply = json.loads(buf.decode("utf-8"))
+    if not reply.get("ok"):
+        raise ToolError(reply.get("error", "the app refused the request"))
+    return reply
+
+
+def project_dir(project):
+    """The folder `lpc-cli` can read: the project itself, or for "live" a copy of the open project as it is now."""
+    if is_live(project):
+        live_request("export", dir=LIVE_COPY)
+        return LIVE_COPY
+    return norm(project)
+
+
 def snapshot(project):
+    if is_live(project):
+        return live_request("state")["project"]
     return run_cli(["snapshot", norm(project)])
 
 
@@ -129,6 +185,9 @@ def resolve_track(project, selector):
 
 def apply_commands(project, commands, what):
     path = require_writable(project)
+    if path == LIVE:
+        live_request("apply", commands=commands)
+        return {"done": what, "project": LIVE, "note": "one undo step in the app (Edit > Undo, or the undo tool)"}
     n = save_history(path)
     path_json = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
     try:
@@ -183,12 +242,12 @@ def range_args(a):
 
 
 def t_analyze_mix(a):
-    return run_cli(["analyze", norm(a["project"])] + range_args(a) + ([] if a.get("tempo", True) else ["--no-tempo"]))
+    return run_cli(["analyze", project_dir(a["project"])] + range_args(a) + ([] if a.get("tempo", True) else ["--no-tempo"]))
 
 
 def t_analyze_track(a):
     track, _ = resolve_track(a["project"], a["track"])
-    return run_cli(["analyze", norm(a["project"]), "--track", track["id"]] + range_args(a) + ([] if a.get("tempo", False) else ["--no-tempo"]))
+    return run_cli(["analyze", project_dir(a["project"]), "--track", track["id"]] + range_args(a) + ([] if a.get("tempo", False) else ["--no-tempo"]))
 
 
 def t_analyze_file(a):
@@ -198,7 +257,7 @@ def t_analyze_file(a):
 def t_compare_tracks(a):
     ta, _ = resolve_track(a["project"], a["track_a"])
     tb, _ = resolve_track(a["project"], a["track_b"])
-    return run_cli(["masking", norm(a["project"]), ta["id"], tb["id"]] + range_args(a))
+    return run_cli(["masking", project_dir(a["project"]), ta["id"], tb["id"]] + range_args(a))
 
 
 def t_set_fader(a):
@@ -261,8 +320,27 @@ def t_apply_commands(a):
     return apply_commands(a["project"], a["commands"], "%d command(s)" % len(a["commands"]))
 
 
+def run_mastering_live(a):
+    """Mastering on the open project: the assistant runs on a copy, and what it found is put in the app as one undo step."""
+    copy = project_dir(LIVE)
+    result = run_cli(["mastering", copy] + range_args(a))
+    master = [t for t in snapshot(copy) ["tracks"] if t["kind"] == "master"][0]
+    found = [i for i in master["inserts"] if i["processorId"] == "builtin.mastering"][0]
+    live_master = [t for t in snapshot(LIVE)["tracks"] if t["kind"] == "master"][0]
+    existing = [i for i in live_master["inserts"] if i["processorId"] == "builtin.mastering"]
+    if existing:
+        cmds = [{"type": "set_insert_param", "trackId": live_master["id"], "index": existing[0]["index"], "param": k, "value": v} for k, v in found["params"].items()]
+    else:
+        cmds = [{"type": "add_insert", "trackId": live_master["id"], "index": -1, "insert": {"processorId": "builtin.mastering", "params": found["params"], "state": ""}}]
+    live_request("apply", commands=cmds)
+    result["appliedTo"] = "the master of the open project (one undo step in the app)"
+    return result
+
+
 def t_run_mastering_assistant(a):
     path = require_writable(a["project"])
+    if path == LIVE:
+        return run_mastering_live(a)
     n = save_history(path)
     try:
         result = run_cli(["mastering", path] + range_args(a))
@@ -275,7 +353,7 @@ def t_run_mastering_assistant(a):
 
 def t_render_excerpt(a):
     out = a.get("out") or os.path.join(tempfile.gettempdir(), "jad-excerpt-%d.wav" % int(datetime.datetime.now().timestamp()))
-    args = ["render", norm(a["project"]), out, "--bits", "16"]
+    args = ["render", project_dir(a["project"]), out, "--bits", "16"]
     if a.get("to_seconds") is not None:
         args += ["--seconds", str(a["to_seconds"])]
     if a.get("track"):
@@ -286,11 +364,73 @@ def t_render_excerpt(a):
     return {"file": out, "analysis": report}
 
 
+def t_import_audio(a):
+    path = require_writable(a["project"])
+    if path == LIVE:
+        raise ToolError("importing into the open app is not supported: use the session of open_project, or Import in the app")
+    n = save_history(path)
+    args = ["import", path, norm(a["file"])]
+    if a.get("track"):
+        track, _ = resolve_track(path, a["track"])
+        args += ["--track", track["id"]]
+    if a.get("name"):
+        args += ["--name", a["name"]]
+    if a.get("start_seconds") is not None:
+        args += ["--start-seconds", str(a["start_seconds"])]
+    try:
+        result = run_cli(args)
+    except ToolError:
+        os.remove(os.path.join(history_dir(path), "%04d.json" % n))
+        raise
+    result["undoSteps"] = n
+    return result
+
+
 def t_effects(a):
     return run_cli(["effects"])
 
 
+def t_live_status(a):
+    return live_request("hello")
+
+
+def t_live_meters(a):
+    """The level meters of the running app. With `seconds`, they are read a few times a second and the loudest values are kept (a peak that came and went is not lost)."""
+    seconds = float(a.get("seconds", 0))
+    reply = live_request("meters")
+    if seconds > 0:
+        import time
+        end = time.time() + min(seconds, 120)
+        while time.time() < end:
+            time.sleep(0.25)
+            now = live_request("meters")
+            reply["masterPeakDb"] = max(reply["masterPeakDb"], now["masterPeakDb"])
+            peaks = {t["id"]: t for t in reply["tracks"]}
+            for t in now["tracks"]:
+                if t["id"] in peaks:
+                    peaks[t["id"]]["peakDb"] = max(peaks[t["id"]]["peakDb"], t["peakDb"])
+                    peaks[t["id"]]["holdDb"] = t["holdDb"]
+            reply["positionSeconds"] = now["positionSeconds"]
+            reply["playing"] = now["playing"]
+    reply.pop("ok", None)
+    reply.pop("id", None)
+    return reply
+
+
+def t_live_transport(a):
+    action = a["action"]
+    if action == "locate":
+        live_request("locate", seconds=float(a.get("seconds", 0)))
+    elif action in ("play", "stop", "reset_peaks"):
+        live_request(action)
+    else:
+        raise ToolError("action must be play, stop, locate or reset_peaks")
+    return live_request("hello")
+
+
 def t_history(a):
+    if is_live(a["project"]):
+        raise ToolError("the open project keeps its own history: the changes are undo steps in the app (undo takes them back)")
     path = norm(a["project"])
     d = os.path.join(path, ".ai-history")
     steps = sorted(f for f in os.listdir(d)) if os.path.isdir(d) else []
@@ -304,6 +444,10 @@ def t_history(a):
 
 def t_undo(a):
     path = require_writable(a["project"])
+    if path == LIVE:
+        for _ in range(int(a.get("steps", 1))):
+            live_request("undo")
+        return {"undone": int(a.get("steps", 1)), "project": LIVE}
     d = history_dir(path)
     steps = sorted(f for f in os.listdir(d) if f.endswith(".json"))
     if not steps:
@@ -333,7 +477,7 @@ def obj(props, required=None):
     return {"type": "object", "properties": props, "required": required or [], "additionalProperties": False}
 
 
-P = {"type": "string", "description": "the project folder (a session from open_project for tools that change it)"}
+P = {"type": "string", "description": "the project folder (a session from open_project for tools that change it), or \"live\" for the project open in the running app (needs Help > AI Assistant Link)"}
 TRACK = {"type": "string", "description": "track name or id"}
 FROM = {"type": "number", "description": "start of the excerpt, seconds"}
 TO = {"type": "number", "description": "end of the excerpt, seconds"}
@@ -368,9 +512,15 @@ TOOLS = [
      "Returns the loudness before and after.", obj({"project": P, "from_seconds": FROM, "to_seconds": TO}, ["project"]), t_run_mastering_assistant),
     ("render_excerpt", "Render a part of the project (or one track alone) to a 16-bit WAV file and return its path with its analysis.",
      obj({"project": P, "from_seconds": FROM, "to_seconds": TO, "track": TRACK, "out": {"type": "string"}}, ["project"]), t_render_excerpt),
+    ("import_audio", "Bring an audio file (wav, mp3, flac, aiff) into the session as a new track (or on an existing track), starting at start_seconds. Use it to add a reference track to compare with.",
+     obj({"project": P, "file": {"type": "string"}, "track": TRACK, "name": {"type": "string"}, "start_seconds": {"type": "number"}}, ["project", "file"]), t_import_audio),
     ("list_effects", "The built-in effects and instruments with every parameter: name, unit, minimum, maximum, default.", obj({}), t_effects),
     ("history", "What was changed in this session (the undo steps and the last calls).", obj({"project": P}, ["project"]), t_history),
-    ("undo", "Undo the last change made in this session.", obj({"project": P}, ["project"]), t_undo),
+    ("undo", "Undo the last change made in this session (or in the open app when the project is \"live\").", obj({"project": P, "steps": {"type": "integer"}}, ["project"]), t_undo),
+    ("live_status", "Is the app linked? The project that is open, whether it plays, where the playhead is, whether it has unsaved changes.", obj({}), t_live_status),
+    ("live_meters", "The level meters of the running app: master peak, each track's peak and hold in dB, gain reduction of compressors, playhead. With seconds, the loudest values over that time "
+     "are kept (play a section first).", obj({"seconds": {"type": "number"}}), t_live_meters),
+    ("live_transport", "Drive the transport of the running app: play, stop, locate (seconds), reset_peaks.", obj({"action": {"type": "string", "enum": ["play", "stop", "locate", "reset_peaks"]}, "seconds": {"type": "number"}}, ["action"]), t_live_transport),
     ("commit_session", "Write the session back to the original project (the original is kept as <project>.before-ai), or to another folder with `to`.",
      obj({"session": {"type": "string"}, "to": {"type": "string"}}, ["session"]), t_commit_session),
 ]
@@ -393,7 +543,7 @@ def call_tool(name, arguments):
             raise ToolError("missing argument: " + key)
     result = fn(arguments)
     project = arguments.get("project") or arguments.get("session")
-    if project and os.path.isdir(norm(project)) and name not in ("open_project",):
+    if project and (is_live(project) or os.path.isdir(norm(project))) and name not in ("open_project",):
         log(project, name, arguments, result if len(json.dumps(result)) < 2000 else "(long result)")
     return result
 

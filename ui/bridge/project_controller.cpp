@@ -1,4 +1,5 @@
 #include "bridge/project_controller.h"
+#include "bridge/live_link.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -1730,6 +1731,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     for (const QString& k : s.value("panels/barItemsOff").toStringList()) barItemsOff_.insert(k);
     autoInput_ = s.value("record/autoInputMonitoring", autoInput_).toBool();
     loadClickSettings(s);
+    if (s.value("ai/liveLink", false).toBool()) QTimer::singleShot(0, this, [this] { setLiveLink(true); });
     loadAudioSettings(s);
     loadMidiSettings(s);
     loadIoSettings(s);

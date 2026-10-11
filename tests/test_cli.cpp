@@ -193,4 +193,30 @@ TEST_CASE("cli ears: snapshot lists the project, analyze listens to a track, mas
     CHECK(loadProject(tmp.path / "demo.lpc").findTrack(*Uuid::parse(toneId))->strip.gainDb == -12.0f);
 }
 
+TEST_CASE("cli ears: import brings an audio file in as a new track or onto a track", "[cli][ears]") {
+    test::TempDir tmp;
+    const std::string proj = path(tmp.path / "demo.lpc");
+    REQUIRE(run({"demo", proj}).code == 0);
+    const std::string tone = path(tmp.path / "demo.lpc" / "audio" / "tone.wav");
+    const Run added = run({"import", proj, tone, "--name", "Reference", "--start-seconds", "1"});
+    REQUIRE(added.code == 0);
+    const nlohmann::json a = nlohmann::json::parse(added.out);
+    CHECK(a["ok"] == true);
+    const Project p = loadProject(tmp.path / "demo.lpc");
+    const Track* t = p.findTrack(*Uuid::parse(a["trackId"].get<std::string>()));
+    REQUIRE(t != nullptr);
+    CHECK(t->name == "Reference");
+    REQUIRE(t->regions.size() == 1);
+    CHECK(t->regions[0].start == 1000000);
+    CHECK(p.mediaPool.size() == 2);
+    CHECK(std::filesystem::exists(tmp.path / "demo.lpc" / "audio" / "tone (2).wav"));
+    // onto an existing track
+    REQUIRE(run({"import", proj, tone, "--track", "Reference"}).code == 0);
+    CHECK(loadProject(tmp.path / "demo.lpc").findTrack(t->id)->regions.size() == 2);
+    // refused: nothing is written
+    CHECK(run({"import", proj, path(tmp.path / "nothing.wav")}).code != 0);
+    CHECK(run({"import", proj, tone, "--track", "No such track"}).code == 1);
+    CHECK(run({"import", proj}).code == 1);
+}
+
 #endif  // LPC_HAVE_CLI_LIB

@@ -32,6 +32,9 @@ Add it to an MCP client, for example in `.mcp.json`:
 
     { "mcpServers": { "jad-ears": { "command": "python", "args": ["tools/mcp-ears/jad_ears_server.py"] } } }
 
+With **Help > AI Assistant Link** on, the running app also listens on the loopback interface (port and token in
+`%LOCALAPPDATA%\JAD\JAD Daw\live-link.json`) and the same tools work on the open project by passing `"live"` as the project:
+read its state and meters, change faders and inserts as undo steps of the app, drive the transport, and listen to a copy of the project as it is now.
 Set `JAD_CLI` if `lpc-cli` is not in the build folders. Test: `python tools/mcp-ears/test_server.py`.
 
 ## UI

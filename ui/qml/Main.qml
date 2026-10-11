@@ -282,6 +282,7 @@ ApplicationWindow {
 
     // what each real action does; every other id in the table is a stub (see actions/actions.json)
     readonly property var handlers: ({
+        "help.aiLiveLink": () => controller.setLiveLink(!controller.liveLinkOn),
         "help.about": () => aboutDialog.open(),
         "file.new": () => root.guard(() => newDialog.open()),
         "file.open": () => root.guard(() => openDialog.open()),
@@ -614,6 +615,7 @@ ApplicationWindow {
         "mix.preFaderMetering": controller.preFaderMetering,
         "mix.groupsActive": controller.groupsActive,
         "transport.metronome": controller.metronomeOn,
+        "help.aiLiveLink": controller.liveLinkOn,
         "transport.record": controller.recording,
         "transport.punch": controller.punchEnabled,
         "mix.enableAutomationQuickAccess": controller.automationQuickAccess,

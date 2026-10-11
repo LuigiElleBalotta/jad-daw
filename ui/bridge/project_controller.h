@@ -35,6 +35,10 @@
 #include "bridge/track_list_model.h"
 #include "bridge/waveform_cache.h"
 
+namespace jad {
+class LiveLink;
+}
+
 namespace lpc {
 class MediaStore;
 class PatchLibrary;
@@ -371,6 +375,11 @@ public:
     void loadClickSettings(QSettings& s);
     void saveClickSettings(QSettings& s) const;
     Q_INVOKABLE void setMetronome(bool on);
+    // The live link for an AI assistant (Help > AI Assistant Link): a loopback socket with a token; see live_link.h and project_controller_live.cpp.
+    Q_PROPERTY(bool liveLinkOn READ liveLinkOn NOTIFY liveLinkChanged)
+    bool liveLinkOn() const;
+    Q_INVOKABLE void setLiveLink(bool on);
+    Q_INVOKABLE QString liveLinkInfoPath() const;
     bool automationVisible() const { return automationVisible_; }
     void setAutomationVisible(bool on);
     QString automationParam() const { return automationParam_; }
@@ -869,6 +878,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void metronomeChanged();
+    void liveLinkChanged();
     void barsChanged();
     void showHiddenTracksChanged();
     void meteringChanged();
@@ -931,6 +941,8 @@ private:
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
     void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false, bool musical = false, bool recorded = false);
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
+    void liveHandle(const nlohmann::json& request, std::function<void(const nlohmann::json&)> reply);
+    std::unique_ptr<LiveLink> live_;
     QString inspectorBusId_, pinOwner_;  // the pinned bus of the right strip and the track it was pinned for
     int routingRevision_ = 0;
     QString selectWhenListed_;  // a track made by a command: selected as soon as a snapshot lists it

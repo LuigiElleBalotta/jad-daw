@@ -18,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include "lpc/audio_analysis.h"
+#include "lpc/wav.h"
 #include "lpc/audio_decode.h"
 #include "lpc/commands.h"
 #include "lpc/effect_specs.h"
@@ -26,6 +27,7 @@
 #include "lpc/model_json.h"
 #include "lpc/offline_render.h"
 #include "lpc/processor_ids.h"
+#include "lpc/project_summary.h"
 #include "lpc/project_io.h"
 
 namespace lpc::cli {
@@ -41,14 +43,14 @@ struct Usage {
 
 fs::path toPath(const std::string& s) { return fs::path(std::u8string(s.begin(), s.end())); }
 
+std::string text_of(const fs::path& p) {
+    const auto u = p.u8string();
+    return std::string(u.begin(), u.end());
+}
+
 std::string lower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return s;
-}
-
-const char* kindName(TrackKind k) {
-    static const char* names[] = {"audio", "midi", "instrument", "aux", "bus", "master"};
-    return names[static_cast<int>(k)];
 }
 
 const Track* findTrackBy(const Project& p, const std::string& selector) {
@@ -137,67 +139,11 @@ void parseRange(const std::optional<std::string>& s, double& from, double& to) {
     if (!(from >= 0 && to > from)) throw Usage{"--seconds needs a range like 10:40"};
 }
 
-json snapshotOf(const Project& p) {
-    json j;
-    j["name"] = p.name;
-    j["sampleRate"] = p.sampleRate;
-    j["tempo"] = json::array();
-    for (const auto& e : p.tempoMap.tempos()) j["tempo"].push_back({{"beat", static_cast<double>(e.tick) / kPPQ}, {"bpm", e.bpm}});
-    j["timeSignature"] = json::array();
-    for (const auto& e : p.tempoMap.signatures()) j["timeSignature"].push_back({{"beat", static_cast<double>(e.tick) / kPPQ}, {"numerator", e.numerator}, {"denominator", e.denominator}});
-    j["markers"] = json::array();
-    for (const Marker& m : p.markers) j["markers"].push_back({{"id", m.id.toString()}, {"beat", static_cast<double>(m.tick) / kPPQ}, {"name", m.name}, {"text", m.text}});
-    j["lengthSeconds"] = std::round(static_cast<double>(projectEndFrame(p)) / std::max(1, p.sampleRate) * 100.0) / 100.0;
-    json tracks = json::array();
-    for (const Track& t : p.tracks) {
-        json x = {{"id", t.id.toString()}, {"name", t.name}, {"kind", kindName(t.kind)}, {"gainDb", t.strip.gainDb}, {"pan", t.strip.pan}, {"mute", t.strip.mute}, {"solo", t.strip.solo}};
-        if (!t.strip.output.isNull()) {
-            const Track* out = p.findTrack(t.strip.output);
-            x["output"] = out ? out->name : t.strip.output.toString();
-        } else if (t.kind != TrackKind::Master) {
-            x["output"] = "Master";
-        }
-        if (t.instrument) x["instrument"] = {{"processorId", t.instrument->processorId}, {"params", t.instrument->params}, {"label", t.instrument->label}};
-        x["inserts"] = json::array();
-        int index = 0;
-        for (const ProcessorRef& i : t.strip.inserts) x["inserts"].push_back({{"index", index++}, {"processorId", i.processorId}, {"label", i.label}, {"bypass", i.bypass}, {"params", i.params}});
-        x["sends"] = json::array();
-        for (const Send& s : t.strip.sends) {
-            const Track* target = p.findTrack(s.targetTrackId);
-            x["sends"].push_back({{"id", s.id.toString()}, {"target", target ? target->name : s.targetTrackId.toString()}, {"levelDb", s.levelDb}, {"preFader", s.preFader}});
-        }
-        x["regions"] = json::array();
-        for (const Region& r : t.regions) {
-            json rr = {{"id", r.id.toString()}, {"startBeat", static_cast<double>(r.start) / kPPQ}, {"lengthBeats", static_cast<double>(r.length) / kPPQ},
-                       {"muted", r.muted}, {"gainDb", r.gainDb}, {"notes", static_cast<int>(r.notes.size())}};
-            if (!r.mediaId.isNull())
-                if (const MediaItem* m = p.findMedia(r.mediaId)) rr["file"] = m->path;
-            if (r.flex) rr["flex"] = true;
-            if (!r.generator.empty()) rr["sessionPlayer"] = true;
-            x["regions"].push_back(std::move(rr));
-        }
-        if (!t.automation.empty()) {
-            x["automation"] = json::array();
-            for (const AutomationLane& l : t.automation) x["automation"].push_back({{"target", l.target}, {"points", static_cast<int>(l.points.size())}});
-        }
-        if (t.flexMode.size()) x["flexMode"] = t.flexMode;
-        if (!t.stack.empty()) x["stack"] = t.stack;
-        if (!t.parent.isNull()) x["parent"] = t.parent.toString();
-        if (!t.alternatives.empty()) {
-            x["alternative"] = t.alternative.empty() ? "Main" : t.alternative;
-            x["otherAlternatives"] = static_cast<int>(t.alternatives.size());
-        }
-        tracks.push_back(std::move(x));
-    }
-    j["tracks"] = std::move(tracks);
-    return j;
-}
-
 int cmdSnapshot(const std::vector<std::string>& args, std::ostream& out) {
     const Options o = parseOptions(args, {}, {"--full"});
     if (o.positional.size() != 1) throw Usage{"snapshot needs a project directory"};
     const Project p = loadProject(toPath(o.positional[0]));
-    out << (o.has("--full") ? toJson(p) : snapshotOf(p)).dump(1) << "\n";
+    out << (o.has("--full") ? toJson(p) : projectSummary(p)).dump(1) << "\n";
     return 0;
 }
 
@@ -391,7 +337,85 @@ Project soloTrackProject(Project project, const std::string& selector) {
     }
 }
 
-bool isEarsCommand(const std::string& cmd) { return cmd == "snapshot" || cmd == "analyze" || cmd == "masking" || cmd == "apply" || cmd == "mastering" || cmd == "effects"; }
+// Brings an audio file (wav, mp3, flac, aiff) into the project like the app does: converted to the project's rate and written as a 24-bit WAV in audio/,
+// then a media item and a region (on `--track`, or on a new audio track) in one transaction.
+int cmdImport(const std::vector<std::string>& args, std::ostream& out) {
+    const Options o = parseOptions(args, {"--track", "--name", "--start-seconds"}, {});
+    if (o.positional.size() != 2) throw Usage{"import needs a project directory and an audio file"};
+    const fs::path dir = toPath(o.positional[0]);
+    const fs::path source = toPath(o.positional[1]);
+    Project p = loadProject(dir);
+    if (!isImportableAudioExtension(lower(source.extension().string()))) throw Usage{"only WAV, MP3, FLAC and AIFF files can be imported"};
+    double start = 0.0;
+    if (const auto s = o.get("--start-seconds")) {
+        try {
+            start = std::stod(*s);
+        } catch (const std::exception&) {
+            throw Usage{"--start-seconds needs a number"};
+        }
+        if (!(start >= 0.0)) throw Usage{"--start-seconds needs a number of at least 0"};
+    }
+    const WavData data = convertForProject(decodeAudioFile(source), p.sampleRate);
+    if (data.frames() == 0) throw Usage{"the file has no audio"};
+    fs::create_directories(dir / "audio");
+    fs::path target;
+    for (int n = 1;; ++n) {
+        target = dir / "audio" / (n == 1 ? source.stem().u16string() + u".wav" : source.stem().u16string() + u" (" + std::u16string(1, static_cast<char16_t>(u'0' + n % 10)) + u").wav");
+        if (n > 9) throw Usage{"too many files with that name in audio/"};
+        if (!fs::exists(target)) break;
+    }
+    writeWav(target, p.sampleRate, data.channels, data.samples, WavFormat::Pcm24);
+    std::uint64_t h = 1469598103934665603ull;  // FNV-1a over the file: an identifier, not a security check
+    {
+        std::ifstream in(target, std::ios::binary);
+        char buf[65536];
+        while (in.read(buf, sizeof buf) || in.gcount() > 0) {
+            for (std::streamsize i = 0; i < in.gcount(); ++i) h = (h ^ static_cast<unsigned char>(buf[i])) * 1099511628211ull;
+            if (in.eof()) break;
+        }
+    }
+    MediaItem item;
+    item.id = Uuid::random();
+    const std::u8string rel = (fs::path("audio") / target.filename()).generic_u8string();
+    item.path.assign(rel.begin(), rel.end());
+    item.hash = "fnv1a-" + [&] { char b[20]; std::snprintf(b, sizeof b, "%016llx", static_cast<unsigned long long>(h)); return std::string(b); }();
+    item.sampleRate = p.sampleRate;
+    item.channels = data.channels;
+    item.frames = data.frames();
+    Region region;
+    region.id = Uuid::random();
+    region.timeBase = TimeBase::Absolute;
+    region.start = static_cast<std::int64_t>(std::llround(start * 1e6));
+    region.length = std::max<std::int64_t>(1, std::llround(static_cast<double>(data.frames()) * 1e6 / p.sampleRate));
+    region.mediaId = item.id;
+    json commands = json::array();
+    Uuid trackId;
+    if (const auto selector = o.get("--track")) {
+        trackId = findTrackBy(p, *selector)->id;
+    } else {
+        Track t;
+        t.id = Uuid::random();
+        t.kind = TrackKind::Audio;
+        t.name = o.get("--name").value_or(text_of(source.stem()));
+        trackId = t.id;
+        commands.push_back({{"type", "add_track"}, {"track", t}, {"index", -1}});
+    }
+    commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
+    commands.push_back({{"type", "add_region"}, {"trackId", trackId.toString()}, {"region", region}, {"index", -1}});
+    const ApplyResult r = commandFromJson({{"type", "transaction"}, {"commands", commands}})->apply(p);
+    if (!r.ok()) {
+        std::error_code ignore;
+        fs::remove(target, ignore);
+        throw Usage{"the project refused the import: " + r.error->code + ": " + r.error->message};
+    }
+    saveProject(p, dir);
+    out << json{{"ok", true}, {"trackId", trackId.toString()}, {"file", item.path}, {"seconds", std::round(static_cast<double>(data.frames()) / p.sampleRate * 100.0) / 100.0}}.dump(1) << "\n";
+    return 0;
+}
+
+bool isEarsCommand(const std::string& cmd) {
+    return cmd == "snapshot" || cmd == "analyze" || cmd == "masking" || cmd == "apply" || cmd == "mastering" || cmd == "effects" || cmd == "import";
+}
 
 int runEars(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
     try {
@@ -402,6 +426,7 @@ int runEars(const std::vector<std::string>& args, std::ostream& out, std::ostrea
         if (cmd == "apply") return cmdApply(args, out);
         if (cmd == "mastering") return cmdMastering(args, out);
         if (cmd == "effects") return cmdEffects(out);
+        if (cmd == "import") return cmdImport(args, out);
     } catch (const Usage& e) {
         err << "error: " << e.message << "\n";
         return 1;

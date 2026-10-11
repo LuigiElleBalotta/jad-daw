@@ -28,8 +28,8 @@ class Client:
         assert reply["id"] == self.n, reply
         return reply
 
-    def tool(self, name, **args):
-        reply = self.call("tools/call", {"name": name, "arguments": args})["result"]
+    def tool(self, tool_name, **args):
+        reply = self.call("tools/call", {"name": tool_name, "arguments": args})["result"]
         text = reply["content"][0]["text"]
         return reply["isError"], (json.loads(text) if not reply["isError"] else text)
 
@@ -95,10 +95,16 @@ def main():
         err, eff = c.tool("list_effects")
         check(not err and any(e["id"] == "builtin.compressor" for e in eff["effects"]), "list_effects")
 
+        err, imp = c.tool("import_audio", project=session, file=os.path.join(session, "audio", "tone.wav"), name="Reference")
+        check(not err and imp["ok"], "import_audio adds a track: %s" % (imp if err else ""))
+        _, listed = c.tool("list_tracks", project=session)
+        check(any(t["name"] == "Reference" and t["regions"] == 1 for t in listed["tracks"]), "the imported track has its region")
+        err, live = c.tool("live_status")
+        check(err and "AI Assistant Link" in live or not err, "live_status says how to link when the app is off")
         err, bad = c.tool("set_fader", project=session, track="no such track", gain_db=0)
         check(err, "unknown track is an error")
         err, hist = c.tool("history", project=session)
-        check(not err and hist["undoSteps"] >= 4, "history counts %s steps" % hist.get("undoSteps"))
+        check(not err and hist["undoSteps"] >= 5, "history counts %s steps" % hist.get("undoSteps"))
 
         for _i in range(hist["undoSteps"]):
             c.tool("undo", project=session)

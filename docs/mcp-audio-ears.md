@@ -5,7 +5,7 @@ DAW, and it must also let the model *hear* the project, because the goal is a re
 An LLM cannot listen to a waveform. It can read numbers, text and images, and some models accept short audio clips. So the server
 must turn sound into those things.
 
-State today: the MCP server does not exist yet. What exists and is ready to be exposed: every edit is a JSON command (`ProjectHost`),
+State today: the MCP server exists (`tools/mcp-ears`, offline analysis on session copies and a live link to the running app); the images, the audio clips and the compare-two-renders tool below are still to do. Original text: the MCP server did not exist yet. What exists and is ready to be exposed: every edit is a JSON command (`ProjectHost`),
 `lpc-cli render` makes a deterministic offline bounce of the whole project, and the engine keeps a master peak. The tools below are
 the "ears" half of the server and should be designed in the same step as the "hands" half (commands).
 

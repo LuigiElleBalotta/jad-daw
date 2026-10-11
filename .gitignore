@@ -13,3 +13,4 @@ build-plugin/
 
 # local secrets (API keys): never committed
 .secrets/
+.scratch-audio/

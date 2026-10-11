@@ -211,3 +211,15 @@ TEST_CASE("flex pitch render: a range is the same as the matching part of the wh
     REQUIRE(part.frames() == 30000);
     for (std::int64_t i = 0; i < 30000; ++i) REQUIRE(part.samples[static_cast<std::size_t>(i)] == whole.samples[static_cast<std::size_t>(30000 + i)]);
 }
+
+// Optional: LPC_VOICE_WAV=<a recording of speech or singing> prints what the pitch analysis finds in it (not run when unset).
+TEST_CASE("flex pitch: a real voice recording (LPC_VOICE_WAV)", "[flex][pitch][voice]") {
+    const char* path = std::getenv("LPC_VOICE_WAV");
+    if (!path) return;
+    const WavData wav = readWav(path);
+    const PitchAnalysis a = analysePitch(wav);
+    WARN("frames " << wav.frames() << " notes " << a.notes.size());
+    for (const FlexNote& n : a.notes) WARN("note start " << n.start / double(wav.sampleRate) << "s len " << n.length / double(wav.sampleRate) << "s pitch " << n.pitch);
+    CHECK(!a.notes.empty());
+    for (const FlexNote& n : a.notes) CHECK((n.pitch > 28 && n.pitch < 90));
+}

@@ -636,4 +636,14 @@ WavData renderFlexPitch(const WavData& src, const PitchAnalysis& analysis, const
     return r;
 }
 
+std::vector<float> flexNoteCurve(const PitchAnalysis& analysis, const FlexNote& note, const NoteEdit& edit) {
+    std::vector<float> out;
+    if (analysis.hop <= 0 || analysis.midi.empty() || note.length <= 0) return out;
+    Channels none;
+    none.n = std::max(analysis.frames, note.start + note.length);
+    const NoteRenderer r(none, analysis, note, edit);
+    for (std::int64_t p = note.start; p <= note.start + note.length; p += analysis.hop) out.push_back(static_cast<float>(r.targetAt(static_cast<double>(p))));
+    return out;
+}
+
 }  // namespace lpc

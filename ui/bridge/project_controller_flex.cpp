@@ -722,6 +722,31 @@ QVariantList ProjectController::flexPitchNotes(const QString& regionId) {
     return out;
 }
 
+QVariantList ProjectController::flexPitchCurves(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!row || !row->audio || row->missing || row->lengthFrames <= 0) return {};
+    lpc::FlexData data = flexDataOf(*row);
+    const FlexState::Entry entry = flexState().entries.value(windowKey(data));
+    if (!entry.pitchDone || !entry.pitch) return {};
+    if (data.notes.empty()) data.notes = lpc::flexNoteData(entry.pitch->notes);
+    lpc::PitchAnalysis a = *entry.pitch;
+    a.notes = lpc::flexNotes(data);
+    const std::vector<lpc::NoteEdit> edits = lpc::flexEdits(data);
+    const lpc::TimeMap map(data.sourceLength, row->lengthFrames, lpc::flexAnchors(data));
+    const double total = static_cast<double>(row->lengthFrames);
+    QVariantList out;
+    for (std::size_t i = 0; i < a.notes.size(); ++i) {
+        const std::vector<float> curve = lpc::flexNoteCurve(a, a.notes[i], i < edits.size() ? edits[i] : lpc::NoteEdit{});
+        QVariantList points;
+        for (std::size_t k = 0; k < curve.size(); ++k) {
+            points.append(map.toDest(static_cast<double>(a.notes[i].start) + static_cast<double>(k) * a.hop) / total);
+            points.append(static_cast<double>(curve[k]));
+        }
+        out.append(QVariantMap{{"index", static_cast<int>(i)}, {"points", points}});
+    }
+    return out;
+}
+
 void ProjectController::flexNoteEdit(const QString& regionId, int index, const QVariantMap& edit) {
     lpc::FlexData data;
     if (!flexPrepare(regionId, data, true)) return;

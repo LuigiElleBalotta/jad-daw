@@ -40,6 +40,7 @@ int main(int argc, char** argv) {
     QCommandLineOption selectRegionOption("select-region", "Select region number <n> (1-based) for --screenshot.", "n");
     QCommandLineOption applyPatchOption("apply-patch", "Apply the patch <id> to the selected track for --screenshot.", "id");
     QCommandLineOption softwareOption("software", "Render without a GPU (icons are missing).");
+    QCommandLineOption flexOption("flex", "Show Flex and switch the first audio track to the Flex mode <mode> for --screenshot.", "mode");
     QCommandLineOption sizeOption("size", "Window size for --screenshot, for example 1280x800.", "WxH", "1280x800");
     QCommandLineOption windowOption("window", "Open the dialog or window <name> for --screenshot (a window is pictured on its own).", "name");
     QCommandLineOption delayOption("delay", "Milliseconds to wait before the screenshot.", "ms", "1500");
@@ -51,6 +52,7 @@ int main(int argc, char** argv) {
     parser.addOption(applyPatchOption);
     parser.addOption(selectRegionOption);
     parser.addOption(toolOption);
+    parser.addOption(flexOption);
     parser.addOption(selectTrackOption);
     parser.addOption(menuOption);
     parser.addOption(sizeOption);
@@ -87,8 +89,19 @@ int main(int argc, char** argv) {
         const QString file = parser.value(screenshotOption);
         const int delay = parser.value(delayOption).toInt();
         // the state for the picture is set shortly before it is taken, once the project has been shown
-        QTimer::singleShot(delay, &app, [&parser, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &applyPatchOption, &menuOption, &windowOption, controller, window, file, &app] {
+        QTimer::singleShot(delay, &app, [&parser, &flexOption, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &applyPatchOption, &menuOption, &windowOption, controller, window, file, &app] {
             if (controller && parser.isSet(toolOption)) controller->setTool(parser.value(toolOption));
+            if (controller && parser.isSet(flexOption)) {
+                controller->setFlexView(true);
+                for (int i = 0; i < controller->tracks()->rowCount(); ++i) {
+                    const QString id = controller->tracks()->trackIdAt(i);
+                    const auto roles = controller->tracks()->roleNames();
+                    if (controller->tracks()->data(controller->tracks()->index(i), roles.key("kind")).toString() == "audio") {
+                        controller->setTrackFlexMode(id, parser.value(flexOption));
+                        break;
+                    }
+                }
+            }
             if (controller && parser.isSet(selectTrackOption))
                 controller->selectTrack(controller->tracks()->trackIdAt(parser.value(selectTrackOption).toInt() - 1), "replace");
             if (controller && parser.isSet(panelsOption)) {
@@ -111,7 +124,7 @@ int main(int argc, char** argv) {
                 QMetaObject::invokeMethod(window, "showWindow", Q_RETURN_ARG(QVariant, opened), Q_ARG(QVariant, parser.value(windowOption)));
                 if (auto* other = qobject_cast<QQuickWindow*>(opened.value<QObject*>())) shot = other;  // a window of its own
             }
-            QTimer::singleShot(600, &app, [shot, file] {
+            QTimer::singleShot(parser.isSet(flexOption) ? 4000 : 600, &app, [shot, file] {
                 const QImage image = shot->grabWindow();
                 QCoreApplication::exit(!image.isNull() && image.save(file) ? 0 : 2);
             });

@@ -56,6 +56,7 @@
  {"id":"edit.selectInvertSelection","label":"Invert Selection","menu":"Edit/Select","shortcut":"Shift+I","kind":"command","status":"ready"},
  {"id":"edit.selectTracks","label":"Select Tracks","menu":"Edit","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.hideFlexPitchTime","label":"Show Flex Pitch/Time","menu":"Edit","shortcut":"Ctrl+F","kind":"toggle","status":"ready"},
+ {"id":"edit.flexOpenEditor","label":"Open Flex Editor","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.flexResetAll","label":"Reset All Flex Edits","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.flexSliceAtTransients","label":"Slice at Transient Markers","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.flexSliceAtMarkers","label":"Slice at Flex Markers","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},

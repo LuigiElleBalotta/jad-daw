@@ -1355,6 +1355,7 @@ private slots:
         c.setTrackFlexMode(track, "monophonic");
         QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("monophonic"));
         QTRY_VERIFY_WITH_TIMEOUT(c.flexTransients(id).size() >= 3, 15000);          // the analysis found the three hits
+        QCOMPARE(c.regionInfo(id).value("flexMode").toString(), QStringLiteral("monophonic"));   // the editors learn the mode from the region's info
         const QVariantList hits = c.flexTransients(id);
         c.flexAddMarker(id, hits[1].toDouble(), true);                               // the lower half: the hit and its neighbours
         QTRY_VERIFY(c.regions()->find(id)->flexed);

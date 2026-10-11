@@ -22,6 +22,7 @@ TestCase {
     } }
     Component { id: ctlC; ProjectController { audioEnabled: false } }
     Component { id: edC; AudioEditor { width: 900; height: 300 } }
+    Component { id: winC; FlexEditorWindow { visible: false } }
 
     function test_the_flex_button_shows_only_when_flex_is_shown_and_its_menu_picks_the_mode() {
         const h = createTemporaryObject(hdr, this)
@@ -94,5 +95,55 @@ TestCase {
         compare(e.flexNotes.length, 0)
         verify(findChild(e, "flexNoteStrip") !== null)
         verify(!findChild(e, "flexNoteStrip").visible)
+    }
+
+    function test_the_flex_editor_window_holds_the_audio_editor_and_follows_the_selection() {
+        const c = createTemporaryObject(ctlC, this)
+        const w = createTemporaryObject(winC, this, { project: c })
+        verify(w !== null)
+        compare(w.regionId, "")
+        verify(w.editor !== null)
+        verify(!w.editor.valid)
+        const bar = findChild(w.editor, "flexBar")
+        verify(bar !== null)
+        verify(!bar.visible)                       // no audio region: no Flex bar
+    }
+
+    Component { id: probeC; Item {
+        property var project
+        property string regionId
+        readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
+    } }
+
+    function test_a_binding_on_the_region_info_follows_a_change_of_its_track() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() > 0 })
+        const track = c.tracks.trackIdAt(c.tracks.rowCount() - 1)
+        c.createRegion(track, 0, 4)
+        tryVerify(function () { return c.regions.rowCount() > 0 })
+        const id = c.regions.regionIdAt(0)
+        const probe = createTemporaryObject(probeC, this, { project: c, regionId: id })
+        const before = probe.info.trackName
+        c.renameTrack(track, "Renamed")
+        tryVerify(function () { return probe.info.trackName === "Renamed" }, 5000)
+        verify(before !== "Renamed")
+    }
+
+    function test_a_binding_on_the_region_info_follows_a_change_of_the_region() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() > 0 })
+        const track = c.tracks.trackIdAt(c.tracks.rowCount() - 1)
+        c.createRegion(track, 0, 4)
+        tryVerify(function () { return c.regions.rowCount() > 0 })
+        const id = c.regions.regionIdAt(0)
+        const probe = createTemporaryObject(probeC, this, { project: c, regionId: id })
+        compare(probe.info.lengthBeats, 4)
+        c.selectRegion(id, "replace")
+        c.resizeSelectedRegions(id, 0, 8)
+        tryVerify(function () { return probe.info.lengthBeats === 8 }, 5000)
     }
 }

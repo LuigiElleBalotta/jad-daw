@@ -31,7 +31,7 @@ Item {
             width: 1
             height: Math.min(12, root.height - 14)
             color: root.tint
-            opacity: 0.5
+            opacity: 0.35
         }
     }
 
@@ -46,8 +46,8 @@ Item {
             width: 12
             height: root.height
             z: 5
-            Rectangle { x: 5; y: 0; width: 2; height: parent.height; color: Theme.stateSolo }
-            Rectangle { x: 1; y: 0; width: 10; height: 10; radius: 2; color: Theme.stateSolo; border.color: Theme.surfaceCanvas }
+            Rectangle { x: 5; y: 0; width: 2; height: parent.height; color: Theme.textPrimary }
+            Rectangle { x: 1; y: 0; width: 10; height: 10; radius: 2; color: Theme.trackOrangeSolid; border.color: Theme.surfaceCanvas }
             MouseArea {
                 id: grab
                 x: -3; y: 0; width: 18; height: Math.min(parent.height, 26)

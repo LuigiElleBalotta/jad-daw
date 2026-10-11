@@ -44,6 +44,7 @@ qt_add_qml_module(jad_ui_lib
         qml/RegionItem.qml
         qml/FlexOverlay.qml
         qml/FlexNoteStrip.qml
+        qml/FlexEditorWindow.qml
         qml/WaveformPreview.qml
         qml/TrackList.qml
         qml/Meter.qml

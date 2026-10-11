@@ -56,6 +56,10 @@ struct NoteEdit {
 // can be heard at once while it is dragged. Notes that are neutral, and everything outside the notes, are copied unchanged.
 WavData renderFlexPitch(const WavData& src, const PitchAnalysis& analysis, const std::vector<NoteEdit>& edits, std::int64_t from = 0, std::int64_t to = -1);
 
+// The pitch of a note as it plays with these edits (MIDI note numbers, fractional): one value every analysis hop from the start of the note
+// to its end (what the editor draws as the curve over the note).
+std::vector<float> flexNoteCurve(const PitchAnalysis& analysis, const FlexNote& note, const NoteEdit& edit);
+
 double midiToHz(double midi);
 double hzToMidi(double hz);
 

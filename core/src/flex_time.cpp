@@ -4,6 +4,7 @@
 #include <cmath>
 #include <complex>
 #include <cstring>
+#include <limits>
 
 #include "lpc/fft.h"
 #include "lpc/flex_pitch.h"
@@ -86,12 +87,27 @@ public:
             const std::int64_t target = static_cast<std::int64_t>(std::llround(map_.toSource(static_cast<double>(os + hop_)) - hop_));
             std::int64_t start = target;
             if (have && similarity_) start = bestStart(target, prev + hop_);
+            // A frame in a stretched stretch of sound reads only that stretch (mirrored beyond its ends): an attack in the unstretched window
+            // next to it must not be copied into the sound around it.
+            std::int64_t lo = std::numeric_limits<std::int64_t>::min() / 4, hi = std::numeric_limits<std::int64_t>::max() / 4;
+            {
+                const std::vector<FlexAnchor>& pts = map_.points();
+                const std::int64_t centre = os + hop_;
+                for (std::size_t k = 0; k + 1 < pts.size(); ++k)
+                    if (centre >= pts[k].dst && centre < pts[k + 1].dst) {
+                        if (std::llabs((pts[k + 1].src - pts[k].src) - (pts[k + 1].dst - pts[k].dst)) > 1 && similarity_ && pts.size() > 2) { lo = pts[k].src; hi = pts[k + 1].src; }
+                        break;
+                    }
+            }
             for (std::size_t c = 0; c < x_.ch.size(); ++c) {
                 const std::vector<float>& in = x_.ch[c];
                 for (int i = 0; i < frame_; ++i) {
                     const std::int64_t o = os + i;
                     if (o < 0 || o >= len) continue;
-                    out[c][static_cast<std::size_t>(o)] += window_[static_cast<std::size_t>(i)] * at(in, start + i);
+                    std::int64_t q = start + i;
+                    if (q < lo) q = std::min(hi - 1, 2 * lo - q - 1);
+                    else if (q >= hi) q = std::max(lo, 2 * hi - q - 1);
+                    out[c][static_cast<std::size_t>(o)] += window_[static_cast<std::size_t>(i)] * at(in, q);
                 }
             }
             prev = start;

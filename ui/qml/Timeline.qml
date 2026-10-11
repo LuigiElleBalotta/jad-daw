@@ -341,7 +341,7 @@ Item {
                 onContextRequested: (id) => { root.forceActiveFocus(); regionContext.open(id) }
                 fadeInBeats: model.fadeInBeats
                 fadeOutBeats: model.fadeOutBeats
-                flexMode: root.project.tracks.flexModeAt(trackIndex)
+                flexMode: { const rev = root.project.revision; return rev < 0 ? "" : root.project.tracks.flexModeAt(trackIndex) }
                 flexView: root.project.flexView
                 flexMarkers: model.flexMarkers
                 flexNotes: model.flexNotes

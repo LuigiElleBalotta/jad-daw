@@ -30,7 +30,7 @@ ApplicationWindow {
     // for screenshots: opens a dialog or window by name and returns it (a window is pictured on its own, a dialog over the main window)
     function showWindow(name) {
         const all = ({ transport: transportFloat, event: eventFloat, regionInspector: regionInspectorFloat, stepInput: stepInput, musicalTyping: musicalTyping,
-                       trackIcon: trackIconDialog, automationSettings: automationSettings, alternatives: alternativesDialog, copyMidi: copyMidiEvents, midiTransform: midiTransform,
+                       flexEditor: flexEditor, trackIcon: trackIconDialog, automationSettings: automationSettings, alternatives: alternativesDialog, copyMidi: copyMidiEvents, midiTransform: midiTransform,
                        header: customizeBars })
         const w = all[name]
         if (!w) return null
@@ -217,10 +217,11 @@ ApplicationWindow {
     TransportFloatWindow { id: transportFloat; project: controller; visible: false }
     EventFloatWindow { id: eventFloat; project: controller; piano: editorArea.piano; visible: false }
     RegionInspectorFloatWindow { id: regionInspectorFloat; project: controller; visible: false }
+    FlexEditorWindow { id: flexEditor; project: controller; visible: false }
     StepInputKeyboardWindow { id: stepInput; project: controller; visible: false }
     // Window > Cycle Through Windows: the next visible window of the app comes to the front
     function cycleWindows() {
-        const all = [root, musicalTyping, transportFloat, eventFloat, regionInspectorFloat, stepInput].filter(w => w.visible)
+        const all = [root, musicalTyping, transportFloat, eventFloat, regionInspectorFloat, stepInput, flexEditor].filter(w => w.visible)
         if (all.length < 2) return
         let at = all.findIndex(w => w.active)
         const next = all[(at + 1) % all.length]
@@ -550,6 +551,7 @@ ApplicationWindow {
         "edit.flexSliceAtTransients": () => controller.flexSlice(false),
         "edit.flexSliceAtMarkers": () => controller.flexSlice(true),
         "edit.flexQuantize": () => controller.flexQuantize(controller.snapBeats > 0 ? controller.snapBeats : 0.25, 100),
+        "edit.flexOpenEditor": () => { controller.flexView = true; flexEditor.visible = true; flexEditor.raise(); flexEditor.requestActivate() },
         "edit.flexCreateMidi": () => { if (controller.selectedRegionIds.length > 0) controller.flexCreateMidiTrack(controller.selectedRegionIds[0]) },
         "tool.autoCurve": () => { controller.tool = "autoCurve" },
         "tool.autoSelect": () => { controller.tool = "autoSelect" },
@@ -786,7 +788,10 @@ ApplicationWindow {
             }
             Timeline {
                 id: timeline
-                onEditRequested: { if (!root.editorsVisible) root.showLowerPane("editors") }
+                onEditRequested: (id) => {
+                    if (controller.flexView && controller.flexAvailable(id)) { controller.selectRegion(id, "replace"); flexEditor.visible = true; flexEditor.raise(); flexEditor.requestActivate(); return }  // the Flex view: the Flex editor
+                    if (!root.editorsVisible) root.showLowerPane("editors")
+                }
                 onAddAudioRequested: (id, beats) => { addAudioDialog.trackId = id; addAudioDialog.beats = beats; addAudioDialog.open() }
                 onRenameRequested: (id) => { regionNameDialog.regionId = id; regionNameDialog.text = controller.regionName(id); regionNameDialog.open() }
                 onAutomationParameterRequested: (id) => { automationParamDialog.trackId = id; automationParamDialog.open() }

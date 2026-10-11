@@ -10,7 +10,8 @@ Rectangle {
     property bool fileMode: false
     signal processRequested(string op)            // the dialogs of Normalize, Gain, Time Stretch, Pitch Shift, Strip Silence
 
-    readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
+    // the revision is used (not just read), so that the compiled binding keeps depending on it
+    readonly property var info: { const rev = project.revision; const r = regionId !== "" ? project.regionInfo(regionId) : ({ found: false }); r.revision = rev; return r }
     readonly property bool valid: info.found === true && info.audio === true
     readonly property real rate: project ? project.sampleRateHz : 48000
     // the frames shown: the region's part, or the whole file
@@ -18,10 +19,33 @@ Rectangle {
     readonly property real shownFrames: valid ? (fileMode ? Math.max(1, info.mediaFrames) : Math.max(1, info.lengthFrames)) : 1
     property real zoom: 1
     // Flex Pitch: the notes of the region are drawn over the waveform, in the pitch range they span
-    readonly property bool pitchMode: valid && !fileMode && info.flexMode === "pitch"
+    readonly property bool pitchMode: valid && !fileMode && flexMode === "pitch"
     property int flexSelected: -1
+    // Flex Time: the transients and the flex markers over the waveform (the markers come with the region's info)
+    // the mode comes from the track list, which is what the header's Flex button follows (the region info alone can lag behind it)
+    property string trackFlexMode: "?"
+    readonly property string flexMode: valid ? (trackFlexMode !== "?" ? trackFlexMode : (info.flexMode ?? "")) : ""
+    Repeater {
+        model: root.project ? root.project.tracks : null
+        delegate: Item {
+            required property string trackId
+            required property string flexMode
+            visible: false
+            Binding { target: root; property: "trackFlexMode"; value: flexMode; when: root.valid && trackId === root.info.trackId }
+        }
+    }
+    readonly property bool timeFlex: valid && !fileMode && flexMode !== "" && flexMode !== "pitch"
+    property var flexTransients: []
+    function refreshTransients() { flexTransients = timeFlex ? project.flexTransients(regionId) : [] }
+    onTimeFlexChanged: refreshTransients()
+    readonly property var flexModes: [{ id: "", label: qsTr("Off") }, { id: "slicing", label: qsTr("Slicing") }, { id: "rhythmic", label: qsTr("Rhythmic") },
+                                      { id: "monophonic", label: qsTr("Monophonic") }, { id: "polyphonic", label: qsTr("Polyphonic") },
+                                      { id: "tempophone", label: qsTr("Tempophone") }, { id: "speed", label: qsTr("Speed") },
+                                      { id: "automatic", label: qsTr("Automatic") }, { id: "pitch", label: qsTr("Flex Pitch") }]
     property int flexRefresh: 0
-    readonly property var flexNotes: { project.revision; flexRefresh; return pitchMode ? project.flexPitchNotes(regionId) : [] }
+    // (the revision is used in the expression, not only read: the compiled binding would drop a bare read)
+    readonly property var flexNotes: { const rev = project.revision + flexRefresh; return pitchMode && rev >= 0 ? project.flexPitchNotes(regionId) : [] }
+    readonly property var flexCurves: { const rev = project.revision + flexRefresh; return pitchMode && rev >= 0 ? project.flexPitchCurves(regionId) : [] }
     readonly property real lowPitch: { let v = 127; for (const n of flexNotes) v = Math.min(v, n.pitch, n.original); return flexNotes.length ? Math.floor(v) - 3 : 48 }
     readonly property real highPitch: { let v = 0; for (const n of flexNotes) v = Math.max(v, n.pitch, n.original); return flexNotes.length ? Math.max(Math.ceil(v) + 3, lowPitch + 12) : 72 }
     property var peaks: []
@@ -42,13 +66,13 @@ Rectangle {
     onRegionIdChanged: { selFrom = -1; selTo = -1; peaks = []; flexSelected = -1; refresh.restart() }
     onFileModeChanged: { selFrom = -1; selTo = -1; peaks = []; refresh.restart() }
     onZoomChanged: refresh.restart()
-    onInfoChanged: refresh.restart()
+    onInfoChanged: { refresh.restart(); refreshTransients() }
     Timer { id: refresh; interval: 80; onTriggered: root.refreshPeaks() }
     Connections {
         target: root.project
         function onRegionPeaksReady(id) { if (id === root.regionId) root.refreshPeaks() }
         function onWaveformReady(id) { if (root.valid && id === root.info.mediaId) root.refreshPeaks() }
-        function onFlexAnalysisReady(id) { if (id === root.regionId) root.flexRefresh++ }
+        function onFlexAnalysisReady(id) { if (id === root.regionId) { root.flexRefresh++; root.refreshTransients() } }
     }
 
     Text {
@@ -104,10 +128,115 @@ Rectangle {
                 font.pixelSize: Theme.fontTypeLabelSize
             }
         }
-        Flickable {
-            id: flick
+        Rectangle {  // Flex: the mode, and what can be done with the markers and the notes
+            id: flexBar
+            objectName: "flexBar"
+            visible: root.valid && !root.fileMode && (root.flexMode !== "" || root.project.flexView)
             width: parent.width
-            height: parent.height - 30 - (root.pitchMode ? flexStrip.height : 0)
+            height: visible ? 28 : 0
+            color: Theme.surfacePanel
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.borderSubtle }
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                x: Theme.spacing[2]
+                spacing: Theme.spacing[1]
+                IconButton {
+                    objectName: "flexModeButton"
+                    implicitHeight: 22
+                    label: qsTr("Flex: %1").arg((root.flexModes.find(m => m.id === root.flexMode) ?? root.flexModes[0]).label)
+                    active: root.flexMode !== ""
+                    onClicked: flexModePopup.popup()
+                }
+                IconButton { visible: root.timeFlex; implicitHeight: 22; label: qsTr("Slice at Transients"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexSlice(false) } }
+                IconButton { visible: root.timeFlex; implicitHeight: 22; label: qsTr("Quantize"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexQuantize(root.project.snapBeats > 0 ? root.project.snapBeats : 0.25, 100) } }
+                IconButton { visible: root.flexMode !== ""; implicitHeight: 22; label: qsTr("Reset All"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexResetEdits() } }
+                IconButton { visible: root.pitchMode; implicitHeight: 22; label: qsTr("Create MIDI Track"); onClicked: root.project.flexCreateMidiTrack(root.regionId) }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    leftPadding: Theme.spacing[3]
+                    visible: root.flexMode === ""
+                    text: qsTr("Choose a Flex mode to see the transients and edit the sound")
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontTypeLabelSize
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    leftPadding: Theme.spacing[3]
+                    visible: root.timeFlex
+                    text: qsTr("Double click the waveform to set a flex marker (upper half one, lower half three); drag a marker to stretch, Alt to slide it; double click a marker to delete it")
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontTypeLabelSize
+                }
+            }
+            ThemedMenu {
+                id: flexModePopup
+                Instantiator {
+                    model: root.flexModes
+                    delegate: ThemedMenuItem {
+                        required property var modelData
+                        text: modelData.label
+                        checkable: true
+                        checked: root.flexMode === modelData.id
+                        onTriggered: root.project.setTrackFlexMode(root.info.trackId, modelData.id)
+                    }
+                    onObjectAdded: (index, object) => flexModePopup.insertItem(index, object)
+                    onObjectRemoved: (index, object) => flexModePopup.removeItem(object)
+                }
+            }
+        }
+        Row {
+            id: body
+            width: parent.width
+            height: parent.height - 30 - flexBar.height
+            FlexNoteStrip {  // the inspector of the Audio Track Editor in Flex Pitch
+                id: flexStrip
+                objectName: "flexNoteStrip"
+                visible: root.pitchMode
+                width: visible ? 210 : 0
+                height: body.height
+                project: root.project
+                regionId: root.regionId
+                noteIndex: root.flexSelected
+                note: root.flexSelected >= 0 && root.flexSelected < root.flexNotes.length ? root.flexNotes[root.flexSelected] : null
+            }
+            Item {  // the keyboard of the pitch rows
+                id: piano
+                objectName: "flexPiano"
+                visible: root.pitchMode
+                width: visible ? 40 : 0
+                height: body.height
+                clip: true
+                Rectangle { anchors.fill: parent; color: Theme.surfacePanel }
+                Repeater {
+                    model: root.pitchMode ? Math.ceil(root.highPitch - root.lowPitch) : 0
+                    delegate: Rectangle {
+                        required property int index
+                        readonly property int midi: Math.floor(root.highPitch) - index
+                        readonly property bool black: [1, 3, 6, 8, 10].indexOf(((midi % 12) + 12) % 12) >= 0
+                        readonly property real rowH: (body.height - 20) / (root.highPitch - root.lowPitch)
+                        y: 20 + (root.highPitch - (midi + 0.5)) * rowH
+                        width: parent.width - (black ? 12 : 1)
+                        height: Math.max(1, rowH - 1)
+                        color: black ? "#1b1b1f" : "#d6d6da"
+                        Text {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 3
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: midi % 12 === 0
+                            text: "C" + (Math.floor(midi / 12) - 1)
+                            color: "#303036"
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                        }
+                    }
+                }
+            }
+            Flickable {
+            id: flick
+            width: body.width - flexStrip.width - piano.width
+            height: body.height
             contentWidth: width * root.zoom
             contentHeight: height
             boundsBehavior: Flickable.StopAtBounds
@@ -145,7 +274,7 @@ Rectangle {
                     height: parent.height - ruler.height
                     onWidthChanged: { requestPaint(); refresh.restart() }
                     onHeightChanged: requestPaint()
-                    Connections { target: root; function onPeaksChanged() { wave.requestPaint() } }
+                    Connections { target: root; function onPeaksChanged() { wave.requestPaint() } function onPitchModeChanged() { wave.requestPaint() } }
                     onPaint: {
                         const ctx = getContext("2d")
                         ctx.reset()
@@ -157,7 +286,7 @@ Rectangle {
                         if (n === 0) return
                         const mid = height / 2
                         const barW = width / n
-                        ctx.fillStyle = Theme.accentPrimary
+                        ctx.fillStyle = root.pitchMode ? "rgba(60,100,160,0.42)" : Theme.accentPrimary
                         for (let i = 0; i < n; ++i) {
                             const h = Math.max(1, root.peaks[i] * (height - 8))
                             ctx.fillRect(i * barW, mid - h / 2, Math.max(1, barW - 0.3), h)
@@ -182,7 +311,11 @@ Rectangle {
                         anchors.fill: parent
                         property real anchorFrame: 0
                         function frameAt(x) { return Math.max(0, Math.min(root.shownFrames, x / width * root.shownFrames)) }
-                        onPressed: (m) => { anchorFrame = frameAt(m.x); root.selFrom = -1; root.selTo = -1 }
+                        onPressed: (m) => {
+                            if (root.timeFlex && root.project.tool === "flex") { root.project.flexAddMarker(root.regionId, m.x / width, m.y > height / 2); return }
+                            anchorFrame = frameAt(m.x); root.selFrom = -1; root.selTo = -1
+                        }
+                        onDoubleClicked: (m) => { if (root.timeFlex) root.project.flexAddMarker(root.regionId, m.x / width, m.y > height / 2) }
                         onPositionChanged: (m) => {
                             if (!pressed) return
                             const f = frameAt(m.x)
@@ -191,6 +324,22 @@ Rectangle {
                         }
                         onWheel: (w) => { flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width, flick.contentX - w.angleDelta.y - w.angleDelta.x)) }
                     }
+                }
+                FlexOverlay {
+                    id: timeOverlay
+                    objectName: "flexTimeOverlay"
+                    y: ruler.height
+                    width: parent.width
+                    height: parent.height - ruler.height
+                    visible: root.timeFlex
+                    project: root.project
+                    regionId: root.regionId
+                    mode: root.flexMode
+                    markers: root.info.flexMarkers ?? []
+                    transients: root.flexTransients
+                    tint: Theme.textPrimary
+                    onMarkerMoved: (index, fraction, slide) => root.project.flexMoveMarker(root.regionId, index, fraction, slide)
+                    onMarkerDeleted: (index) => root.project.flexDeleteMarker(root.regionId, index)
                 }
                 Item {  // Flex Pitch: a row for every semitone, and the notes
                     id: notesLayer
@@ -201,6 +350,31 @@ Rectangle {
                     visible: root.pitchMode
                     readonly property real rowHeight: height / (root.highPitch - root.lowPitch)
                     function yOf(pitch) { return (root.highPitch - pitch) * rowHeight }
+                    Canvas {  // the pitch curve of every note, as it plays
+                        id: curveLayer
+                        objectName: "flexCurves"
+                        anchors.fill: parent
+                        z: 2
+                        Connections { target: root; function onFlexCurvesChanged() { curveLayer.requestPaint() } }
+                        onWidthChanged: requestPaint()
+                        onHeightChanged: requestPaint()
+                        onPaint: {
+                            const ctx = getContext("2d")
+                            ctx.reset()
+                            ctx.strokeStyle = "#b7d8ff"
+                            ctx.lineWidth = 1.4
+                            for (const note of root.flexCurves) {
+                                const pts = note.points
+                                if (pts.length < 4) continue
+                                ctx.beginPath()
+                                for (let k = 0; k + 1 < pts.length; k += 2) {
+                                    const x = pts[k] * width, y = notesLayer.yOf(pts[k + 1])
+                                    if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                                }
+                                ctx.stroke()
+                            }
+                        }
+                    }
                     Repeater {  // the C lines, with their names
                         model: root.pitchMode ? Math.ceil(root.highPitch - root.lowPitch) : 0
                         delegate: Item {
@@ -209,6 +383,7 @@ Rectangle {
                             visible: midi % 12 === 0 || notesLayer.rowHeight >= 10
                             y: notesLayer.yOf(midi + 0.5)
                             width: notesLayer.width
+                            Rectangle { y: 0; width: parent.width; height: notesLayer.rowHeight; visible: [1, 3, 6, 8, 10].indexOf(((midi % 12) + 12) % 12) >= 0; color: "#0fffffff" }
                             Rectangle { width: parent.width; height: 1; color: midi % 12 === 0 ? Theme.borderStrong : Theme.borderSubtle }
                             Text {
                                 x: 3; y: 1
@@ -235,14 +410,22 @@ Rectangle {
                             height: Math.max(6, notesLayer.rowHeight - 1)
                             y: notesLayer.yOf(shownPitch + 0.5)
                             radius: 3
-                            color: selectedNote ? Theme.textValue : Theme.accentPrimary
-                            opacity: 0.9
-                            border.color: Theme.textPrimary
-                            border.width: selectedNote ? 2 : 1
+                            color: selectedNote ? "#5aaaff" : "#2f5f97"
+                            border.color: selectedNote ? "#cfe6ff" : "#1b3a5c"
+                            border.width: 1
+                            Rectangle {  // the lower strip of a note: its gain
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 1
+                                x: 1
+                                width: parent.width - 2
+                                height: Math.max(2, Math.min(parent.height / 3, 5))
+                                radius: 1
+                                color: Qt.rgba(0, 0, 0, 0.38)
+                            }
                             Text {
                                 x: 4
                                 anchors.verticalCenter: parent.verticalCenter
-                                visible: parent.width > 30 && parent.height > 11
+                                visible: false
                                 text: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][((Math.round(noteBar.shownPitch) % 12) + 12) % 12] + (Math.floor(Math.round(noteBar.shownPitch) / 12) - 1)
                                 color: Theme.surfaceCanvas
                                 font.family: Theme.fontFamily
@@ -315,16 +498,6 @@ Rectangle {
                 }
             }
         }
-        FlexNoteStrip {
-            id: flexStrip
-            objectName: "flexNoteStrip"
-            visible: root.pitchMode
-            width: parent.width
-            height: visible ? 50 : 0
-            project: root.project
-            regionId: root.regionId
-            noteIndex: root.flexSelected
-            note: root.flexSelected >= 0 && root.flexSelected < root.flexNotes.length ? root.flexNotes[root.flexSelected] : null
         }
     }
 }

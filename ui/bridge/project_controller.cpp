@@ -1341,7 +1341,7 @@ void ProjectController::redo() {
 QVariantList ProjectController::regionPeaks(const QString& regionId, int buckets) {
     const RegionRow* r = regions_.find(regionId);
     if (!r || !r->audio || r->missing || buckets <= 0 || buckets > 4096 || r->lengthFrames <= 0) return {};
-    const QString key = regionId + '#' + QString::number(r->sourceOffsetFrames) + '#' + QString::number(r->lengthFrames) + '#' + QString::number(buckets);
+    const QString key = regionId + '#' + r->mediaId + '#' + QString::number(r->sourceOffsetFrames) + '#' + QString::number(r->lengthFrames) + '#' + QString::number(buckets);
     if (const auto it = regionPeaksCache_.constFind(key); it != regionPeaksCache_.constEnd()) return it.value();
     const auto path = mediaPaths_.constFind(r->mediaId);
     if (path == mediaPaths_.constEnd() || regionPeaksPending_.contains(key)) return {};

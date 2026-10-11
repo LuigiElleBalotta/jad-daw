@@ -547,6 +547,7 @@ public:
     Q_INVOKABLE void flexResetEdits();                                                           // the selected regions play as recorded again
     Q_INVOKABLE void flexSlice(bool atMarkers);                                                  // the selected regions are cut at their transients (or flex markers)
     Q_INVOKABLE void flexQuantize(double gridBeats, double strengthPercent);                     // the transients of the selected regions move towards the grid
+    Q_INVOKABLE QVariantList flexPitchCurves(const QString& regionId);                           // {index, points: [x0, y0, x1, y1, ...]} of each note: where it plays (0..1 of the region) and its pitch as edited
     Q_INVOKABLE QVariantList flexPitchNotes(const QString& regionId);                            // the notes {index, start, end, pitch, original, edits...}; empty until analysed
     Q_INVOKABLE void flexNoteEdit(const QString& regionId, int index, const QVariantMap& edit);  // keys: semitones, fineCents, correct, vibrato, driftIn, driftOut, gainDb, formantCents
     Q_INVOKABLE void flexNoteTime(const QString& regionId, int index, double startFraction, double endFraction);

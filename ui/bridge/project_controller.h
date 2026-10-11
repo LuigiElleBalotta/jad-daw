@@ -581,6 +581,7 @@ public:
     Q_INVOKABLE void toggleStackOpen(const QString& trackId);
     Q_INVOKABLE void addMasteringAssistant();
     Q_INVOKABLE void masteringAnalyse(const QString& trackId, int index);
+    Q_INVOKABLE void masteringMeasure(const QString& trackId, int index);   // the Output line: loudness and true peak with the insert on
     Q_INVOKABLE QVariantMap masteringStats() const { return masteringStats_; }  // integratedLufs, momentaryMax, shortTermMax, range, truePeakDb of the last analysis
     Q_INVOKABLE void flexCreateMidiTrack(const QString& regionId);                               // a MIDI track with the notes of the region
     Q_INVOKABLE QVariantMap unusedMedia() const;  // {count, bytes} of the audio files that no region and no frozen track uses

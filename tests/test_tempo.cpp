@@ -130,6 +130,8 @@ TEST_CASE("flex beats: a window keeps the beats inside it and the bar phase, and
 #include <iostream>
 #include "lpc/audio_decode.h"
 #include "lpc/mastering.h"
+#include "lpc/audio/effects.h"
+#include "lpc/processor_ids.h"
 #include "lpc/drum_replace.h"
 TEST_CASE("analyses on a real recording (LPC_REAL_AUDIO)", "[real]") {
     const char* path = std::getenv("LPC_REAL_AUDIO");
@@ -146,4 +148,25 @@ TEST_CASE("analyses on a real recording (LPC_REAL_AUDIO)", "[real]") {
     for (double g : m.eqDb) std::cout << " " << g;
     std::cout << "\nhits found: " << hits.size() << "\n";
     CHECK(t.bpm > 0);
+    // the mastering insert with what the analysis found, run over the recording
+    ProcessorRef ref;
+    ref.processorId = kProcMastering;
+    ref.params["gain"] = m.gainDb;
+    for (int b = 0; b < kMasteringBands; ++b) ref.params["eq" + std::to_string(b + 1)] = m.eqDb[static_cast<std::size_t>(b)];
+    auto proc = audio::makeBuiltinEffect(ref, d.sampleRate);
+    REQUIRE(proc);
+    std::vector<float> l(static_cast<std::size_t>(d.frames())), r(l.size());
+    for (std::int64_t i = 0; i < d.frames(); ++i) {
+        l[static_cast<std::size_t>(i)] = d.samples[static_cast<std::size_t>(i * d.channels)];
+        r[static_cast<std::size_t>(i)] = d.samples[static_cast<std::size_t>(i * d.channels + (d.channels > 1 ? 1 : 0))];
+    }
+    for (std::size_t at = 0; at < l.size(); at += 512) proc->process(l.data() + at, r.data() + at, static_cast<int>(std::min<std::size_t>(512, l.size() - at)));
+    WavData out;
+    out.sampleRate = d.sampleRate;
+    out.channels = 2;
+    for (std::size_t i = 0; i < l.size(); ++i) { out.samples.push_back(l[i]); out.samples.push_back(r[i]); }
+    const LoudnessStats after = measureLoudness(out);
+    std::cout << "mastered: " << after.integrated << " LUFS, range " << after.range << " LU, true peak " << after.truePeakDb << " dBTP" << std::endl;
+    CHECK(after.truePeakDb <= -0.7);
+    CHECK(after.integrated > m.before.integrated + 3.0);   // louder; -14 itself needs a peak-to-loudness ratio of about 13 dB, this recording has 22
 }

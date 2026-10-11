@@ -129,15 +129,25 @@ private:
 
 class LimiterProcessor final : public IProcessor {
 public:
-    LimiterProcessor(const ProcessorRef& ref, double sr)
-        : gain_(static_cast<float>(dbToLin(param(ref, "gain")))), ceiling_(static_cast<float>(dbToLin(param(ref, "ceiling")))),
+    // `truePeak`: the level is also looked for between the samples (a cubic through the neighbours, four times oversampled), so that what
+    // comes out stays under the ceiling as a reconstructed signal too, not only as samples
+    LimiterProcessor(const ProcessorRef& ref, double sr, bool truePeak = false)
+        : truePeak_(truePeak), gain_(static_cast<float>(dbToLin(param(ref, "gain")))), ceiling_(static_cast<float>(dbToLin(param(ref, "ceiling")))),
           look_(std::max(1, static_cast<int>(0.001 * sr))), release_(smoothing(param(ref, "release"), sr)), attack_(smoothing(0.25, sr)),
           needs_(static_cast<std::size_t>(look_ + 1), 1.0f), delayL_(static_cast<std::size_t>(look_), 0.0f), delayR_(static_cast<std::size_t>(look_), 0.0f) {}
     int latencySamples() const override { return look_; }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
             const float inL = l[i] * gain_, inR = r[i] * gain_;
-            const float peak = std::max(std::abs(inL), std::abs(inR));
+            float peak = std::max(std::abs(inL), std::abs(inR));
+            if (truePeak_) {
+                for (float t : {0.25f, 0.5f, 0.75f}) {  // between the two samples before this one, with this one as the neighbour after them
+                    peak = std::max(peak, std::abs(cubicPoint(h_[0][2], h_[0][1], h_[0][0], inL, t)));
+                    peak = std::max(peak, std::abs(cubicPoint(h_[1][2], h_[1][1], h_[1][0], inR, t)));
+                }
+                h_[0][2] = h_[0][1]; h_[0][1] = h_[0][0]; h_[0][0] = inL;
+                h_[1][2] = h_[1][1]; h_[1][1] = h_[1][0]; h_[1][0] = inR;
+            }
             needs_[pos_ % needs_.size()] = peak > ceiling_ ? ceiling_ / peak : 1.0f;
             float target = 1.0f;  // the strongest reduction asked for in the last millisecond: it is in place before the loud sample leaves
             for (const float n : needs_) target = std::min(target, n);
@@ -155,6 +165,12 @@ public:
     nlohmann::json describe() const override { return {{"id", kProcLimiter}}; }
 
 private:
+    // Catmull-Rom between b and c at t (0..1); a before b, d after c
+    static float cubicPoint(float a, float b, float c, float d, float t) {
+        return b + 0.5f * t * (c - a + t * (2.0f * a - 5.0f * b + 4.0f * c - d + t * (3.0f * (b - c) + d - a)));
+    }
+    bool truePeak_;
+    float h_[2][3] = {{0, 0, 0}, {0, 0, 0}};  // the last three input samples of each channel
     float gain_, ceiling_;
     int look_;
     double release_, attack_;
@@ -314,7 +330,7 @@ class MasteringProcessor final : public IProcessor {
 public:
     MasteringProcessor(const ProcessorRef& ref, double sr)
         : bypass_(param(ref, "bypass") >= 0.5), excite_(param(ref, "excite") >= 0.5), character_(static_cast<int>(std::lround(param(ref, "character")))),
-          limiter_(limiterRef(), sr), compressor_(compressorRef(static_cast<int>(std::lround(param(ref, "character")))), sr) {
+          limiter_(limiterRef(), sr, true), compressor_(compressorRef(static_cast<int>(std::lround(param(ref, "character"))), -14.0 - param(ref, "gain")), sr) {
         const double amount = param(ref, "autoEq") / 100.0;
         for (int i = 0; i < kBands; ++i) {
             const double g = param(ref, ("eq" + std::to_string(i + 1)).c_str()) * amount;
@@ -326,7 +342,7 @@ public:
         if (character_ == 1) { bands_[0] = lowShelf(sr, 80.0, param(ref, "eq1") * amount + 1.5); drive_ = 1.6f; }
         if (character_ == 2) extra_ = peaking(sr, 2500.0, 1.5, 0.8);
         totalGain_ = param(ref, "gain") + 0.06 * param(ref, "loudness");
-        gain_ = static_cast<float>(dbToLin(param(ref, "compensate") >= 0.5 ? 0.0 : totalGain_));
+        gain_ = static_cast<float>(dbToLin(param(ref, "compensate") >= 0.5 ? param(ref, "compTrim") : totalGain_));  // compensation: the level the analysis measured
         // a delay as long as the limiter's, so that bypassing does not shift the sound
         delay_.assign(static_cast<std::size_t>(std::max(1, limiter_.latencySamples())), 0.0f);
         delayR_ = delay_;
@@ -360,31 +376,38 @@ public:
                 xl = std::tanh(drive_ * xl) / std::tanh(static_cast<double>(drive_));
                 xr = std::tanh(drive_ * xr) / std::tanh(static_cast<double>(drive_));
             }
-            l[i] = static_cast<float>(xl) * gain_;
-            r[i] = static_cast<float>(xr) * gain_;
+            l[i] = static_cast<float>(xl);
+            r[i] = static_cast<float>(xr);
         }
-        compressor_.process(l, r, frames);
+        compressor_.process(l, r, frames);  // the dynamics are shaped at the level the mix has, then the loudness is made up and the limiter holds the peaks
+        for (int i = 0; i < frames; ++i) {  // the gain, and a soft clip that takes the tallest few dB off the peaks before the limiter has to hold the rest
+            l[i] = static_cast<float>(kClip * std::tanh(static_cast<double>(l[i]) * gain_ / kClip));
+            r[i] = static_cast<float>(kClip * std::tanh(static_cast<double>(r[i]) * gain_ / kClip));
+        }
         limiter_.process(l, r, frames);
     }
     float reductionDb() const noexcept override { return std::max(compressor_.reductionDb(), 0.0f); }
     nlohmann::json describe() const override { return {{"id", kProcMastering}, {"bypass", bypass_}, {"gainDb", totalGain_}}; }
 
 private:
+    static constexpr double kClip = 0.9;  // the soft clip's ceiling, about -0.9 dBFS
     static constexpr int kBands = 8;
     static constexpr std::array<double, kBands> kCentres{40, 100, 250, 630, 1600, 4000, 8000, 14000};
     static ProcessorRef limiterRef() {
         ProcessorRef r;
         r.processorId = kProcLimiter;
-        r.params = {{"gain", 0.0}, {"ceiling", -1.0}, {"release", 120.0}};
+        r.params = {{"gain", 0.0}, {"ceiling", -1.0}, {"release", 30.0}};
         return r;
     }
-    static ProcessorRef compressorRef(int character) {
+    // `levelLufs`: the loudness of the mix before the insert (the analysis stored the gain that brings it to -14), so the threshold sits a few dB above it
+    static ProcessorRef compressorRef(int character, double levelLufs) {
         ProcessorRef r;
         r.processorId = kProcCompressor;
         // Clean: gentle; Valve: slow and warm; Punch: fast attack lets less through; Transparent: tight and light
-        static const double threshold[4] = {-14, -16, -18, -20}, ratio[4] = {1.5, 2.0, 2.5, 1.8}, attack[4] = {25, 40, 12, 8}, release[4] = {160, 220, 90, 120};
+        static const double above[4] = {4, 3, 2, 3}, ratio[4] = {1.6, 2.0, 2.5, 1.8}, attack[4] = {25, 40, 12, 8}, release[4] = {160, 220, 90, 120};
         const int c = std::clamp(character, 0, 3);
-        r.params = {{"threshold", threshold[c]}, {"ratio", ratio[c]}, {"attack", attack[c]}, {"release", release[c]}, {"knee", 8.0}, {"makeup", 0.0}, {"mix", 100.0}};
+        const double threshold = std::clamp(levelLufs + above[c], -60.0, 0.0);
+        r.params = {{"threshold", threshold}, {"ratio", ratio[c]}, {"attack", attack[c]}, {"release", release[c]}, {"knee", 8.0}, {"makeup", 0.0}, {"mix", 100.0}};
         return r;
     }
     static double biquad(const BiquadCoeffs& c, std::array<double, 4>& z, int off, double x) {

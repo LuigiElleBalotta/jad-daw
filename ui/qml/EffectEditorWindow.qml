@@ -121,7 +121,7 @@ Window {
             objectName: "masteringBox"
             visible: root.isMastering
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: 86
             color: Theme.surfaceCanvas
             radius: Theme.radiusControl
             border.color: Theme.borderSubtle
@@ -131,7 +131,7 @@ Window {
                 anchors.margins: Theme.spacing[2]
                 spacing: Theme.spacing[3]
                 Column {
-                    width: parent.width - reanalyze.width - Theme.spacing[3]
+                    width: parent.width - reanalyze.width - 130 - Theme.spacing[3] * 2
                     anchors.verticalCenter: parent.verticalCenter
                     Text {
                         text: root.masterStats.integratedLufs !== undefined ? qsTr("Analysed: %1 LUFS-I   %2 LU range   %3 dBTP").arg(root.masterStats.integratedLufs.toFixed(1)).arg(root.masterStats.range.toFixed(1)).arg(root.masterStats.truePeakDb.toFixed(1)) : qsTr("Not analysed yet")
@@ -140,11 +140,34 @@ Window {
                         font.pixelSize: Theme.fontTypeLabelSize
                     }
                     Text {
+                        visible: root.masterStats.outputLufs !== undefined
+                        text: root.masterStats.outputLufs !== undefined ? qsTr("Output: %1 LUFS-I   %2 LU range   %3 dBTP   (%4 LUFS momentary max)").arg(root.masterStats.outputLufs.toFixed(1)).arg(root.masterStats.outputRange.toFixed(1)).arg(root.masterStats.outputTruePeakDb.toFixed(1)).arg(root.masterStats.outputMomentaryMax.toFixed(1)) : ""
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontTypeLabelSize
+                    }
+                    Text {
+                        visible: root.masterStats.outputLufs !== undefined && root.masterStats.outputLufs < -16 && root.masterStats.truePeakDb - root.masterStats.integratedLufs > 16
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: qsTr("The mix peaks %1 dB above its loudness: -14 LUFS would need heavy limiting, so it stays at %2 LUFS. Lower the peaks (compression before the master) or accept a quieter master.").arg((root.masterStats.truePeakDb - root.masterStats.integratedLufs).toFixed(0)).arg(root.masterStats.outputLufs !== undefined ? root.masterStats.outputLufs.toFixed(1) : "")
+                        color: Theme.stateRecord
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontTypeCaptionSize
+                    }
+                    Text {
                         text: root.masterStats.gainDb !== undefined ? qsTr("Brings the mix to -14 LUFS (%1 dB), limited at -1 dBTP").arg(root.masterStats.gainDb.toFixed(1)) : qsTr("The Loudness knob centre is -14 LUFS; the output never goes above -1 dB")
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontTypeCaptionSize
                     }
+                }
+                IconButton {
+                    objectName: "masteringMeasure"
+                    anchors.verticalCenter: parent.verticalCenter
+                    enabled: !root.project.masteringBusy
+                    label: qsTr("Measure Output")
+                    onClicked: root.project.masteringMeasure(root.trackId, root.index)
                 }
                 IconButton {
                     id: reanalyze
@@ -171,7 +194,7 @@ Window {
                 columnSpacing: Theme.spacing[3]
                 rowSpacing: Theme.spacing[1]
                 Repeater {
-                    model: root.spec ? root.spec.params.filter(p => !(root.isMastering && (p.name === "gain" || p.name.startsWith("eq")))) : []
+                    model: root.spec ? root.spec.params.filter(p => !(root.isMastering && (p.name === "gain" || p.name === "compTrim" || p.name.startsWith("eq")))) : []
                     delegate: RowLayout {
                         id: row
                         required property var modelData

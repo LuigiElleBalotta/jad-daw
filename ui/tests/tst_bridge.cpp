@@ -1678,6 +1678,9 @@ private slots:
         QTRY_VERIFY2_WITH_TIMEOUT(!c.masteringStats().isEmpty(), qPrintable(notes.join(" | ") + " ERR: " + c.lastError()), 20000);
         const QVariantMap stats = c.masteringStats();
         QVERIFY(stats.value("integratedLufs").toDouble() > -60.0);
+        QVERIFY(stats.contains("outputLufs"));                                       // what it sounds like with the insert on
+        QVERIFY(stats.value("outputTruePeakDb").toDouble() <= -0.5);                 // held under the ceiling as a true peak
+        QVERIFY(std::abs(stats.value("outputLufs").toDouble() - (-14.0)) < 4.0);     // near the target (the limiter takes some of it)
         const QVariantList inserts = c.trackInserts(master);
         QVERIFY(!inserts.isEmpty());
         const QVariantMap params = inserts.last().toMap().value("params").toMap();

@@ -101,3 +101,34 @@ TEST_CASE("mastering processor: nothing leaves above -1 dB, bypass keeps the sou
     const auto passed = run(bypass, -10.0);
     CHECK(std::abs(passed.first - std::pow(10.0, -10.0 / 20.0)) < 0.01);
 }
+
+TEST_CASE("mastering processor: the limiter holds the true peak, not only the sample peak", "[mastering]") {
+    ProcessorRef ref;
+    ref.processorId = kProcMastering;
+    ref.params = {{"gain", 12.0}, {"autoEq", 0.0}};
+    auto p = audio::makeBuiltinEffect(ref, kRate);
+    REQUIRE(p);
+    // a sine at a quarter of the sample rate, 45 degrees off the samples: the samples reach 0.7 of the real peak
+    const int n = kRate * 2;
+    std::vector<float> l(static_cast<std::size_t>(n)), r(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) l[static_cast<std::size_t>(i)] = r[static_cast<std::size_t>(i)] = static_cast<float>(0.5 * std::sin(kPi / 2.0 * i + kPi / 4.0));
+    p->process(l.data(), r.data(), n);
+    WavData d;
+    d.sampleRate = kRate;
+    d.channels = 2;
+    for (int i = kRate / 2; i < n; ++i) { d.samples.push_back(l[static_cast<std::size_t>(i)]); d.samples.push_back(r[static_cast<std::size_t>(i)]); }
+    CHECK(measureLoudness(d).truePeakDb <= -0.8);   // the ceiling is -1 dBTP
+}
+
+TEST_CASE("mastering processor: Loudness Compensation applies the trim the analysis measured", "[mastering]") {
+    ProcessorRef ref;
+    ref.processorId = kProcMastering;
+    ref.params = {{"gain", 12.0}, {"autoEq", 0.0}, {"compensate", 1.0}, {"compTrim", -6.0}};
+    auto p = audio::makeBuiltinEffect(ref, kRate);
+    std::vector<float> l(kRate), r(kRate);
+    for (int i = 0; i < kRate; ++i) l[static_cast<std::size_t>(i)] = r[static_cast<std::size_t>(i)] = static_cast<float>(0.1 * std::sin(2 * kPi * 440.0 * i / kRate));
+    p->process(l.data(), r.data(), kRate);
+    float peak = 0;
+    for (int i = kRate / 2; i < kRate; ++i) peak = std::max(peak, std::abs(l[static_cast<std::size_t>(i)]));
+    CHECK(std::abs(peak - 0.05f) < 0.01f);          // 0.1 at -6 dB, not at +12 dB
+}

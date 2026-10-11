@@ -36,6 +36,26 @@ struct PitchAnalysis {
 // `d` may have any number of channels (they are averaged).
 PitchAnalysis analysePitch(const WavData& d, const PitchOptions& options = {});
 
+// What the user did to one note (Flex Pitch). The neutral values leave the note exactly as it was recorded.
+struct NoteEdit {
+    double semitones = 0.0;   // the note moved up or down (dragged on the pitch axis)
+    double fineCents = 0.0;   // fine pitch, -50 .. +50
+    double correct = 0.0;     // 0 .. 1: how much of the slow wander of the pitch around the note is taken out
+    double vibrato = 1.0;     // 1 as recorded, 0 flat, 2 twice as deep
+    double driftIn = 0.0;     // 0 .. 1: how much of the drift into the note (its first moments) is taken out
+    double driftOut = 0.0;    // 0 .. 1: the same at the end
+    double gainDb = 0.0;
+    double formantCents = 0.0;  // the timbre moved up or down without moving the pitch
+    bool isNeutral() const {
+        return semitones == 0.0 && fineCents == 0.0 && correct == 0.0 && vibrato == 1.0 && driftIn == 0.0 && driftOut == 0.0 && gainDb == 0.0 && formantCents == 0.0;
+    }
+};
+
+// The sound with the notes edited (TD-PSOLA on the pitch marks of the pitch track, on every channel alike). `edits` goes with
+// analysis.notes, one per note (missing ones are neutral). Only frames [from, to) are returned (to < 0: up to the end), so that one note
+// can be heard at once while it is dragged. Notes that are neutral, and everything outside the notes, are copied unchanged.
+WavData renderFlexPitch(const WavData& src, const PitchAnalysis& analysis, const std::vector<NoteEdit>& edits, std::int64_t from = 0, std::int64_t to = -1);
+
 double midiToHz(double midi);
 double hzToMidi(double hz);
 

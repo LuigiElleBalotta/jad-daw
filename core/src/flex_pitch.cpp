@@ -393,4 +393,247 @@ PitchAnalysis analysePitch(const WavData& d, const PitchOptions& options) {
     return out;
 }
 
+
+// ---------------------------------------------------------------- Flex Pitch rendering: TD-PSOLA
+
+namespace {
+
+// the planar copy of the sound and a mono mix
+struct Channels {
+    std::vector<std::vector<float>> ch;
+    std::vector<float> mono;
+    std::int64_t n = 0;
+};
+
+Channels splitChannels(const WavData& d) {
+    Channels c;
+    c.n = d.frames();
+    const int count = std::max(1, d.channels);
+    c.ch.assign(static_cast<std::size_t>(count), std::vector<float>(static_cast<std::size_t>(c.n)));
+    c.mono.assign(static_cast<std::size_t>(c.n), 0.0f);
+    for (std::int64_t i = 0; i < c.n; ++i) {
+        double s = 0.0;
+        for (int k = 0; k < count; ++k) {
+            const float v = d.samples[static_cast<std::size_t>(i * count + k)];
+            c.ch[static_cast<std::size_t>(k)][static_cast<std::size_t>(i)] = v;
+            s += v;
+        }
+        c.mono[static_cast<std::size_t>(i)] = static_cast<float>(s / count);
+    }
+    return c;
+}
+
+inline float sampleAt(const std::vector<float>& v, std::int64_t i) { return (i >= 0 && i < static_cast<std::int64_t>(v.size())) ? v[static_cast<std::size_t>(i)] : 0.0f; }
+
+inline float interpolated(const std::vector<float>& v, double pos) {
+    const std::int64_t i = static_cast<std::int64_t>(std::floor(pos));
+    const double f = pos - static_cast<double>(i);
+    return static_cast<float>(sampleAt(v, i) * (1.0 - f) + sampleAt(v, i + 1) * f);
+}
+
+// moving average of `values` over `width` entries (centred, shorter at the ends)
+std::vector<double> movingAverage(const std::vector<double>& values, int width) {
+    std::vector<double> out(values.size(), 0.0);
+    const int half = std::max(1, width / 2);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const std::size_t a = i >= static_cast<std::size_t>(half) ? i - static_cast<std::size_t>(half) : 0;
+        const std::size_t b = std::min(values.size() - 1, i + static_cast<std::size_t>(half));
+        double s = 0.0;
+        for (std::size_t j = a; j <= b; ++j) s += values[j];
+        out[i] = s / static_cast<double>(b - a + 1);
+    }
+    return out;
+}
+
+// One note: the edited pitch as a function of the position, the original pitch, and the period at every pitch mark.
+class NoteRenderer {
+public:
+    NoteRenderer(const Channels& x, const PitchAnalysis& a, const FlexNote& note, const NoteEdit& e) : x_(x), a_(a), note_(note), e_(e) {
+        rate_ = a.sampleRate;
+        start_ = note.start;
+        end_ = std::min<std::int64_t>(x.n, note.start + note.length);
+        // the pitch track over the note, a value for each analysis hop
+        const int hop = a.hop;
+        firstFrame_ = static_cast<int>(start_ / hop);
+        const int lastFrame = static_cast<int>(end_ / hop) + 1;
+        orig_.assign(static_cast<std::size_t>(lastFrame - firstFrame_ + 1), note.pitch);
+        for (int f = firstFrame_; f <= lastFrame; ++f) {
+            const std::size_t idx = static_cast<std::size_t>(f);
+            if (idx < a.midi.size() && a.midi[idx] > 0) orig_[static_cast<std::size_t>(f - firstFrame_)] = a.midi[idx];
+        }
+        // the deviation from the note's pitch: a slow part (drift, wander) and a fast part (vibrato)
+        std::vector<double> dev(orig_.size());
+        for (std::size_t i = 0; i < orig_.size(); ++i) dev[i] = orig_[i] - note.pitch;
+        const double hopSeconds = static_cast<double>(hop) / rate_;
+        const std::vector<double> slow = movingAverage(dev, std::max(3, static_cast<int>(0.17 / hopSeconds)));
+        target_.resize(orig_.size());
+        const double noteSeconds = static_cast<double>(end_ - start_) / rate_;
+        const double edge = std::min(0.15, noteSeconds * 0.4);
+        for (std::size_t i = 0; i < orig_.size(); ++i) {
+            const double t = (static_cast<double>(firstFrame_ + static_cast<int>(i)) * hop - static_cast<double>(start_)) / rate_;
+            const double toEnd = noteSeconds - t;
+            const double wIn = e.driftIn * std::clamp(1.0 - t / std::max(edge, 1e-3), 0.0, 1.0);
+            const double wOut = e.driftOut * std::clamp(1.0 - toEnd / std::max(edge, 1e-3), 0.0, 1.0);
+            const double vib = dev[i] - slow[i];
+            const double keptSlow = slow[i] * (1.0 - e.correct) * (1.0 - wIn) * (1.0 - wOut);
+            target_[i] = note.pitch + e.semitones + e.fineCents / 100.0 + e.vibrato * vib + keptSlow;
+        }
+    }
+
+    double originalAt(double pos) const { return track(orig_, pos); }
+    double targetAt(double pos) const { return track(target_, pos); }
+    double periodAt(double pos) const { return rate_ / midiToHz(originalAt(pos)); }
+
+    // Renders the note into `out` (one buffer per channel, absolute positions, same length as the sound): the PSOLA result replaces
+    // the sound inside the note and is blended into it over a few milliseconds at both edges.
+    void render(std::vector<std::vector<float>>& out) const {
+        const bool pitchChanged = e_.semitones != 0.0 || e_.fineCents != 0.0 || e_.correct != 0.0 || e_.vibrato != 1.0 || e_.driftIn != 0.0 || e_.driftOut != 0.0 || e_.formantCents != 0.0;
+        const std::int64_t len = end_ - start_;
+        if (len < 16) return;
+        const double gain = std::pow(10.0, e_.gainDb / 20.0);
+        const std::int64_t fade = std::max<std::int64_t>(1, std::min<std::int64_t>(static_cast<std::int64_t>(0.008 * rate_), len / 4));
+        auto mix = [&](std::int64_t p) {
+            const double in = std::min(1.0, static_cast<double>(p - start_ + 1) / fade);
+            const double outG = std::min(1.0, static_cast<double>(end_ - p) / fade);
+            return std::min(in, outG);
+        };
+        if (!pitchChanged) {  // only a gain: the same sound, louder or softer, with soft edges
+            for (auto& ch : out)
+                for (std::int64_t p = start_; p < end_; ++p) {
+                    const double m = mix(p);
+                    ch[static_cast<std::size_t>(p)] = static_cast<float>(ch[static_cast<std::size_t>(p)] * (1.0 + m * (gain - 1.0)));
+                }
+            return;
+        }
+
+        // pitch marks of the original sound: peaks one period apart, found from the loudest point of the note outwards
+        std::vector<double> marks = findMarks();
+        if (marks.size() < 3) return;
+
+        const double formant = std::pow(2.0, e_.formantCents / 1200.0);
+        const std::int64_t pad = static_cast<std::int64_t>(rate_ / 40.0);  // the longest grain, two periods of 40 Hz
+        const std::int64_t base = start_ - pad;
+        const std::size_t span = static_cast<std::size_t>(len + 2 * pad);
+        std::vector<std::vector<float>> acc(x_.ch.size(), std::vector<float>(span, 0.0f));
+        std::vector<float> weight(span, 0.0f);
+
+        // synthesis marks: from the first analysis mark on, one edited period apart
+        double s = marks.front();
+        while (s < static_cast<double>(end_ + pad / 2)) {
+            // the analysis mark nearest to this position
+            auto it = std::lower_bound(marks.begin(), marks.end(), s);
+            double am = (it == marks.end()) ? marks.back() : *it;
+            if (it != marks.begin() && (it == marks.end() || s - *(it - 1) < *it - s)) am = *(it - 1);
+            const double t0 = periodAt(s);
+            const double ratio = std::pow(2.0, (targetAt(s) - originalAt(s)) / 12.0);
+            const double newPeriod = t0 / ratio;
+            const double half = std::clamp(std::max(periodAt(am), newPeriod), 8.0, static_cast<double>(pad));
+            const std::int64_t h = static_cast<std::int64_t>(std::ceil(half));
+            for (std::int64_t u = -h; u <= h; ++u) {
+                const std::int64_t pos = static_cast<std::int64_t>(std::llround(s)) + u;
+                const std::int64_t idx = pos - base;
+                if (idx < 0 || idx >= static_cast<std::int64_t>(span)) continue;
+                const double w = 0.5 * (1.0 + std::cos(kPi * static_cast<double>(u) / (half + 1.0)));
+                const double readAt = am + static_cast<double>(u) * formant;
+                for (std::size_t c = 0; c < x_.ch.size(); ++c) acc[c][static_cast<std::size_t>(idx)] += static_cast<float>(w * interpolated(x_.ch[c], readAt));
+                weight[static_cast<std::size_t>(idx)] += static_cast<float>(w);
+            }
+            s += std::max(8.0, newPeriod);
+        }
+        for (std::int64_t p = start_; p < end_; ++p) {
+            const std::size_t idx = static_cast<std::size_t>(p - base);
+            const double w = weight[idx];
+            const double m = mix(p);
+            for (std::size_t c = 0; c < x_.ch.size(); ++c) {
+                const double synth = w > 0.05 ? acc[c][idx] / w : static_cast<double>(out[c][static_cast<std::size_t>(p)]);
+                out[c][static_cast<std::size_t>(p)] = static_cast<float>(out[c][static_cast<std::size_t>(p)] * (1.0 - m) + synth * gain * m);
+            }
+        }
+    }
+
+private:
+    double track(const std::vector<double>& v, double pos) const {
+        const double f = pos / a_.hop - firstFrame_;
+        if (f <= 0) return v.front();
+        const std::size_t i = static_cast<std::size_t>(f);
+        if (i + 1 >= v.size()) return v.back();
+        const double fr = f - static_cast<double>(i);
+        return v[i] * (1.0 - fr) + v[i + 1] * fr;
+    }
+
+    // marks near positive peaks, one period apart
+    std::vector<double> findMarks() const {
+        const std::vector<float>& m = x_.mono;
+        // the loudest sample of the note's middle part starts the chain
+        const std::int64_t mid0 = start_ + (end_ - start_) / 4, mid1 = end_ - (end_ - start_) / 4;
+        std::int64_t peak = (start_ + end_) / 2;
+        float best = -1e30f;
+        for (std::int64_t p = mid0; p < mid1; ++p)
+            if (sampleAt(m, p) > best) { best = sampleAt(m, p); peak = p; }
+        auto refine = [&](double predicted, double period) {
+            const std::int64_t r = std::max<std::int64_t>(1, static_cast<std::int64_t>(period * 0.25));
+            const std::int64_t c = static_cast<std::int64_t>(std::llround(predicted));
+            std::int64_t bestPos = c;
+            float bestVal = -1e30f;
+            for (std::int64_t p = c - r; p <= c + r; ++p)
+                if (sampleAt(m, p) > bestVal) { bestVal = sampleAt(m, p); bestPos = p; }
+            return static_cast<double>(bestPos);
+        };
+        std::vector<double> forward{static_cast<double>(peak)};
+        while (forward.back() < static_cast<double>(end_) + periodAt(forward.back())) {
+            const double t0 = periodAt(forward.back());
+            forward.push_back(refine(forward.back() + t0, t0));
+            if (forward.back() <= forward[forward.size() - 2]) forward.back() = forward[forward.size() - 2] + std::max(2.0, t0);
+        }
+        std::vector<double> backward;
+        double p = static_cast<double>(peak);
+        while (p > static_cast<double>(start_) - periodAt(p)) {
+            const double t0 = periodAt(p);
+            double q = refine(p - t0, t0);
+            if (q >= p) q = p - std::max(2.0, t0);
+            backward.push_back(q);
+            p = q;
+        }
+        std::reverse(backward.begin(), backward.end());
+        backward.insert(backward.end(), forward.begin(), forward.end());
+        return backward;
+    }
+
+    const Channels& x_;
+    const PitchAnalysis& a_;
+    FlexNote note_;
+    NoteEdit e_;
+    double rate_ = 48000;
+    std::int64_t start_ = 0, end_ = 0;
+    int firstFrame_ = 0;
+    std::vector<double> orig_, target_;
+};
+
+}  // namespace
+
+WavData renderFlexPitch(const WavData& src, const PitchAnalysis& analysis, const std::vector<NoteEdit>& edits, std::int64_t from, std::int64_t to) {
+    const Channels x = splitChannels(src);
+    const std::int64_t n = x.n;
+    if (to < 0 || to > n) to = n;
+    from = std::clamp<std::int64_t>(from, 0, to);
+    std::vector<std::vector<float>> out = x.ch;
+    if (analysis.sampleRate == src.sampleRate && analysis.hop > 0 && !analysis.midi.empty()) {
+        for (std::size_t i = 0; i < analysis.notes.size(); ++i) {
+            const NoteEdit e = i < edits.size() ? edits[i] : NoteEdit{};
+            if (e.isNeutral()) continue;
+            const FlexNote& note = analysis.notes[i];
+            if (note.start + note.length <= from || note.start >= to) continue;
+            NoteRenderer(x, analysis, note, e).render(out);
+        }
+    }
+    WavData r;
+    r.sampleRate = src.sampleRate;
+    r.channels = src.channels;
+    const int channels = std::max(1, src.channels);
+    r.samples.resize(static_cast<std::size_t>((to - from) * channels));
+    for (std::int64_t i = from; i < to; ++i)
+        for (int c = 0; c < channels; ++c) r.samples[static_cast<std::size_t>((i - from) * channels + c)] = out[static_cast<std::size_t>(c)][static_cast<std::size_t>(i)];
+    return r;
+}
+
 }  // namespace lpc

@@ -106,3 +106,108 @@ TEST_CASE("flex pitch: silence and noise hold no notes", "[flex][pitch]") {
     REQUIRE(analysePitch(toWav(noise, rate)).notes.empty());
     REQUIRE(analysePitch(toWav({0.1f, 0.2f}, rate)).notes.empty());  // too short to say anything
 }
+
+namespace {
+
+struct Voice {
+    WavData audio;
+    PitchAnalysis analysis;
+};
+
+// 1.8 s of a voice-like tone at `hz(t)`, analysed
+template <class F>
+Voice voice(F hz, int channels = 1, int rate = 48000) {
+    std::vector<float> v(static_cast<std::size_t>(2.0 * rate), 0.0f);
+    addTone(v, rate, 0.1, 1.9, hz);
+    Voice r;
+    r.audio = toWav(v, rate, channels);
+    r.analysis = analysePitch(r.audio);
+    return r;
+}
+
+double rms(const WavData& d, std::int64_t from, std::int64_t to) {
+    double s = 0.0;
+    for (std::int64_t i = from; i < to; ++i) s += static_cast<double>(d.samples[static_cast<std::size_t>(i * d.channels)]) * d.samples[static_cast<std::size_t>(i * d.channels)];
+    return std::sqrt(s / static_cast<double>(to - from));
+}
+
+double pitchOf(const WavData& d) {
+    const PitchAnalysis a = analysePitch(d);
+    return a.notes.size() == 1 ? a.notes[0].pitch : -1.0;
+}
+
+}  // namespace
+
+TEST_CASE("flex pitch render: neutral edits give the sound back bit for bit", "[flex][pitch]") {
+    const Voice v = voice([](double) { return 220.0; });
+    REQUIRE(v.analysis.notes.size() == 1);
+    const WavData same = renderFlexPitch(v.audio, v.analysis, {NoteEdit{}});
+    REQUIRE(same.samples == v.audio.samples);
+    REQUIRE(renderFlexPitch(v.audio, v.analysis, {}).samples == v.audio.samples);
+}
+
+TEST_CASE("flex pitch render: a note moved up or down plays at the new pitch, with its length and the sound around it intact", "[flex][pitch]") {
+    const Voice v = voice([](double) { return 220.0; });
+    for (double semitones : {3.0, -5.0, 12.0}) {
+        NoteEdit e;
+        e.semitones = semitones;
+        const WavData out = renderFlexPitch(v.audio, v.analysis, {e});
+        INFO(semitones);
+        REQUIRE(out.samples.size() == v.audio.samples.size());
+        REQUIRE(pitchOf(out) == Catch::Approx(57.0 + semitones).margin(0.2));
+        const FlexNote& n = v.analysis.notes[0];
+        for (std::int64_t i = 0; i < n.start - 200; ++i) REQUIRE(out.samples[static_cast<std::size_t>(i)] == v.audio.samples[static_cast<std::size_t>(i)]);
+    }
+    NoteEdit fine;
+    fine.fineCents = 30;
+    REQUIRE(pitchOf(renderFlexPitch(v.audio, v.analysis, {fine})) == Catch::Approx(57.3).margin(0.12));
+}
+
+TEST_CASE("flex pitch render: vibrato 0 flattens it, 2 deepens it", "[flex][pitch]") {
+    const Voice v = voice([](double t) { return 329.6276 * std::pow(2.0, 0.4 / 12.0 * std::sin(2 * kPi * 5.5 * t)); });
+    REQUIRE(v.analysis.notes.size() == 1);
+    auto swing = [](const WavData& d) {
+        const PitchAnalysis a = analysePitch(d);
+        double lo = 1e9, hi = -1e9;
+        for (std::int64_t p = d.sampleRate / 4; p < d.sampleRate * 3 / 2; p += 200) {
+            const double m = a.midiAt(p);
+            if (m <= 0) continue;
+            lo = std::min(lo, m);
+            hi = std::max(hi, m);
+        }
+        return hi - lo;
+    };
+    const double before = swing(v.audio);
+    NoteEdit flat;
+    flat.vibrato = 0.0;
+    NoteEdit deep;
+    deep.vibrato = 2.0;
+    REQUIRE(swing(renderFlexPitch(v.audio, v.analysis, {flat})) < 0.3 * before);
+    REQUIRE(swing(renderFlexPitch(v.audio, v.analysis, {deep})) > 1.5 * before);
+}
+
+TEST_CASE("flex pitch render: gain, formant and stereo", "[flex][pitch]") {
+    const Voice v = voice([](double) { return 220.0; }, 2);
+    NoteEdit quiet;
+    quiet.gainDb = -6.0;
+    const WavData q = renderFlexPitch(v.audio, v.analysis, {quiet});
+    const double ratio = rms(q, 48000 / 2, 48000) / rms(v.audio, 48000 / 2, 48000);
+    REQUIRE(ratio == Catch::Approx(0.5012).margin(0.02));
+    NoteEdit formant;
+    formant.formantCents = 400;
+    const WavData f = renderFlexPitch(v.audio, v.analysis, {formant});
+    REQUIRE(f.samples != v.audio.samples);
+    REQUIRE(pitchOf(f) == Catch::Approx(57.0).margin(0.2));  // the timbre moved, the pitch did not
+    REQUIRE(f.channels == 2);
+    for (std::size_t i = 0; i + 1 < f.samples.size(); i += 2) REQUIRE(f.samples[i] == f.samples[i + 1]);
+}
+
+TEST_CASE("flex pitch render: a range is the same as the matching part of the whole", "[flex][pitch]") {
+    const Voice v = voice([](double) { return 220.0; });
+    NoteEdit e;
+    e.semitones = 2;
+    const WavData whole = renderFlexPitch(v.audio, v.analysis, {e});
+    const WavData part = renderFlexPitch(v.audio, v.analysis, {e}, 30000, 60000);
+    REQUIRE(part.frames() == 30000);
+    for (std::int64_t i = 0; i < 30000; ++i) REQUIRE(part.samples[static_cast<std::size_t>(i)] == whole.samples[static_cast<std::size_t>(30000 + i)]);
+}

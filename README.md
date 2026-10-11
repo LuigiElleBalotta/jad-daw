@@ -20,6 +20,19 @@ Use `-DLPC_BUILD_CLI=OFF` to skip the CLI, or `-DLPC_WITH_JUCE=OFF` to build the
     lpc-cli info demo.lpc
     lpc-cli render demo.lpc out.wav        # deterministic offline bounce
     lpc-cli play demo.lpc                  # needs a 48 kHz output device
+    lpc-cli snapshot|analyze|masking|apply|mastering|effects   # JSON for programs that look at a project and listen to it
+
+### The DAW's ears (MCP server)
+
+`tools/mcp-ears/jad_ears_server.py` is a Model Context Protocol server (stdio, Python 3, no packages) that lets an AI assistant
+open a project, listen to the mix or to one track (loudness, spectrum, stereo, masking, problems, tempo), change faders, pans,
+inserts and sends, run the Mastering Assistant and render excerpts. Changes go to a copy of the project (`<project>.ai-session`),
+every change is an undo step, every call is logged in `.ai-log.jsonl`, and `commit_session` writes back (keeping `.before-ai`).
+Add it to an MCP client, for example in `.mcp.json`:
+
+    { "mcpServers": { "jad-ears": { "command": "python", "args": ["tools/mcp-ears/jad_ears_server.py"] } } }
+
+Set `JAD_CLI` if `lpc-cli` is not in the build folders. Test: `python tools/mcp-ears/test_server.py`.
 
 ## UI
 

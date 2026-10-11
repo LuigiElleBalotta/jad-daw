@@ -20,6 +20,7 @@
 #include "lpc/audio_analysis.h"
 #include "lpc/audio_decode.h"
 #include "lpc/commands.h"
+#include "lpc/effect_specs.h"
 #include "lpc/mastering_fit.h"
 #include "lpc/media_store.h"
 #include "lpc/model_json.h"
@@ -320,6 +321,22 @@ int cmdApply(const std::vector<std::string>& args, std::ostream& out) {
     return allOk ? 0 : 2;
 }
 
+// The built-in effects and instruments with their parameters (name, unit, range, default): what `add_insert` and `set_insert_param` can use.
+int cmdEffects(std::ostream& out) {
+    auto specsJson = [](const std::vector<EffectSpec>& specs) {
+        json list = json::array();
+        for (const EffectSpec& s : specs) {
+            json params = json::array();
+            for (const EffectParam& p : s.params)
+                params.push_back({{"name", p.name}, {"label", p.label}, {"unit", p.unit}, {"min", p.min}, {"max", p.max}, {"default", p.def}, {"logarithmic", p.logarithmic}});
+            list.push_back({{"id", s.id}, {"name", s.name}, {"group", s.group}, {"parameters", params}});
+        }
+        return list;
+    };
+    out << json{{"effects", specsJson(effectSpecs())}, {"instruments", specsJson(instrumentSpecs())}}.dump(1) << "\n";
+    return 0;
+}
+
 // Mastering Assistant on the project: the insert is added to the master when it is not there, analysed, and its parameters are written (unless --dry-run).
 int cmdMastering(const std::vector<std::string>& args, std::ostream& out) {
     const Options o = parseOptions(args, {"--out", "--seconds"}, {"--dry-run"});
@@ -374,7 +391,7 @@ Project soloTrackProject(Project project, const std::string& selector) {
     }
 }
 
-bool isEarsCommand(const std::string& cmd) { return cmd == "snapshot" || cmd == "analyze" || cmd == "masking" || cmd == "apply" || cmd == "mastering"; }
+bool isEarsCommand(const std::string& cmd) { return cmd == "snapshot" || cmd == "analyze" || cmd == "masking" || cmd == "apply" || cmd == "mastering" || cmd == "effects"; }
 
 int runEars(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
     try {
@@ -384,6 +401,7 @@ int runEars(const std::vector<std::string>& args, std::ostream& out, std::ostrea
         if (cmd == "masking") return cmdMasking(args, out);
         if (cmd == "apply") return cmdApply(args, out);
         if (cmd == "mastering") return cmdMastering(args, out);
+        if (cmd == "effects") return cmdEffects(out);
     } catch (const Usage& e) {
         err << "error: " << e.message << "\n";
         return 1;

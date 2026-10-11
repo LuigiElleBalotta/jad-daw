@@ -1507,6 +1507,30 @@ void ProjectController::flexCreateMidiTrack(const QString& regionId) {
 
 // ---------------------------------------------------------------- Drum Replacement
 
+// A new instrument track on the Drum Kit with a note for every hit of the region (the sound picks the note, the level the velocity).
+void ProjectController::appendDrumHitsTrack(nlohmann::json& commands, const RegionRow& row, const std::vector<lpc::DrumHit>& hits, const QString& sound) {
+    const lpc::Ticks startTick = static_cast<lpc::Ticks>(std::llround(row.startBeats * lpc::kPPQ));
+    const double startSamples = tempoMap_.ticksToSamples(startTick, sampleRate_);
+    const int note = sound == "kick" ? 36 : (sound == "tom" ? 47 : (sound == "hihat" ? 42 : (sound == "clap" ? 39 : 38)));
+    nlohmann::json notes = nlohmann::json::array();
+    for (const lpc::DrumHit& h : hits) {
+        const std::int64_t at = static_cast<std::int64_t>(tempoMap_.samplesToTicks(startSamples + static_cast<double>(h.frame), sampleRate_)) - startTick;
+        const int velocity = std::clamp(static_cast<int>(std::lround(20.0 + 107.0 * std::min(h.level, 1.2) / 1.2)), 1, 127);
+        notes.push_back({{"start", std::max<std::int64_t>(0, at)}, {"length", lpc::kPPQ / 8}, {"note", note}, {"velocity", velocity}});
+    }
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    const QString trackId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    nlohmann::json track = {{"id", trackId.toStdString()}, {"kind", "instrument"}, {"name", "Drum Hits"}, {"color", ""},
+                            {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()}, {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                            {"regions", nlohmann::json::array()}, {"automation", nlohmann::json::array()},
+                            {"instrument", {{"processorId", lpc::kProcDrums}, {"params", nlohmann::json::object()}, {"state", ""}}}};
+    nlohmann::json region = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"}, {"start", startTick},
+                             {"length", std::max<std::int64_t>(1, static_cast<std::int64_t>(std::llround(row.lengthBeats * lpc::kPPQ)))}, {"mediaId", nullId},
+                             {"sourceOffsetFrames", 0}, {"gainDb", 0}, {"notes", notes}, {"name", "Drum Hits"}};
+    commands.push_back({{"type", "add_track"}, {"index", -1}, {"track", track}});
+    commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"region", region}});
+}
+
 // Track > Replace or Double Drum Track: the hits of the selected audio regions get a drum sound. The regions are rendered in a worker thread and
 // replaced together with their new files in one undo step (the recording stays in the project).
 void ProjectController::drumReplace(const QVariantMap& options) {
@@ -1523,7 +1547,10 @@ void ProjectController::drumReplace(const QVariantMap& options) {
         return;
     }
     lpc::DrumReplaceParams params;
-    params.replace = options.value("mode", "replace").toString() != "double";
+    const QString modeName = options.value("mode", "replace").toString();
+    const bool midiOnly = modeName == "midi";                          // only the hits are made, as MIDI on the Drum Kit; the audio stays
+    const bool alsoMidi = midiOnly || options.value("midi", false).toBool();
+    params.replace = modeName != "double";
     params.mix = std::clamp(options.value("mix", 100.0).toDouble() / 100.0, 0.0, 1.0);
     params.levelDb = std::clamp(options.value("levelDb", 0.0).toDouble(), -24.0, 12.0);
     params.velocity = std::clamp(options.value("velocity", 70.0).toDouble() / 100.0, 0.0, 1.0);
@@ -1548,13 +1575,14 @@ void ProjectController::drumReplace(const QVariantMap& options) {
     for (const RegionRow& r : rows) sources.push_back(mediaPath(projectDir, mediaPaths_.value(r.mediaId)));
     QPointer<ProjectController> self(this);
     const std::uint64_t generation = generation_;
-    (void)QtConcurrent::run([self, rows, sources, params, sound, customFile, projectDir, rate, generation] {
+    (void)QtConcurrent::run([self, rows, sources, params, sound, customFile, projectDir, rate, generation, midiOnly, alsoMidi] {
         struct Result {
             RegionRow row;
             std::filesystem::path target;
             QString hash;
             std::int64_t frames = 0;
             int channels = 0, hits = 0;
+            std::vector<lpc::DrumHit> hitList;  // for the MIDI track
         };
         std::vector<Result> results;
         QString error;
@@ -1585,9 +1613,18 @@ void ProjectController::drumReplace(const QVariantMap& options) {
                 }
                 const std::vector<lpc::DrumHit> hits = lpc::findDrumHits(audio, params.sensitivity, params.minGapMs);
                 if (hits.empty()) continue;
+                if (midiOnly) {
+                    Result only;
+                    only.row = row;
+                    only.hits = static_cast<int>(hits.size());
+                    only.hitList = hits;
+                    results.push_back(std::move(only));
+                    continue;
+                }
                 const lpc::WavData out = lpc::replaceDrums(audio, hits, s, params);
                 Result res;
                 res.row = row;
+                if (alsoMidi) res.hitList = hits;
                 res.frames = out.frames();
                 res.channels = out.channels;
                 res.hits = static_cast<int>(hits.size());
@@ -1606,7 +1643,7 @@ void ProjectController::drumReplace(const QVariantMap& options) {
             error = QString::fromUtf8(e.what());
         }
         if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self, results = std::move(results), error, projectDir, rate, generation]() mutable {
+        QMetaObject::invokeMethod(self.data(), [self, results = std::move(results), error, projectDir, rate, generation, sound, midiOnly]() mutable {
             std::error_code ignore;
             auto discard = [&] {
                 for (auto& r : results) std::filesystem::remove(r.target, ignore);
@@ -1632,6 +1669,8 @@ void ProjectController::drumReplace(const QVariantMap& options) {
                 if (!row || row->lengthFrames != r.row.lengthFrames) { std::filesystem::remove(r.target, ignore); continue; }
                 nlohmann::json region = nlohmann::json::parse(row->json, nullptr, false);
                 if (region.is_discarded()) continue;
+                if (!r.hitList.empty()) self->appendDrumHitsTrack(commands, *row, r.hitList, sound);
+                if (r.target.empty()) { total += r.hits; continue; }  // MIDI only: the audio stays as it is
                 lpc::MediaItem item;
                 item.id = lpc::Uuid::random();
                 const std::u8string rel = (std::filesystem::path("audio") / r.target.filename()).generic_u8string();
@@ -1653,7 +1692,7 @@ void ProjectController::drumReplace(const QVariantMap& options) {
                 std::error_code ec;
                 for (const auto& f : files) std::filesystem::remove(f, ec);
             });
-            emit self->notice(QString("Replaced %1 drum hit%2").arg(total).arg(total == 1 ? "" : "s"));
+            emit self->notice(QString(midiOnly ? "Made MIDI for %1 drum hit%2" : "Replaced %1 drum hit%2").arg(total).arg(total == 1 ? "" : "s"));
         }, Qt::QueuedConnection);
     });
 }

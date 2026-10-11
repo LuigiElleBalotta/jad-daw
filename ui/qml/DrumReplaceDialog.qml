@@ -18,6 +18,7 @@ Dialog {
     property real levelDb: 0
     property real velocity: 70
     property real sensitivity: 50
+    property bool alsoMidi: false
     readonly property var sounds: [{ id: "kick", label: qsTr("Kick") }, { id: "snare", label: qsTr("Snare") }, { id: "tom", label: qsTr("Tom") },
                                    { id: "hihat", label: qsTr("Hi-Hat") }, { id: "clap", label: qsTr("Clap") }, { id: "file", label: qsTr("Audio file…") }]
     background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
@@ -30,7 +31,7 @@ Dialog {
         onAccepted: { root.file = selectedFile; root.sound = "file" }
     }
     function apply() {
-        project.drumReplace({ mode: mode, sound: sound, file: String(file), mix: mix, levelDb: levelDb, velocity: velocity, sensitivity: sensitivity })
+        project.drumReplace({ mode: mode, sound: sound, file: String(file), mix: mix, midi: alsoMidi, levelDb: levelDb, velocity: velocity, sensitivity: sensitivity })
         close()
     }
 
@@ -42,6 +43,7 @@ Dialog {
             Text { text: qsTr("Mode"); Layout.preferredWidth: 110; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
             IconButton { objectName: "drumReplaceMode"; implicitHeight: 24; label: qsTr("Replace"); active: root.mode === "replace"; onClicked: root.mode = "replace" }
             IconButton { objectName: "drumDoubleMode"; implicitHeight: 24; label: qsTr("Double"); active: root.mode === "double"; onClicked: root.mode = "double" }
+            IconButton { objectName: "drumMidiMode"; implicitHeight: 24; label: qsTr("MIDI only"); active: root.mode === "midi"; onClicked: root.mode = "midi" }
         }
         RowLayout {
             spacing: Theme.spacing[2]
@@ -53,6 +55,12 @@ Dialog {
                 format: (c) => c === "file" && root.file.toString() !== "" ? decodeURIComponent(root.file.toString().split("/").pop()) : root.sounds.find(s => s.id === c).label
                 onChosen: (c) => { if (c === "file") fileDialog.open(); else root.sound = c }
             }
+        }
+        RowLayout {
+            visible: root.mode !== "midi"
+            spacing: Theme.spacing[2]
+            Text { text: qsTr("MIDI track"); Layout.preferredWidth: 110; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
+            IconButton { objectName: "drumAlsoMidi"; implicitHeight: 24; label: root.alsoMidi ? qsTr("Also make one (Drum Kit)") : qsTr("None"); active: root.alsoMidi; onClicked: root.alsoMidi = !root.alsoMidi }
         }
         Repeater {
             model: [{ key: "sensitivity", label: qsTr("Sensitivity"), from: 0, to: 100, def: 50, unit: "%" },

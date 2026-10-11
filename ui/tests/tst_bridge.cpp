@@ -1635,6 +1635,33 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.regions()->find(id)->mediaId, original);
     }
+    void drumReplacementCanMakeAMidiTrackOfTheHits() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, true, 100.0, &track);
+        QVERIFY(!id.isEmpty());
+        const QString original = c.regions()->find(id)->mediaId;
+        const int tracks = c.tracks()->rowCount(), regions = c.regions()->rowCount();
+        c.selectRegion(id, "replace");
+        c.drumReplace({{"mode", "midi"}, {"sound", "kick"}});                         // only the hits, as MIDI: the audio stays
+        QTRY_COMPARE_WITH_TIMEOUT(c.tracks()->rowCount(), tracks + 1, 30000);
+        QCOMPARE(c.regions()->rowCount(), regions + 1);
+        QCOMPARE(c.regions()->find(id)->mediaId, original);
+        bool found = false;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && !r->audio && r->startBeats > 99.0) {
+                nlohmann::json j = nlohmann::json::parse(r->json);
+                found = j["notes"].size() >= 3 && j["notes"][0]["note"] == 36;       // the three hits of the clip, as kick notes
+            }
+        }
+        QVERIFY(found);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks);
+    }
     void masteringAssistantAnalysesTheProjectAndWritesItsFindingsInOneUndoStep() {
         TempDir dir, other;
         jad::ProjectController c(false);

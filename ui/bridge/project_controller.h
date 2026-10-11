@@ -40,6 +40,7 @@ class MediaStore;
 class PatchLibrary;
 class ProjectHost;
 struct InsertSlot;
+struct DrumHit;
 #ifdef JAD_HAVE_JUCE
 class JucePluginHost;
 class PluginScanner;
@@ -564,7 +565,7 @@ public:
     Q_INVOKABLE void flexNotePreview(const QString& regionId, int index, const QVariantMap& edit);  // plays the note as it would sound with these edits, repeating, until flexStopPreview
     Q_INVOKABLE void flexMarkerPreview(const QString& regionId, int index, double fraction, bool slide);  // while a marker is dragged: the stretch around it is heard (repeating) until flexStopPreview
     Q_INVOKABLE void flexStopPreview();
-    // Track > Replace or Double Drum Track: options mode (replace|double), sound (kick|snare|tom|hihat|clap|file), file, mix %, levelDb, velocity %, sensitivity %, minGapMs
+    // Track > Replace or Double Drum Track: options mode (replace|double|midi: only the hits as MIDI), midi (also make a MIDI track), sound (kick|snare|tom|hihat|clap|file), file, mix %, levelDb, velocity %, sensitivity %, minGapMs
     // Track > New Session Player Track: options kind (drummer|bass|keys), style, chords ("Am F C G"), repeats, intensity %, swing %, seed
     Q_INVOKABLE void newSessionPlayer(const QVariantMap& options);   // also startBeats
     Q_INVOKABLE void sessionRegenerate(const QString& regionId);      // the part again with the next seed
@@ -1158,6 +1159,7 @@ private:
     void smartRefollow();                                                // after a change of tempo or position: the regions that follow conform again
     bool refollowQueued_ = false;
     bool setStackStrip(const QString& trackId, const char* field, bool on);
+    void appendDrumHitsTrack(nlohmann::json& commands, const RegionRow& row, const std::vector<lpc::DrumHit>& hits, const QString& sound);
     void masteringAfterAdd(const QString& master, int attempt);
     bool masteringBusy_ = false;
     QVariantMap masteringStats_;

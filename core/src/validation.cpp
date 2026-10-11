@@ -1,4 +1,5 @@
 #include "lpc/validation.h"
+#include "lpc/flex_model.h"
 #include "lpc/effect_specs.h"
 
 #include <cctype>
@@ -41,8 +42,15 @@ MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r) {
         if (!r.notes.empty() || !r.controls.empty()) return CommandError{"bad_region", "audio regions cannot contain notes"};
         if (r.sourceOffsetFrames < 0 || r.sourceOffsetFrames > kMaxPosition)
             return CommandError{"bad_region", "sourceOffsetFrames must be in [0, 2^40]"};
+        if (r.flex) {
+            const MediaItem* source = p.findMedia(r.flex->sourceMediaId);
+            if (!source) return CommandError{"bad_region", "the flex data needs its source media in the media pool"};
+            const std::string why = flexProblem(*r.flex, source->frames);
+            if (!why.empty()) return CommandError{"bad_region", why};
+        }
     } else if (kind == TrackKind::Midi || kind == TrackKind::Instrument) {
         if (!r.mediaId.isNull()) return CommandError{"bad_region", "MIDI regions cannot reference media"};
+        if (r.flex) return CommandError{"bad_region", "only audio regions can be flexed"};
         if (r.timeBase != TimeBase::Musical) return CommandError{"bad_region", "MIDI regions must be musical"};
         if (r.controls.size() > 16384) return CommandError{"bad_region", "a region holds at most 16384 controller events"};
         for (std::size_t i = 0; i < r.controls.size(); ++i) {

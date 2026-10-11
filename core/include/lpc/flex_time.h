@@ -20,14 +20,17 @@ struct FlexAnchor {
     std::int64_t dst = 0;
 };
 
-// The piecewise-linear map between the original sound and the flexed one. The anchors are cleaned up on construction: sorted by src,
-// those outside (0, length) or that would not keep the order of dst are dropped.
+// The piecewise-linear map between the original sound (srcLength frames) and the flexed one (dstLength frames: the same unless the
+// region was trimmed after the markers were set). The anchors are cleaned up on construction: sorted by src, those outside the sound or
+// that would not keep the order of dst are dropped.
 class TimeMap {
 public:
     TimeMap() = default;
-    TimeMap(std::int64_t length, std::vector<FlexAnchor> anchors);
-    std::int64_t length() const { return length_; }
-    const std::vector<FlexAnchor>& points() const { return pts_; }  // including (0, 0) and (length, length)
+    TimeMap(std::int64_t length, std::vector<FlexAnchor> anchors) : TimeMap(length, length, std::move(anchors)) {}
+    TimeMap(std::int64_t srcLength, std::int64_t dstLength, std::vector<FlexAnchor> anchors);
+    std::int64_t srcLength() const { return srcLength_; }
+    std::int64_t dstLength() const { return dstLength_; }
+    const std::vector<FlexAnchor>& points() const { return pts_; }  // including (0, 0) and (srcLength, dstLength)
     double toSource(double dst) const;
     double toDest(double src) const;
     bool isIdentity() const { return pts_.size() <= 2; }
@@ -37,7 +40,7 @@ public:
     TimeMap withProtectedTransients(const std::vector<std::int64_t>& transients, int sampleRate, double preMs = 4.0, double postMs = 30.0) const;
 
 private:
-    std::int64_t length_ = 0;
+    std::int64_t srcLength_ = 0, dstLength_ = 0;
     std::vector<FlexAnchor> pts_;
 };
 
@@ -54,9 +57,10 @@ struct FlexTimeParams {
     bool preserveTransients = true;  // Monophonic, Polyphonic: keep attacks unstretched
 };
 
-// The sound as the markers ask: same format and the same number of frames as `src`. `transients` are the positions found by
-// findTransients (used by Slicing, Rhythmic and, if preserveTransients, by the stretching modes).
-WavData renderFlexTime(const WavData& src, const std::vector<FlexAnchor>& anchors, const std::vector<std::int64_t>& transients, const FlexTimeParams& params);
+// The sound as the markers ask: same format as `src` and `outFrames` frames (< 0: as many as `src`). `transients` are the positions
+// found by findTransients (used by Slicing, Rhythmic and, if preserveTransients, by the stretching modes).
+WavData renderFlexTime(const WavData& src, const std::vector<FlexAnchor>& anchors, const std::vector<std::int64_t>& transients, const FlexTimeParams& params,
+                       std::int64_t outFrames = -1);
 
 // A guess of the best mode for this sound: Slicing for short percussive hits, Monophonic for one voice or instrument, Polyphonic otherwise.
 FlexMode chooseFlexMode(const WavData& d);

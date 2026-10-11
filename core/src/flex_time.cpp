@@ -44,8 +44,9 @@ WavData join(const Planar& p, const std::vector<std::vector<float>>& out, int ch
     WavData d;
     d.sampleRate = p.rate;
     d.channels = channels;
-    d.samples.resize(static_cast<std::size_t>(p.n * channels));
-    for (std::int64_t i = 0; i < p.n; ++i)
+    const std::int64_t n = out.empty() ? 0 : static_cast<std::int64_t>(out[0].size());
+    d.samples.resize(static_cast<std::size_t>(n * channels));
+    for (std::int64_t i = 0; i < n; ++i)
         for (int k = 0; k < channels; ++k) d.samples[static_cast<std::size_t>(i * channels + k)] = out[static_cast<std::size_t>(k)][static_cast<std::size_t>(i)];
     return d;
 }
@@ -75,7 +76,7 @@ public:
     }
 
     std::vector<std::vector<float>> run() const {
-        const std::int64_t len = x_.n;
+        const std::int64_t len = map_.dstLength();
         std::vector<std::vector<float>> out(x_.ch.size(), std::vector<float>(static_cast<std::size_t>(len), 0.0f));
         std::int64_t prev = 0;
         bool have = false;
@@ -151,8 +152,8 @@ private:
 // ---------------------------------------------------------------- speed: resampling along the map (the pitch follows)
 
 std::vector<std::vector<float>> speedRender(const Planar& x, const TimeMap& map) {
-    std::vector<std::vector<float>> out(x.ch.size(), std::vector<float>(static_cast<std::size_t>(x.n), 0.0f));
-    for (std::int64_t o = 0; o < x.n; ++o) {
+    std::vector<std::vector<float>> out(x.ch.size(), std::vector<float>(static_cast<std::size_t>(map.dstLength()), 0.0f));
+    for (std::int64_t o = 0; o < map.dstLength(); ++o) {
         const double s = map.toSource(static_cast<double>(o));
         const std::int64_t i = static_cast<std::int64_t>(std::floor(s));
         const double f = s - static_cast<double>(i);
@@ -169,7 +170,8 @@ std::vector<std::vector<float>> speedRender(const Planar& x, const TimeMap& map)
 // ---------------------------------------------------------------- slicing and rhythmic: slices at their original speed, moved
 
 std::vector<std::vector<float>> sliceRender(const Planar& x, const TimeMap& map, const std::vector<std::int64_t>& transients, const FlexTimeParams& p) {
-    const std::int64_t len = x.n;
+    const std::int64_t len = x.n;                  // the sound as recorded
+    const std::int64_t outLen = map.dstLength();   // the sound as flexed
     const int rate = x.rate;
     auto ms = [&](double v) { return static_cast<std::int64_t>(v * 0.001 * rate); };
     std::vector<std::int64_t> cuts{0};
@@ -180,7 +182,7 @@ std::vector<std::vector<float>> sliceRender(const Planar& x, const TimeMap& map,
         if (t > cuts.back() + ms(10) && t < len - ms(10)) cuts.push_back(t);
     cuts.push_back(len);
 
-    std::vector<std::vector<float>> out(x.ch.size(), std::vector<float>(static_cast<std::size_t>(len), 0.0f));
+    std::vector<std::vector<float>> out(x.ch.size(), std::vector<float>(static_cast<std::size_t>(outLen), 0.0f));
     const bool rhythmic = p.mode == FlexMode::Rhythmic;
     for (std::size_t k = 0; k + 1 < cuts.size(); ++k) {
         const std::int64_t s0 = cuts[k], s1 = cuts[k + 1];
@@ -199,7 +201,7 @@ std::vector<std::vector<float>> sliceRender(const Planar& x, const TimeMap& map,
             std::vector<float>& o = out[c];
             for (std::int64_t i = -preroll; i < playLen; ++i) {
                 const std::int64_t pos = d0 + i;
-                if (pos < 0 || pos >= len) continue;
+                if (pos < 0 || pos >= outLen) continue;
                 double g = 1.0;
                 if (i < 0) g = static_cast<double>(i + preroll) / std::max<std::int64_t>(1, preroll);   // the lead-in before the attack
                 if (i >= playLen - endFade) g *= static_cast<double>(playLen - i) / std::max<std::int64_t>(1, endFade);
@@ -216,7 +218,7 @@ std::vector<std::vector<float>> sliceRender(const Planar& x, const TimeMap& map,
                 const std::int64_t xf = std::max<std::int64_t>(1, std::min<std::int64_t>(ms(2), loopLen / 3));
                 for (std::int64_t i = 0; i < gap; ++i) {
                     const std::int64_t pos = gapStart + i;
-                    if (pos < 0 || pos >= len) continue;
+                    if (pos < 0 || pos >= outLen) continue;
                     const std::int64_t within = i % (loopLen - xf);
                     float v = at(in, loopFrom + within);
                     if (within >= loopLen - 2 * xf && loopLen > 3 * xf) {  // blend the end of the piece into its own beginning
@@ -249,7 +251,7 @@ public:
     }
 
     std::vector<std::vector<float>> run() const {
-        const std::int64_t len = x_.n;
+        const std::int64_t len = map_.dstLength();
         std::vector<std::vector<float>> out;
         for (const std::vector<float>& ch : x_.ch) out.push_back(runChannel(ch, len));
         return out;
@@ -350,7 +352,7 @@ void spliceAttacks(const Planar& x, const TimeMap& used, const std::vector<std::
         for (std::size_t c = 0; c < x.ch.size(); ++c) {
             for (std::int64_t i = -fadeIn; i < pre + post + fadeOut; ++i) {
                 const std::int64_t pos = a + i;
-                if (pos < 0 || pos >= x.n) continue;
+                if (pos < 0 || pos >= used.dstLength()) continue;
                 double m = 1.0;
                 if (i < 0) m = 0.5 - 0.5 * std::cos(kPi * static_cast<double>(i + fadeIn) / fadeIn);
                 else if (i >= pre + post) m = 0.5 + 0.5 * std::cos(kPi * static_cast<double>(i - (pre + post)) / fadeOut);
@@ -387,21 +389,21 @@ FlexMode flexModeFromName(const char* name) {
 
 // ---------------------------------------------------------------- TimeMap
 
-TimeMap::TimeMap(std::int64_t length, std::vector<FlexAnchor> anchors) : length_(length) {
+TimeMap::TimeMap(std::int64_t srcLength, std::int64_t dstLength, std::vector<FlexAnchor> anchors) : srcLength_(srcLength), dstLength_(dstLength) {
     std::stable_sort(anchors.begin(), anchors.end(), [](const FlexAnchor& a, const FlexAnchor& b) { return a.src < b.src; });
     pts_.push_back({0, 0});
     for (const FlexAnchor& a : anchors) {
-        if (a.src <= pts_.back().src || a.src >= length) continue;
-        if (a.dst <= pts_.back().dst || a.dst >= length) continue;
+        if (a.src <= pts_.back().src || a.src >= srcLength) continue;
+        if (a.dst <= pts_.back().dst || a.dst >= dstLength) continue;
         pts_.push_back(a);
     }
-    pts_.push_back({length, length});
+    pts_.push_back({srcLength, dstLength});
 }
 
 double TimeMap::toSource(double dst) const {
     if (pts_.size() < 2) return dst;
     if (dst <= 0) return dst;
-    if (dst >= static_cast<double>(length_)) return static_cast<double>(length_) + (dst - static_cast<double>(length_));
+    if (dst >= static_cast<double>(dstLength_)) return static_cast<double>(srcLength_) + (dst - static_cast<double>(dstLength_));
     auto it = std::upper_bound(pts_.begin(), pts_.end(), dst, [](double v, const FlexAnchor& a) { return v < static_cast<double>(a.dst); });
     const FlexAnchor& b = *it;
     const FlexAnchor& a = *(it - 1);
@@ -411,7 +413,7 @@ double TimeMap::toSource(double dst) const {
 double TimeMap::toDest(double src) const {
     if (pts_.size() < 2) return src;
     if (src <= 0) return src;
-    if (src >= static_cast<double>(length_)) return static_cast<double>(length_) + (src - static_cast<double>(length_));
+    if (src >= static_cast<double>(srcLength_)) return static_cast<double>(dstLength_) + (src - static_cast<double>(srcLength_));
     auto it = std::upper_bound(pts_.begin(), pts_.end(), src, [](double v, const FlexAnchor& a) { return v < static_cast<double>(a.src); });
     const FlexAnchor& b = *it;
     const FlexAnchor& a = *(it - 1);
@@ -440,7 +442,7 @@ TimeMap TimeMap::withProtectedTransients(const std::vector<std::int64_t>& transi
             first.push_back(a);
         }
     }
-    const TimeMap ext(length_, first);
+    const TimeMap ext(srcLength_, dstLength_, first);
     // 2. transients inside a stretched stretch of sound get one too, and the stretch is taken up by the sound between them
     std::vector<FlexAnchor> out(ext.pts_.begin() + 1, ext.pts_.end() - 1);
     for (std::size_t i = 0; i + 1 < ext.pts_.size(); ++i) {
@@ -473,7 +475,7 @@ TimeMap TimeMap::withProtectedTransients(const std::vector<std::int64_t>& transi
         }
         if (ok) out.insert(out.end(), add.begin(), add.end());
     }
-    return TimeMap(length_, out);
+    return TimeMap(srcLength_, dstLength_, out);
 }
 
 // ---------------------------------------------------------------- transients
@@ -543,10 +545,12 @@ std::vector<std::int64_t> findTransients(const WavData& d, double sensitivity) {
 
 // ---------------------------------------------------------------- rendering
 
-WavData renderFlexTime(const WavData& src, const std::vector<FlexAnchor>& anchors, const std::vector<std::int64_t>& transients, const FlexTimeParams& params) {
+WavData renderFlexTime(const WavData& src, const std::vector<FlexAnchor>& anchors, const std::vector<std::int64_t>& transients, const FlexTimeParams& params,
+                       std::int64_t outFrames) {
     if (src.sampleRate <= 0 || src.channels <= 0 || src.frames() == 0) return src;
-    TimeMap map(src.frames(), anchors);
-    if (map.isIdentity()) return src;
+    if (outFrames < 0) outFrames = src.frames();
+    TimeMap map(src.frames(), outFrames, anchors);
+    if (map.isIdentity() && outFrames == src.frames()) return src;
     const Planar x = split(src);
     FlexMode mode = params.mode;
     if (mode == FlexMode::Off) return src;

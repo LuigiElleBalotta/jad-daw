@@ -96,7 +96,6 @@ TEST_CASE("flex time: a marker moves its transient, the ones before and after st
         const WavData out = renderFlexTime(d, {{hits[0], hits[0]}, {hits[1], hits[1] + frames(0.15)}, {hits[2], hits[2]}}, hits, p);
         const auto moved = findTransients(out);
         INFO(flexModeName(mode));
-        for (auto f : moved) std::fprintf(stderr, "%s found %.4f\n", flexModeName(mode), static_cast<double>(f) / kRate);
         REQUIRE(near(moved, 0.5));
         REQUIRE(near(moved, 1.15, 0.02));
         REQUIRE(near(moved, 1.5));
@@ -198,7 +197,6 @@ TEST_CASE("flex time: the phase vocoder keeps the notes of a chord where they ar
     REQUIRE(strongestHz(out, frames(0.6), frames(1.0), 260, 295) == Catch::Approx(277.18).margin(2.0));
     // the clicks arrive on time
     const auto moved = findTransients(out);
-    for (auto f : moved) std::fprintf(stderr, "chord found %.4f\n", static_cast<double>(f) / kRate);
     REQUIRE(near(moved, static_cast<double>(hits[0]) / kRate));
     REQUIRE(near(moved, static_cast<double>(hits[1]) / kRate + 0.2, 0.02));
     REQUIRE(near(moved, static_cast<double>(hits[2]) / kRate));

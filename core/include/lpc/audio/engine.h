@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "lpc/audio/audition.h"
 #include "lpc/audio/click.h"
 #include "lpc/audio/messages.h"
 #include "lpc/audio/render_graph.h"
@@ -64,6 +65,8 @@ public:
     bool takeRecorded(RecChunk& out) { return rec_.pop(out); }
     // the input level of a channel since the last call (linear peak); any thread, reading resets it
     float takeInputPeak(int channel) { return channel >= 0 && channel < kMaxInputs ? inPeak_[channel].exchange(0.0f, std::memory_order_relaxed) : 0.0f; }
+    // the frame of the audition clip being played now; -1 when none is (any thread)
+    std::int64_t auditionPosition() const { return auditionPosPub_.load(std::memory_order_relaxed); }
     int inputChannelCount() const { return inChannelsPub_.load(std::memory_order_relaxed); }
     std::uint64_t recordedDropped() const { return recDropped_.load(std::memory_order_relaxed); }  // chunks lost because nobody read them
 
@@ -106,6 +109,11 @@ private:
     void mixClickTrack(const ClickTrack* track, float* outL, float* outR, std::int64_t from, int n) noexcept;
     void capture(int offset, int n) noexcept;
     ClickKit* kit_ = nullptr;      // the samples of the click sounds (SetClickKit)
+    AuditionClip* audition_ = nullptr;  // the sound played over everything else (SetAudition)
+    std::int64_t auditionPos_ = 0;
+    bool auditionLoop_ = false;
+    std::atomic<std::int64_t> auditionPosPub_{-1};
+    void mixAudition(float* outL, float* outR, int n) noexcept;
     bool clickOn_ = false;
     struct ClickVoice {            // a sound being played: a sample, or the built-in blip when sample is null
         const std::vector<float>* sample = nullptr;

@@ -64,6 +64,10 @@ public:
     std::future<void> setMonitor(Uuid track, int first, int second);
     // Low Latency Monitoring Mode: a monitored track bypasses the inserts whose latency is above `limitFrames` (0 = off).
     std::future<void> setLowLatency(int limitFrames);
+    // Plays a sound over everything (stereo, at the project's rate) from frame `start` of it, once or repeating, replacing the one playing.
+    std::future<void> audition(audio::AuditionClip clip, std::int64_t start = 0, bool repeat = false);
+    std::future<void> stopAudition();
+    std::int64_t auditionPosition() const;  // the frame of the sound being played; -1 when none
     std::future<void> setMetronome(bool on);  // a click on every beat of the tempo map while playing, accent on the first beat of a bar
 
     // Called on the project thread after every accepted submit/undo/redo and after a rebuild of the audio

@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <stdexcept>
 #include <unordered_set>
 
+#include "lpc/flex_model.h"
 #include "lpc/model_json.h"
 #include "lpc/processor_ids.h"
 #include "lpc/validation.h"
@@ -390,6 +392,8 @@ public:
         if (patch_.name) j["name"] = *patch_.name;
         if (patch_.color) j["color"] = *patch_.color;
         if (patch_.icon) j["icon"] = *patch_.icon;
+        if (patch_.flexMode) j["flexMode"] = *patch_.flexMode;
+        if (patch_.flexParams) j["flexParams"] = *patch_.flexParams;
         if (patch_.showInTracks) j["showInTracks"] = *patch_.showInTracks;
         if (patch_.automationMode) j["automationMode"] = *patch_.automationMode;
         if (patch_.delayMs) j["delayMs"] = *patch_.delayMs;
@@ -409,6 +413,18 @@ public:
             const std::string& k = *patch_.icon;
             const bool plain = std::all_of(k.begin(), k.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-'; });
             if (k.size() > 40 || !plain) return fail("bad_value", "a track icon is a key of at most 40 lowercase letters, digits and dashes");
+        }
+        if (patch_.flexMode) {
+            const std::string& m = *patch_.flexMode;
+            static const char* const kModes[] = {"", "slicing", "rhythmic", "monophonic", "polyphonic", "tempophone", "speed", "automatic", "pitch"};
+            if (std::none_of(std::begin(kModes), std::end(kModes), [&](const char* k) { return m == k; })) return fail("bad_value", "the flex mode is slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic or pitch");
+            if (!m.empty() && t->kind != TrackKind::Audio) return fail("invalid_kind", "only audio tracks can be flexed");
+        }
+        if (patch_.flexParams) {
+            static const char* const kKeys[] = {"decay", "sliceLength", "loopLengthMs", "loopOffsetMs", "grainMs", "sensitivity"};
+            for (const auto& [key, value] : *patch_.flexParams)
+                if (std::none_of(std::begin(kKeys), std::end(kKeys), [&](const char* k) { return key == k; }) || !std::isfinite(value) || std::abs(value) > 1e5)
+                    return fail("bad_value", "unknown flex parameter or a value out of range");
         }
         if (patch_.automationMode) {
             const std::string& m = *patch_.automationMode;
@@ -446,6 +462,14 @@ public:
         if (patch_.icon) {
             previous.icon = t->icon;
             t->icon = *patch_.icon;
+        }
+        if (patch_.flexMode) {
+            previous.flexMode = t->flexMode;
+            t->flexMode = *patch_.flexMode;
+        }
+        if (patch_.flexParams) {
+            previous.flexParams = t->flexParams;
+            t->flexParams = *patch_.flexParams;
         }
         if (patch_.showInTracks) {
             previous.showInTracks = t->showInTracks;
@@ -530,7 +554,7 @@ public:
         if (it == p.mediaPool.end()) return fail("not_found", "no such media");
         for (const Track& t : p.tracks)
             for (const Region& r : t.regions)
-                if (r.mediaId == id_) return fail("in_use", "a region still uses this media");
+                if (r.mediaId == id_ || (r.flex && r.flex->sourceMediaId == id_)) return fail("in_use", "a region still uses this media");
         MediaItem removed = *it;
         const int index = static_cast<int>(it - p.mediaPool.begin());
         p.mediaPool.erase(it);
@@ -657,6 +681,15 @@ public:
         if (t->kind == TrackKind::Audio) {
             r.sourceOffsetFrames = old.sourceOffsetFrames + framesBetween(p, old.timeBase, old.start, start_);
             if (r.sourceOffsetFrames < 0) return fail("bad_region", "the start cannot move before the beginning of the media");
+            if (old.flex) {  // the flex edits follow the window the region now shows
+                const MediaItem* source = p.findMedia(old.flex->sourceMediaId);
+                const std::int64_t total = framesBetween(p, old.timeBase, old.start, old.start + old.length);
+                const std::int64_t from = framesBetween(p, old.timeBase, old.start, start_);
+                const std::int64_t frames = framesBetween(p, old.timeBase, start_, start_ + length_);
+                auto window = source ? flexWindow(*old.flex, total, from, frames, source->frames) : std::nullopt;
+                if (!window) return fail("bad_region", "the flexed sound does not reach that far");
+                r.flex = std::move(window);
+            }
         } else {
             r.notes.clear();
             for (MidiNote n : old.notes) {
@@ -713,6 +746,16 @@ public:
         right.length = old.start + old.length - at_;
         if (t->kind == TrackKind::Audio) {
             right.sourceOffsetFrames = old.sourceOffsetFrames + framesBetween(p, old.timeBase, old.start, at_);
+            if (old.flex) {
+                const MediaItem* source = p.findMedia(old.flex->sourceMediaId);
+                const std::int64_t total = framesBetween(p, old.timeBase, old.start, old.start + old.length);
+                const std::int64_t cut = framesBetween(p, old.timeBase, old.start, at_);
+                auto head = source ? flexWindow(*old.flex, total, 0, cut, source->frames) : std::nullopt;
+                auto tail = source ? flexWindow(*old.flex, total, cut, total - cut, source->frames) : std::nullopt;
+                if (!head || !tail) return fail("bad_region", "the flexed sound cannot be cut there");
+                left.flex = std::move(head);
+                right.flex = std::move(tail);
+            }
         } else {
             const std::int64_t cut = at_ - old.start;
             left.notes.clear();
@@ -792,7 +835,22 @@ public:
         Region joined = first;
         joined.length = last.start + last.length - first.start;
         joined.fadeOut = last.fadeOut;
-        if (track->kind != TrackKind::Audio) {
+        if (track->kind == TrackKind::Audio) {
+            const bool anyFlex = std::any_of(order.begin(), order.end(), [&](std::size_t i) { return regions[i].flex.has_value(); });
+            if (anyFlex) {  // the flex edits of neighbours that came from one sound become one set of edits
+                if (!first.flex) return fail("bad_region", "the regions have different flex edits");
+                FlexData merged = *first.flex;
+                std::int64_t total = framesBetween(p, first.timeBase, first.start, first.start + first.length);
+                for (std::size_t i = 1; i < order.size(); ++i) {
+                    const Region& r = regions[order[i]];
+                    auto next = r.flex ? flexJoin(merged, total, *r.flex) : std::nullopt;
+                    if (!next) return fail("bad_region", "the regions have different flex edits");
+                    merged = std::move(*next);
+                    total += framesBetween(p, r.timeBase, r.start, r.start + r.length);
+                }
+                joined.flex = std::move(merged);
+            }
+        } else {
             for (std::size_t i = 1; i < order.size(); ++i) {
                 const Region& r = regions[order[i]];
                 for (MidiNote n : r.notes) {
@@ -1013,6 +1071,8 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("color")) patch.color = j["color"].get<std::string>();
             if (j.contains("showInTracks")) patch.showInTracks = j["showInTracks"].get<bool>();
             if (j.contains("icon")) patch.icon = j["icon"].get<std::string>();
+            if (j.contains("flexMode")) patch.flexMode = j["flexMode"].get<std::string>();
+            if (j.contains("flexParams")) patch.flexParams = j["flexParams"].get<std::map<std::string, double>>();
             if (j.contains("automationMode")) patch.automationMode = j["automationMode"].get<std::string>();
             if (j.contains("delayMs")) patch.delayMs = j["delayMs"].get<double>();
             if (j.contains("midi")) {

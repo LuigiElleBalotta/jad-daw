@@ -13,6 +13,7 @@ AudioEngine::AudioEngine(double sampleRate) : sampleRate_(sampleRate), graph_(sa
 AudioEngine::~AudioEngine() {
     delete click_;
     delete kit_;
+    delete audition_;
     delete countClick_;
 }
 
@@ -82,6 +83,15 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             if (playing_) countLeft_ = 0;
             recordingPub_.store(true, std::memory_order_relaxed);
             playingPub_.store(true, std::memory_order_relaxed);
+            break;
+        }
+        case MsgKind::SetAudition: {
+            Owned old = makeOwned(audition_);
+            audition_ = static_cast<AuditionClip*>(m.obj.ptr);
+            if (old.ptr && !feedback_.push(Feedback{old})) garbageOverflow_.fetch_add(1, std::memory_order_relaxed);
+            auditionPos_ = std::max<std::int64_t>(0, m.frame);
+            auditionLoop_ = m.frame2 != 0;
+            if (!audition_) auditionPosPub_.store(-1, std::memory_order_relaxed);
             break;
         }
         case MsgKind::SetClickKit: {
@@ -213,6 +223,28 @@ void AudioEngine::drain() noexcept {
     for (int i = 0; i < kMaxMessagesPerBlock && !feedback_.full() && messages_.pop(m); ++i) handle(m);
 }
 
+// Adds the audition clip to the output; it stops at its end unless it repeats.
+void AudioEngine::mixAudition(float* outL, float* outR, int n) noexcept {
+    const std::int64_t length = static_cast<std::int64_t>(std::min(audition_->left.size(), audition_->right.size()));
+    if (length == 0) {
+        auditionPosPub_.store(-1, std::memory_order_relaxed);
+        return;
+    }
+    for (int i = 0; i < n; ++i) {
+        if (auditionPos_ >= length) {
+            if (!auditionLoop_) {
+                auditionPosPub_.store(-1, std::memory_order_relaxed);
+                return;
+            }
+            auditionPos_ = 0;
+        }
+        outL[i] += audition_->left[static_cast<std::size_t>(auditionPos_)];
+        outR[i] += audition_->right[static_cast<std::size_t>(auditionPos_)];
+        ++auditionPos_;
+    }
+    auditionPosPub_.store(auditionPos_, std::memory_order_relaxed);
+}
+
 void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
     drain();
     drainMidi();
@@ -230,6 +262,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
             done += n;
             continue;
         }
+        const int blockStart = done;
         if (playing_) {
             if (loopEnd_ > loopStart_) {
                 if (position_ >= loopEnd_) {  // wrap exactly at the loop end
@@ -252,6 +285,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
             std::fill_n(outL + done, n, 0.0f);
             std::fill_n(outR + done, n, 0.0f);
         }
+        if (audition_) mixAudition(outL + blockStart, outR + blockStart, n);
         done += n;
     }
     inFrames_ = 0;

@@ -103,6 +103,52 @@ void from_json(const nlohmann::json& j, MediaItem& m) {
     m.recordedAt = j.value("recordedAt", std::int64_t{-1});
 }
 
+void to_json(nlohmann::json& j, const FlexData& f) {
+    j = {{"sourceMediaId", f.sourceMediaId}, {"sourceOffset", f.sourceOffset}, {"sourceLength", f.sourceLength}};
+    j["markers"] = nlohmann::json::array();
+    for (const FlexMarker& m : f.markers) j["markers"].push_back({m.src, m.dst});
+    j["notes"] = nlohmann::json::array();
+    for (const FlexNoteData& n : f.notes) {
+        nlohmann::json e = {{"start", n.start}, {"length", n.length}, {"pitch", n.pitch}};
+        if (n.semitones != 0.0) e["semitones"] = n.semitones;
+        if (n.fineCents != 0.0) e["fineCents"] = n.fineCents;
+        if (n.correct != 0.0) e["correct"] = n.correct;
+        if (n.vibrato != 1.0) e["vibrato"] = n.vibrato;
+        if (n.driftIn != 0.0) e["driftIn"] = n.driftIn;
+        if (n.driftOut != 0.0) e["driftOut"] = n.driftOut;
+        if (n.gainDb != 0.0) e["gainDb"] = n.gainDb;
+        if (n.formantCents != 0.0) e["formantCents"] = n.formantCents;
+        j["notes"].push_back(std::move(e));
+    }
+}
+
+void from_json(const nlohmann::json& j, FlexData& f) {
+    j.at("sourceMediaId").get_to(f.sourceMediaId);
+    j.at("sourceOffset").get_to(f.sourceOffset);
+    j.at("sourceLength").get_to(f.sourceLength);
+    f.markers.clear();
+    for (const auto& m : j.at("markers")) {
+        if (!m.is_array() || m.size() != 2) throw std::runtime_error("a flex marker is [src, dst]");
+        f.markers.push_back({m[0].get<std::int64_t>(), m[1].get<std::int64_t>()});
+    }
+    f.notes.clear();
+    for (const auto& e : j.at("notes")) {
+        FlexNoteData n;
+        n.start = e.at("start").get<std::int64_t>();
+        n.length = e.at("length").get<std::int64_t>();
+        n.pitch = e.at("pitch").get<double>();
+        n.semitones = e.value("semitones", 0.0);
+        n.fineCents = e.value("fineCents", 0.0);
+        n.correct = e.value("correct", 0.0);
+        n.vibrato = e.value("vibrato", 1.0);
+        n.driftIn = e.value("driftIn", 0.0);
+        n.driftOut = e.value("driftOut", 0.0);
+        n.gainDb = e.value("gainDb", 0.0);
+        n.formantCents = e.value("formantCents", 0.0);
+        f.notes.push_back(n);
+    }
+}
+
 void to_json(nlohmann::json& j, const Region& r) {
     j = {{"id", r.id}, {"timeBase", r.timeBase}, {"start", r.start}, {"length", r.length}, {"mediaId", r.mediaId},
          {"sourceOffsetFrames", r.sourceOffsetFrames}, {"gainDb", r.gainDb}, {"notes", r.notes}};
@@ -116,6 +162,7 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (r.velocityOffset != 0) j["velocityOffset"] = r.velocityOffset;
     if (r.quantize != 0) j["quantize"] = r.quantize;
     if (!r.name.empty()) j["name"] = r.name;
+    if (r.flex) j["flex"] = *r.flex;
 }
 
 void from_json(const nlohmann::json& j, Region& r) {
@@ -137,6 +184,8 @@ void from_json(const nlohmann::json& j, Region& r) {
     r.velocityOffset = j.value("velocityOffset", 0);
     r.quantize = j.value("quantize", Ticks{0});
     r.name = j.value("name", std::string());
+    r.flex.reset();
+    if (j.contains("flex") && !j["flex"].is_null()) r.flex = j.at("flex").get<FlexData>();
 }
 
 void to_json(nlohmann::json& j, const MidiControl& c) { j = {{"tick", c.tick}, {"status", c.status}, {"data1", c.data1}, {"data2", c.data2}}; }
@@ -191,6 +240,8 @@ void to_json(nlohmann::json& j, const Track& t) {
     j["instrument"] = t.instrument ? nlohmann::json(*t.instrument) : nlohmann::json(nullptr);
     if (!t.patchId.empty()) j["patchId"] = t.patchId;
     if (!t.icon.empty()) j["icon"] = t.icon;
+    if (!t.flexMode.empty()) j["flexMode"] = t.flexMode;
+    if (!t.flexParams.empty()) j["flexParams"] = t.flexParams;
     if (!t.showInTracks) j["showInTracks"] = false;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
     if (t.delayMs != 0.0) j["delayMs"] = t.delayMs;
@@ -228,6 +279,10 @@ void from_json(const nlohmann::json& j, Track& t) {
     }
     t.icon = j.value("icon", std::string());
     if (t.icon.size() > 40) throw std::runtime_error("a track icon has at most 40 characters");
+    t.flexMode = j.value("flexMode", std::string());
+    if (t.flexMode.size() > 20) throw std::runtime_error("a flex mode has at most 20 characters");
+    t.flexParams.clear();
+    if (j.contains("flexParams")) j.at("flexParams").get_to(t.flexParams);
     if (j.contains("showInTracks")) {
         if (!j["showInTracks"].is_boolean()) throw std::runtime_error("showInTracks must be a boolean");
         t.showInTracks = j["showInTracks"].get<bool>();

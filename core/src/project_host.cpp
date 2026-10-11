@@ -305,6 +305,29 @@ std::future<void> ProjectHost::setMonitor(Uuid track, int first, int second) {
     });
 }
 
+std::future<void> ProjectHost::audition(audio::AuditionClip clip, std::int64_t start, bool repeat) {
+    return call([this, start, repeat, c = std::move(clip)]() mutable {
+        if (degraded_) return;
+        audio::AudioMsg m;
+        m.kind = audio::MsgKind::SetAudition;
+        m.obj = audio::makeOwned(new audio::AuditionClip(std::move(c)));
+        m.frame = start;
+        m.frame2 = repeat ? 1 : 0;
+        post(m);
+    });
+}
+
+std::future<void> ProjectHost::stopAudition() {
+    return call([this] {
+        if (degraded_) return;
+        audio::AudioMsg m;
+        m.kind = audio::MsgKind::SetAudition;
+        post(m);
+    });
+}
+
+std::int64_t ProjectHost::auditionPosition() const { return engine_.auditionPosition(); }
+
 std::future<void> ProjectHost::setLowLatency(int limitFrames) {
     return call([this, limitFrames] {
         if (degraded_) return;

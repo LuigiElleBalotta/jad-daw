@@ -31,6 +31,30 @@ struct MidiControl {
     bool operator==(const MidiControl&) const = default;
 };
 
+// Flex Time and Flex Pitch of an audio region (see lpc/flex_model.h). The region plays a file that was rendered from `sourceMediaId`
+// with these edits; the edits are kept so that they can be changed later. Positions are frames of the media's sample rate.
+struct FlexMarker {
+    std::int64_t src = 0;  // in the part of the source that is flexed (counted from sourceOffset)
+    std::int64_t dst = 0;  // where that sound plays, counted from the start of the region
+    bool operator==(const FlexMarker&) const = default;
+};
+
+struct FlexNoteData {  // a note of the Flex Pitch analysis and what was done to it
+    std::int64_t start = 0, length = 0;  // in the flexed part of the source
+    double pitch = 0.0;                  // MIDI note number as analysed (fractional)
+    double semitones = 0.0, fineCents = 0.0, correct = 0.0, vibrato = 1.0, driftIn = 0.0, driftOut = 0.0, gainDb = 0.0, formantCents = 0.0;
+    bool operator==(const FlexNoteData&) const = default;
+};
+
+struct FlexData {
+    Uuid sourceMediaId;
+    std::int64_t sourceOffset = 0;  // the frame of that media where the flexed part begins
+    std::int64_t sourceLength = 0;  // how many frames of it
+    std::vector<FlexMarker> markers;  // by src (and dst), both strictly rising
+    std::vector<FlexNoteData> notes;
+    bool operator==(const FlexData&) const = default;
+};
+
 struct Region {
     Uuid id;
     TimeBase timeBase = TimeBase::Musical;
@@ -46,6 +70,7 @@ struct Region {
     int velocityOffset = 0;      // MIDI regions, played: added to every velocity
     Ticks quantize = 0;          // MIDI regions, played: > 0 moves the start of every note to the nearest multiple of this many ticks
     std::string name;  // shown on the region (Text tool, Region inspector); empty: the track's name
+    std::optional<FlexData> flex;  // audio regions: the flex edits behind the sound this region plays
     std::int64_t loopLength = 0;  // > 0: the first loopLength (same unit as length, at most length) repeat until the end of the region
     std::vector<MidiNote> notes;
     std::vector<MidiControl> controls;  // MIDI regions: sorted by tick
@@ -120,6 +145,8 @@ struct Track {
     std::optional<ProcessorRef> instrument;
     std::string patchId;  // the built-in patch applied to the track; empty when none
     std::string icon;     // the key of the picture shown in the track header (Track > Assign Track Icon); empty: none
+    std::string flexMode;  // audio tracks: Flex on, with this algorithm (slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic or pitch); empty: off
+    std::map<std::string, double> flexParams;  // decay, sliceLength, loopLengthMs, loopOffsetMs, grainMs, sensitivity
     bool showInTracks = true;  // false: a bus or aux that lives in the Mixer only, not in the Tracks area
     MidiShaping midi;  // instrument tracks
     std::optional<Freeze> freeze;  // audio and instrument tracks

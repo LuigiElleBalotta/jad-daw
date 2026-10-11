@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -18,6 +19,8 @@ struct TrackPatch {
     std::optional<std::string> name;
     std::optional<std::string> color;
     std::optional<std::string> icon;            // "" removes it; a key of at most 40 letters, digits and dashes
+    std::optional<std::string> flexMode;        // "" (off), slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic or pitch (audio tracks)
+    std::optional<std::map<std::string, double>> flexParams;  // decay, sliceLength, loopLengthMs, loopOffsetMs, grainMs, sensitivity
     std::optional<bool> showInTracks;
     std::optional<std::string> automationMode;  // off, read, touch, latch or write
     std::optional<double> delayMs;              // -1000..1000 ms (audio and instrument tracks)

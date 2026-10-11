@@ -139,5 +139,6 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - [x] Flex Pitch tried on a voice: Fish Audio answered 402 (no API credit), so a Windows speech synthesis recording was used (`LPC_VOICE_WAV=<wav> lpc_tests [voice]` prints the notes found: plausible pitches, 12 notes in a spoken sentence). A real singer is still untested.
 - [x] Beat markers can be dragged and deleted in the Flex view (`smartMoveBeat`, `smartDeleteBeat`).
 - [x] Smart Tempo hints: Downbeat Here / Beat Here at the playhead (`smartHint`).
-- [x] Left out for now: tapping hints with D/T while playing, hotspot handles on Flex Time markers.
+- [x] Hints can be tapped while playing: Alt+D / Alt+T (plain D is List Editors), collected and applied as one edit.
+- [x] Left out for now: hotspot handles on Flex Time markers.
 

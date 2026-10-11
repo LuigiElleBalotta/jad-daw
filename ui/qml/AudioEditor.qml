@@ -6,6 +6,17 @@ import Jad
 Rectangle {
     id: root
     required property ProjectController project
+    // Smart Tempo hints while the sound plays: Alt+D marks a downbeat, Alt+T a beat, at the playhead (D and T alone belong to the app's shortcuts)
+    Shortcut {
+        sequence: "Alt+D"
+        enabled: root.visible && root.regionId !== "" && (root.info.beatsBpm ?? 0) > 0
+        onActivated: root.project.smartHint(root.regionId, (root.project.positionBeats - root.info.startBeats) / Math.max(0.0001, root.info.lengthBeats), true)
+    }
+    Shortcut {
+        sequence: "Alt+T"
+        enabled: root.visible && root.regionId !== "" && (root.info.beatsBpm ?? 0) > 0
+        onActivated: root.project.smartHint(root.regionId, (root.project.positionBeats - root.info.startBeats) / Math.max(0.0001, root.info.lengthBeats), false)
+    }
     property string regionId: ""
     property bool fileMode: false
     signal processRequested(string op)            // the dialogs of Normalize, Gain, Time Stretch, Pitch Shift, Strip Silence
@@ -161,13 +172,13 @@ Rectangle {
                 IconButton {
                     visible: root.info.beatsBpm > 0
                     implicitHeight: 22
-                    label: qsTr("Downbeat Here")
+                    label: qsTr("Downbeat Here (Alt+D)")
                     onClicked: root.project.smartHint(root.regionId, (root.project.positionBeats - root.info.startBeats) / Math.max(0.0001, root.info.lengthBeats), true)
                 }
                 IconButton {
                     visible: root.info.beatsBpm > 0
                     implicitHeight: 22
-                    label: qsTr("Beat Here")
+                    label: qsTr("Beat Here (Alt+T)")
                     onClicked: root.project.smartHint(root.regionId, (root.project.positionBeats - root.info.startBeats) / Math.max(0.0001, root.info.lengthBeats), false)
                 }
                 IconButton { visible: root.flexMode !== ""; implicitHeight: 22; label: qsTr("Reset All"); onClicked: { root.project.selectRegion(root.regionId, "replace"); root.project.flexResetEdits() } }

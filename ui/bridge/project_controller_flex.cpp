@@ -1049,33 +1049,55 @@ void ProjectController::smartMoveBeat(const QString& regionId, int index, double
     flexApplyOne(regionId, data, data.beats->follow ? "Moving the beat" : "");
 }
 
+// Taps (D and T while the sound plays) are collected and applied together once they stop, as one edit.
 void ProjectController::smartHint(const QString& regionId, double fraction, bool downbeat) {
+    if (!host_ || !std::isfinite(fraction)) return;
+    hints_[regionId].append({fraction, downbeat});
+    const int serial = ++hintSerial_;
+    QPointer<ProjectController> self(this);
+    QTimer::singleShot(450, this, [self, serial] {
+        if (!self || self->hintSerial_ != serial) return;
+        const auto all = self->hints_;
+        self->hints_.clear();
+        for (auto it = all.begin(); it != all.end(); ++it) self->smartApplyHints(it.key(), it.value());
+    });
+}
+
+void ProjectController::smartApplyHints(const QString& regionId, const QList<QPair<double, bool>>& hints) {
     const RegionRow* row = regions_.find(regionId);
-    if (!host_ || !row || !row->audio || !std::isfinite(fraction)) return;
+    if (!host_ || !row || !row->audio) return;
     lpc::FlexData data = flexDataOf(*row);
     if (!data.beats || data.beats->beats.size() < 2) {
         emit notice("Follow Tempo first, so the beats are found");
         return;
     }
     const lpc::TimeMap map(data.sourceLength, row->lengthFrames, lpc::flexAnchors(data));
-    const std::int64_t src = static_cast<std::int64_t>(std::llround(map.toSource(std::clamp(fraction, 0.0, 1.0) * static_cast<double>(row->lengthFrames))));
     std::vector<std::int64_t>& beats = data.beats->beats;
-    std::size_t nearest = 0;
-    for (std::size_t i = 0; i < beats.size(); ++i)
-        if (std::llabs(beats[i] - src) < std::llabs(beats[nearest] - src)) nearest = i;
     const std::int64_t period = std::max<std::int64_t>(1, (beats.back() - beats.front()) / static_cast<std::int64_t>(beats.size() - 1));
     const int bpb = std::max(1, data.beats->beatsPerBar);
-    if (std::llabs(beats[nearest] - src) > period * 3 / 10) {  // no beat there: a beat hint adds one
-        if (downbeat) return;
-        const std::size_t at = static_cast<std::size_t>(std::lower_bound(beats.begin(), beats.end(), src) - beats.begin());
-        beats.insert(beats.begin() + static_cast<std::ptrdiff_t>(at), src);
-        if (static_cast<int>(at) <= data.beats->firstDownbeat) data.beats->firstDownbeat = (data.beats->firstDownbeat + 1) % bpb;
-        nearest = at;
+    bool changed = false;
+    for (const auto& [fraction, downbeat] : hints) {
+        const std::int64_t src = static_cast<std::int64_t>(std::llround(map.toSource(std::clamp(fraction, 0.0, 1.0) * static_cast<double>(row->lengthFrames))));
+        std::size_t nearest = 0;
+        for (std::size_t i = 0; i < beats.size(); ++i)
+            if (std::llabs(beats[i] - src) < std::llabs(beats[nearest] - src)) nearest = i;
+        if (std::llabs(beats[nearest] - src) > period * 3 / 10) {  // no beat there: a beat hint adds one
+            if (downbeat) continue;
+            const std::size_t at = static_cast<std::size_t>(std::lower_bound(beats.begin(), beats.end(), src) - beats.begin());
+            beats.insert(beats.begin() + static_cast<std::ptrdiff_t>(at), src);
+            if (static_cast<int>(at) <= data.beats->firstDownbeat) data.beats->firstDownbeat = (data.beats->firstDownbeat + 1) % bpb;
+            nearest = at;
+            changed = true;
+        }
+        if (downbeat) {
+            data.beats->firstDownbeat = static_cast<int>(nearest % static_cast<std::size_t>(bpb));
+            changed = true;
+        }
     }
-    if (downbeat) data.beats->firstDownbeat = static_cast<int>(nearest % static_cast<std::size_t>(bpb));
+    if (!changed) return;
     data.beats->anchor = 0.0;
     if (data.beats->follow && !smartMarkers(*row, data)) return;
-    flexApplyOne(regionId, data, data.beats->follow ? "Applying the hint" : "");
+    flexApplyOne(regionId, data, data.beats->follow ? "Applying the hints" : "");
 }
 
 void ProjectController::smartDeleteBeat(const QString& regionId, int index) {

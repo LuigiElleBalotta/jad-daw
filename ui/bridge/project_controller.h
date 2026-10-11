@@ -1134,9 +1134,12 @@ private:
     void flexApply(std::vector<FlexEdit> edits, const nlohmann::json& prefix, const QString& what);
     void flexApplyOne(const QString& regionId, const lpc::FlexData& data, const QString& what);
     void smartAnalyse(const QString& regionId);
+    void smartApplyHints(const QString& regionId, const QList<QPair<double, bool>>& hints);
     bool smartMarkers(const RegionRow& row, lpc::FlexData& data) const;  // the markers that put the beats of the sound on the project's beats
     void smartRefollow();                                                // after a change of tempo or position: the regions that follow conform again
     bool refollowQueued_ = false;
+    QHash<QString, QList<QPair<double, bool>>> hints_;  // taps waiting to be applied together (fraction of the region, downbeat)
+    int hintSerial_ = 0;
     bool moveMarkerData(const QString& regionId, lpc::FlexData& data, int index, double fraction, bool slide) const;
     void flexMarkerPreviewRun(const QString& regionId, int index, double fraction, bool slide);
     bool flexPrepare(const QString& regionId, lpc::FlexData& data, bool needNotes);  // the flex data of a region (made from the analysis when it has none yet)

@@ -124,3 +124,26 @@ TEST_CASE("flex beats: a window keeps the beats inside it and the bar phase, and
     bad.beats->beats = {9000, 8000};
     CHECK(!flexProblem(bad, 200000).empty());
 }
+
+// Optional: LPC_REAL_AUDIO=<an audio file> prints what the tempo, mastering and drum analyses find in a real recording (not run when unset).
+#include <cstdlib>
+#include <iostream>
+#include "lpc/audio_decode.h"
+#include "lpc/mastering.h"
+#include "lpc/drum_replace.h"
+TEST_CASE("analyses on a real recording (LPC_REAL_AUDIO)", "[real]") {
+    const char* path = std::getenv("LPC_REAL_AUDIO");
+    if (!path) return;
+    WavData d = decodeAudioFile(path);
+    const std::int64_t keep = std::min<std::int64_t>(d.frames(), static_cast<std::int64_t>(d.sampleRate) * 60);
+    d.samples.resize(static_cast<std::size_t>(keep * d.channels));   // the first minute
+    const TempoAnalysis t = analyseTempo(d);
+    const MasteringAnalysis m = analyseMastering(d);
+    const auto hits = findDrumHits(d, 0.5, 80.0);
+    std::cout << "tempo " << t.bpm << " bpm, confidence " << t.confidence << ", beats " << t.beats.size() << ", downbeat " << t.firstDownbeat << "\n"
+              << "loudness " << m.before.integrated << " LUFS, range " << m.before.range << " LU, true peak " << m.before.truePeakDb << " dBTP, gain to -14: " << m.gainDb << " dB\n"
+              << "eq:";
+    for (double g : m.eqDb) std::cout << " " << g;
+    std::cout << "\nhits found: " << hits.size() << "\n";
+    CHECK(t.bpm > 0);
+}

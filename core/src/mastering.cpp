@@ -85,7 +85,7 @@ MasteringAnalysis analyseMastering(const WavData& mix) {
     refWant /= 4.0;
     for (int b = 0; b < kMasteringBands; ++b) {
         const double diff = (want[static_cast<std::size_t>(b)] - refWant) - (level[static_cast<std::size_t>(b)] - refLevel);
-        a.eqDb[static_cast<std::size_t>(b)] = std::clamp(0.5 * diff, -6.0, 6.0);  // half of the way, never more than 6 dB
+        a.eqDb[static_cast<std::size_t>(b)] = std::clamp(0.4 * diff, -4.0, 4.0);  // a bit under half of the way, never more than 4 dB (on a real mix the first version asked for 6 dB on most bands)
     }
     return a;
 }

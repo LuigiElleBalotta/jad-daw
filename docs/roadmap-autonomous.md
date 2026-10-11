@@ -145,6 +145,6 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 ## 13. Mastering Assistant and Drum Replacement (the owner: "Farei drum replacement e mastering assistant sicuramente")
 
 - [x] Mastering Assistant: loudness measurement (BS.1770), mix analysis, `builtin.mastering` insert (correction EQ, characters, excite, loudness, limiter at -1 dB, bypass, compensation), Mix menu entry, window with Reanalyze, tests.
-- [ ] Drum Replacement: find the hits of a drum track, play samples from a sampler track (replace or double), sensitivity / mix controls.
+- [x] Drum Replacement: hits found with the transient detector, built-in synthesized sounds or a chosen file, Replace (ducking the original) or Double, sensitivity, level, velocity response; audio-to-audio in one undo step (there is no sampler instrument to play MIDI hits).
 - [ ] Left for later: Session Players.
 

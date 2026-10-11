@@ -21,6 +21,7 @@
 
 #include "bridge/project_controller.h"
 #include "lpc/audio/audition.h"
+#include "lpc/drum_replace.h"
 #include "lpc/flex_model.h"
 #include "lpc/flex_pitch.h"
 #include "lpc/flex_time.h"
@@ -1501,5 +1502,159 @@ void ProjectController::flexCreateMidiTrack(const QString& regionId) {
     sendCommand({{"type", "transaction"}, {"commands", commands}});
     emit notice(QString("Created a MIDI track with %1 note%2").arg(notes.size()).arg(notes.size() == 1 ? "" : "s"));
 }
+
+// ---------------------------------------------------------------- Drum Replacement
+
+// Track > Replace or Double Drum Track: the hits of the selected audio regions get a drum sound. The regions are rendered in a worker thread and
+// replaced together with their new files in one undo step (the recording stays in the project).
+void ProjectController::drumReplace(const QVariantMap& options) {
+    if (!host_) return;
+    std::vector<RegionRow> rows;
+    bool flexed = false;
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (!r->audio || r->missing || r->lengthFrames <= 0) continue;
+        if (r->flexed) { flexed = true; continue; }
+        rows.push_back(*r);
+    }
+    if (rows.empty()) {
+        emit notice(flexed ? "Reset the Flex edits of the region first" : "Select an audio region first");
+        return;
+    }
+    lpc::DrumReplaceParams params;
+    params.replace = options.value("mode", "replace").toString() != "double";
+    params.mix = std::clamp(options.value("mix", 100.0).toDouble() / 100.0, 0.0, 1.0);
+    params.levelDb = std::clamp(options.value("levelDb", 0.0).toDouble(), -24.0, 12.0);
+    params.velocity = std::clamp(options.value("velocity", 70.0).toDouble() / 100.0, 0.0, 1.0);
+    params.sensitivity = std::clamp(options.value("sensitivity", 50.0).toDouble() / 100.0, 0.0, 1.0);
+    params.minGapMs = std::clamp(options.value("minGapMs", 60.0).toDouble(), 10.0, 500.0);
+    const QString sound = options.value("sound", "snare").toString();
+    std::filesystem::path customFile;
+    if (sound == QLatin1String("file")) {
+        customFile = QUrl(options.value("file").toString()).isLocalFile() ? std::filesystem::path(QUrl(options.value("file").toString()).toLocalFile().toStdWString())
+                                                                         : std::filesystem::path(options.value("file").toString().toStdWString());
+        if (!std::filesystem::exists(customFile)) {
+            emit notice("The drum sound file was not found");
+            return;
+        }
+    }
+    emit notice(QString("Replacing the drums of %1 region%2…").arg(rows.size()).arg(rows.size() == 1 ? "" : "s"));
+    ++flexBusy_;
+    emit flexBusyChanged();
+    const std::filesystem::path projectDir = dir_;
+    const int rate = sampleRate_;
+    std::vector<std::filesystem::path> sources;
+    for (const RegionRow& r : rows) sources.push_back(mediaPath(projectDir, mediaPaths_.value(r.mediaId)));
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    (void)QtConcurrent::run([self, rows, sources, params, sound, customFile, projectDir, rate, generation] {
+        struct Result {
+            RegionRow row;
+            std::filesystem::path target;
+            QString hash;
+            std::int64_t frames = 0;
+            int channels = 0, hits = 0;
+        };
+        std::vector<Result> results;
+        QString error;
+        try {
+            lpc::WavData sample;
+            if (!customFile.empty()) sample = lpc::readWav(customFile);
+            for (std::size_t k = 0; k < rows.size(); ++k) {
+                const RegionRow& row = rows[k];
+                const lpc::WavData audio = readWindow(sources[k], row.sourceOffsetFrames, row.lengthFrames);
+                lpc::WavData s = customFile.empty() ? lpc::synthDrum(lpc::drumSoundFromName(sound.toStdString()), audio.sampleRate) : sample;
+                if (s.sampleRate != audio.sampleRate && s.sampleRate > 0) {  // a sound file at another rate: linear resampling is enough for a drum hit
+                    const double ratio = static_cast<double>(s.sampleRate) / audio.sampleRate;
+                    lpc::WavData r;
+                    r.sampleRate = audio.sampleRate;
+                    r.channels = s.channels;
+                    const std::int64_t n = static_cast<std::int64_t>(static_cast<double>(s.frames()) / ratio);
+                    r.samples.resize(static_cast<std::size_t>(n * s.channels));
+                    for (std::int64_t i = 0; i < n; ++i) {
+                        const double pos = static_cast<double>(i) * ratio;
+                        const std::int64_t a = static_cast<std::int64_t>(pos);
+                        const float f = static_cast<float>(pos - static_cast<double>(a));
+                        for (int c = 0; c < s.channels; ++c) {
+                            const float x0 = s.samples[static_cast<std::size_t>(std::min(a, s.frames() - 1) * s.channels + c)], x1 = s.samples[static_cast<std::size_t>(std::min(a + 1, s.frames() - 1) * s.channels + c)];
+                            r.samples[static_cast<std::size_t>(i * s.channels + c)] = x0 * (1 - f) + x1 * f;
+                        }
+                    }
+                    s = std::move(r);
+                }
+                const std::vector<lpc::DrumHit> hits = lpc::findDrumHits(audio, params.sensitivity, params.minGapMs);
+                if (hits.empty()) continue;
+                const lpc::WavData out = lpc::replaceDrums(audio, hits, s, params);
+                Result res;
+                res.row = row;
+                res.frames = out.frames();
+                res.channels = out.channels;
+                res.hits = static_cast<int>(hits.size());
+                const std::filesystem::path audioDir = projectDir / "audio";
+                std::filesystem::create_directories(audioDir);
+                std::u16string stem = sources[k].stem().u16string();
+                for (int n = 1;; ++n) {
+                    res.target = audioDir / (stem + u" (drums" + (n > 1 ? u" " + QString::number(n).toStdU16String() : std::u16string()) + u").wav");
+                    if (!std::filesystem::exists(res.target)) break;
+                }
+                lpc::writeWav(res.target, out.sampleRate > 0 ? out.sampleRate : rate, out.channels, out.samples, lpc::WavFormat::Pcm24);
+                res.hash = hashOf(res.target);
+                results.push_back(std::move(res));
+            }
+        } catch (const std::exception& e) {
+            error = QString::fromUtf8(e.what());
+        }
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self, results = std::move(results), error, projectDir, rate, generation]() mutable {
+            std::error_code ignore;
+            auto discard = [&] {
+                for (auto& r : results) std::filesystem::remove(r.target, ignore);
+            };
+            if (!self) { discard(); return; }
+            --self->flexBusy_;
+            emit self->flexBusyChanged();
+            if (generation != self->generation_ || !self->host_ || self->dir_ != projectDir) { discard(); return; }
+            if (!error.isEmpty()) {
+                discard();
+                self->setError("Cannot replace the drums: " + error);
+                return;
+            }
+            if (results.empty()) {
+                emit self->notice("No drum hits were found: raise the sensitivity");
+                return;
+            }
+            nlohmann::json commands = nlohmann::json::array();
+            std::vector<std::filesystem::path> files;
+            int total = 0;
+            for (auto& r : results) {
+                const RegionRow* row = self->regions_.find(r.row.id);
+                if (!row || row->lengthFrames != r.row.lengthFrames) { std::filesystem::remove(r.target, ignore); continue; }
+                nlohmann::json region = nlohmann::json::parse(row->json, nullptr, false);
+                if (region.is_discarded()) continue;
+                lpc::MediaItem item;
+                item.id = lpc::Uuid::random();
+                const std::u8string rel = (std::filesystem::path("audio") / r.target.filename()).generic_u8string();
+                item.path.assign(rel.begin(), rel.end());
+                item.hash = r.hash.toStdString();
+                item.sampleRate = rate;
+                item.channels = r.channels;
+                item.frames = r.frames;
+                commands.push_back({{"type", "add_media"}, {"item", item}, {"index", -1}});
+                region["mediaId"] = item.id.toString();
+                region["sourceOffsetFrames"] = 0;
+                commands.push_back({{"type", "replace_region"}, {"region", region}});
+                files.push_back(r.target);
+                total += r.hits;
+            }
+            if (commands.empty()) return;
+            self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [files](bool accepted) {
+                if (accepted) return;
+                std::error_code ec;
+                for (const auto& f : files) std::filesystem::remove(f, ec);
+            });
+            emit self->notice(QString("Replaced %1 drum hit%2").arg(total).arg(total == 1 ? "" : "s"));
+        }, Qt::QueuedConnection);
+    });
+}
+
 
 }  // namespace jad

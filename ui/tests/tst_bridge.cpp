@@ -1541,6 +1541,22 @@ private slots:
         c.smartFollowRegion(id, false);
         QTRY_VERIFY_WITH_TIMEOUT(!c.regions()->find(id)->followTempo, 60000);
     }
+    void drumReplacementPutsASoundOnEachHitInOneUndoStep() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, true, 100.0, &track);
+        QVERIFY(!id.isEmpty());
+        const QString original = c.regions()->find(id)->mediaId;
+        c.selectRegion(id, "replace");
+        c.drumReplace({{"mode", "replace"}, {"sound", "kick"}, {"sensitivity", 50.0}});
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->mediaId != original, 30000);
+        QTRY_COMPARE_WITH_TIMEOUT(c.flexBusy(), 0, 30000);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(id)->mediaId, original);
+    }
     void masteringAssistantAnalysesTheProjectAndWritesItsFindingsInOneUndoStep() {
         TempDir dir, other;
         jad::ProjectController c(false);

@@ -142,7 +142,7 @@
  {"id":"track.globalTracks","label":"Show Global Tracks","menu":"Track","shortcut":"G","kind":"toggle","status":"ready","sep":true},
  {"id":"track.showTrackAlternatives","label":"Show Track Alternatives","menu":"Track","shortcut":"","kind":"command","status":"stub"},
  {"id":"track.showOutputTrack","label":"Show Output Track","menu":"Track","shortcut":"Ctrl+Shift+M","kind":"command","status":"ready"},
- {"id":"track.replaceOrDoubleDrumTrack","label":"Replace or Double Drum Track…","menu":"Track","shortcut":"","kind":"command","status":"stub","sep":true},
+ {"id":"track.replaceOrDoubleDrumTrack","label":"Replace or Double Drum Track…","menu":"Track","shortcut":"","kind":"command","status":"ready","sep":true},
  {"id":"track.convertRegionsToNewSamplerTrack","label":"Convert Regions to New Sampler Track…","menu":"Track","shortcut":"","kind":"command","status":"stub"},
  {"id":"track.searchAndSelectTrack","label":"Search and Select Track…","menu":"Track","shortcut":"","kind":"command","status":"ready","sep":true},
  {"id":"track.hideSelectedTrack","label":"Hide Selected Track","menu":"Track","shortcut":"","kind":"command","status":"ready"},

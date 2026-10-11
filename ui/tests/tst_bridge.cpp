@@ -3733,6 +3733,12 @@ private slots:
         QVERIFY(state["ok"].get<bool>());
         QVERIFY(state["project"]["tracks"].size() >= 2);
         QVERIFY(ask(R"({"op":"meters"})")["ok"].get<bool>());
+        const auto inputs = ask(R"({"op":"inputs"})");  // the recording assistant: without a device there is nothing to read, but the answer is complete
+        QVERIFY(inputs["ok"].get<bool>());
+        QVERIFY(inputs["armedTracks"].is_array());
+        QVERIFY(inputs["channels"].is_array());
+        QVERIFY(!inputs["device"]["open"].get<bool>());
+        QVERIFY(ask(R"({"op":"reset_inputs"})")["ok"].get<bool>());
         // two changes, one undo step
         std::string trackId;
         for (const auto& t : state["project"]["tracks"])

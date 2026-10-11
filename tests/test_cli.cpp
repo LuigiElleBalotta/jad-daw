@@ -213,6 +213,20 @@ TEST_CASE("cli ears: import brings an audio file in as a new track or onto a tra
     // onto an existing track
     REQUIRE(run({"import", proj, tone, "--track", "Reference"}).code == 0);
     CHECK(loadProject(tmp.path / "demo.lpc").findTrack(t->id)->regions.size() == 2);
+    // a region alone (a take), over its own span; the snapshot gives its place in seconds
+    const nlohmann::json snap = nlohmann::json::parse(run({"snapshot", proj}).out);
+    std::string regionId;
+    for (const auto& tr : snap["tracks"])
+        if (tr["name"] == "Reference") regionId = tr["regions"][0]["id"];
+    REQUIRE(!regionId.empty());
+    CHECK(snap["tracks"][4]["regions"][0]["startSeconds"] == 1.0);
+    const Run alone = run({"analyze", proj, "--region", regionId, "--no-tempo"});
+    REQUIRE(alone.code == 0);
+    const nlohmann::json rep = nlohmann::json::parse(alone.out);
+    CHECK(rep["analysed"].get<std::string>().find("region") == 0);
+    CHECK(rep["level"]["peakDb"].get<double>() > -30.0);
+    CHECK(rep["problems"].contains("noiseFloorDb"));
+    CHECK(run({"analyze", proj, "--region", "00000000-0000-0000-0000-000000000009", "--no-tempo"}).code == 1);
     // refused: nothing is written
     CHECK(run({"import", proj, path(tmp.path / "nothing.wav")}).code != 0);
     CHECK(run({"import", proj, tone, "--track", "No such track"}).code == 1);

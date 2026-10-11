@@ -3,18 +3,21 @@
 //   state                      the project as a mixer sees it (same JSON as `lpc-cli snapshot`)
 //   meters                     playhead, master peak and every track's peak and hold (dB), gain reduction
 //   apply  {commands: [...]}   commands of the project model, all in one undo step (one command is accepted as {command: {...}})
+//   inputs | reset_inputs     the recording assistant: level of each input since the last reset, gain advice, device latency
 //   play | stop | locate {seconds} | undo | redo | reset_peaks
 //   export {dir}               a copy of the project as it is now (saved or not) in `dir`, for `lpc-cli analyze` to listen to
 #include <QDir>
 #include <QSettings>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
 #include "bridge/live_link.h"
 #include "bridge/project_controller.h"
+#include "lpc/input_stats.h"
 #include "lpc/model_json.h"
 #include "lpc/project_host.h"
 #include "lpc/project_io.h"
@@ -108,6 +111,38 @@ void ProjectController::liveHandle(const json& request, std::function<void(const
         } else if (op == "reset_peaks") {
             resetPeaks();
             reply({{"ok", true}});
+        } else if (op == "reset_inputs") {
+            for (auto& s : inputStats_) s.reset();
+            reply({{"ok", true}});
+        } else if (op == "inputs") {
+            // the recording assistant: what each input has been doing since the last reset, advice for the gain, and the latency of the device
+            const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
+            json armedTracks = json::array();
+            std::array<bool, 8> used{};
+            for (const TrackRow& t : allRows_) {
+                if (!armed.contains(t.id) || t.kind != "audio") continue;
+                armedTracks.push_back({{"id", t.id.toStdString()}, {"name", t.name.toStdString()}, {"input", t.input == 0 ? "1+2 (stereo)" : std::to_string(t.input)}});
+                if (t.input == 0) used[0] = used[1] = true;
+                else used[static_cast<std::size_t>(std::min(t.input - 1, 7))] = true;
+            }
+            json channels = json::array();
+            for (int c = 0; c < 8; ++c) {
+                const lpc::InputSummary s = inputStats_[static_cast<std::size_t>(c)].summary();
+                if (!used[static_cast<std::size_t>(c)] && !s.signal) continue;
+                const lpc::InputAdvice advice = lpc::adviseInput(s);
+                channels.push_back({{"input", c + 1}, {"armed", used[static_cast<std::size_t>(c)]}, {"seconds", std::round(s.seconds * 10.0) / 10.0}, {"peakDb", s.peakDb}, {"loudDb", s.loudDb},
+                                    {"noiseFloorDb", s.noiseFloorDb}, {"clippedReadings", s.clippedReadings}, {"gainChangeDb", advice.gainChangeDb}, {"advice", advice.messages}});
+            }
+            json device = {{"open", device_ != nullptr}, {"sampleRate", sampleRate_}};
+            if (device_) {
+                device["bufferFrames"] = device_->bufferSize();
+                const int round = device_->roundTripLatency();
+                device["roundTripLatencyFrames"] = round;
+                device["roundTripLatencyMs"] = std::round(static_cast<double>(round) * 10000.0 / std::max(1, sampleRate_)) / 10.0;
+            } else {
+                device["error"] = deviceError().toStdString();
+            }
+            reply({{"ok", true}, {"armedTracks", armedTracks}, {"channels", channels}, {"device", device}, {"recording", recording()}});
         } else if (op == "export") {
             const std::string dirText = request.value("dir", std::string());
             if (dirText.empty()) {

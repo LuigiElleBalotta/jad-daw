@@ -92,6 +92,8 @@ def main():
         if len(state["tracks"]) > 1:
             err, m = c.tool("compare_tracks", project=session, track_a=state["tracks"][0]["name"], track_b=state["tracks"][1]["name"], to_seconds=4)
             check(not err and "score" in m, "compare_tracks")
+        err, takes = c.tool("compare_takes", project=session, track="Tone")
+        check(not err and len(takes["takes"]) == 1 and takes["bestBySound"], "compare_takes on one region: %s" % (takes if err else ""))
         err, eff = c.tool("list_effects")
         check(not err and any(e["id"] == "builtin.compressor" for e in eff["effects"]), "list_effects")
 

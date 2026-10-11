@@ -417,6 +417,82 @@ def t_live_meters(a):
     return reply
 
 
+def t_check_recording_setup(a):
+    """Before recording: listen to the inputs for a few seconds (the performer plays or sings), then say if the level is right, if there is noise or clipping,
+    how many dB to change at the preamp, and how big the latency is."""
+    seconds = min(max(float(a.get("seconds", 5)), 1.0), 60.0)
+    live_request("reset_inputs")
+    import time
+    time.sleep(seconds)
+    reply = live_request("inputs")
+    reply.pop("ok", None)
+    reply.pop("id", None)
+    notes = []
+    dev = reply.get("device", {})
+    if not dev.get("open"):
+        notes.append("The audio device is not open (%s): nothing can be recorded; check Preferences > Audio." % (dev.get("error") or "no error given"))
+    else:
+        ms = dev.get("roundTripLatencyMs", 0.0)
+        if ms and ms > 20:
+            notes.append("Round-trip latency is %.1f ms: too much to play along comfortably; lower the buffer size in Preferences > Audio, or monitor through the interface (direct monitoring)." % ms)
+        elif ms and ms > 10:
+            notes.append("Round-trip latency is %.1f ms: workable, but a smaller buffer would feel better for fast playing." % ms)
+        elif ms:
+            notes.append("Round-trip latency is %.1f ms: fine for recording." % ms)
+    if not reply.get("armedTracks"):
+        notes.append("No audio track is armed for recording: arm one (the R button) and choose its input.")
+    for ch in reply.get("channels", []):
+        if ch.get("armed") or ch.get("peakDb", -200) > -70:
+            notes.append("Input %d: %s" % (ch["input"], " ".join(ch["advice"])))
+    reply["notes"] = notes
+    return reply
+
+
+def t_compare_takes(a):
+    """The takes (regions) of a track, each analysed alone: level, clipping, noise floor. The recommendation is about the sound only (a take that clips is out, a quiet floor and good level
+    count), not about timing or pitch, which only a listener can judge."""
+    state = snapshot(a["project"])
+    track, _ = resolve_track(a["project"], a["track"])
+    regions = [r for r in track["regions"] if not r.get("muted")] if not a.get("region_ids") else [r for r in track["regions"] if r["id"] in a["region_ids"]]
+    if a.get("take_group"):
+        regions = [r for r in regions if r.get("takeGroup") == a["take_group"]]
+    if len(regions) < 1:
+        raise ToolError("the track has no regions to compare")
+    directory = project_dir(a["project"])
+    rows = []
+    for r in regions[:24]:
+        rep = run_cli(["analyze", directory, "--region", r["id"], "--no-tempo"])
+        problems = rep.get("problems", {})
+        row = {"region": r["id"], "startSeconds": r.get("startSeconds"), "lengthSeconds": r.get("lengthSeconds"), "takeGroup": r.get("takeGroup", ""),
+               "peakDb": rep["level"]["peakDb"], "rmsDb": rep["level"]["rmsDb"], "crestDb": rep["level"]["crestDb"], "integratedLufs": rep["loudness"]["integratedLufs"],
+               "clippedPercent": problems.get("clippedPercent", 0), "noiseFloorDb": problems.get("noiseFloorDb"), "reading": rep.get("reading", [])}
+        score = 100.0
+        why = []
+        if row["clippedPercent"] > 0.01:
+            score -= 60
+            why.append("clips")
+        if row["peakDb"] > -1:
+            score -= 10
+            why.append("no headroom")
+        if row["peakDb"] < -24:
+            score -= 15
+            why.append("very low level")
+        nf = row["noiseFloorDb"]
+        if nf is not None and nf > -200 and row["rmsDb"] - nf > 12:
+            if nf > -50:
+                score -= 20
+                why.append("noisy floor (%.0f dBFS)" % nf)
+            elif nf < -70:
+                score += 5
+                why.append("quiet floor")
+        row["score"] = round(score, 1)
+        row["why"] = why
+        rows.append(row)
+    ranked = sorted(rows, key=lambda x: -x["score"])
+    return {"track": track["name"], "takes": rows, "bestBySound": ranked[0]["region"], "ranking": [x["region"] for x in ranked],
+            "note": "Ranked by clipping, headroom, level and noise only; timing, pitch and feel need a listener."}
+
+
 def t_live_transport(a):
     action = a["action"]
     if action == "locate":
@@ -520,6 +596,10 @@ TOOLS = [
     ("live_status", "Is the app linked? The project that is open, whether it plays, where the playhead is, whether it has unsaved changes.", obj({}), t_live_status),
     ("live_meters", "The level meters of the running app: master peak, each track's peak and hold in dB, gain reduction of compressors, playhead. With seconds, the loudest values over that time "
      "are kept (play a section first).", obj({"seconds": {"type": "number"}}), t_live_meters),
+    ("check_recording_setup", "Recording assistant: with the app linked and a track armed, listens to the inputs for `seconds` (the performer plays or sings the loudest part) and says whether the level is right, "
+     "whether it clips or hisses, how many dB to change at the preamp, and how big the latency is.", obj({"seconds": {"type": "number"}}), t_check_recording_setup),
+    ("compare_takes", "Compare the takes (regions) of a track, each analysed alone: peak, loudness, clipping, noise floor, with a ranking by sound quality (not timing or pitch). "
+     "Optional region_ids or take_group choose which.", obj({"project": P, "track": TRACK, "region_ids": {"type": "array", "items": {"type": "string"}}, "take_group": {"type": "string"}}, ["project", "track"]), t_compare_takes),
     ("live_transport", "Drive the transport of the running app: play, stop, locate (seconds), reset_peaks.", obj({"action": {"type": "string", "enum": ["play", "stop", "locate", "reset_peaks"]}, "seconds": {"type": "number"}}, ["action"]), t_live_transport),
     ("commit_session", "Write the session back to the original project (the original is kept as <project>.before-ai), or to another folder with `to`.",
      obj({"session": {"type": "string"}, "to": {"type": "string"}}, ["session"]), t_commit_session),

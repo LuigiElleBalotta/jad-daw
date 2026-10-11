@@ -1680,6 +1680,9 @@ void ProjectController::tick() {
         const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
         std::vector<float> in(8);
         for (int c = 0; c < 8; ++c) in[static_cast<std::size_t>(c)] = engine_->takeInputPeak(c);
+        const double dt = inputClock_.isValid() ? std::min(0.25, static_cast<double>(inputClock_.restart()) / 1000.0) : 0.033;
+        if (!inputClock_.isValid()) inputClock_.start();
+        for (int c = 0; c < 8; ++c) inputStats_[static_cast<std::size_t>(c)].push(in[static_cast<std::size_t>(c)], dt);
         bool moved = false;
         for (const TrackRow& t : allRows_) {
             if (t.master || t.kind != "audio" || !armed.contains(t.id)) continue;

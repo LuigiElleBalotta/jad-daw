@@ -148,7 +148,7 @@ int cmdSnapshot(const std::vector<std::string>& args, std::ostream& out) {
 }
 
 int cmdAnalyze(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
-    const Options o = parseOptions(args, {"--track", "--seconds"}, {"--no-tempo"});
+    const Options o = parseOptions(args, {"--track", "--seconds", "--region"}, {"--no-tempo"});
     if (o.positional.size() != 1) throw Usage{"analyze needs a project directory or an audio file"};
     const fs::path target = toPath(o.positional[0]);
     double from = 0, to = -1;
@@ -166,7 +166,29 @@ int cmdAnalyze(const std::vector<std::string>& args, std::ostream& out, std::ost
         what = "file " + target.filename().string();
     } else {
         const Project p = loadProject(target);
-        if (const auto t = o.get("--track")) {
+        if (const auto region = o.get("--region")) {  // one region alone: a take, to compare with the others
+            const Track* owner = nullptr;
+            const Region* hit = nullptr;
+            for (const Track& t : p.tracks)
+                for (const Region& r : t.regions)
+                    if (r.id.toString() == *region) owner = &t, hit = &r;
+            if (!owner) throw Usage{"no region " + *region + " in the project"};
+            if (!(to > from)) {  // the span of the region, unless a range was given
+                const double rate = std::max(1, p.sampleRate);
+                if (hit->timeBase == TimeBase::Absolute) {
+                    from = static_cast<double>(hit->start) / 1e6;
+                    to = static_cast<double>(hit->start + hit->length) / 1e6;
+                } else {
+                    from = p.tempoMap.ticksToSamples(hit->start, p.sampleRate) / rate;
+                    to = p.tempoMap.ticksToSamples(hit->start + hit->length, p.sampleRate) / rate;
+                }
+            }
+            Project only = p;
+            for (Track& t : only.tracks)
+                if (t.id == owner->id) std::erase_if(t.regions, [&](const Region& r) { return r.id.toString() != *region; });
+            audio = renderProject(soloed(only, *owner), target, from, to);
+            what = "region " + *region + " alone (track \"" + owner->name + "\")";
+        } else if (const auto t = o.get("--track")) {
             const Track* track = findTrackBy(p, *t);
             if (track->kind == TrackKind::Master) {
                 audio = renderProject(p, target, from, to);

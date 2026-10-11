@@ -70,12 +70,22 @@ AudioReport analyseAudio(const WavData& audio, const AnalysisOptions& options) {
     // silence in blocks of 100 ms
     const std::int64_t block = std::max<std::int64_t>(1, audio.sampleRate / 10);
     std::vector<bool> quiet;
+    std::vector<double> blockDb;
     for (std::int64_t b = 0; b < frames; b += block) {
         double e = 0.0;
         const std::int64_t end = std::min(frames, b + block);
         for (std::int64_t i = b; i < end; ++i)
             for (int c = 0; c < ch; ++c) e += at(i, c) * at(i, c);
-        quiet.push_back(toDb(e / static_cast<double>((end - b) * ch)) < -60.0);
+        const double db = toDb(e / static_cast<double>((end - b) * ch));
+        quiet.push_back(db < -60.0);
+        if (db > -90.0) blockDb.push_back(db);  // digital silence is not a noise floor
+    }
+    if (!blockDb.empty()) {  // the noise floor: the average level of the quietest tenth of the 100 ms blocks (what is there between the notes)
+        std::sort(blockDb.begin(), blockDb.end());
+        const std::size_t take = std::max<std::size_t>(1, blockDb.size() / 10);
+        double sumDb = 0.0;
+        for (std::size_t i = 0; i < take; ++i) sumDb += blockDb[i];
+        r.noiseFloorDb = sumDb / static_cast<double>(take);
     }
     std::size_t quietCount = 0;
     for (bool q : quiet) quietCount += q ? 1 : 0;
@@ -170,7 +180,7 @@ nlohmann::json toJson(const AudioReport& r) {
     j["level"] = {{"peakDb", rd(r.peakDb)}, {"rmsDb", rd(r.rmsDb)}, {"crestDb", rd(r.crestDb)}};
     j["loudness"] = {{"integratedLufs", rd(r.loudness.integrated)}, {"momentaryMaxLufs", rd(r.loudness.momentaryMax)}, {"shortTermMaxLufs", rd(r.loudness.shortTermMax)},
                      {"rangeLu", rd(r.loudness.range)}, {"truePeakDbtp", rd(r.loudness.truePeakDb)}};
-    j["problems"] = {{"dcOffset", rd(r.dcOffset, 5)}, {"clippedSamples", r.clippedSamples}, {"clippedPercent", rd(r.clippedPercent, 4)}, {"silencePercent", rd(r.silencePercent, 1)},
+    j["problems"] = {{"dcOffset", rd(r.dcOffset, 5)}, {"clippedSamples", r.clippedSamples}, {"clippedPercent", rd(r.clippedPercent, 4)}, {"silencePercent", rd(r.silencePercent, 1)}, {"noiseFloorDb", r.noiseFloorDb > -199.0 ? rd(r.noiseFloorDb, 1) : -200.0},
                      {"leadingSilenceSeconds", rd(r.leadingSilenceSeconds, 1)}, {"trailingSilenceSeconds", rd(r.trailingSilenceSeconds, 1)}};
     nlohmann::json bands = nlohmann::json::array();
     for (std::size_t i = 0; i < r.bandCentres.size(); ++i) bands.push_back({{"hz", rd(r.bandCentres[i], 1)}, {"db", rd(r.bandDb[i], 1)}});
@@ -206,6 +216,10 @@ std::vector<std::string> describeReport(const AudioReport& r) {
         if (r.loudness.range < 3 && r.seconds > 20 && r.crestDb < 14) say("A very narrow loudness range (under 3 LU) with a low crest factor: the dynamics are already squeezed.");
     } else {
         say("The audio is silent or far below -70 LUFS.");
+    }
+    if (r.noiseFloorDb > -50.0 && r.rmsDb - r.noiseFloorDb > 12.0) {  // gaps between the loud parts that are not quiet: noise (a continuous mix has no such gaps)
+        std::snprintf(buf, sizeof buf, "The noise floor is high (%.0f dBFS between the loud parts): hiss, hum or room noise; a recording at a lower gain only makes it worse, a gate or a quieter source helps.", r.noiseFloorDb);
+        say(buf);
     }
     if (r.crestDb < 8) say("Low crest factor (under 8 dB): heavily compressed or limited.");
     if (r.crestDb > 20) say("High crest factor (over 20 dB): sharp peaks over a low level; a compressor or limiter would raise the loudness.");

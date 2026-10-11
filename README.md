@@ -35,6 +35,8 @@ Add it to an MCP client, for example in `.mcp.json`:
 With **Help > AI Assistant Link** on, the running app also listens on the loopback interface (port and token in
 `%LOCALAPPDATA%\JAD\JAD Daw\live-link.json`) and the same tools work on the open project by passing `"live"` as the project:
 read its state and meters, change faders and inserts as undo steps of the app, drive the transport, and listen to a copy of the project as it is now.
+For recording, `check_recording_setup` listens to the armed inputs for a few seconds (peak, usual level, noise floor, clipping, the gain to change at the
+preamp, round-trip latency) and `compare_takes` analyses each take of a track alone and ranks them by clipping, headroom, level and noise.
 Set `JAD_CLI` if `lpc-cli` is not in the build folders. Test: `python tools/mcp-ears/test_server.py`.
 
 ## UI

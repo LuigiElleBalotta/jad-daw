@@ -125,3 +125,71 @@ TEST_CASE("analysis: a real recording (LPC_REAL_AUDIO)", "[real][analysis]") {
     CHECK(r.loudness.integrated > -60.0);
     CHECK(r.bpm > 70.0);
 }
+
+#include "lpc/input_stats.h"
+
+TEST_CASE("analysis: the noise floor is what lies between the loud parts", "[analysis]") {
+    // 1 s of tone, 2 s of -60 dB noise-like hiss (a low sine stands in), 1 s of tone
+    WavData d = tone(1000.0, -12.0, 1.0);
+    const WavData hiss = tone(7000.0, -60.0, 2.0);
+    d.samples.insert(d.samples.end(), hiss.samples.begin(), hiss.samples.end());
+    const WavData again = tone(1000.0, -12.0, 1.0);
+    d.samples.insert(d.samples.end(), again.samples.begin(), again.samples.end());
+    AnalysisOptions o;
+    o.tempo = false;
+    const AudioReport r = analyseAudio(d, o);
+    CHECK(std::abs(r.noiseFloorDb - (-63.0)) < 1.5);  // -60 dB peak of a sine is -63 dB RMS
+    // digital silence has no floor
+    const AudioReport silent = analyseAudio(tone(1000.0, -200.0, 2.0), o);
+    CHECK(silent.noiseFloorDb < -199.0);
+    // a continuous tone: the floor equals its level, so nothing is said about noise
+    const AudioReport steady = analyseAudio(tone(1000.0, -20.0, 4.0), o);
+    CHECK(std::abs(steady.noiseFloorDb - steady.rmsDb) < 1.0);
+    for (const std::string& s : describeReport(steady)) CHECK(s.find("noise floor") == std::string::npos);
+    // loud parts and a floor that is not quiet: it is said
+    WavData noisy = tone(1000.0, -12.0, 1.0);
+    const WavData floorNoise = tone(7000.0, -35.0, 2.0);
+    noisy.samples.insert(noisy.samples.end(), floorNoise.samples.begin(), floorNoise.samples.end());
+    const AudioReport nr = analyseAudio(noisy, o);
+    bool said = false;
+    for (const std::string& s : describeReport(nr)) said = said || s.find("noise floor") != std::string::npos;
+    CHECK(said);
+}
+
+TEST_CASE("input stats: peak, usual level, floor, clipping, and the gain to change", "[analysis][input]") {
+    InputLevelStats stats;
+    CHECK(adviseInput(stats.summary()).messages.front().find("No readings") == 0);
+    for (int i = 0; i < 200; ++i) stats.push(0.0f, 0.02);  // silence
+    CHECK(!stats.summary().signal);
+    CHECK(adviseInput(stats.summary()).messages.front().find("No signal") == 0);
+
+    stats.reset();
+    const float quiet = static_cast<float>(std::pow(10.0, -34.0 / 20.0)), loud = static_cast<float>(std::pow(10.0, -30.0 / 20.0));
+    for (int i = 0; i < 500; ++i) stats.push(i % 5 == 0 ? loud : quiet, 0.02);
+    InputSummary s = stats.summary();
+    CHECK(std::abs(s.seconds - 10.0) < 0.01);
+    CHECK(std::abs(s.peakDb + 30.0) < 0.2);
+    CHECK(std::abs(s.noiseFloorDb + 34.0) < 0.2);
+    InputAdvice a = adviseInput(s);
+    CHECK(a.gainChangeDb == 20.0);  // peaks -30 -> -10
+    CHECK(a.messages.front().find("low") != std::string::npos);
+
+    stats.reset();
+    for (int i = 0; i < 100; ++i) stats.push(i == 50 ? 1.0f : 0.2f, 0.02);
+    s = stats.summary();
+    CHECK(s.clippedReadings == 1);
+    a = adviseInput(s);
+    CHECK(a.gainChangeDb <= -6.0);
+    CHECK(a.messages.front().find("clipped") != std::string::npos);
+
+    stats.reset();
+    for (int i = 0; i < 100; ++i) stats.push(i % 10 == 0 ? 0.3f : 0.1f, 0.02);  // peak -10.5 dBFS
+    a = adviseInput(stats.summary());
+    CHECK(a.gainChangeDb == 0.0);
+    CHECK(a.messages.front().find("good") != std::string::npos);
+
+    // the window is bounded
+    InputLevelStats small(10);
+    for (int i = 0; i < 100; ++i) small.push(0.5f, 0.02);
+    CHECK(small.summary().seconds < 0.25);
+}

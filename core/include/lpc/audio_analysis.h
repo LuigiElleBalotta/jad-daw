@@ -24,6 +24,7 @@ struct AudioReport {
     std::int64_t clippedSamples = 0;  // |x| >= 0.999
     double clippedPercent = 0.0;
     double silencePercent = 0.0;      // 100 ms blocks under -60 dBFS
+    double noiseFloorDb = -200.0;     // RMS of the quietest tenth of the 100 ms blocks that are not digital silence (-200: nothing but silence)
     double leadingSilenceSeconds = 0.0, trailingSilenceSeconds = 0.0;
     // balance
     std::vector<double> bandCentres;  // Hz

@@ -49,11 +49,27 @@ json projectSummary(const Project& p) {
         }
         x["regions"] = json::array();
         for (const Region& r : t.regions) {
-            json rr = {{"id", r.id.toString()}, {"startBeat", static_cast<double>(r.start) / kPPQ}, {"lengthBeats", static_cast<double>(r.length) / kPPQ},
+            // a region on the musical grid is placed in ticks, one in time in microseconds: both are given in beats and in seconds
+            const double rate = std::max(1, p.sampleRate);
+            auto round3 = [](double v) { return std::round(v * 1000.0) / 1000.0; };
+            double startSec, endSec, startBeat, endBeat;
+            if (r.timeBase == TimeBase::Absolute) {
+                startSec = static_cast<double>(r.start) / 1e6;
+                endSec = static_cast<double>(r.start + r.length) / 1e6;
+                startBeat = static_cast<double>(p.tempoMap.samplesToTicks(startSec * rate, p.sampleRate)) / kPPQ;
+                endBeat = static_cast<double>(p.tempoMap.samplesToTicks(endSec * rate, p.sampleRate)) / kPPQ;
+            } else {
+                startBeat = static_cast<double>(r.start) / kPPQ;
+                endBeat = static_cast<double>(r.start + r.length) / kPPQ;
+                startSec = p.tempoMap.ticksToSamples(r.start, p.sampleRate) / rate;
+                endSec = p.tempoMap.ticksToSamples(r.start + r.length, p.sampleRate) / rate;
+            }
+            json rr = {{"id", r.id.toString()}, {"startBeat", round3(startBeat)}, {"lengthBeats", round3(endBeat - startBeat)}, {"startSeconds", round3(startSec)}, {"lengthSeconds", round3(endSec - startSec)},
                        {"muted", r.muted}, {"gainDb", r.gainDb}, {"notes", static_cast<int>(r.notes.size())}};
             if (!r.mediaId.isNull())
                 if (const MediaItem* m = p.findMedia(r.mediaId)) rr["file"] = m->path;
             if (r.flex) rr["flex"] = true;
+            if (!r.takeGroup.empty()) rr["takeGroup"] = r.takeGroup;
             if (!r.generator.empty()) rr["sessionPlayer"] = true;
             x["regions"].push_back(std::move(rr));
         }

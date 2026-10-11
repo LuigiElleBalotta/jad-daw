@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QHash>
+#include <QElapsedTimer>
 #include <QSet>
 #include <QSettings>
 #include <QString>
@@ -11,6 +12,7 @@
 #include <QUrl>
 #include <QtQml/qqmlregistration.h>
 
+#include <array>
 #include <atomic>
 #include <deque>
 #include <functional>
@@ -26,6 +28,7 @@
 #include "lpc/audio/click.h"
 #include "lpc/audio/engine.h"
 #include "lpc/device.h"
+#include "lpc/input_stats.h"
 #include "bridge/inspector_model.h"
 #include "bridge/library_model.h"
 #include "bridge/mixer_model.h"
@@ -1161,6 +1164,8 @@ private:
     std::vector<MarkerRow> markerRows_;
     void sendMarkers(const std::vector<MarkerRow>& rows);
     QHash<QString, double> meter_, hold_, reduction_;
+    std::array<lpc::InputLevelStats, 8> inputStats_;  // what each input channel looked like lately (the recording assistant reads it through the live link)
+    QElapsedTimer inputClock_;
     QString deviceError_;
     // Flex: the analyses of the sounds, and the renderings in progress (all in project_controller_flex.cpp)
     struct FlexState;

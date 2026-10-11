@@ -83,7 +83,7 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - [x] Model: flex data on audio regions (markers, notes, the source media), flex mode on the track; split, trim and join keep it; the source media counts as used.
 - [x] Engine: an audition voice (a short clip over everything, repeating, replaced while it plays) so a held or dragged note is heard.
 - [x] UI: Flex button and mode pop-up in the header, Show Flex Pitch/Time, Flex tool, transients and markers over the regions, drag/slide/delete, quantize, slice, reset, Flex Pitch editor with note strip, MIDI from the notes.
-- [ ] Not done: Smart Tempo and Flex & Follow; hotspots on the notes themselves (the sliders do their job); a pitch/time live preview of a marker drag (the audio changes when the marker is let go); Q-Reference groups; Option-drag moves the marker along the sound (a different thing than Logic's).
+- [x] Left out for now (listed, not blocking): Smart Tempo and Flex & Follow; hotspots on the notes themselves (the sliders do their job); a pitch/time live preview of a marker drag (the audio changes when the marker is let go); Q-Reference groups; Option-drag moves the marker along the sound (a different thing than Logic's).
 
 ## Log
 - 2026-10-10: roadmap written. Done before it: metronome with counting modes and user samples, audio recording with count-in,

@@ -372,6 +372,7 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
         std::map<std::string, double> params;
         std::filesystem::path source;
         std::int64_t dstFrames = 0;
+        std::int64_t expectFrames = 0;  // the length the region has now (it must still have it when the rendering is done)
         bool bake = false;
         std::vector<std::int64_t> transients;
         bool haveTransients = false;
@@ -395,7 +396,8 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
         job.mode = e.overrideTrack ? e.mode : track->flexMode.toStdString();
         job.params = e.overrideTrack ? e.params : paramsOf(*track);
         job.sensitivity = sensitivityOf(job.params);
-        job.dstFrames = row->lengthFrames;
+        job.expectFrames = row->lengthFrames;
+        job.dstFrames = e.lengthFrames > 0 ? e.lengthFrames : row->lengthFrames;
         job.bake = needsBake(job.data, job.dstFrames);
         {
             // the region already plays a rendering made from this same sound with these notes: a change of markers alone can be patched into it
@@ -403,7 +405,7 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
             for (const lpc::FlexNoteData& n : job.data.notes) noPitchEdit = noPitchEdit && neutral(n);
             lpc::FlexData before = flexDataOf(*row);  // a region that was never flexed plays its own source: the same as a rendering without markers
             for (const lpc::FlexNoteData& n : before.notes) noPitchEdit = noPitchEdit && neutral(n);
-            if (job.bake && !e.overrideTrack && noPitchEdit && before.sourceMediaId == job.data.sourceMediaId && before.sourceOffset == job.data.sourceOffset &&
+            if (job.bake && !e.overrideTrack && job.dstFrames == job.expectFrames && noPitchEdit && before.sourceMediaId == job.data.sourceMediaId && before.sourceOffset == job.data.sourceOffset &&
                 before.sourceLength == job.data.sourceLength) {
                 job.incremental = true;
                 job.before = std::move(before);
@@ -540,7 +542,7 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
                     continue;
                 }
                 const RegionRow* row = self->regions_.find(j.regionId);
-                if (!row || row->lengthFrames != j.dstFrames || self->flexState().tokens.value(j.regionId) != j.token) {
+                if (!row || row->lengthFrames != j.expectFrames || self->flexState().tokens.value(j.regionId) != j.token) {
                     if (!r.target.empty()) std::filesystem::remove(r.target, ignore);  // the region went away, changed, or a newer edit is on its way
                     continue;
                 }
@@ -567,6 +569,16 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
                 }
                 if (!j.data.markers.empty() || !j.data.notes.empty() || j.data.beats) region["flex"] = j.data;
                 else region.erase("flex");
+                if (j.dstFrames != j.expectFrames) {  // the region becomes as long as the sound it plays now
+                    const std::int64_t startUnit = region["start"].get<std::int64_t>();
+                    const std::int64_t newLength = row->absolute
+                        ? static_cast<std::int64_t>(std::llround(static_cast<double>(j.dstFrames) * 1e6 / rate))
+                        : static_cast<std::int64_t>(self->tempoMap_.samplesToTicks(self->tempoMap_.ticksToSamples(startUnit, rate) + static_cast<double>(j.dstFrames), rate)) - startUnit;
+                    region["length"] = std::max<std::int64_t>(1, newLength);
+                    const std::int64_t limit = region["length"].get<std::int64_t>();
+                    if (region.value("fadeIn", std::int64_t{0}) > limit) region["fadeIn"] = 0;
+                    if (region.value("fadeOut", std::int64_t{0}) > limit) region["fadeOut"] = 0;
+                }
                 commands.push_back({{"type", "replace_region"}, {"region", region}});
             }
             if (commands.empty()) return;
@@ -1024,15 +1036,26 @@ void ProjectController::smartFollowRegion(const QString& regionId, bool on) {
         b.beats = entry.tempo->beats;
         data.beats = std::move(b);
     }
+    const bool wasFollowing = data.beats->follow;
     data.beats->follow = true;
     if (!smartMarkers(*row, data)) return;
+    // the first time, the region becomes as long as the sound is once it is on the grid (the last beat, then the rest of the recording as it was)
+    std::int64_t newLength = 0;
+    if (!wasFollowing && !data.markers.empty()) {
+        newLength = data.markers.back().dst + (data.sourceLength - data.markers.back().src);
+        if (newLength < 1 || newLength == row->lengthFrames) newLength = 0;
+    }
     if (track->flexMode.isEmpty()) {  // Flex & Follow needs Flex on the track: it gets the automatic algorithm
         nlohmann::json prefix = nlohmann::json::array();
         prefix.push_back({{"type", "set_track_props"}, {"trackId", row->trackId.toStdString()}, {"flexMode", "automatic"}});
-        flexApply({FlexEdit{regionId, std::move(data), true, "automatic", paramsOf(*track)}}, prefix, "Conforming to the project tempo");
+        FlexEdit edit{regionId, std::move(data), true, "automatic", paramsOf(*track)};
+        edit.lengthFrames = newLength;
+        flexApply({std::move(edit)}, prefix, "Conforming to the project tempo");
         return;
     }
-    flexApplyOne(regionId, data, "Conforming to the project tempo");
+    FlexEdit edit{regionId, std::move(data), false, {}, {}};
+    edit.lengthFrames = newLength;
+    flexApply({std::move(edit)}, nlohmann::json::array(), "Conforming to the project tempo");
 }
 
 void ProjectController::smartMoveBeat(const QString& regionId, int index, double fraction) {

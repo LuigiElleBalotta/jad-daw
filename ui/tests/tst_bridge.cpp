@@ -1528,6 +1528,7 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->followTempo, 120000);
         QVERIFY(std::abs(c.regions()->find(id)->beatsBpm - 100.0) < 2.0);
         QVERIFY(c.regions()->find(id)->flexMarkers.size() >= 10);
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->lengthBeats < 36.0 && c.regions()->find(id)->lengthBeats > 30.0, 60000);   // 20 s at 100 bpm is 33 beats: the region is as long as the sound on the grid, not the 40 beats it had
         const int beatCount = c.regions()->find(id)->beatFracs.size();
         c.smartHint(id, c.regions()->find(id)->beatFracs[5].toDouble(), true);        // hints (D): that beat opens a bar, applied together after a pause
         QTest::qWait(900);

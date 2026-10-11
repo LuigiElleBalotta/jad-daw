@@ -153,6 +153,7 @@ TEST_CASE("analyses on a real recording (LPC_REAL_AUDIO)", "[real]") {
     WavData d = decodeAudioFile(path);
     const std::int64_t keep = std::min<std::int64_t>(d.frames(), static_cast<std::int64_t>(d.sampleRate) * 60);
     d.samples.resize(static_cast<std::size_t>(keep * d.channels));   // the first minute
+    if (const char* out = std::getenv("LPC_REAL_AUDIO_OUT")) writeWav(out, d.sampleRate, d.channels, d.samples, WavFormat::Pcm16);   // the minute as a WAV, for building a test project by hand
     const TempoAnalysis t = analyseTempo(d);
     const MasteringAnalysis m = analyseMastering(d);
     const auto hits = findDrumHits(d, 0.5, 80.0);

@@ -132,10 +132,28 @@ void ProjectController::masteringAnalyse(const QString& trackId, int index) {
                 unity["compensate"] = 1.0;
                 unity["compTrim"] = 0.0;
                 const lpc::LoudnessStats atUnity = outputStats(withInsert, root, render, trackId.toStdString(), index, unity);
-                trim = std::clamp(a.before.integrated - atUnity.integrated, -12.0, 12.0);
-                trim = std::round(trim * 100.0) / 100.0;
+                const double lost = a.before.integrated - atUnity.integrated;  // what the insert takes off the loudness at unity gain (EQ, compressor, soft clip)
+                trim = std::round(std::clamp(lost, -12.0, 12.0) * 100.0) / 100.0;
                 base["compTrim"] = trim;
+                // the gain that reaches the target: the first estimate adds what is lost, then it is corrected from what is measured (a limiter that is
+                // working hard gives back less than it is asked for, so it stops when more gain does not make it louder)
+                double gain = std::clamp(a.gainDb + lost, -24.0, 36.0);
+                base["gain"] = std::round(gain * 100.0) / 100.0;
                 output = outputStats(withInsert, root, render, trackId.toStdString(), index, base);
+                for (int pass = 0; pass < 3; ++pass) {
+                    const double err = lpc::kMasteringTargetLufs - output.integrated;
+                    if (std::abs(err) < 0.4) break;
+                    const double candidate = std::clamp(gain + err, -24.0, 36.0);
+                    if (candidate == gain) break;
+                    std::map<std::string, double> trial = base;
+                    trial["gain"] = std::round(candidate * 100.0) / 100.0;
+                    const lpc::LoudnessStats got = outputStats(withInsert, root, render, trackId.toStdString(), index, trial);
+                    if (std::abs(lpc::kMasteringTargetLufs - got.integrated) >= std::abs(err) - 0.2) break;  // no nearer: the limiter has taken what it could
+                    gain = candidate;
+                    base = trial;
+                    output = got;
+                }
+                a.gainDb = std::round(gain * 100.0) / 100.0;
             }
         } catch (const std::exception& e) {
             error = QString::fromUtf8(e.what());

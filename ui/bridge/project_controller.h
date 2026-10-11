@@ -1158,6 +1158,7 @@ private:
         bool overrideTrack = false;  // render with this mode and these settings instead of the track's (they are about to be set)
         std::string mode;
         std::map<std::string, double> params;
+        std::int64_t lengthFrames = 0;  // > 0: the region becomes this long (frames), as it plays; 0: it keeps its length
     };
     FlexState& flexState();
     bool flexView_ = false;

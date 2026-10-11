@@ -155,7 +155,7 @@ Window {
                     }
                     Text {
                         visible: root.masterStats.outputLufs !== undefined
-                        text: root.masterStats.outputLufs !== undefined ? qsTr("Output: %1 LUFS-I   %2 LU range   %3 dBTP   (%4 LUFS momentary max)").arg(root.masterStats.outputLufs.toFixed(1)).arg(root.masterStats.outputRange.toFixed(1)).arg(root.masterStats.outputTruePeakDb.toFixed(1)).arg(root.masterStats.outputMomentaryMax.toFixed(1)) : ""
+                        text: root.masterStats.outputLufs !== undefined ? qsTr("Output: %1 LUFS-I   %2 LU range   %3 dBTP").arg(root.masterStats.outputLufs.toFixed(1)).arg(root.masterStats.outputRange.toFixed(1)).arg(root.masterStats.outputTruePeakDb.toFixed(1)) : ""
                         color: Theme.textPrimary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontTypeLabelSize

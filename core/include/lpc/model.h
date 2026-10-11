@@ -80,6 +80,7 @@ struct Region {
     int transpose = 0;           // MIDI regions, played: semitones added to every note
     int velocityOffset = 0;      // MIDI regions, played: added to every velocity
     Ticks quantize = 0;          // MIDI regions, played: > 0 moves the start of every note to the nearest multiple of this many ticks
+    std::string generator;  // MIDI regions made by a Session Player: the settings (JSON text) it can be made again from; empty otherwise
     std::string name;  // shown on the region (Text tool, Region inspector); empty: the track's name
     std::optional<FlexData> flex;  // audio regions: the flex edits behind the sound this region plays
     std::int64_t loopLength = 0;  // > 0: the first loopLength (same unit as length, at most length) repeat until the end of the region

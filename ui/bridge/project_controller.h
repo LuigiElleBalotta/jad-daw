@@ -566,7 +566,9 @@ public:
     Q_INVOKABLE void flexStopPreview();
     // Track > Replace or Double Drum Track: options mode (replace|double), sound (kick|snare|tom|hihat|clap|file), file, mix %, levelDb, velocity %, sensitivity %, minGapMs
     // Track > New Session Player Track: options kind (drummer|bass|keys), style, chords ("Am F C G"), repeats, intensity %, swing %, seed
-    Q_INVOKABLE void newSessionPlayer(const QVariantMap& options);
+    Q_INVOKABLE void newSessionPlayer(const QVariantMap& options);   // also startBeats
+    Q_INVOKABLE void sessionRegenerate(const QString& regionId);      // the part again with the next seed
+    Q_INVOKABLE QVariantMap sessionChordsFromMarkers() const;         // {chords, startBeats, bars} from the markers named as chords; empty when there are none
     Q_INVOKABLE void drumReplace(const QVariantMap& options);
     // Mastering Assistant (on the stereo output): adding it analyses the project; Reanalyze does it again (the cycle only, when one is set)
     Q_PROPERTY(bool masteringBusy READ masteringBusy NOTIFY masteringBusyChanged)

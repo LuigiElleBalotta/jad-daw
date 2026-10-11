@@ -35,6 +35,7 @@ MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r) {
         return CommandError{"bad_value", "region transpose is -48..48, velocity -127..127 and quantize 0 to a whole note"};
     if (r.takeGroup.size() > 64) return CommandError{"bad_value", "a take group name has at most 64 characters"};
     if (r.name.size() > 200) return CommandError{"bad_value", "a region name has at most 200 bytes"};
+    if (r.generator.size() > 4096) return CommandError{"bad_value", "a region generator has at most 4096 bytes"};
     if (r.loopLength < 0 || r.loopLength > r.length) return CommandError{"bad_region", "a region loop is between 0 and the length of the region"};
     if (kind == TrackKind::Audio) {
         if (r.mediaId.isNull() || !p.findMedia(r.mediaId))

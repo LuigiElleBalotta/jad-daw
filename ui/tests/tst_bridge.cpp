@@ -1587,6 +1587,38 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.tracks()->rowCount(), tracks + 1);
     }
+    void sessionPlayersRemainRegenerableAndCanReadChordsFromMarkers() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QVERIFY(c.sessionChordsFromMarkers().isEmpty());                              // no chord markers yet
+        c.addMarker(8.0, "Am");
+        QTRY_COMPARE(c.markers().size(), 1);
+        c.addMarker(12.0, "F");
+        QTRY_COMPARE(c.markers().size(), 2);
+        c.addMarker(16.0, "Verse");                                                   // not a chord: it ends the F
+        QTRY_COMPARE(c.markers().size(), 3);
+        const QVariantMap found = c.sessionChordsFromMarkers();
+        QCOMPARE(found.value("chords").toString(), QStringLiteral("Am F"));   // four beats a bar: a bar of Am, a bar of F
+        QCOMPARE(found.value("startBeats").toDouble(), 8.0);
+        const int regions = c.regions()->rowCount();
+        c.newSessionPlayer({{"kind", "bass"}, {"style", "walking"}, {"chords", found.value("chords")}, {"repeats", 1}, {"startBeats", found.value("startBeats")}});
+        QTRY_COMPARE(c.regions()->rowCount(), regions + 1);
+        QString id;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && !r->audio && r->generated) id = r->id;
+        }
+        QVERIFY(!id.isEmpty());
+        QCOMPARE(c.regions()->find(id)->startBeats, 8.0);
+        const std::string before = c.regions()->find(id)->json;
+        c.sessionRegenerate(id);
+        QTRY_VERIFY(c.regions()->find(id)->json != before);                           // the next seed: another part, one undo step
+        QVERIFY(c.regions()->find(id)->generated);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(id)->json, before);
+    }
     void drumReplacementPutsASoundOnEachHitInOneUndoStep() {
         TempDir dir, other;
         jad::ProjectController c(false);

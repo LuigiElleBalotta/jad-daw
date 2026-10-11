@@ -1662,68 +1662,151 @@ void ProjectController::drumReplace(const QVariantMap& options) {
 // ---------------------------------------------------------------- Session Players
 
 // Track > New Session Player Track: an instrument track with a region of generated notes (drums on the Drum Kit, bass and keys on the synth)
-// that follow the chord progression. The part starts on the bar the playhead is in and repeats the progression `repeats` times.
-void ProjectController::newSessionPlayer(const QVariantMap& options) {
-    if (!host_) return;
+// that follow the chord progression. The part starts on the bar the playhead is in and repeats the progression `repeats` times. The settings
+// stay in the region (Region::generator), so the part can be made again with another seed (Regenerate Session Player Part).
+
+namespace {
+
+struct SessionPart {
+    nlohmann::json notes = nlohmann::json::array();
+    nlohmann::json generator;
+    double progressionBeats = 0.0;
+    int repeats = 1;
+    lpc::SessionKind kind = lpc::SessionKind::Drummer;
+    std::string error;
+};
+
+SessionPart buildSession(const QVariantMap& options, int beatsPerBar) {
+    SessionPart out;
     const QString kindName = options.value("kind", "drummer").toString();
     lpc::SessionParams params;
     params.kind = kindName == "bass" ? lpc::SessionKind::Bass : (kindName == "keys" ? lpc::SessionKind::Keys : lpc::SessionKind::Drummer);
-    params.style = options.value("style", lpc::sessionStyles(params.kind).front().c_str()).toString().toStdString();
+    out.kind = params.kind;
     const auto& styles = lpc::sessionStyles(params.kind);
+    params.style = options.value("style", QString::fromStdString(styles.front())).toString().toStdString();
     if (std::find(styles.begin(), styles.end(), params.style) == styles.end()) params.style = styles.front();
     params.intensity = std::clamp(options.value("intensity", 60.0).toDouble() / 100.0, 0.0, 1.0);
     params.swing = std::clamp(options.value("swing", 0.0).toDouble() / 100.0, 0.0, 1.0);
-    params.beatsPerBar = std::max(1, beatsPerBar_);
+    params.beatsPerBar = std::max(1, beatsPerBar);
     params.seed = static_cast<unsigned>(options.value("seed", 1).toUInt());
-    std::string error;
-    const std::vector<lpc::SessionChord> chords = lpc::parseChords(options.value("chords", "Am F C G").toString().toStdString(), params.beatsPerBar, error);
-    if (!error.empty()) {
-        emit notice(QString::fromStdString(error));
-        return;
-    }
-    const int repeats = std::clamp(options.value("repeats", 2).toInt(), 1, 64);
-    double progressionBeats = 0.0;
-    for (const lpc::SessionChord& c : chords) progressionBeats += c.beats;
-    std::vector<lpc::MidiNote> one = lpc::generateSession(chords, params);
-    nlohmann::json notes = nlohmann::json::array();
-    for (int r = 0; r < repeats; ++r) {
+    const std::string chordText = options.value("chords", "Am F C G").toString().toStdString();
+    const std::vector<lpc::SessionChord> chords = lpc::parseChords(chordText, params.beatsPerBar, out.error);
+    if (!out.error.empty()) return out;
+    out.repeats = std::clamp(options.value("repeats", 2).toInt(), 1, 64);
+    for (const lpc::SessionChord& c : chords) out.progressionBeats += c.beats;
+    for (int r = 0; r < out.repeats; ++r) {
         // each repeat is generated again with its own seed, so the repeats are not copies of each other (the drummer's fills still fall every fourth bar)
         lpc::SessionParams again = params;
         again.seed = params.seed + static_cast<unsigned>(r);
-        const std::vector<lpc::MidiNote> part = r == 0 ? one : lpc::generateSession(chords, again);
-        const std::int64_t offset = static_cast<std::int64_t>(std::llround(progressionBeats * r * lpc::kPPQ));
-        for (const lpc::MidiNote& n : part)
-            notes.push_back({{"start", n.start + offset}, {"length", n.length}, {"note", n.note}, {"velocity", n.velocity}});
+        const std::int64_t offset = static_cast<std::int64_t>(std::llround(out.progressionBeats * r * lpc::kPPQ));
+        for (const lpc::MidiNote& n : lpc::generateSession(chords, again))
+            out.notes.push_back({{"start", n.start + offset}, {"length", n.length}, {"note", n.note}, {"velocity", n.velocity}});
     }
-    if (notes.empty()) {
+    out.generator = {{"kind", kindName.toStdString()}, {"style", params.style}, {"chords", chordText}, {"repeats", out.repeats},
+                     {"intensity", params.intensity * 100.0}, {"swing", params.swing * 100.0}, {"seed", params.seed}};
+    return out;
+}
+
+const char* sessionName(lpc::SessionKind k) {
+    static const char* names[] = {"Drummer", "Bass Player", "Keyboard Player"};
+    return names[static_cast<int>(k)];
+}
+
+}  // namespace
+
+void ProjectController::newSessionPlayer(const QVariantMap& options) {
+    if (!host_) return;
+    const SessionPart part = buildSession(options, beatsPerBar_);
+    if (!part.error.empty()) {
+        emit notice(QString::fromStdString(part.error));
+        return;
+    }
+    if (part.notes.empty()) {
         emit notice("The Session Player has nothing to play for these chords");
         return;
     }
-    const double barBeats = params.beatsPerBar * 4.0 / std::max(1, beatUnit_);
-    const double startBeats = std::floor(std::max(0.0, positionBeats_) / barBeats) * barBeats;
+    const double barBeats = std::max(1, beatsPerBar_) * 4.0 / std::max(1, beatUnit_);
+    const double startBeats = options.contains("startBeats") ? std::max(0.0, options.value("startBeats").toDouble())
+                                                             : std::floor(std::max(0.0, positionBeats_) / barBeats) * barBeats;
     const std::string nullId = "00000000-0000-0000-0000-000000000000";
     const QString trackId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    const char* names[] = {"Drummer", "Bass Player", "Keyboard Player"};
     nlohmann::json instrument;
-    if (params.kind == lpc::SessionKind::Drummer) {
+    if (part.kind == lpc::SessionKind::Drummer) {
         instrument = {{"processorId", lpc::kProcDrums}, {"params", nlohmann::json::object()}, {"state", ""}};
-    } else if (params.kind == lpc::SessionKind::Bass) {
+    } else if (part.kind == lpc::SessionKind::Bass) {
         instrument = {{"processorId", lpc::kProcSynth}, {"state", ""}, {"params", {{"wave", 2}, {"attack", 4}, {"decay", 200}, {"sustain", 60}, {"release", 120}, {"cutoff", 700}, {"level", -6}}}};
     } else {
         instrument = {{"processorId", lpc::kProcSynth}, {"state", ""}, {"params", {{"wave", 1}, {"attack", 8}, {"decay", 300}, {"sustain", 70}, {"release", 250}, {"cutoff", 5000}, {"level", -10}}}};
     }
-    nlohmann::json track = {{"id", trackId.toStdString()}, {"kind", "instrument"}, {"name", names[static_cast<int>(params.kind)]}, {"color", ""},
+    nlohmann::json track = {{"id", trackId.toStdString()}, {"kind", "instrument"}, {"name", sessionName(part.kind)}, {"color", ""},
                             {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()}, {"sends", nlohmann::json::array()}, {"output", nullId}}},
                             {"regions", nlohmann::json::array()}, {"automation", nlohmann::json::array()}, {"instrument", instrument}};
     nlohmann::json region = {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"},
                              {"start", static_cast<std::int64_t>(std::llround(startBeats * lpc::kPPQ))},
-                             {"length", static_cast<std::int64_t>(std::llround(progressionBeats * repeats * lpc::kPPQ))}, {"mediaId", nullId}, {"sourceOffsetFrames", 0},
-                             {"gainDb", 0}, {"notes", notes}, {"name", names[static_cast<int>(params.kind)]}};
+                             {"length", static_cast<std::int64_t>(std::llround(part.progressionBeats * part.repeats * lpc::kPPQ))}, {"mediaId", nullId}, {"sourceOffsetFrames", 0},
+                             {"gainDb", 0}, {"notes", part.notes}, {"name", sessionName(part.kind)}, {"generator", part.generator.dump()}};
     nlohmann::json commands = nlohmann::json::array();
     commands.push_back({{"type", "add_track"}, {"index", -1}, {"track", track}});
     commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"region", region}});
     sendCommand({{"type", "transaction"}, {"commands", commands}});
-    emit notice(QString("Created the %1 with %2 notes").arg(names[static_cast<int>(params.kind)]).arg(notes.size()));
+    emit notice(QString("Created the %1 with %2 notes").arg(sessionName(part.kind)).arg(part.notes.size()));
+}
+
+// Makes the part again with the next seed (the same settings): one undo step, the region keeps its place and length.
+void ProjectController::sessionRegenerate(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row) return;
+    nlohmann::json region = nlohmann::json::parse(row->json, nullptr, false);
+    if (region.is_discarded() || !region.contains("generator")) {
+        emit notice("This region was not made by a Session Player");
+        return;
+    }
+    const nlohmann::json g = nlohmann::json::parse(region["generator"].get<std::string>(), nullptr, false);
+    if (g.is_discarded() || !g.is_object()) return;
+    QVariantMap options;
+    options["kind"] = QString::fromStdString(g.value("kind", std::string("drummer")));
+    options["style"] = QString::fromStdString(g.value("style", std::string()));
+    options["chords"] = QString::fromStdString(g.value("chords", std::string("Am F C G")));
+    options["repeats"] = g.value("repeats", 2);
+    options["intensity"] = g.value("intensity", 60.0);
+    options["swing"] = g.value("swing", 0.0);
+    options["seed"] = static_cast<unsigned>(g.value("seed", 1u) + 1u);
+    const SessionPart part = buildSession(options, beatsPerBar_);
+    if (!part.error.empty()) {
+        emit notice(QString::fromStdString(part.error));
+        return;
+    }
+    const std::int64_t length = region.value("length", std::int64_t{0});
+    nlohmann::json notes = nlohmann::json::array();
+    for (const auto& n : part.notes)
+        if (n["start"].get<std::int64_t>() < length) notes.push_back(n);
+    region["notes"] = notes;
+    region["generator"] = part.generator.dump();
+    sendCommand({{"type", "replace_region"}, {"region", region}});
+    emit notice("Made the part again");
+}
+
+// The chords written as marker names ("Am", "F", "C/E", "G7"...): one per bar from the marker to the next marker (a marker that is not a chord
+// ends the one before it). `chords` is the text for the dialog, `startBeats` the bar of the first chord marker.
+QVariantMap ProjectController::sessionChordsFromMarkers() const {
+    std::vector<MarkerRow> markers = markerRows_;
+    std::sort(markers.begin(), markers.end(), [](const MarkerRow& a, const MarkerRow& b) { return a.beats < b.beats; });
+    const double barBeats = std::max(1, beatsPerBar_) * 4.0 / std::max(1, beatUnit_);
+    QStringList bars;
+    double first = -1.0;
+    for (std::size_t i = 0; i < markers.size(); ++i) {
+        std::string error;
+        const std::string name = markers[i].name.trimmed().toStdString();
+        if (name.empty() || name.find_first_of(" .%") != std::string::npos) continue;
+        if (lpc::parseChords(name, std::max(1, beatsPerBar_), error).empty() || !error.empty()) continue;
+        const double end = i + 1 < markers.size() ? markers[i + 1].beats : markers[i].beats + barBeats;
+        if (first < 0) first = std::floor(markers[i].beats / barBeats) * barBeats;
+        const int count = std::max(1, static_cast<int>(std::lround((end - markers[i].beats) / barBeats)));
+        bars << QString::fromStdString(name);
+        for (int k = 1; k < count; ++k) bars << QStringLiteral("%");
+    }
+    if (bars.isEmpty()) return {};
+    return QVariantMap{{"chords", bars.join(' ')}, {"startBeats", first}, {"bars", static_cast<int>(bars.size())}};
 }
 
 

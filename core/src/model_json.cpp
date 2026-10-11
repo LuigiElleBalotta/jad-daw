@@ -180,6 +180,7 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (r.velocityOffset != 0) j["velocityOffset"] = r.velocityOffset;
     if (r.quantize != 0) j["quantize"] = r.quantize;
     if (!r.name.empty()) j["name"] = r.name;
+    if (!r.generator.empty()) j["generator"] = r.generator;
     if (r.flex) j["flex"] = *r.flex;
 }
 
@@ -202,6 +203,7 @@ void from_json(const nlohmann::json& j, Region& r) {
     r.velocityOffset = j.value("velocityOffset", 0);
     r.quantize = j.value("quantize", Ticks{0});
     r.name = j.value("name", std::string());
+    r.generator = j.value("generator", std::string());
     r.flex.reset();
     if (j.contains("flex") && !j["flex"].is_null()) r.flex = j.at("flex").get<FlexData>();
 }

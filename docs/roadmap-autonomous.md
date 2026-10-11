@@ -157,7 +157,7 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 Rule: a feature is done only when it works end to end, has a test, is checked on a real mp3 from `C:/Users/l.balotta/Music/band/sequenze` where audio is involved, and its README line says what it does and does not do. Order: finish what is half done, then the DAW's ears.
 
 ### A. Finish the half-done features
-- [ ] A1. Session Players: the region takes the colour of its track; the part can be made again from the menu with the same settings kept in the region (new seed); a chord progression can be read from the project's markers (marker names such as "Am", "F") so there is a chord source.
+- [x] A1. Session Players (the region already takes the colour of its track: the palette is by row, as for every track; Regenerate and the chord source from markers are done): the part can be made again from the menu with the same settings kept in the region (new seed); a chord progression can be read from the project's markers (marker names such as "Am", "F") so there is a chord source.
 - [ ] A2. Drum Replacement: also "make a MIDI track with the hits" playing the Drum Kit (velocity from the level), so the hits can be edited; tested on Boulevard_78bpm.mp3.
 - [ ] A3. Mastering Assistant: live LUFS-M/S/I, LU range and true-peak readout in its window; a true-peak limiter (4x oversampled) instead of the sample-peak one; Loudness Compensation measured, not assumed; Reanalyze checked on the real mp3.
 - [ ] A4. Flex Pitch: a quality pass on a spoken or sung recording, hotspot values checked against the numbers, notes edited and rendered, audio compared before/after in a test.

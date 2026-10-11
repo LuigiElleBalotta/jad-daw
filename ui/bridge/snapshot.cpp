@@ -187,6 +187,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
                                   ? static_cast<std::int64_t>(std::llround(static_cast<double>(r.length) * p.sampleRate / 1e6))
                                   : static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(r.start + r.length, p.sampleRate) - p.tempoMap.ticksToSamples(r.start, p.sampleRate)));
             rr.name = QString::fromStdString(r.name);
+            rr.generated = !r.generator.empty();
             if (r.flex) {
                 const lpc::FlexData& f = *r.flex;
                 rr.flexed = true;

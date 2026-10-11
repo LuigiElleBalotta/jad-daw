@@ -18,13 +18,14 @@ Dialog {
     property real intensity: 60
     property real swing: 0
     property int seed: 1
+    property real startBeats: -1         // set when the chords come from the markers: the part starts at the first chord marker
     readonly property var kinds: [{ id: "drummer", label: qsTr("Drummer") }, { id: "bass", label: qsTr("Bass Player") }, { id: "keys", label: qsTr("Keyboard Player") }]
     readonly property var styles: ({ drummer: ["rock", "pop", "funk", "ballad", "shuffle"], bass: ["root", "eighths", "walking", "funk"], keys: ["block", "arpeggio", "comp", "pad"] })
     background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
     header: Item { height: 0 }
 
     function create() {
-        project.newSessionPlayer({ kind: kind, style: style, chords: chords, repeats: Math.round(repeats), intensity: intensity, swing: swing, seed: seed })
+        project.newSessionPlayer({ kind: kind, style: style, chords: chords, repeats: Math.round(repeats), intensity: intensity, swing: swing, seed: seed, startBeats: startBeats >= 0 ? startBeats : undefined })
         seed = seed + 1   // the next one made with the same settings plays differently
         close()
     }
@@ -73,8 +74,20 @@ Dialog {
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontTypeBodySize
-                    onTextEdited: root.chords = text
+                    onTextEdited: { root.chords = text; root.startBeats = -1 }
                     onAccepted: root.create()
+                }
+            }
+            IconButton {
+                objectName: "chordsFromMarkers"
+                implicitHeight: 24
+                label: qsTr("From Markers")
+                onClicked: {
+                    const r = root.project.sessionChordsFromMarkers()
+                    if (r.chords === undefined) { root.project.notice(qsTr("Name markers after chords (Am, F, C/E, G7…) first")); return }
+                    root.chords = r.chords
+                    root.startBeats = r.startBeats
+                    root.repeats = 1
                 }
             }
         }

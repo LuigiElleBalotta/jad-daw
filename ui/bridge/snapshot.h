@@ -98,6 +98,7 @@ struct RegionRow {
     QString takeGroup;                      // regions of a track with the same group are takes of one passage
     QString name;                           // the name of the region; empty: the track's name is shown
     bool flexed = false;                    // the region has flex data
+    bool generated = false;                 // a Session Player part: it can be made again
     QVariantList flexMarkers;               // {index, frac (where it plays, 0..1 of the region), srcFrac (where it was)}
     bool followTempo = false;               // Flex & Follow: the region conforms to the project tempo
     double beatsBpm = 0.0;                  // the tempo analysed in the sound (0: not analysed)

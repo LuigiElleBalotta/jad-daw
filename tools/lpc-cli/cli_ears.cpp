@@ -20,9 +20,11 @@
 #include "lpc/audio_analysis.h"
 #include "lpc/audio_decode.h"
 #include "lpc/commands.h"
+#include "lpc/mastering_fit.h"
 #include "lpc/media_store.h"
 #include "lpc/model_json.h"
 #include "lpc/offline_render.h"
+#include "lpc/processor_ids.h"
 #include "lpc/project_io.h"
 
 namespace lpc::cli {
@@ -318,6 +320,48 @@ int cmdApply(const std::vector<std::string>& args, std::ostream& out) {
     return allOk ? 0 : 2;
 }
 
+// Mastering Assistant on the project: the insert is added to the master when it is not there, analysed, and its parameters are written (unless --dry-run).
+int cmdMastering(const std::vector<std::string>& args, std::ostream& out) {
+    const Options o = parseOptions(args, {"--out", "--seconds"}, {"--dry-run"});
+    if (o.positional.size() != 1) throw Usage{"mastering needs a project directory"};
+    const fs::path dir = toPath(o.positional[0]);
+    Project p = loadProject(dir);
+    double from = 0, to = -1;
+    parseRange(o.get("--seconds"), from, to);
+    Track* master = nullptr;
+    for (Track& t : p.tracks)
+        if (t.kind == TrackKind::Master) master = &t;
+    if (!master) throw std::runtime_error("the project has no master track");
+    int index = -1;
+    for (std::size_t i = 0; i < master->strip.inserts.size(); ++i)
+        if (master->strip.inserts[i].processorId == kProcMastering) index = static_cast<int>(i);
+    bool added = false;
+    if (index < 0) {
+        master->strip.inserts.push_back(ProcessorRef{kProcMastering, {}, ""});
+        index = static_cast<int>(master->strip.inserts.size()) - 1;
+        added = true;
+    }
+    RenderOptions render;
+    render.tailSeconds = 0.3;
+    render.startFrame = static_cast<std::int64_t>(std::llround(from * p.sampleRate));
+    if (to > from) render.frames = static_cast<std::int64_t>(std::llround((to - from) * p.sampleRate));
+    const MasteringFit fit = fitMastering(p, dir, master->id, index, render);
+    if (fit.silent) throw std::runtime_error("the mix is silent: there is nothing to master");
+    master->strip.inserts[static_cast<std::size_t>(index)].params = fit.params;
+    json j = {{"added", added},
+              {"before", {{"integratedLufs", fit.analysis.before.integrated}, {"rangeLu", fit.analysis.before.range}, {"truePeakDbtp", fit.analysis.before.truePeakDb}}},
+              {"after", {{"integratedLufs", fit.output.integrated}, {"rangeLu", fit.output.range}, {"truePeakDbtp", fit.output.truePeakDb}}},
+              {"parameters", fit.params}};
+    if (!o.has("--dry-run")) {
+        const fs::path target = o.has("--out") ? toPath(*o.get("--out")) : dir;
+        if (target != dir) fs::copy(dir, target, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+        saveProject(p, target);
+        j["savedTo"] = target.string();
+    }
+    out << j.dump(1) << "\n";
+    return 0;
+}
+
 }  // namespace
 
 Project soloTrackProject(Project project, const std::string& selector) {
@@ -330,7 +374,7 @@ Project soloTrackProject(Project project, const std::string& selector) {
     }
 }
 
-bool isEarsCommand(const std::string& cmd) { return cmd == "snapshot" || cmd == "analyze" || cmd == "masking" || cmd == "apply"; }
+bool isEarsCommand(const std::string& cmd) { return cmd == "snapshot" || cmd == "analyze" || cmd == "masking" || cmd == "apply" || cmd == "mastering"; }
 
 int runEars(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
     try {
@@ -339,6 +383,7 @@ int runEars(const std::vector<std::string>& args, std::ostream& out, std::ostrea
         if (cmd == "analyze") return cmdAnalyze(args, out, err);
         if (cmd == "masking") return cmdMasking(args, out);
         if (cmd == "apply") return cmdApply(args, out);
+        if (cmd == "mastering") return cmdMastering(args, out);
     } catch (const Usage& e) {
         err << "error: " << e.message << "\n";
         return 1;

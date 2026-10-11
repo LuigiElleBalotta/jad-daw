@@ -59,7 +59,8 @@ constexpr const char* kUsage =
     "  lpc-cli snapshot <project-dir> [--full]\n"
     "  lpc-cli analyze <project-dir|audio-file> [--track <id|name>] [--seconds a:b] [--no-tempo]\n"
     "  lpc-cli masking <project-dir> <trackA> <trackB> [--seconds a:b]\n"
-    "  lpc-cli apply <project-dir> <commands.json|-> [--out <dir>] [--dry-run]\n";
+    "  lpc-cli apply <project-dir> <commands.json|-> [--out <dir>] [--dry-run]\n"
+    "  lpc-cli mastering <project-dir> [--out <dir>] [--dry-run] [--seconds a:b]\n";
 
 fs::path toPath(const std::string& s) { return fs::path(std::u8string(s.begin(), s.end())); }
 

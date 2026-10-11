@@ -12,6 +12,7 @@
 
 #include "bridge/project_controller.h"
 #include "lpc/mastering.h"
+#include "lpc/mastering_fit.h"
 #include "lpc/media_store.h"
 #include "lpc/model_json.h"
 #include "lpc/offline_render.h"
@@ -107,59 +108,16 @@ void ProjectController::masteringAnalyse(const QString& trackId, int index) {
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
     const std::uint64_t generation = generation_;
-    (void)QtConcurrent::run([self, project, withInsert, root, render, trackId, index, generation] {
-        lpc::MasteringAnalysis a;
-        double trim = 0.0;
-        lpc::LoudnessStats output;
+    (void)QtConcurrent::run([self, withInsert, root, render, trackId, index, generation] {
+        lpc::MasteringFit fit;
         QString error;
         try {
-            lpc::MediaStore media(root, /*streaming=*/false);
-            const lpc::RenderResult r = lpc::renderOffline(project, media, render);
-            lpc::WavData mix;
-            mix.sampleRate = r.sampleRate;
-            mix.channels = 2;
-            mix.samples = r.interleaved;
-            a = lpc::analyseMastering(mix);
-            if (a.before.integrated > -69.0) {
-                // what the insert does to the loudness with these settings: Loudness Compensation is the trim that brings it back to the level of the mix
-                std::map<std::string, double> base;
-                for (const lpc::Track& t : withInsert.tracks)
-                    if (t.id.toString() == trackId.toStdString()) base = t.strip.inserts[static_cast<std::size_t>(index)].params;
-                base["gain"] = std::round(a.gainDb * 100.0) / 100.0;
-                for (int b = 0; b < lpc::kMasteringBands; ++b) base["eq" + std::to_string(b + 1)] = std::round(a.eqDb[static_cast<std::size_t>(b)] * 100.0) / 100.0;
-                base["bypass"] = 0.0;
-                std::map<std::string, double> unity = base;
-                unity["compensate"] = 1.0;
-                unity["compTrim"] = 0.0;
-                const lpc::LoudnessStats atUnity = outputStats(withInsert, root, render, trackId.toStdString(), index, unity);
-                const double lost = a.before.integrated - atUnity.integrated;  // what the insert takes off the loudness at unity gain (EQ, compressor, soft clip)
-                trim = std::round(std::clamp(lost, -12.0, 12.0) * 100.0) / 100.0;
-                base["compTrim"] = trim;
-                // the gain that reaches the target: the first estimate adds what is lost, then it is corrected from what is measured (a limiter that is
-                // working hard gives back less than it is asked for, so it stops when more gain does not make it louder)
-                double gain = std::clamp(a.gainDb + lost, -24.0, 36.0);
-                base["gain"] = std::round(gain * 100.0) / 100.0;
-                output = outputStats(withInsert, root, render, trackId.toStdString(), index, base);
-                for (int pass = 0; pass < 3; ++pass) {
-                    const double err = lpc::kMasteringTargetLufs - output.integrated;
-                    if (std::abs(err) < 0.4) break;
-                    const double candidate = std::clamp(gain + err, -24.0, 36.0);
-                    if (candidate == gain) break;
-                    std::map<std::string, double> trial = base;
-                    trial["gain"] = std::round(candidate * 100.0) / 100.0;
-                    const lpc::LoudnessStats got = outputStats(withInsert, root, render, trackId.toStdString(), index, trial);
-                    if (std::abs(lpc::kMasteringTargetLufs - got.integrated) >= std::abs(err) - 0.2) break;  // no nearer: the limiter has taken what it could
-                    gain = candidate;
-                    base = trial;
-                    output = got;
-                }
-                a.gainDb = std::round(gain * 100.0) / 100.0;
-            }
+            fit = lpc::fitMastering(withInsert, root, lpc::Uuid::parse(trackId.toStdString()).value_or(lpc::Uuid{}), index, render);
         } catch (const std::exception& e) {
             error = QString::fromUtf8(e.what());
         }
         if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self, a, error, trackId, index, generation, trim, output] {
+        QMetaObject::invokeMethod(self.data(), [self, fit, error, trackId, index, generation] {
             if (!self) return;
             self->masteringBusy_ = false;
             emit self->masteringBusyChanged();
@@ -168,20 +126,21 @@ void ProjectController::masteringAnalyse(const QString& trackId, int index) {
                 self->setError("Mastering Assistant: " + error);
                 return;
             }
-            if (a.before.integrated < -69.0) {
+            if (fit.silent) {
                 emit self->notice("Mastering Assistant: the mix is silent");
                 return;
             }
+            const lpc::MasteringAnalysis& a = fit.analysis;
             self->masteringStats_ = QVariantMap{{"integratedLufs", a.before.integrated}, {"momentaryMax", a.before.momentaryMax}, {"shortTermMax", a.before.shortTermMax},
-                                                {"range", a.before.range}, {"truePeakDb", a.before.truePeakDb}, {"gainDb", a.gainDb}, {"compTrim", trim}};
-            const QVariantMap outMap = outputMap(output);
+                                                {"range", a.before.range}, {"truePeakDb", a.before.truePeakDb}, {"gainDb", a.gainDb}, {"compTrim", fit.compTrim}};
+            const QVariantMap outMap = outputMap(fit.output);
             for (auto it = outMap.cbegin(); it != outMap.cend(); ++it) self->masteringStats_.insert(it.key(), it.value());
             nlohmann::json commands = nlohmann::json::array();
             auto set = [&](const std::string& param, double value) {
                 commands.push_back({{"type", "set_insert_param"}, {"trackId", trackId.toStdString()}, {"index", index}, {"param", param}, {"value", value}});
             };
-            set("gain", std::round(a.gainDb * 100.0) / 100.0);
-            set("compTrim", trim);
+            set("gain", a.gainDb);
+            set("compTrim", fit.compTrim);
             for (int b = 0; b < lpc::kMasteringBands; ++b) set("eq" + std::to_string(b + 1), std::round(a.eqDb[static_cast<std::size_t>(b)] * 100.0) / 100.0);
             self->sendCommand({{"type", "transaction"}, {"commands", commands}});
             emit self->masteringAnalysed();

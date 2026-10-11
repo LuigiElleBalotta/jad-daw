@@ -556,6 +556,8 @@ ApplicationWindow {
         "edit.smartApplyTempo": () => { const ids = controller.selectedRegionIds; if (ids.length > 0) controller.smartApplyRegionTempo(ids[0]) },
         "edit.smartDownbeatLater": () => { for (const id of controller.selectedRegionIds) controller.smartShiftDownbeat(id, 1) },
         "edit.flexQuantizeReference": () => controller.flexQuantizeGroup(controller.snapBeats > 0 ? controller.snapBeats : 0.25, 100),
+        "edit.openSmartTempoEditor": () => { controller.flexView = true; flexEditor.visible = true; flexEditor.raise(); flexEditor.requestActivate() },
+        "window.openSmartTempoEditor": () => { controller.flexView = true; flexEditor.visible = true; flexEditor.raise(); flexEditor.requestActivate() },
         "edit.flexOpenEditor": () => { controller.flexView = true; flexEditor.visible = true; flexEditor.raise(); flexEditor.requestActivate() },
         "edit.flexCreateMidi": () => { if (controller.selectedRegionIds.length > 0) controller.flexCreateMidiTrack(controller.selectedRegionIds[0]) },
         "tool.autoCurve": () => { controller.tool = "autoCurve" },

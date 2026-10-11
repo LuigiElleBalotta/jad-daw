@@ -40,7 +40,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
 - Menus (File, Edit, Track, Navigate, Record, Mix, View, Window, Help), control bar with LCD, local toolbar, track
   headers, timeline and mixer. Every action comes from one table, `ui/actions/actions.json`: label, menu, default
   shortcut (Logic Pro's), and whether it is **ready** or a **stub**.
-- A stub is present and can be chosen, but nothing is behind it yet (Smart Tempo, Session Players, folder stacks, Drum Replacement, the Flex tool, movie, printing, Dolby Atmos, Mastering Assistant, the Mac window sets...).
+- A stub is present and can be chosen, but nothing is behind it yet (Session Players, folder stacks, Drum Replacement, movie, printing, Dolby Atmos, Mastering Assistant, the Mac window sets...).
   Choosing a stub shows a "not implemented yet" notice. Everything else works through the Core's JSON commands, with undo/redo.
 - Real today: open/create/save projects (a `.lpc` folder), play, locate, cycle, tempo and time signature (double click
   the LCD), master volume, tracks (new, delete, rename, colour, heights, select with click / Shift / Ctrl), mute, solo,

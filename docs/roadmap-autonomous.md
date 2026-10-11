@@ -150,3 +150,28 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - [x] Track Stacks: `Track.parent/stack/stackOpen` with commands, validation and JSON; folder and summing stacks, fold/unfold, Flatten Stack, Convert Folder Stack to Summing Stack; the Tracks area indents and folds them.
 - [x] Checked on a real recording (`LPC_REAL_AUDIO=<file> lpc_tests [real]`, Boulevard_78bpm.mp3): Smart Tempo finds 77.9 bpm (78 expected), the mastering analysis reads -23.2 LUFS and asked for +-6 dB on most bands, so the Auto EQ was made gentler (0.4 of the difference, at most 4 dB); the drum detector finds 78 hits in the first minute. Not heard: no audio device in these runs.
 
+
+
+## 14. The night plan (the owner: "niente funzionalita' a meta'", then "le orecchie della daw")
+
+Rule: a feature is done only when it works end to end, has a test, is checked on a real mp3 from `C:/Users/l.balotta/Music/band/sequenze` where audio is involved, and its README line says what it does and does not do. Order: finish what is half done, then the DAW's ears.
+
+### A. Finish the half-done features
+- [ ] A1. Session Players: the region takes the colour of its track; the part can be made again from the menu with the same settings kept in the region (new seed); a chord progression can be read from the project's markers (marker names such as "Am", "F") so there is a chord source.
+- [ ] A2. Drum Replacement: also "make a MIDI track with the hits" playing the Drum Kit (velocity from the level), so the hits can be edited; tested on Boulevard_78bpm.mp3.
+- [ ] A3. Mastering Assistant: live LUFS-M/S/I, LU range and true-peak readout in its window; a true-peak limiter (4x oversampled) instead of the sample-peak one; Loudness Compensation measured, not assumed; Reanalyze checked on the real mp3.
+- [ ] A4. Flex Pitch: a quality pass on a spoken or sung recording, hotspot values checked against the numbers, notes edited and rendered, audio compared before/after in a test.
+- [ ] A5. Smart Tempo: time signatures other than 4/4 (3/4, 6/8) in the beat/downbeat model and in Flex & Follow; tempo changes inside a recording (a tempo map from the beats, "Apply Region Tempo" writing tempo events along the region, not one tempo).
+- [ ] A6. External MIDI track: a MIDI output in the platform layer (JUCE), a track field with device and channel, the engine sends its MIDI there; New External MIDI Track in the menu; tests with a fake output.
+- [ ] A7. The small stubs that can be real: Play/Stop button options, Open Marker Text, Deselect Global Tracks, Show Track Alternatives (takes), SMPTE-locked regions (absolute-time regions). Movie, printing, Dolby Atmos stay out for good.
+- [ ] A8. A full pass: every new window opened once in the app (Flex editor, Smart Tempo beats, Mastering, Drum Replacement, Session Players, Stacks), screenshots checked, defects fixed.
+
+### B. The DAW's ears (an MCP server so an AI can assist with mixing, recording and mastering)
+- [ ] B1. Core audio analysis library: per-track and master loudness (M/S/I, LRA), true peak, RMS, crest factor, third-octave spectrum, stereo width and correlation, clipping and DC, silence, tempo, spectral centroid, masking between two tracks (band overlap). JSON output. Tests on synthetic and real audio.
+- [ ] B2. `lpc-cli` commands: `analyze <project|wav> [--track id] [--range a:b]`, `snapshot` (project state as JSON: tracks, inserts with parameters, sends, automation, regions, tempo), `apply` (JSON commands, undoable), `render --solo track`, so a headless session works on a project file.
+- [ ] B3. MCP server (stdio, Python) over lpc-cli: tools list_tracks, get_state, analyze_mix, analyze_track, compare_tracks (masking), set_fader/pan/mute/solo, add_insert/set_insert_param (EQ, compressor, limiter, reverb, mastering), run_mastering_analysis, render_excerpt, undo/redo, save. Safe by default: works on a copy unless told otherwise; every change is one undo step; a log of what the AI did.
+- [ ] B4. Live link: the running app exposes the same commands and meters over a loopback socket with a token, so the MCP server can drive and listen to the open project (playhead, live meters, record arm), not only files.
+- [ ] B5. Recording assistant tools: input level check (peak, noise floor, clipping risk), gain staging suggestion, latency check, take comparison.
+- [ ] B6. A guide for the AI (docs/ai-assistant.md): what each tool measures, target values (LUFS per platform, headroom, balance curves), a mixing and mastering checklist, example sessions; verified end to end on a real mp3 project.
+
+Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

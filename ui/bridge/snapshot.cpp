@@ -93,7 +93,15 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         for (const lpc::Group& g : p.groups)
             if (std::find(g.members.begin(), g.members.end(), t.id) != g.members.end()) tr.groupId = QString::fromStdString(g.id.toString());
         tr.regionCount = static_cast<int>(t.regions.size());
-        const bool shown = t.showInTracks || showHidden;
+        tr.stack = QString::fromStdString(t.stack);
+        tr.stackOpen = t.stackOpen;
+        bool folded = false;  // inside a closed stack
+        for (const lpc::Track* up = t.parent.isNull() ? nullptr : p.findTrack(t.parent); up && tr.depth < 9; up = up->parent.isNull() ? nullptr : p.findTrack(up->parent)) {
+            ++tr.depth;
+            if (tr.parentId.isEmpty()) tr.parentId = QString::fromStdString(up->id.toString());
+            if (!up->stackOpen) folded = true;
+        }
+        const bool shown = (t.showInTracks || showHidden) && !folded;
         tr.showInTracks = shown;
         tr.icon = QString::fromStdString(t.icon);
         tr.flexMode = QString::fromStdString(t.flexMode);

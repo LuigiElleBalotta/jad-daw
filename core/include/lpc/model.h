@@ -158,6 +158,9 @@ struct Track {
     std::string icon;     // the key of the picture shown in the track header (Track > Assign Track Icon); empty: none
     std::string flexMode;  // audio tracks: Flex on, with this algorithm (slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic or pitch); empty: off
     std::map<std::string, double> flexParams;  // decay, sliceLength, loopLengthMs, loopOffsetMs, grainMs, sensitivity
+    Uuid parent;               // Track Stacks: the stack this track belongs to (null: none)
+    std::string stack;         // a bus that is a Track Stack: "folder" (only organizes its tracks) or "summing" (its tracks play through it); empty: not a stack
+    bool stackOpen = true;     // a stack shows its tracks, or hides them
     bool showInTracks = true;  // false: a bus or aux that lives in the Mixer only, not in the Tracks area
     MidiShaping midi;  // instrument tracks
     std::optional<Freeze> freeze;  // audio and instrument tracks

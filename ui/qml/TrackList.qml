@@ -89,6 +89,10 @@ Rectangle {
             required frozen
             required icon
             required flexMode
+            required depth
+            required stackKind
+            required stackOpen
+            onStackToggled: (id) => root.project.toggleStackOpen(id)
             required gainDb
             required pan
             width: ListView.view.width

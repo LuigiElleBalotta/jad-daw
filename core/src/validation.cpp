@@ -232,6 +232,14 @@ MaybeError checkProject(const Project& p) {
         if (auto e = checkTrackProps(t.name, t.color)) return e;
         if (auto e = checkPatchId(t.patchId)) return e;
         if (auto e = checkShowInTracks(t.kind, t.showInTracks)) return e;
+        if (!t.stack.empty() && ((t.stack != "folder" && t.stack != "summing") || t.kind != TrackKind::Bus)) return CommandError{"bad_value", "only a bus can be a Track Stack (folder or summing)"};
+        if (!t.parent.isNull()) {
+            int depth = 0;
+            const Track* up = p.findTrack(t.parent);
+            if (!up || up->stack.empty() || t.kind == TrackKind::Master) return CommandError{"bad_value", "a track's parent must be a Track Stack"};
+            for (; up && !up->parent.isNull(); up = p.findTrack(up->parent))
+                if (up->parent == t.id || ++depth > 8) return CommandError{"bad_value", "Track Stacks cannot contain themselves or nest that deep"};
+        }
         if (auto e = checkMidiShaping(t.midi)) return e;
         if (t.freeze) {
             if (t.kind != TrackKind::Audio && t.kind != TrackKind::Instrument) return CommandError{"invalid_kind", "only audio and instrument tracks can be frozen"};

@@ -571,6 +571,11 @@ public:
     // Mastering Assistant (on the stereo output): adding it analyses the project; Reanalyze does it again (the cycle only, when one is set)
     Q_PROPERTY(bool masteringBusy READ masteringBusy NOTIFY masteringBusyChanged)
     Q_INVOKABLE QString masterTrackId() const { return masterId_; }
+    // Track Stacks (Track > Create Folder Stack / Summing Stack from the selected tracks)
+    Q_INVOKABLE void createStack(const QString& kind);               // "folder" or "summing"
+    Q_INVOKABLE void flattenStack(const QString& trackId);           // the tracks stay, the stack goes
+    Q_INVOKABLE void convertFolderStackToSummingStack(const QString& trackId);
+    Q_INVOKABLE void toggleStackOpen(const QString& trackId);
     Q_INVOKABLE void addMasteringAssistant();
     Q_INVOKABLE void masteringAnalyse(const QString& trackId, int index);
     Q_INVOKABLE QVariantMap masteringStats() const { return masteringStats_; }  // integratedLufs, momentaryMax, shortTermMax, range, truePeakDb of the last analysis

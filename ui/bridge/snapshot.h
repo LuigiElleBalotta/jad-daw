@@ -57,6 +57,10 @@ struct TrackRow {
     bool frozen = false;      // plays its rendered audio
     int transpose = 0, velocity = 0, keyLow = 0, keyHigh = 127, velocityLow = 1, velocityHigh = 127;  // the shaping of the notes of an instrument track
     QString icon;  // the key of the header picture ("" none)
+    QString parentId;          // Track Stacks: the stack it is in (empty: none)
+    int depth = 0;             // how many stacks it is inside
+    QString stack;             // this track is a stack: folder or summing
+    bool stackOpen = true;
     QString flexMode;  // Flex on this audio track: "" off, or slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic, pitch
     QVariantMap flexParams;
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)

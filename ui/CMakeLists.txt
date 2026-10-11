@@ -19,6 +19,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/project_controller_edit.cpp
         bridge/project_controller_flex.cpp
         bridge/project_controller_mastering.cpp
+        bridge/project_controller_stacks.cpp
         bridge/waveform_cache.cpp
         bridge/lcd_parse.cpp
         bridge/inspector_model.cpp

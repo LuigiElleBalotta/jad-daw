@@ -113,6 +113,7 @@ public:
                                 std::any_of(t.strip.sends.begin(), t.strip.sends.end(),
                                             [&](const Send& s) { return s.targetTrackId == id_; });
             if (routed) return fail("in_use", "another track routes to this track");
+            if (t.parent == id_) return fail("in_use", "the stack still has tracks: flatten it first");
         }
         const int index = static_cast<int>(it - p.tracks.begin());
         Track removed = std::move(*it);
@@ -395,6 +396,9 @@ public:
         if (patch_.flexMode) j["flexMode"] = *patch_.flexMode;
         if (patch_.flexParams) j["flexParams"] = *patch_.flexParams;
         if (patch_.showInTracks) j["showInTracks"] = *patch_.showInTracks;
+        if (patch_.parent) j["parent"] = *patch_.parent;
+        if (patch_.stack) j["stack"] = *patch_.stack;
+        if (patch_.stackOpen) j["stackOpen"] = *patch_.stackOpen;
         if (patch_.automationMode) j["automationMode"] = *patch_.automationMode;
         if (patch_.delayMs) j["delayMs"] = *patch_.delayMs;
         if (patch_.midi)
@@ -409,6 +413,23 @@ public:
         if (auto e = checkTrackProps(patch_.name.value_or(t->name), patch_.color.value_or(t->color))) return fail(*e);
         if (patch_.showInTracks)
             if (auto e = checkShowInTracks(t->kind, *patch_.showInTracks)) return fail(*e);
+        if (patch_.stack) {
+            const std::string& s = *patch_.stack;
+            if (s != "" && s != "folder" && s != "summing") return fail("bad_value", "a stack is folder or summing");
+            if (!s.empty() && t->kind != TrackKind::Bus) return fail("invalid_kind", "only a bus can be a Track Stack");
+            if (s.empty() && std::any_of(p.tracks.begin(), p.tracks.end(), [&](const Track& o) { return o.parent == id_; })) return fail("in_use", "the stack still has tracks: flatten it first");
+        }
+        if (patch_.parent && !patch_.parent->isNull()) {
+            const std::string stackNow = patch_.stack ? *patch_.stack : t->stack;
+            if (*patch_.parent == id_) return fail("bad_value", "a track cannot be in itself");
+            const Track* parent = p.findTrack(*patch_.parent);
+            if (!parent || parent->stack.empty()) return fail("not_found", "the parent must be a Track Stack");
+            if (t->kind == TrackKind::Master) return fail("invalid_kind", "the master track cannot be in a stack");
+            int depth = 0;
+            for (const Track* up = parent; up && !up->parent.isNull(); up = p.findTrack(up->parent)) {
+                if (up->parent == id_ || ++depth > 8) return fail("bad_value", "stacks cannot contain themselves or nest that deep");
+            }
+        }
         if (patch_.icon) {
             const std::string& k = *patch_.icon;
             const bool plain = std::all_of(k.begin(), k.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-'; });
@@ -474,6 +495,18 @@ public:
         if (patch_.showInTracks) {
             previous.showInTracks = t->showInTracks;
             t->showInTracks = *patch_.showInTracks;
+        }
+        if (patch_.parent) {
+            previous.parent = t->parent;
+            t->parent = *patch_.parent;
+        }
+        if (patch_.stack) {
+            previous.stack = t->stack;
+            t->stack = *patch_.stack;
+        }
+        if (patch_.stackOpen) {
+            previous.stackOpen = t->stackOpen;
+            t->stackOpen = *patch_.stackOpen;
         }
         return success(makeSetTrackProps(id_, std::move(previous)));
     }
@@ -1070,6 +1103,9 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("name")) patch.name = j["name"].get<std::string>();
             if (j.contains("color")) patch.color = j["color"].get<std::string>();
             if (j.contains("showInTracks")) patch.showInTracks = j["showInTracks"].get<bool>();
+            if (j.contains("parent")) patch.parent = j["parent"].get<Uuid>();
+            if (j.contains("stack")) patch.stack = j["stack"].get<std::string>();
+            if (j.contains("stackOpen")) patch.stackOpen = j["stackOpen"].get<bool>();
             if (j.contains("icon")) patch.icon = j["icon"].get<std::string>();
             if (j.contains("flexMode")) patch.flexMode = j["flexMode"].get<std::string>();
             if (j.contains("flexParams")) patch.flexParams = j["flexParams"].get<std::map<std::string, double>>();

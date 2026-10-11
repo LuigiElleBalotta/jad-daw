@@ -261,6 +261,9 @@ void to_json(nlohmann::json& j, const Track& t) {
     if (!t.flexMode.empty()) j["flexMode"] = t.flexMode;
     if (!t.flexParams.empty()) j["flexParams"] = t.flexParams;
     if (!t.showInTracks) j["showInTracks"] = false;
+    if (!t.parent.isNull()) j["parent"] = t.parent;
+    if (!t.stack.empty()) j["stack"] = t.stack;
+    if (!t.stackOpen) j["stackOpen"] = false;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
     if (t.delayMs != 0.0) j["delayMs"] = t.delayMs;
     if (t.freeze) j["freeze"] = {{"mediaId", t.freeze->mediaId}, {"startFrame", t.freeze->startFrame}};
@@ -305,6 +308,10 @@ void from_json(const nlohmann::json& j, Track& t) {
         if (!j["showInTracks"].is_boolean()) throw std::runtime_error("showInTracks must be a boolean");
         t.showInTracks = j["showInTracks"].get<bool>();
     }
+    t.parent = j.contains("parent") ? j.at("parent").get<Uuid>() : Uuid{};
+    t.stack = j.value("stack", std::string());
+    if (t.stack.size() > 10) throw std::runtime_error("a stack is folder or summing");
+    t.stackOpen = j.value("stackOpen", true);
 }
 
 nlohmann::json toJson(const Project& p) {

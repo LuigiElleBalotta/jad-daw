@@ -1541,6 +1541,32 @@ private slots:
         c.smartFollowRegion(id, false);
         QTRY_VERIFY_WITH_TIMEOUT(!c.regions()->find(id)->followTempo, 60000);
     }
+    void trackStacksGatherTracksFoldThemAndFlattenBack() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 2);
+        const int rows = c.tracks()->rowCount();
+        c.selectTrack(c.tracks()->trackIdAt(0), "replace");
+        c.selectTrack(c.tracks()->trackIdAt(1), "extend");
+        c.createStack("folder");
+        QTRY_COMPARE(c.tracks()->rowCount(), rows + 1);                           // the stack row, with the two tracks under it
+        const QString stack = c.tracks()->trackIdAt(0);
+        QCOMPARE(c.tracks()->find(stack)->stack, QStringLiteral("folder"));
+        QCOMPARE(c.tracks()->find(c.tracks()->trackIdAt(1))->depth, 1);
+        c.toggleStackOpen(stack);                                                 // closed: its tracks leave the list
+        QTRY_COMPARE(c.tracks()->rowCount(), rows + 1 - 2);
+        c.toggleStackOpen(stack);
+        QTRY_COMPARE(c.tracks()->rowCount(), rows + 1);
+        c.convertFolderStackToSummingStack(stack);
+        QTRY_COMPARE(c.tracks()->find(stack)->stack, QStringLiteral("summing"));
+        QCOMPARE(c.tracks()->find(c.tracks()->trackIdAt(1))->outputId, stack);    // its tracks play through it
+        c.flattenStack(stack);
+        QTRY_COMPARE(c.tracks()->rowCount(), rows);
+        QCOMPARE(c.tracks()->find(c.tracks()->trackIdAt(0))->depth, 0);
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), rows + 1);
+    }
     void sessionPlayersMakeATrackWithAPartInOneUndoStep() {
         TempDir dir;
         jad::ProjectController c(false);

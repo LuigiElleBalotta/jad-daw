@@ -30,6 +30,10 @@ Item {
     property bool showSolo: true
     property bool showSliders: true
     property bool selected: false
+    property int depth: 0                // Track Stacks: how many stacks the track is in (it is indented)
+    property string stackKind: ""        // this track is a stack: folder or summing
+    property bool stackOpen: true
+    signal stackToggled(string trackId)
 
     readonly property bool slidersVisible: height >= 56 && showSliders
     readonly property url iconSource: icon === "" ? "" : (icon === "audio" || icon === "instrument" ? "icons/icon-" + icon + ".svg" : "icons/track-" + icon + ".svg")
@@ -89,7 +93,7 @@ Item {
     }
     Rectangle {
         id: chip
-        x: Theme.spacing[3]
+        x: Theme.spacing[3] + root.depth * 14
         anchors.verticalCenter: parent.verticalCenter
         width: 4
         height: parent.height - 16
@@ -106,8 +110,20 @@ Item {
         y: root.slidersVisible ? Theme.spacing[3] : (root.height - height) / 2
         height: 22
 
+        Text {  // the disclosure triangle of a stack
+            id: disclosure
+            objectName: "stackToggle"
+            visible: root.stackKind !== ""
+            width: visible ? 14 : 0
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.stackOpen ? "▾" : "▸"
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontTypeBodySize
+            MouseArea { anchors.fill: parent; anchors.margins: -3; onClicked: root.stackToggled(root.trackId) }
+        }
         Item {
             id: iconSlot
+            anchors.left: disclosure.right
             objectName: "headerIcon"
             visible: root.showIcon && root.icon !== ""
             width: visible ? 20 : 0

@@ -22,6 +22,9 @@ struct TrackPatch {
     std::optional<std::string> flexMode;        // "" (off), slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic or pitch (audio tracks)
     std::optional<std::map<std::string, double>> flexParams;  // decay, sliceLength, loopLengthMs, loopOffsetMs, grainMs, sensitivity
     std::optional<bool> showInTracks;
+    std::optional<Uuid> parent;                 // the stack the track belongs to (a null id: none)
+    std::optional<std::string> stack;           // "", "folder" or "summing" (buses only)
+    std::optional<bool> stackOpen;
     std::optional<std::string> automationMode;  // off, read, touch, latch or write
     std::optional<double> delayMs;              // -1000..1000 ms (audio and instrument tracks)
     std::optional<MidiShaping> midi;            // transpose, velocity and the limits (instrument tracks)

@@ -59,12 +59,16 @@ QVariant TrackListModel::data(const QModelIndex& index, int role) const {
         case Frozen: return r.frozen;
         case Icon: return r.icon;
         case FlexMode: return r.flexMode;
+        case Depth: return r.depth;
+        case StackKind: return r.stack;
+        case StackOpen: return r.stackOpen;
+        case ParentId: return r.parentId;
     }
     return {};
 }
 
 QHash<int, QByteArray> TrackListModel::roleNames() const {
-    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {RecordArm, "recordArm"}, {InputMonitor, "inputMonitor"}, {Hidden, "hidden"}, {Frozen, "frozen"}, {Icon, "icon"}, {FlexMode, "flexMode"}};
+    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {RecordArm, "recordArm"}, {InputMonitor, "inputMonitor"}, {Hidden, "hidden"}, {Frozen, "frozen"}, {Icon, "icon"}, {FlexMode, "flexMode"}, {Depth, "depth"}, {StackKind, "stackKind"}, {StackOpen, "stackOpen"}, {ParentId, "parentId"}};
 }
 
 }  // namespace jad

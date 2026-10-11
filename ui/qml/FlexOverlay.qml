@@ -78,6 +78,29 @@ Item {
             z: 5
             Rectangle { x: 5; y: 0; width: 2; height: parent.height; color: Theme.textPrimary }
             Rectangle { x: 1; y: 0; width: 10; height: 10; radius: 2; color: Theme.trackOrangeSolid; border.color: Theme.surfaceCanvas }
+            Rectangle {  // the second hotspot: the round handle slides the marker along the sound (as Alt-drag does)
+                id: slideSpot
+                objectName: "flexSlideHandle" + marker.modelData.index
+                x: 1; y: Math.max(14, parent.height - 22); width: 10; height: 10; radius: 5
+                color: slideArea.pressed ? "#ffffff" : "#d8e8ff"
+                border.color: Theme.surfaceCanvas
+                visible: parent.height >= 40
+                MouseArea {
+                    id: slideArea
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    cursorShape: Qt.SizeHorCursor
+                    preventStealing: true
+                    onPressed: { root.dragIndex = marker.modelData.index; root.dragFrac = marker.modelData.frac }
+                    onPositionChanged: (m) => { if (pressed) root.dragFrac = Math.max(0, Math.min(1, root.mapFromItem(slideArea, m.x, 0).x / Math.max(1, root.width))) }
+                    onReleased: {
+                        const index = root.dragIndex, frac = root.dragFrac
+                        root.dragIndex = -1
+                        if (Math.abs(frac - marker.modelData.frac) * root.width >= 2) root.markerMoved(index, frac, true)
+                    }
+                    onCanceled: root.dragIndex = -1
+                }
+            }
             MouseArea {
                 id: grab
                 x: -3; y: 0; width: 18; height: Math.min(parent.height, 26)

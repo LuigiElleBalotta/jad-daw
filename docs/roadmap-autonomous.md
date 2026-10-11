@@ -66,7 +66,7 @@ commit secrets (`.secrets/` is ignored); ask before outward actions; the CI fix 
 - [x] The remaining `stub`s (about 74: Flex, Smart Tempo, Session Players, folder stacks, movie, printing, Mac window sets, ...) say "not implemented yet" when chosen; each is listed in `ui/actions/actions.json` with status `stub`.
 
 ## 9. Platform
-- [ ] (waits for the owner: macOS run and the CI Configure fix; the app icon exists) macOS build run for real (never done), the CI Configure failure (only when the owner says), signed bundle, app icon.
+- [x] (dropped by the owner, 2026-10-11: "dimenticati di macOS"; the app icon exists) was: macOS run and the CI Configure fix; the app icon exists) macOS build run for real (never done), the CI Configure failure (only when the owner says), signed bundle, app icon.
 
 ## 10. The rest of the `stub` actions (the owner: "port them to Windows")
 Most stubs were never Mac-only: they are Logic features not written yet. Left out for good: Print, Page Setup, Movie, Dolby Atmos, Mastering Assistant.
@@ -140,5 +140,5 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - [x] Beat markers can be dragged and deleted in the Flex view (`smartMoveBeat`, `smartDeleteBeat`).
 - [x] Smart Tempo hints: Downbeat Here / Beat Here at the playhead (`smartHint`).
 - [x] Hints can be tapped while playing: Alt+D / Alt+T (plain D is List Editors), collected and applied as one edit.
-- [x] Left out for now: hotspot handles on Flex Time markers.
+- [x] A round slide handle on each Flex Time marker (the marker moves along the sound, like Alt-drag).
 

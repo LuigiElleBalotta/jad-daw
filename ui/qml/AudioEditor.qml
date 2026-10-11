@@ -342,6 +342,8 @@ Rectangle {
                     tint: Theme.textPrimary
                     onMarkerMoved: (index, fraction, slide) => root.project.flexMoveMarker(root.regionId, index, fraction, slide)
                     onMarkerDeleted: (index) => root.project.flexDeleteMarker(root.regionId, index)
+                    onMarkerDragging: (index, fraction, slide) => root.project.flexMarkerPreview(root.regionId, index, fraction, slide)
+                    onMarkerDragEnded: root.project.flexStopPreview()
                 }
                 Item {  // Flex Pitch: a row for every semitone, and the notes
                     id: notesLayer
@@ -475,6 +477,84 @@ Rectangle {
                                     root.project.flexStopPreview()
                                 }
                                 onCanceled: { noteBar.liveSemitones = NaN; noteBar.liveShift = 0; axis = ""; root.project.flexStopPreview() }
+                            }
+                            Repeater {  // the six hotspots of the selected note (drag: the value is heard as it moves; double click: back to its default)
+                                model: noteBar.selectedNote ? [
+                                    { key: "driftIn", label: qsTr("Pitch Drift In"), from: 0, to: 1, def: 0, horizontal: true, sign: 1, range: 70, unit: "%", scale: 100, ax: 0, ay: 0 },
+                                    { key: "vibrato", label: qsTr("Vibrato"), from: 0, to: 2, def: 1, horizontal: false, sign: 1, range: 70, unit: "%", scale: 100, ax: 0.5, ay: 0 },
+                                    { key: "driftOut", label: qsTr("Pitch Drift Out"), from: 0, to: 1, def: 0, horizontal: true, sign: -1, range: 70, unit: "%", scale: 100, ax: 1, ay: 0 },
+                                    { key: "formantCents", label: qsTr("Formant Shift"), from: -600, to: 600, def: 0, horizontal: false, sign: 1, range: 120, unit: " ct", scale: 1, ax: 0, ay: 1 },
+                                    { key: "fineCents", label: qsTr("Fine Pitch"), from: -50, to: 50, def: 0, horizontal: false, sign: 1, range: 60, unit: " ct", scale: 1, ax: 0.5, ay: 1 },
+                                    { key: "gainDb", label: qsTr("Gain"), from: -12, to: 12, def: 0, horizontal: false, sign: 1, range: 80, unit: " dB", scale: 1, ax: 1, ay: 1 }
+                                ] : []
+                                delegate: Rectangle {
+                                    id: spot
+                                    required property var modelData
+                                    objectName: "flexHotspot_" + modelData.key
+                                    property bool dragging: false
+                                    property real startValue: 0
+                                    property real liveValue: 0
+                                    width: 9; height: 9; radius: 5
+                                    x: modelData.ax * (noteBar.width - width)
+                                    y: modelData.ay * (noteBar.height - height) + (modelData.ay === 0 ? -5 : 5)
+                                    z: 3
+                                    color: dragging ? "#ffffff" : "#e8f2ff"
+                                    border.color: "#1b3a5c"
+                                    border.width: 1
+                                    function clampValue(v) { return Math.max(modelData.from, Math.min(modelData.to, v)) }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        anchors.margins: -3
+                                        preventStealing: true
+                                        cursorShape: spot.modelData.horizontal ? Qt.SizeHorCursor : Qt.SizeVerCursor
+                                        property real pressPos: 0
+                                        onPressed: (m) => {
+                                            root.flexSelected = noteBar.modelData.index
+                                            spot.startValue = noteBar.modelData[spot.modelData.key]
+                                            spot.liveValue = spot.startValue
+                                            spot.dragging = true
+                                            const p = mapToItem(notesLayer, m.x, m.y)
+                                            pressPos = spot.modelData.horizontal ? p.x : p.y
+                                        }
+                                        onPositionChanged: (m) => {
+                                            if (!pressed) return
+                                            const p = mapToItem(notesLayer, m.x, m.y)
+                                            const d = spot.modelData.horizontal ? (p.x - pressPos) * spot.modelData.sign : pressPos - p.y
+                                            spot.liveValue = spot.clampValue(spot.startValue + d / spot.modelData.range * (spot.modelData.to - spot.modelData.from))
+                                            const e = {}; e[spot.modelData.key] = spot.liveValue
+                                            root.project.flexNotePreview(root.regionId, noteBar.modelData.index, e)
+                                        }
+                                        onReleased: {
+                                            spot.dragging = false
+                                            if (spot.liveValue !== spot.startValue) {
+                                                const e = {}; e[spot.modelData.key] = spot.liveValue
+                                                root.project.flexNoteEdit(root.regionId, noteBar.modelData.index, e)
+                                            }
+                                            root.project.flexStopPreview()
+                                        }
+                                        onCanceled: { spot.dragging = false; root.project.flexStopPreview() }
+                                        onDoubleClicked: {
+                                            const e = {}; e[spot.modelData.key] = spot.modelData.def
+                                            root.project.flexNoteEdit(root.regionId, noteBar.modelData.index, e)
+                                        }
+                                    }
+                                    Rectangle {  // the value while it is dragged
+                                        visible: spot.dragging
+                                        x: 12; y: -2
+                                        width: tip.implicitWidth + 8; height: tip.implicitHeight + 4
+                                        radius: 3
+                                        color: Theme.surfaceCanvas
+                                        border.color: Theme.borderStrong
+                                        Text {
+                                            id: tip
+                                            anchors.centerIn: parent
+                                            text: spot.modelData.label + " " + Math.round(spot.liveValue * spot.modelData.scale) + spot.modelData.unit
+                                            color: Theme.textPrimary
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: Theme.fontTypeCaptionSize
+                                        }
+                                    }
+                                }
                             }
                             Repeater {  // the edges resize the note
                                 model: [true, false]

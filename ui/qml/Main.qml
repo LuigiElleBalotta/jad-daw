@@ -551,6 +551,7 @@ ApplicationWindow {
         "edit.flexSliceAtTransients": () => controller.flexSlice(false),
         "edit.flexSliceAtMarkers": () => controller.flexSlice(true),
         "edit.flexQuantize": () => controller.flexQuantize(controller.snapBeats > 0 ? controller.snapBeats : 0.25, 100),
+        "edit.flexQuantizeReference": () => controller.flexQuantizeGroup(controller.snapBeats > 0 ? controller.snapBeats : 0.25, 100),
         "edit.flexOpenEditor": () => { controller.flexView = true; flexEditor.visible = true; flexEditor.raise(); flexEditor.requestActivate() },
         "edit.flexCreateMidi": () => { if (controller.selectedRegionIds.length > 0) controller.flexCreateMidiTrack(controller.selectedRegionIds[0]) },
         "tool.autoCurve": () => { controller.tool = "autoCurve" },

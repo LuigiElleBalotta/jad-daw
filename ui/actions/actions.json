@@ -61,6 +61,7 @@
  {"id":"edit.flexSliceAtTransients","label":"Slice at Transient Markers","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.flexSliceAtMarkers","label":"Slice at Flex Markers","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.flexQuantize","label":"Quantize Transients to the Grid","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},
+ {"id":"edit.flexQuantizeReference","label":"Quantize to the First Selected Region (Q-Reference)","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready"},
  {"id":"edit.flexCreateMidi","label":"Create MIDI Track from Flex Pitch Data","menu":"Edit/Flex","shortcut":"","kind":"command","status":"ready","sep":true},
  {"id":"tool.pointer","label":"Pointer Tool","menu":"Edit/Tool","shortcut":"","kind":"command","status":"ready","group":"tool","subsep":true},
  {"id":"tool.pencil","label":"Pencil Tool","menu":"Edit/Tool","shortcut":"P","kind":"command","status":"ready","group":"tool","verified":true},

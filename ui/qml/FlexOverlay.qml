@@ -17,6 +17,8 @@ Item {
     property real dragFrac: 0
     signal markerMoved(int index, real fraction, bool slide)
     signal markerDeleted(int index)
+    signal markerDragging(int index, real fraction, bool slide)   // while it is dragged: the stretch can be heard
+    signal markerDragEnded()
 
     // the pitch range of the notes, for drawing them
     readonly property real lowPitch: { let v = 127; for (const n of notes) v = Math.min(v, n.pitch); return notes.length ? v - 1 : 0 }
@@ -58,14 +60,16 @@ Item {
                 onPositionChanged: (m) => {
                     if (!pressed) return
                     root.dragFrac = Math.max(0, Math.min(1, root.mapFromItem(grab, m.x, 0).x / Math.max(1, root.width)))
+                    root.markerDragging(root.dragIndex, root.dragFrac, (m.modifiers & Qt.AltModifier) !== 0)
                 }
                 onReleased: (m) => {
                     const index = root.dragIndex
                     const frac = root.dragFrac
                     root.dragIndex = -1
+                    root.markerDragEnded()
                     if (Math.abs(frac - marker.modelData.frac) * root.width >= 2) root.markerMoved(index, frac, (m.modifiers & Qt.AltModifier) !== 0)
                 }
-                onCanceled: root.dragIndex = -1
+                onCanceled: { root.dragIndex = -1; root.markerDragEnded() }
                 onDoubleClicked: root.markerDeleted(marker.modelData.index)
             }
         }

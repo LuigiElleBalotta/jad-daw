@@ -1481,6 +1481,50 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->mediaId != original, 30000);
         QVERIFY(c.regions()->find(id)->flexMarkers.size() >= 3);
     }
+    void flexQReferenceMovesTheOtherRegionsWithTheReference() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString first = importFlexClip(c, dir, other, true, 100.0, &track);
+        QVERIFY(!first.isEmpty());
+        c.importAudio(url(other.path() / "hits.wav"), track, 100.0);                  // a second take of the same hits at the same place
+        QTRY_VERIFY_WITH_TIMEOUT([&] { int n = 0; for (int i = 0; i < c.regions()->rowCount(); ++i) { const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i)); if (r && r->audio && r->startBeats > 99.0) ++n; } return n; }() == 2, 15000);
+        QStringList ids;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio && r->startBeats > 99.0) ids << r->id;
+        }
+        c.setTrackFlexMode(track, "monophonic");
+        QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("monophonic"));
+        for (const QString& id : ids) QTRY_VERIFY_WITH_TIMEOUT(c.flexTransients(id).size() >= 3, 15000);
+        c.selectRegion(ids[0], "replace");
+        c.selectRegion(ids[1], "extend");
+        c.flexQuantizeGroup(1.5, 100.0);
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(ids[0])->flexMarkers.size() >= 3 && c.regions()->find(ids[1])->flexMarkers.size() >= 3, 40000);
+    }
+    void flexMarkerPreviewDoesNotBreakAnything() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, true, 100.0, &track);
+        QVERIFY(!id.isEmpty());
+        c.setTrackFlexMode(track, "monophonic");
+        QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("monophonic"));
+        QTRY_VERIFY_WITH_TIMEOUT(c.flexTransients(id).size() >= 3, 15000);
+        c.flexAddMarker(id, c.flexTransients(id)[1].toDouble(), false);
+        QTRY_VERIFY(c.regions()->find(id)->flexed);
+        const QString baked = c.regions()->find(id)->mediaId;
+        const double at = c.regions()->find(id)->flexMarkers[0].toMap().value("frac").toDouble();
+        c.flexMarkerPreview(id, 0, at + 0.03, false);
+        c.flexMarkerPreview(id, 0, at + 0.05, false);
+        c.flexStopPreview();
+        QTest::qWait(500);
+        QCOMPARE(c.regions()->find(id)->mediaId, baked);                              // hearing it changes nothing
+    }
     void flexPitchFindsTheNotesAndAnEditMakesANewFileWithOneUndoStep() {
         TempDir dir, other;
         jad::ProjectController c(false);

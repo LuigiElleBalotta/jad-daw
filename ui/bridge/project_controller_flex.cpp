@@ -679,14 +679,19 @@ void ProjectController::flexAddMarker(const QString& regionId, double fraction, 
 
 void ProjectController::flexMoveMarker(const QString& regionId, int index, double fraction, bool slide) {
     lpc::FlexData data;
-    if (!std::isfinite(fraction) || !flexPrepare(regionId, data, false)) return;
+    if (!std::isfinite(fraction) || !flexPrepare(regionId, data, false) || !moveMarkerData(regionId, data, index, fraction, slide)) return;
+    flexApplyOne(regionId, data, "");
+}
+
+// The markers of `data` with marker `index` moved to `fraction` of the region (kept between its neighbours).
+bool ProjectController::moveMarkerData(const QString& regionId, lpc::FlexData& data, int index, double fraction, bool slide) const {
     const RegionRow* row = regions_.find(regionId);
-    if (index < 0 || index >= static_cast<int>(data.markers.size())) return;
+    if (!row || index < 0 || index >= static_cast<int>(data.markers.size())) return false;
     const std::size_t i = static_cast<std::size_t>(index);
     const std::int64_t gap = std::max<std::int64_t>(1, sampleRate_ / 100);
     const std::int64_t lo = (i > 0 ? data.markers[i - 1].dst : 0) + gap;
     const std::int64_t hi = (i + 1 < data.markers.size() ? data.markers[i + 1].dst : row->lengthFrames) - gap;
-    if (hi < lo) return;
+    if (hi < lo) return false;
     const std::int64_t target = std::clamp<std::int64_t>(static_cast<std::int64_t>(std::llround(std::clamp(fraction, 0.0, 1.0) * static_cast<double>(row->lengthFrames))), lo, hi);
     if (slide) {  // the marker moves along the sound; nothing is stretched
         const lpc::TimeMap map(data.sourceLength, row->lengthFrames, lpc::flexAnchors(data));
@@ -697,7 +702,7 @@ void ProjectController::flexMoveMarker(const QString& regionId, int index, doubl
     } else {
         data.markers[i].dst = target;
     }
-    flexApplyOne(regionId, data, "");
+    return true;
 }
 
 void ProjectController::flexDeleteMarker(const QString& regionId, int index) {
@@ -817,6 +822,70 @@ void ProjectController::flexQuantize(double gridBeats, double strengthPercent) {
         return;
     }
     flexApply(std::move(edits), nlohmann::json::array(), "Quantizing");
+}
+
+// Q-Reference: the first selected region is the reference. Its transients go to the grid; a transient of another selected region that falls
+// together with one of the reference moves to the same place, so the group stays tight with it (a kick and a bass that played together).
+void ProjectController::flexQuantizeGroup(double gridBeats, double strengthPercent) {
+    if (!std::isfinite(gridBeats) || gridBeats <= 0 || !std::isfinite(strengthPercent)) return;
+    const double strength = std::clamp(strengthPercent, 0.0, 100.0) / 100.0;
+    std::vector<const RegionRow*> rows;
+    for (const RegionRow* r : selectedRegionRows())
+        if (r->audio && !r->missing && r->lengthFrames > 0) rows.push_back(r);
+    if (rows.size() < 2) {
+        emit notice("Select the reference region and at least one more audio region");
+        return;
+    }
+    struct Hit { double from; double to; };  // timeline samples
+    auto startOf = [&](const RegionRow* r) { return tempoMap_.ticksToSamples(static_cast<std::int64_t>(std::llround(r->startBeats * lpc::kPPQ)), sampleRate_); };
+    std::vector<Hit> reference;
+    for (const RegionRow* r : rows) {
+        lpc::FlexData data = flexDataOf(*r);
+        if (!flexState().entries.value(windowKey(data)).transientsDone) {
+            for (const RegionRow* q : rows) flexAnalyse(q->id);
+            emit notice("Analysing the sound… try again in a moment");
+            return;
+        }
+    }
+    {
+        const RegionRow* r = rows.front();
+        const lpc::FlexData data = flexDataOf(*r);
+        const lpc::TimeMap map(data.sourceLength, r->lengthFrames, lpc::flexAnchors(data));
+        const double start = startOf(r);
+        for (std::int64_t t : flexState().entries.value(windowKey(data)).transients) {
+            const double at = start + map.toDest(static_cast<double>(t));
+            const double posBeats = static_cast<double>(tempoMap_.samplesToTicks(at, sampleRate_)) / lpc::kPPQ;
+            const double gridded = std::round(posBeats / gridBeats) * gridBeats;
+            const double gridSamples = tempoMap_.ticksToSamples(static_cast<std::int64_t>(std::llround(gridded * lpc::kPPQ)), sampleRate_);
+            reference.push_back({at, at + strength * (gridSamples - at)});
+        }
+    }
+    const double tolerance = 0.03 * sampleRate_;
+    const std::int64_t gap = std::max<std::int64_t>(1, sampleRate_ / 100);
+    std::vector<FlexEdit> edits;
+    for (const RegionRow* r : rows) {
+        lpc::FlexData data = flexDataOf(*r);
+        const lpc::TimeMap map(data.sourceLength, r->lengthFrames, lpc::flexAnchors(data));
+        const double start = startOf(r);
+        std::vector<lpc::FlexMarker> markers;
+        std::int64_t lastSrc = 0, lastDst = 0;
+        for (std::int64_t t : flexState().entries.value(windowKey(data)).transients) {
+            if (t <= lastSrc || t >= data.sourceLength) continue;
+            const double at = start + map.toDest(static_cast<double>(t));
+            const Hit* best = nullptr;
+            for (const Hit& h : reference)
+                if (std::abs(h.from - at) <= tolerance && (!best || std::abs(h.from - at) < std::abs(best->from - at))) best = &h;
+            if (!best) continue;
+            const std::int64_t target = static_cast<std::int64_t>(std::llround(best->to - start));
+            if (target <= lastDst + gap || target >= r->lengthFrames - gap) continue;
+            markers.push_back({t, target});
+            lastSrc = t;
+            lastDst = target;
+        }
+        data.markers = std::move(markers);
+        edits.push_back(FlexEdit{r->id, std::move(data), false, {}, {}});
+    }
+    flexApply(std::move(edits), nlohmann::json::array(), "Quantizing to the reference");
 }
 
 // ---------------------------------------------------------------- Flex Pitch: the notes
@@ -951,6 +1020,10 @@ void ProjectController::flexNotePreview(const QString& regionId, int index, cons
         st.pending = FlexState::Pending{regionId, index, edit};
         return;
     }
+    if (edit.contains("_marker")) {  // a marker being dragged: the stretch between its neighbours is rendered with it where it is now
+        flexMarkerPreviewRun(regionId, index, edit.value("_marker").toDouble(), edit.value("_slide").toBool());
+        return;
+    }
     lpc::FlexData data;
     if (!flexPrepare(regionId, data, true)) return;
     if (index < 0 || index >= static_cast<int>(data.notes.size())) return;
@@ -1015,6 +1088,72 @@ void ProjectController::flexNotePreview(const QString& regionId, int index, cons
                     if (from < 0 || from >= length) from = 0;  // a clip that was not playing starts at its beginning
                     (void)self->host_->audition(std::move(clip), from, true);
                 }
+            }
+            if (st.pending) {
+                const FlexState::Pending p = *st.pending;
+                st.pending.reset();
+                self->flexNotePreview(p.regionId, p.index, p.edit);
+            }
+        }, Qt::QueuedConnection);
+    });
+}
+
+void ProjectController::flexMarkerPreview(const QString& regionId, int index, double fraction, bool slide) {
+    flexNotePreview(regionId, index, {{"_marker", fraction}, {"_slide", slide}});
+}
+
+void ProjectController::flexMarkerPreviewRun(const QString& regionId, int index, double fraction, bool slide) {
+    FlexState& st = flexState();
+    lpc::FlexData data;
+    if (!std::isfinite(fraction) || !flexPrepare(regionId, data, false) || !moveMarkerData(regionId, data, index, fraction, slide)) return;
+    const RegionRow* row = regions_.find(regionId);
+    const std::size_t i = static_cast<std::size_t>(index);
+    const std::int64_t dstFrames = row->lengthFrames;
+    const std::int64_t from = i > 0 ? data.markers[i - 1].dst : 0;
+    const std::int64_t to = i + 1 < data.markers.size() ? data.markers[i + 1].dst : dstFrames;
+    const QString key = windowKey(data);
+    const FlexState::Entry entry = st.entries.value(key);
+    const TrackRow* track = tracks_.find(row->trackId);
+    const std::string mode = track ? track->flexMode.toStdString() : std::string();
+    const std::map<std::string, double> params = track ? paramsOf(*track) : std::map<std::string, double>{};
+    const std::filesystem::path file = mediaPath(dir_, mediaPaths_.value(QString::fromStdString(data.sourceMediaId.toString())));
+    const int engineRate = sampleRate_;
+    const double sensitivity = sensitivityOf(params);
+    st.previewBusy = true;
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    (void)QtConcurrent::run([self, data, file, entry, from, to, dstFrames, mode, params, sensitivity, engineRate, generation] {
+        lpc::audio::AuditionClip clip;
+        try {
+            const lpc::TimeMap map(data.sourceLength, dstFrames, lpc::flexAnchors(data));
+            const std::int64_t srcLo = std::clamp<std::int64_t>(static_cast<std::int64_t>(std::floor(map.toSource(static_cast<double>(from)))), 0, data.sourceLength - 1);
+            const std::int64_t srcHi = std::clamp<std::int64_t>(static_cast<std::int64_t>(std::ceil(map.toSource(static_cast<double>(to)))), srcLo + 1, data.sourceLength);
+            const lpc::WavData sub = readWindow(file, data.sourceOffset + srcLo, srcHi - srcLo);
+            std::vector<lpc::FlexAnchor> anchors;
+            for (const lpc::FlexMarker& m : data.markers)
+                if (m.src > srcLo && m.src < srcHi && m.dst > from && m.dst < to) anchors.push_back({m.src - srcLo, m.dst - from});
+            std::vector<std::int64_t> hits;
+            if (entry.transientsDone) {
+                for (std::int64_t t : entry.transients)
+                    if (t > srcLo && t < srcHi) hits.push_back(t - srcLo);
+            } else {
+                hits = lpc::findTransients(sub, sensitivity);
+            }
+            const lpc::WavData out = lpc::renderFlexTime(sub, anchors, hits, timeParams(mode, params), to - from);
+            clip = makeClip(out, engineRate);
+        } catch (const std::exception&) {
+            clip = {};
+        }
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self, clip = std::move(clip), generation]() mutable {
+            if (!self) return;
+            FlexState& st = self->flexState();
+            st.previewBusy = false;
+            if (generation == self->generation_ && self->host_ && !clip.left.empty() && !self->flexStopped_) {
+                const std::int64_t length = static_cast<std::int64_t>(clip.left.size());
+                std::int64_t at = self->host_->auditionPosition();
+                if (at < 0 || at >= length) at = 0;
+                (void)self->host_->audition(std::move(clip), at, true);
             }
             if (st.pending) {
                 const FlexState::Pending p = *st.pending;

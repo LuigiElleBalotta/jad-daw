@@ -547,6 +547,7 @@ public:
     Q_INVOKABLE void flexResetEdits();                                                           // the selected regions play as recorded again
     Q_INVOKABLE void flexSlice(bool atMarkers);                                                  // the selected regions are cut at their transients (or flex markers)
     Q_INVOKABLE void flexQuantize(double gridBeats, double strengthPercent);                     // the transients of the selected regions move towards the grid
+    Q_INVOKABLE void flexQuantizeGroup(double gridBeats, double strengthPercent);                // Q-Reference: the first selected region goes to the grid, the others follow its hits
     Q_INVOKABLE QVariantList flexPitchCurves(const QString& regionId);                           // {index, points: [x0, y0, x1, y1, ...]} of each note: where it plays (0..1 of the region) and its pitch as edited
     Q_INVOKABLE QVariantList flexPitchNotes(const QString& regionId);                            // the notes {index, start, end, pitch, original, edits...}; empty until analysed
     Q_INVOKABLE void flexNoteEdit(const QString& regionId, int index, const QVariantMap& edit);  // keys: semitones, fineCents, correct, vibrato, driftIn, driftOut, gainDb, formantCents
@@ -554,6 +555,7 @@ public:
     Q_INVOKABLE void flexNoteSplit(const QString& regionId, int index, double fraction);
     Q_INVOKABLE void flexNoteJoin(const QString& regionId, int index);                           // with the note after it
     Q_INVOKABLE void flexNotePreview(const QString& regionId, int index, const QVariantMap& edit);  // plays the note as it would sound with these edits, repeating, until flexStopPreview
+    Q_INVOKABLE void flexMarkerPreview(const QString& regionId, int index, double fraction, bool slide);  // while a marker is dragged: the stretch around it is heard (repeating) until flexStopPreview
     Q_INVOKABLE void flexStopPreview();
     Q_INVOKABLE void flexCreateMidiTrack(const QString& regionId);                               // a MIDI track with the notes of the region
     Q_INVOKABLE QVariantMap unusedMedia() const;  // {count, bytes} of the audio files that no region and no frozen track uses
@@ -1124,6 +1126,8 @@ private:
     void flexAnalyse(const QString& regionId);
     void flexApply(std::vector<FlexEdit> edits, const nlohmann::json& prefix, const QString& what);
     void flexApplyOne(const QString& regionId, const lpc::FlexData& data, const QString& what);
+    bool moveMarkerData(const QString& regionId, lpc::FlexData& data, int index, double fraction, bool slide) const;
+    void flexMarkerPreviewRun(const QString& regionId, int index, double fraction, bool slide);
     bool flexPrepare(const QString& regionId, lpc::FlexData& data, bool needNotes);  // the flex data of a region (made from the analysis when it has none yet)
     QString lastError_;
 };

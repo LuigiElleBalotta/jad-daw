@@ -390,6 +390,8 @@ Track: %3")
             tint: root.solid
             onMarkerMoved: (index, fraction, slide) => root.flexMarkerMoved(root.regionId, index, fraction, slide)
             onMarkerDeleted: (index) => root.flexMarkerDeleted(root.regionId, index)
+            onMarkerDragging: (index, fraction, slide) => root.project.flexMarkerPreview(root.regionId, index, fraction, slide)
+            onMarkerDragEnded: root.project.flexStopPreview()
         }
     }
 

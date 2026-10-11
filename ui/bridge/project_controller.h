@@ -292,6 +292,10 @@ public:
     Q_INVOKABLE QVariantList instrumentSpecs() const;                // the built-in instruments and their parameters
     // An instrument track's instrument: the choice (params start at their defaults) and one parameter of it (one undo step each)
     Q_INVOKABLE void setInstrument(const QString& trackId, const QString& processorId);
+    Q_INVOKABLE QStringList midiOutputNames() const;                  // the MIDI output ports of the system
+    Q_INVOKABLE void newExternalMidiTrack();                           // Track > New External MIDI Track
+    Q_INVOKABLE bool externalMidiTestNote(const QString& trackId);     // a soft middle C out of the track's port, to hear it is connected
+    Q_INVOKABLE void setExternalMidiDevice(const QString& trackId, const QString& device);
     Q_INVOKABLE void setInstrumentParam(const QString& trackId, const QString& param, double value);
     // A VST3 instrument for an instrument track (its window is openPluginEditor(trackId, -1)); label is the name shown in the slot
     Q_INVOKABLE void setInstrumentPlugin(const QString& trackId, const QString& pluginId, const QString& label);
@@ -1166,6 +1170,7 @@ private:
     QVariantMap masteringStats_;
     QHash<QString, QList<QPair<double, bool>>> hints_;  // taps waiting to be applied together (fraction of the region, downbeat)
     int hintSerial_ = 0;
+    void ensureJuce();  // starts JUCE (the MIDI and plug-in code of the platform layer needs it)
     bool masteringBusy() const { return masteringBusy_; }
     bool moveMarkerData(const QString& regionId, lpc::FlexData& data, int index, double fraction, bool slide) const;
     void flexMarkerPreviewRun(const QString& regionId, int index, double fraction, bool slide);

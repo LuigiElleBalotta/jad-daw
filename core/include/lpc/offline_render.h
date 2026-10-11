@@ -13,6 +13,7 @@ struct RenderOptions {
     std::int64_t frames = -1;  // -1: from startFrame to the end of the last region, plus tailSeconds
     double tailSeconds = 0.5;
     int blockSize = 256;       // clamped to [1, 65536]
+    bool externalMidi = false;  // External MIDI tracks send their notes to the MIDI ports while rendering (off: they are silent, as in a bounce)
     IPluginHost* plugins = nullptr;  // hosts the "vst3:" inserts; the output is aligned for their latency
 };
 

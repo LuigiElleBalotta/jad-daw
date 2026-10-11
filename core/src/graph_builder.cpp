@@ -6,6 +6,8 @@
 #include <cmath>
 #include <unordered_map>
 
+#include <nlohmann/json.hpp>
+
 #include "lpc/audio/processors.h"
 #include "lpc/processor_ids.h"
 
@@ -308,6 +310,17 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         if (plugins && !t.instrument->bypass)
             live = plugins->acquireInstrument(InsertSlot{t.id, kInstrumentSlot}, *t.instrument, static_cast<double>(p.sampleRate), kMaxBlock);
         cfg->instrument = live ? live : std::make_shared<SilentInstrument>(true);
+    }
+    if (t.instrument && t.instrument->processorId == kProcExternalMidi) {  // the notes go out of a MIDI port; silence when it cannot be opened
+        std::shared_ptr<IMidiOutput> out;
+        if (plugins && !t.instrument->bypass) {
+            const nlohmann::json state = nlohmann::json::parse(t.instrument->state.empty() ? "{}" : t.instrument->state, nullptr, false);
+            const std::string device = state.is_object() ? state.value("device", std::string()) : std::string();
+            if (!device.empty()) out = plugins->openMidiOutput(device);
+        }
+        const auto ch = t.instrument->params.find("channel");
+        cfg->instrument = out ? std::static_pointer_cast<IInstrument>(std::make_shared<ExternalMidiInstrument>(out, static_cast<int>(ch == t.instrument->params.end() ? 1 : std::lround(ch->second))))
+                              : std::static_pointer_cast<IInstrument>(std::make_shared<SilentInstrument>(false));
     }
     for (const AutomationLane& lane : t.automation) {
         if (t.automationMode == "off") break;  // the fader and the pan stay where the strip has them

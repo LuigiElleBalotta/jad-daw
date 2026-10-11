@@ -1839,6 +1839,12 @@ void ProjectController::addInsert(const QString& trackId, const QString& process
                  {"insert", {{"processorId", processorId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}}}});
 }
 
+void ProjectController::ensureJuce() {
+#ifdef JAD_HAVE_JUCE
+    if (!juce_) juce_ = std::make_unique<JuceInit>();
+#endif
+}
+
 void ProjectController::startPlugins() {
 #ifdef JAD_HAVE_JUCE
     if (!openAudioDevice_) return;

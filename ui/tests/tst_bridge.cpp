@@ -1571,6 +1571,44 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.tracks()->rowCount(), rows + 1);
     }
+    void anExternalMidiTrackReachesARealPortWhenThereIsOne() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        const QStringList ports = c.midiOutputNames();
+        if (ports.isEmpty()) QSKIP("no MIDI output port on this machine");
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        c.newExternalMidiTrack();
+        QTRY_VERIFY(c.tracks()->find(c.tracks()->trackIdAt(c.tracks()->rowCount() - 1))->instrument == "builtin.external");
+        const QString id = c.tracks()->trackIdAt(c.tracks()->rowCount() - 1);
+        c.setExternalMidiDevice(id, ports.first());
+        QTRY_COMPARE(c.trackInstrument(id).value("device").toString(), ports.first());
+        QStringList said;
+        QObject::connect(&c, &jad::ProjectController::notice, [&](const QString& m) { said << m; });
+        const bool sent = c.externalMidiTestNote(id);
+        if (!sent && said.join(" ").contains("cannot be opened")) QSKIP("the system cannot open this MIDI port (in use by another program, or not usable here)");
+        QVERIFY2(sent, qPrintable(said.join(" | ")));                                              // a soft middle C goes out of the real port
+        QVERIFY(!c.externalMidiTestNote(c.tracks()->trackIdAt(0)));                       // an ordinary track has no port
+        QTest::qWait(500);
+    }
+    void anExternalMidiTrackKeepsItsPortAndChannel() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        const int tracks = c.tracks()->rowCount();
+        c.newExternalMidiTrack();
+        QTRY_COMPARE(c.tracks()->rowCount(), tracks + 1);
+        const QString id = c.tracks()->trackIdAt(c.tracks()->rowCount() - 1);
+        QCOMPARE(c.trackInstrument(id).value("processorId").toString(), QStringLiteral("builtin.external"));
+        c.setExternalMidiDevice(id, "Loop Port");
+        QTRY_COMPARE(c.trackInstrument(id).value("device").toString(), QStringLiteral("Loop Port"));
+        c.setInstrumentParam(id, "channel", 7);                                          // the channel changes, the port stays
+        QTRY_COMPARE(c.trackInstrument(id).value("params").toMap().value("channel").toInt(), 7);
+        QCOMPARE(c.trackInstrument(id).value("device").toString(), QStringLiteral("Loop Port"));
+        c.undo();
+        QTRY_COMPARE(c.trackInstrument(id).value("params").toMap().value("channel").toInt(), 1);
+    }
     void sessionPlayersMakeATrackWithAPartInOneUndoStep() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -1449,7 +1449,7 @@ QVariantList ProjectController::instrumentSpecs() const {
 
 QVariantMap ProjectController::trackInstrument(const QString& trackId) const {
     for (const TrackRow& t : allRows_)
-        if (t.id == trackId) return {{"processorId", t.instrument}, {"params", t.instrumentParams}};
+        if (t.id == trackId) return {{"processorId", t.instrument}, {"params", t.instrumentParams}, {"device", t.instrumentDevice}};
     return {};
 }
 
@@ -1469,8 +1469,9 @@ void ProjectController::setInstrumentParam(const QString& trackId, const QString
         nlohmann::json params = nlohmann::json::object();
         for (auto it = t.instrumentParams.begin(); it != t.instrumentParams.end(); ++it) params[it.key().toStdString()] = it.value().toDouble();
         params[param.toStdString()] = std::clamp(value, p->min, p->max);
+        const std::string state = t.instrument == QLatin1String(lpc::kProcExternalMidi) ? nlohmann::json{{"device", t.instrumentDevice.toStdString()}}.dump() : std::string();  // the port stays
         sendCommand({{"type", "set_instrument"}, {"trackId", trackId.toStdString()},
-                     {"instrument", {{"processorId", t.instrument.toStdString()}, {"params", params}, {"state", ""}}}});
+                     {"instrument", {{"processorId", t.instrument.toStdString()}, {"params", params}, {"state", state}}}});
         return;
     }
 }
@@ -1496,6 +1497,63 @@ int ProjectController::midiOpenCount() const {
 #else
     return 0;
 #endif
+}
+
+QStringList ProjectController::midiOutputNames() const {
+    QStringList out;
+#ifdef JAD_HAVE_JUCE
+    for (const std::string& n : lpc::listJuceMidiOutputs()) out << QString::fromStdString(n);
+#endif
+    return out;
+}
+
+// Track > New External MIDI Track: an instrument track whose notes go out of a MIDI port (the first one, until another is chosen in the
+// instrument's window) on channel 1.
+void ProjectController::newExternalMidiTrack() {
+    if (!host_) return;
+    const QStringList ports = midiOutputNames();
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    const QString trackId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const nlohmann::json state = {{"device", ports.isEmpty() ? std::string() : ports.first().toStdString()}};
+    nlohmann::json track = {{"id", trackId.toStdString()}, {"kind", "instrument"}, {"name", "External MIDI"}, {"color", ""},
+                            {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()}, {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                            {"regions", nlohmann::json::array()}, {"automation", nlohmann::json::array()},
+                            {"instrument", {{"processorId", lpc::kProcExternalMidi}, {"params", {{"channel", 1}}}, {"state", state.dump()}}}};
+    sendCommand({{"type", "add_track"}, {"index", -1}, {"track", track}});
+    if (ports.isEmpty()) emit notice("No MIDI output was found: connect a device or a virtual cable, then choose it in the instrument's window");
+}
+
+bool ProjectController::externalMidiTestNote(const QString& trackId) {
+#ifdef JAD_HAVE_JUCE
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId || t.instrument != QLatin1String(lpc::kProcExternalMidi) || t.instrumentDevice.isEmpty()) continue;
+        ensureJuce();  // the MIDI drivers need JUCE up
+        const std::shared_ptr<lpc::IMidiOutput> port = lpc::openJuceMidiOutput(t.instrumentDevice.toStdString());
+        if (!port) {
+            emit notice("The MIDI port \"" + t.instrumentDevice + "\" cannot be opened");
+            return false;
+        }
+        const unsigned char channel = static_cast<unsigned char>(std::clamp(static_cast<int>(std::lround(t.instrumentParams.value("channel", 1).toDouble())), 1, 16) - 1);
+        port->send(static_cast<unsigned char>(0x90 | channel), 60, 50);
+        QTimer::singleShot(400, this, [port, channel] { port->send(static_cast<unsigned char>(0x80 | channel), 60, 0); });
+        return true;
+    }
+#else
+    Q_UNUSED(trackId);
+#endif
+    return false;
+}
+
+void ProjectController::setExternalMidiDevice(const QString& trackId, const QString& device) {
+    if (!host_) return;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId || t.instrument != QLatin1String(lpc::kProcExternalMidi)) continue;
+        nlohmann::json params = nlohmann::json::object();
+        for (auto it = t.instrumentParams.begin(); it != t.instrumentParams.end(); ++it) params[it.key().toStdString()] = it.value().toDouble();
+        sendCommand({{"type", "set_instrument"}, {"trackId", trackId.toStdString()},
+                     {"instrument", {{"processorId", lpc::kProcExternalMidi}, {"params", params}, {"state", nlohmann::json{{"device", device.toStdString()}}.dump()}}}});
+        return;
+    }
 }
 
 QStringList ProjectController::midiInputNames() const {

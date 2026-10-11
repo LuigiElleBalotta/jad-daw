@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "lpc/audio/external_midi.h"
 #include "lpc/audio/processors.h"
 #include "lpc/model.h"
 
@@ -48,6 +49,8 @@ public:
     virtual void setReadyListener(std::function<void(const InsertSlot&)> listener) = 0;  // any thread
     // The instrument of an instrument track lives in the slot with index kInstrumentSlot. Same contract as acquire(): never blocks,
     // nullptr while the plug-in is loading, missing or failed.
+    // Project thread. The MIDI output port with this name (shared by the tracks that use it); nullptr when there is none or the host has no MIDI.
+    virtual std::shared_ptr<IMidiOutput> openMidiOutput(const std::string& /*device*/) { return nullptr; }
     virtual std::shared_ptr<audio::IInstrument> acquireInstrument(const InsertSlot& /*slot*/, const ProcessorRef& /*ref*/, double /*sampleRate*/,
                                                                   int /*maxBlock*/) {
         return nullptr;

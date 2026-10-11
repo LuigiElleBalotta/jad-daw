@@ -53,6 +53,7 @@ struct TrackRow {
     bool hidden = false;       // the track is hidden but shown anyway (Track > Toggle Hide View): drawn dimmed
     QVariantMap instrumentParams;  // the parameters of the instrument (the synth's)
     QString instrumentLabel;  // the name of a plug-in instrument
+    QString instrumentDevice;  // an External MIDI track: the MIDI output port it plays
     double delayMs = 0.0;     // Track Delay
     bool frozen = false;      // plays its rendered audio
     int transpose = 0, velocity = 0, keyLow = 0, keyHigh = 127, velocityLow = 1, velocityHigh = 127;  // the shaping of the notes of an instrument track

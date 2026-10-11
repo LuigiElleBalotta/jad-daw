@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -138,6 +141,43 @@ private:
     std::vector<std::unique_ptr<juce::MidiInput>> inputs_;
 };
 }  // namespace
+
+namespace {
+
+class JuceMidiOutput final : public IMidiOutput {
+public:
+    explicit JuceMidiOutput(std::unique_ptr<juce::MidiOutput> out) : out_(std::move(out)) {}
+    void send(unsigned char status, unsigned char d1, unsigned char d2) noexcept override {
+        out_->sendMessageNow(juce::MidiMessage(static_cast<int>(status), static_cast<int>(d1), static_cast<int>(d2)));
+    }
+
+private:
+    std::unique_ptr<juce::MidiOutput> out_;
+};
+
+}  // namespace
+
+std::vector<std::string> listJuceMidiOutputs() {
+    std::vector<std::string> out;
+    for (const juce::MidiDeviceInfo& info : juce::MidiOutput::getAvailableDevices()) out.push_back(info.name.toStdString());
+    return out;
+}
+
+std::shared_ptr<IMidiOutput> openJuceMidiOutput(const std::string& name) {
+    static std::mutex lock;
+    static std::map<std::string, std::weak_ptr<IMidiOutput>> open;
+    std::lock_guard<std::mutex> guard(lock);
+    if (auto existing = open[name].lock()) return existing;
+    for (const juce::MidiDeviceInfo& info : juce::MidiOutput::getAvailableDevices())
+        if (info.name.toStdString() == name) {
+            std::unique_ptr<juce::MidiOutput> device = juce::MidiOutput::openDevice(info.identifier);
+            if (!device) return nullptr;
+            std::shared_ptr<IMidiOutput> port = std::make_shared<JuceMidiOutput>(std::move(device));
+            open[name] = port;
+            return port;
+        }
+    return nullptr;
+}
 
 std::vector<std::string> listJuceMidiInputs() {
     std::vector<std::string> out;

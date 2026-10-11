@@ -19,6 +19,7 @@ public:
     std::vector<PluginDescriptor> catalogue() const override;
 
     std::shared_ptr<audio::IProcessor> acquire(const InsertSlot& slot, const ProcessorRef& ref, double sampleRate, int maxBlock) override;
+    std::shared_ptr<IMidiOutput> openMidiOutput(const std::string& device) override;
     std::shared_ptr<audio::IInstrument> acquireInstrument(const InsertSlot& slot, const ProcessorRef& ref, double sampleRate, int maxBlock) override;
     void setWanted(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override;
     void prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override;

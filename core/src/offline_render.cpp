@@ -22,7 +22,33 @@ std::int64_t projectEndFrame(const Project& p) {
     return end;
 }
 
-RenderResult renderOffline(const Project& p, MediaStore& media, const RenderOptions& options) {
+namespace {
+
+// The plug-in host as an offline render sees it: the same instances, but no MIDI ports (a bounce must not play a hardware synth).
+class NoMidiHost final : public IPluginHost {
+public:
+    explicit NoMidiHost(IPluginHost& inner) : inner_(inner) {}
+    std::vector<PluginDescriptor> catalogue() const override { return inner_.catalogue(); }
+    std::shared_ptr<audio::IProcessor> acquire(const InsertSlot& s, const ProcessorRef& r, double sr, int mb) override { return inner_.acquire(s, r, sr, mb); }
+    void setWanted(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override { inner_.setWanted(live); }
+    void prune(const std::vector<std::pair<InsertSlot, ProcessorRef>>& live) override { inner_.prune(live); }
+    std::optional<std::string> captureState(const InsertSlot& s) override { return inner_.captureState(s); }
+    void setReadyListener(std::function<void(const InsertSlot&)> l) override { inner_.setReadyListener(std::move(l)); }
+    std::shared_ptr<audio::IInstrument> acquireInstrument(const InsertSlot& s, const ProcessorRef& r, double sr, int mb) override { return inner_.acquireInstrument(s, r, sr, mb); }
+
+private:
+    IPluginHost& inner_;
+};
+
+}  // namespace
+
+RenderResult renderOffline(const Project& p, MediaStore& media, const RenderOptions& optionsIn) {
+    RenderOptions options = optionsIn;
+    std::unique_ptr<NoMidiHost> quiet;
+    if (options.plugins && !options.externalMidi) {
+        quiet = std::make_unique<NoMidiHost>(*options.plugins);
+        options.plugins = quiet.get();
+    }
     RenderResult out;
     out.sampleRate = p.sampleRate;
     const std::int64_t start = std::max<std::int64_t>(options.startFrame, 0);

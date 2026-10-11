@@ -79,6 +79,20 @@ Window {
         anchors.margins: Theme.spacing[3]
         spacing: Theme.spacing[2]
 
+        RowLayout {  // External MIDI: the port the notes go to
+            visible: root.index === -2 && root.insert !== null && root.insert.processorId === "builtin.external"
+            Layout.fillWidth: true
+            Text { text: qsTr("MIDI Output"); Layout.preferredWidth: 130; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
+            SelectField {
+                objectName: "externalMidiPort"
+                Layout.fillWidth: true
+                choices: root.project.midiOutputNames()
+                value: root.insert && root.insert.device !== undefined ? root.insert.device : ""
+                placeholder: qsTr("No port chosen")
+                onChosen: (c) => root.project.setExternalMidiDevice(root.trackId, c)
+            }
+            IconButton { objectName: "externalMidiTest"; implicitHeight: 24; label: qsTr("Test Note"); onClicked: root.project.externalMidiTestNote(root.trackId) }
+        }
         Rectangle {  // the response of the Channel EQ
             id: curveBox
             visible: root.spec !== null && root.spec.id === "builtin.eq"

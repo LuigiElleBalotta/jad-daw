@@ -7,6 +7,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "editor_window.h"
+#include "juce_device.h"
 #include "plugin_processor.h"
 
 namespace lpc {
@@ -197,6 +198,8 @@ std::shared_ptr<audio::IProcessor> JucePluginHost::acquire(const InsertSlot& slo
     }
     return adopted;
 }
+
+std::shared_ptr<IMidiOutput> JucePluginHost::openMidiOutput(const std::string& device) { return openJuceMidiOutput(device); }
 
 std::shared_ptr<audio::IInstrument> JucePluginHost::acquireInstrument(const InsertSlot& slot, const ProcessorRef& ref, double sampleRate,
                                                                     int maxBlock) {

@@ -1558,6 +1558,10 @@ private slots:
         QTRY_COMPARE(c.tracks()->rowCount(), rows + 1 - 2);
         c.toggleStackOpen(stack);
         QTRY_COMPARE(c.tracks()->rowCount(), rows + 1);
+        c.setMute(stack, true);                                                   // a folder stack's M reaches its tracks
+        QTRY_VERIFY(c.tracks()->find(c.tracks()->trackIdAt(1))->mute);
+        c.setMute(stack, false);
+        QTRY_VERIFY(!c.tracks()->find(c.tracks()->trackIdAt(1))->mute);
         c.convertFolderStackToSummingStack(stack);
         QTRY_COMPARE(c.tracks()->find(stack)->stack, QStringLiteral("summing"));
         QCOMPARE(c.tracks()->find(c.tracks()->trackIdAt(1))->outputId, stack);    // its tracks play through it

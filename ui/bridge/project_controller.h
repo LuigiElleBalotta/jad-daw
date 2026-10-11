@@ -1155,6 +1155,7 @@ private:
     bool smartMarkers(const RegionRow& row, lpc::FlexData& data) const;  // the markers that put the beats of the sound on the project's beats
     void smartRefollow();                                                // after a change of tempo or position: the regions that follow conform again
     bool refollowQueued_ = false;
+    bool setStackStrip(const QString& trackId, const char* field, bool on);
     void masteringAfterAdd(const QString& master, int attempt);
     bool masteringBusy_ = false;
     QVariantMap masteringStats_;

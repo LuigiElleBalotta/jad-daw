@@ -858,9 +858,35 @@ void ProjectController::barBack() {
 
 void ProjectController::barForward() { locateBeats((std::floor(positionBeats_ / barBeats()) + 1.0) * barBeats()); }
 
-void ProjectController::setMute(const QString& trackId, bool on) { setStripField(trackId, "mute", on); }
+// A folder stack gathers tracks without playing them through itself: its M and S reach every track inside it (one undo step).
+// (A summing stack needs no help: what plays through its bus follows its mute.)
+bool ProjectController::setStackStrip(const QString& trackId, const char* field, bool on) {
+    const TrackRow* stack = nullptr;
+    for (const TrackRow& t : allRows_)
+        if (t.id == trackId) stack = &t;
+    if (!stack || stack->stack != "folder") return false;
+    nlohmann::json commands = nlohmann::json::array();
+    commands.push_back({{"type", "set_strip"}, {"trackId", trackId.toStdString()}, {field, on}});
+    QStringList pending{trackId};
+    for (int guard = 0; !pending.isEmpty() && guard < 64; ++guard) {  // the tracks in it, and in the stacks in it
+        const QString parent = pending.takeFirst();
+        for (const TrackRow& t : allRows_)
+            if (t.parentId == parent && !t.master) {
+                commands.push_back({{"type", "set_strip"}, {"trackId", t.id.toStdString()}, {field, on}});
+                if (!t.stack.isEmpty()) pending.append(t.id);
+            }
+    }
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+    return true;
+}
 
-void ProjectController::setSolo(const QString& trackId, bool on) { setStripField(trackId, "solo", on); }
+void ProjectController::setMute(const QString& trackId, bool on) {
+    if (!setStackStrip(trackId, "mute", on)) setStripField(trackId, "mute", on);
+}
+
+void ProjectController::setSolo(const QString& trackId, bool on) {
+    if (!setStackStrip(trackId, "solo", on)) setStripField(trackId, "solo", on);
+}
 
 // Command-click on M or S: every strip that is in the same state as the clicked one switches to its new state, the master
 // included for mute (one undo step).

@@ -2,6 +2,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <fstream>
 #include <sstream>
+#include <nlohmann/json.hpp>
 
 #ifdef LPC_HAVE_CLI_LIB
 
@@ -122,6 +123,74 @@ TEST_CASE("cli: play is routed to runPlay and its failure is reported", "[cli]")
     const Run r = run({"play", path(tmp.path / "none.lpc")});
     REQUIRE(r.code == 2);
     REQUIRE_THAT(r.err, Catch::Matchers::ContainsSubstring("error:"));
+}
+
+
+TEST_CASE("cli ears: snapshot lists the project, analyze listens to a track, masking compares two, apply changes it safely", "[cli][ears]") {
+    test::TempDir tmp;
+    const std::string proj = path(tmp.path / "demo.lpc");
+    REQUIRE(run({"demo", proj}).code == 0);
+    // snapshot
+    const Run snap = run({"snapshot", proj});
+    REQUIRE(snap.code == 0);
+    const nlohmann::json s = nlohmann::json::parse(snap.out);
+    REQUIRE(s["tracks"].size() == 4);
+    CHECK(s["tempo"][0]["bpm"] == 120.0);
+    std::string toneId, keysId;
+    for (const auto& t : s["tracks"]) {
+        if (t["name"] == "Tone") toneId = t["id"];
+        if (t["name"] == "Keys") keysId = t["id"];
+    }
+    REQUIRE(!toneId.empty());
+    // analyze the 220 Hz tone track alone, by name, and the whole mix
+    const Run tone = run({"analyze", proj, "--track", "tone", "--no-tempo"});
+    REQUIRE(tone.code == 0);
+    const nlohmann::json t = nlohmann::json::parse(tone.out);
+    CHECK(t["analysed"].get<std::string>().find("Tone") != std::string::npos);
+    CHECK(t["loudness"]["integratedLufs"].get<double>() > -40.0);
+    CHECK(t["spectrum"]["centroidHz"].get<double>() < 400.0);        // a 220 Hz tone
+    CHECK(t["reading"].is_array());
+    const Run mix = run({"analyze", proj, "--seconds", "0:1.5", "--no-tempo"});
+    REQUIRE(mix.code == 0);
+    CHECK(nlohmann::json::parse(mix.out)["seconds"].get<double>() < 2.5);
+    // an audio file
+    const std::string wav = path(tmp.path / "mix.wav");
+    REQUIRE(run({"render", proj, wav, "--seconds", "2"}).code == 0);
+    const Run file = run({"analyze", wav, "--no-tempo"});
+    REQUIRE(file.code == 0);
+    CHECK(nlohmann::json::parse(file.out)["analysed"].get<std::string>().find("mix.wav") != std::string::npos);
+    // render one track alone: quieter than the whole mix
+    const std::string solo = path(tmp.path / "solo.wav");
+    REQUIRE(run({"render", proj, solo, "--seconds", "1", "--track", "Tone"}).code == 0);
+    const WavData soloWav = readWav(tmp.path / "solo.wav"), mixWav = readWav(tmp.path / "mix.wav");
+    CHECK(soloWav.frames() > 0);
+    CHECK(run({"render", proj, solo, "--track", "Nobody"}).code == 2);
+    // masking
+    const Run mask = run({"masking", proj, "Keys", "Tone"});
+    REQUIRE(mask.code == 0);
+    CHECK(nlohmann::json::parse(mask.out).contains("advice"));
+    // an unknown track is a usage error
+    CHECK(run({"analyze", proj, "--track", "Nope"}).code == 1);
+    // apply: a dry run changes nothing, a real one saves, a refused one saves nothing
+    const std::string cmds = path(tmp.path / "cmds.json");
+    { std::ofstream(cmds) << "[{\"type\":\"set_strip\",\"trackId\":\"" << toneId << "\",\"gainDb\":-12.0}]"; }
+    const Run dry = run({"apply", proj, cmds, "--dry-run"});
+    CHECK(dry.code == 0);
+    CHECK(loadProject(tmp.path / "demo.lpc").findTrack(*Uuid::parse(toneId))->strip.gainDb == -6.0f);
+    const Run real = run({"apply", proj, cmds});
+    CHECK(real.code == 0);
+    CHECK(loadProject(tmp.path / "demo.lpc").findTrack(*Uuid::parse(toneId))->strip.gainDb == -12.0f);
+    { std::ofstream(cmds) << "[{\"type\":\"set_strip\",\"trackId\":\"" << toneId << "\",\"gainDb\":-3.0},{\"type\":\"set_strip\",\"trackId\":\"00000000-0000-0000-0000-000000000099\",\"gainDb\":0}]"; }
+    const Run bad = run({"apply", proj, cmds});
+    CHECK(bad.code == 2);
+    CHECK(nlohmann::json::parse(bad.out)["applied"] == false);
+    CHECK(loadProject(tmp.path / "demo.lpc").findTrack(*Uuid::parse(toneId))->strip.gainDb == -12.0f);   // the first of the two was not kept
+    // to another folder
+    { std::ofstream(cmds) << "{\"commands\":[{\"type\":\"set_strip\",\"trackId\":\"" << toneId << "\",\"gainDb\":-1.0}]}"; }
+    const std::string copy = path(tmp.path / "copy.lpc");
+    CHECK(run({"apply", proj, cmds, "--out", copy}).code == 0);
+    CHECK(loadProject(tmp.path / "copy.lpc").findTrack(*Uuid::parse(toneId))->strip.gainDb == -1.0f);
+    CHECK(loadProject(tmp.path / "demo.lpc").findTrack(*Uuid::parse(toneId))->strip.gainDb == -12.0f);
 }
 
 #endif  // LPC_HAVE_CLI_LIB

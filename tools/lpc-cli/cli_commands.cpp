@@ -7,6 +7,7 @@
 #include <optional>
 #include <ostream>
 
+#include "cli_ears.h"
 #include "lpc/demo_project.h"
 #include "lpc/media_store.h"
 #include "lpc/offline_render.h"
@@ -53,8 +54,12 @@ constexpr const char* kUsage =
     "usage:\n"
     "  lpc-cli demo <project-dir>\n"
     "  lpc-cli info <project-dir>\n"
-    "  lpc-cli render <project-dir> <out.wav> [--seconds N] [--bits 16|24|32]\n"
-    "  lpc-cli play <project-dir>\n";
+    "  lpc-cli render <project-dir> <out.wav> [--seconds N] [--bits 16|24|32] [--track <id|name>]\n"
+    "  lpc-cli play <project-dir>\n"
+    "  lpc-cli snapshot <project-dir> [--full]\n"
+    "  lpc-cli analyze <project-dir|audio-file> [--track <id|name>] [--seconds a:b] [--no-tempo]\n"
+    "  lpc-cli masking <project-dir> <trackA> <trackB> [--seconds a:b]\n"
+    "  lpc-cli apply <project-dir> <commands.json|-> [--out <dir>] [--dry-run]\n";
 
 fs::path toPath(const std::string& s) { return fs::path(std::u8string(s.begin(), s.end())); }
 
@@ -127,7 +132,7 @@ int cmdInfo(const std::vector<std::string>& args, std::ostream& out, std::ostrea
 }
 
 int cmdRender(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
-    const Parsed p = parse(args, 1, {"--seconds", "--bits"});
+    const Parsed p = parse(args, 1, {"--seconds", "--bits", "--track"});
     if (p.positional.size() != 2) throw UsageError{"render needs a project directory and an output file"};
 
     std::optional<double> seconds;
@@ -150,7 +155,8 @@ int cmdRender(const std::vector<std::string>& args, std::ostream& out, std::ostr
     }
 
     const fs::path dir = toPath(p.positional[0]);
-    const Project project = loadProject(dir);
+    Project project = loadProject(dir);
+    if (const auto solo = p.get("--track")) project = soloTrackProject(std::move(project), *solo);  // only that track is heard
     MediaStore media(dir, /*streaming=*/false);  // memory sources: deterministic output
     RenderOptions options;
     if (seconds) options.frames = static_cast<std::int64_t>(std::llround(std::min(*seconds * project.sampleRate, 1e15)));
@@ -188,6 +194,7 @@ int runCli(const std::vector<std::string>& args, std::ostream& out, std::ostream
         if (cmd == "demo") return cmdDemo(args, out);
         if (cmd == "info") return cmdInfo(args, out, err);
         if (cmd == "render") return cmdRender(args, out, err);
+        if (isEarsCommand(cmd)) return runEars(args, out, err);
         if (cmd == "play") return runPlay(std::vector<std::string>(args.begin() + 1, args.end()), out, err);
         err << "unknown command: " << cmd << "\n" << kUsage;
         return 1;

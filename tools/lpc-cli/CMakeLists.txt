@@ -1,4 +1,4 @@
-add_library(lpc_cli_lib STATIC cli_commands.cpp)
+add_library(lpc_cli_lib STATIC cli_commands.cpp cli_ears.cpp)
 target_include_directories(lpc_cli_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(lpc_cli_lib PUBLIC lpc_core)
 

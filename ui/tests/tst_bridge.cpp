@@ -12,6 +12,7 @@
 #include "lpc/project_io.h"
 #include "lpc/audio_decode.h"
 #include "lpc/audio_ops.h"
+#include "lpc/flex_time.h"
 #include "lpc/wav.h"
 #include "tests_temp.h"
 
@@ -1369,6 +1370,29 @@ private slots:
         QCOMPARE(c.regions()->find(id)->flexMarkers.size(), 3);
         QVERIFY(std::abs(c.regions()->find(id)->flexMarkers[index].toMap().value("frac").toDouble() - moved) < 0.001);
         const QString baked = c.regions()->find(id)->mediaId;
+        // a second move is patched into the first rendering: the sound keeps its length and the hit lands where the marker is
+        const double again = moved + 0.04;
+        c.flexMoveMarker(id, index, again, false);
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->mediaId != baked, 30000);
+        {
+            const auto files = countFiles(dir.path() / "d.lpc" / "audio");
+            QVERIFY(files >= 3);
+            const std::filesystem::path newest = [&] {
+                std::filesystem::path best;
+                std::filesystem::file_time_type t{};
+                for (const auto& e : std::filesystem::directory_iterator(dir.path() / "d.lpc" / "audio"))
+                    if (e.path().extension() == ".wav" && e.last_write_time() >= t) { t = e.last_write_time(); best = e.path(); }
+                return best;
+            }();
+            const lpc::WavData wav = lpc::readWav(newest);
+            QCOMPARE(wav.frames(), std::int64_t{192000});
+            const auto hits = lpc::findTransients(wav);
+            bool found = false;
+            for (std::int64_t h : hits) found = found || std::abs(static_cast<double>(h) / 192000.0 - again) < 0.012;
+            QVERIFY(found);
+        }
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(id)->mediaId, baked);
         c.undo();
         QTRY_COMPARE(c.regions()->find(id)->mediaId, original);                      // the move is one step
         QVERIFY(std::abs(c.regions()->find(id)->flexMarkers[index].toMap().value("frac").toDouble() - moved) > 0.04);
@@ -1378,6 +1402,49 @@ private slots:
         c.flexResetEdits();                                                           // Reset All Flex Edits: the sound as recorded
         QTRY_VERIFY_WITH_TIMEOUT(!c.regions()->find(id)->flexed, 15000);
         QCOMPARE(c.regions()->find(id)->mediaId, original);
+    }
+    void flexLongClipTiming() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        // 60 s of a tone with a burst every half second
+        const int rate = 48000, n = 60 * rate;
+        std::vector<float> v(static_cast<std::size_t>(2 * n), 0.0f);
+        unsigned seed = 5;
+        for (int i = 0; i < n; ++i) {
+            const float tone = 0.1f * std::sin(0.03f * static_cast<float>(i));
+            v[static_cast<std::size_t>(2 * i)] = v[static_cast<std::size_t>(2 * i + 1)] = tone;
+        }
+        for (int t = 0; t < 120; ++t)
+            for (int i = 0; i < 1200; ++i) {
+                seed = seed * 1664525u + 1013904223u;
+                const float nz = 0.7f * (static_cast<float>(seed >> 8) / 8388608.0f - 1.0f) * std::exp(-i / 290.0f);
+                v[static_cast<std::size_t>(2 * (t * rate / 2 + 1000 + i))] += nz;
+                v[static_cast<std::size_t>(2 * (t * rate / 2 + 1000 + i) + 1)] += nz;
+            }
+        lpc::writeWav(other.path() / "long.wav", rate, 2, v, lpc::WavFormat::Float32);
+        const QString track = firstAudioTrackId(c);
+        const int before = c.regions()->rowCount();
+        c.importAudio(url(other.path() / "long.wav"), track, 100.0);
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 30000);
+        QString id;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio && r->startBeats > 99.0) id = r->id;
+        }
+        QVERIFY(!id.isEmpty());
+        QElapsedTimer timer;
+        timer.start();
+        c.setTrackFlexMode(track, "polyphonic");
+        QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("polyphonic"));
+        QTRY_VERIFY_WITH_TIMEOUT(c.flexTransients(id).size() >= 100, 120000);
+        const QVariantList hits = c.flexTransients(id);
+        c.flexAddMarker(id, hits[50].toDouble(), true);
+        QTRY_VERIFY(c.regions()->find(id)->flexed);
+        const double moved = c.regions()->find(id)->flexMarkers[1].toMap().value("frac").toDouble() + 0.0005;
+        c.flexMoveMarker(id, 1, moved, false);
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->mediaId != c.regions()->find(id)->mediaId + "x" && c.flexBusy() == 0 && countFiles(dir.path() / "d.lpc" / "audio") >= 3, 300000);
     }
     void flexSliceCutsTheRegionAtItsTransientsAndTheSoundIsKeptInTheFiles() {
         TempDir dir, other;

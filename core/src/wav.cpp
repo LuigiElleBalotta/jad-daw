@@ -156,20 +156,32 @@ void writeWav(const std::filesystem::path& path, int sampleRate, int channels, c
     }
     o.write("data", 4);
     put32(o, dataSize);
+    // in blocks: a call of the stream for every sample is far too slow for a long recording
+    std::vector<unsigned char> block;
+    block.reserve(static_cast<std::size_t>(1 << 20) + 8);
+    auto flush = [&] {
+        if (!block.empty()) o.write(reinterpret_cast<const char*>(block.data()), static_cast<std::streamsize>(block.size()));
+        block.clear();
+    };
     for (const float s : samples) {
         const float c = std::clamp(s, -1.0f, 1.0f);
         if (format == WavFormat::Float32) {
             std::uint32_t u;
             std::memcpy(&u, &c, 4);
-            put32(o, u);
+            for (int k = 0; k < 4; ++k) block.push_back(static_cast<unsigned char>((u >> (8 * k)) & 0xff));
         } else if (format == WavFormat::Pcm16) {
-            put16(o, static_cast<std::uint16_t>(static_cast<std::int16_t>(std::lround(c * 32767.0f))));
+            const std::uint16_t v = static_cast<std::uint16_t>(static_cast<std::int16_t>(std::lround(c * 32767.0f)));
+            block.push_back(static_cast<unsigned char>(v & 0xff));
+            block.push_back(static_cast<unsigned char>((v >> 8) & 0xff));
         } else {
             const std::int32_t v = static_cast<std::int32_t>(std::lround(c * 8388607.0f));
-            const unsigned char b[3] = {static_cast<unsigned char>(v & 0xff), static_cast<unsigned char>((v >> 8) & 0xff), static_cast<unsigned char>((v >> 16) & 0xff)};
-            o.write(reinterpret_cast<const char*>(b), 3);
+            block.push_back(static_cast<unsigned char>(v & 0xff));
+            block.push_back(static_cast<unsigned char>((v >> 8) & 0xff));
+            block.push_back(static_cast<unsigned char>((v >> 16) & 0xff));
         }
+        if (block.size() >= static_cast<std::size_t>(1 << 20)) flush();
     }
+    flush();
     if (!o) throw std::runtime_error("write failed for " + pathText(path));
 }
 

@@ -46,8 +46,10 @@ Rectangle {
     // (the revision is used in the expression, not only read: the compiled binding would drop a bare read)
     readonly property var flexNotes: { const rev = project.revision + flexRefresh; return pitchMode && rev >= 0 ? project.flexPitchNotes(regionId) : [] }
     readonly property var flexCurves: { const rev = project.revision + flexRefresh; return pitchMode && rev >= 0 ? project.flexPitchCurves(regionId) : [] }
-    readonly property real lowPitch: { let v = 127; for (const n of flexNotes) v = Math.min(v, n.pitch, n.original); return flexNotes.length ? Math.floor(v) - 3 : 48 }
-    readonly property real highPitch: { let v = 0; for (const n of flexNotes) v = Math.max(v, n.pitch, n.original); return flexNotes.length ? Math.max(Math.ceil(v) + 3, lowPitch + 12) : 72 }
+    // the pitch rows: two octaves at least, the notes in the middle
+    readonly property real pitchSpan: { let lo = 127, hi = 0; for (const n of flexNotes) { lo = Math.min(lo, n.pitch, n.original); hi = Math.max(hi, n.pitch, n.original) } return flexNotes.length ? Math.max(24, Math.ceil(hi - lo) + 8) : 24 }
+    readonly property real lowPitch: { let lo = 127, hi = 0; for (const n of flexNotes) { lo = Math.min(lo, n.pitch, n.original); hi = Math.max(hi, n.pitch, n.original) } return flexNotes.length ? Math.floor((lo + hi) / 2 - pitchSpan / 2) : 48 }
+    readonly property real highPitch: lowPitch + pitchSpan
     property var peaks: []
     property real selFrom: -1                      // the selected range, in frames from the start of the shown part (-1: none)
     property real selTo: -1

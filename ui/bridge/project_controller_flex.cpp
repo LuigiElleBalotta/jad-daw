@@ -147,6 +147,72 @@ lpc::audio::AuditionClip makeClip(const lpc::WavData& d, int engineRate) {
     return clip;
 }
 
+
+// A marker moved: only the stretch of sound between the markers around it changes. That part is rendered again and put into the sound that
+// was rendered before (a few milliseconds of cross-fade at its two ends), so an edit costs the same whatever the length of the recording.
+// False when this cannot be done (the caller renders everything); `unchanged` when the two sets of markers sound the same.
+bool renderChanged(const std::filesystem::path& sourceFile, const lpc::FlexData& now, const lpc::FlexData& before, std::int64_t dstFrames,
+                   const std::filesystem::path& previousFile, std::int64_t previousOffset, const std::vector<std::int64_t>& transients, bool haveTransients,
+                   double sensitivity, const lpc::FlexTimeParams& params, lpc::WavData& out, bool& unchanged) {
+    unchanged = false;
+    const lpc::TimeMap oldMap(before.sourceLength, dstFrames, lpc::flexAnchors(before)), newMap(now.sourceLength, dstFrames, lpc::flexAnchors(now));
+    std::vector<std::int64_t> cuts{0, dstFrames};
+    for (const lpc::FlexAnchor& a : oldMap.points()) cuts.push_back(a.dst);
+    for (const lpc::FlexAnchor& a : newMap.points()) cuts.push_back(a.dst);
+    std::sort(cuts.begin(), cuts.end());
+    cuts.erase(std::unique(cuts.begin(), cuts.end()), cuts.end());
+    std::int64_t dirtyLo = dstFrames, dirtyHi = 0;
+    for (std::size_t i = 0; i + 1 < cuts.size(); ++i) {
+        bool differs = false;
+        for (double at : {0.0, 0.5, 1.0}) {
+            const double x = static_cast<double>(cuts[i]) + at * static_cast<double>(cuts[i + 1] - cuts[i]);
+            if (std::abs(oldMap.toSource(x) - newMap.toSource(x)) > 1.0) differs = true;
+        }
+        if (differs) {
+            dirtyLo = std::min(dirtyLo, cuts[i]);
+            dirtyHi = std::max(dirtyHi, cuts[i + 1]);
+        }
+    }
+    if (dirtyHi <= dirtyLo) {
+        unchanged = true;
+        return true;
+    }
+    lpc::WavFile previousWav(previousFile);
+    const int rate = previousWav.sampleRate(), channels = previousWav.channels();
+    const std::int64_t pad = static_cast<std::int64_t>(0.3 * rate), seam = static_cast<std::int64_t>(0.015 * rate);
+    const std::int64_t windowLo = std::max<std::int64_t>(0, dirtyLo - pad), windowHi = std::min(dstFrames, dirtyHi + pad);
+    // the sound as it was, and the source of the window as it is mapped now
+    lpc::WavData result = readWindow(previousFile, previousOffset, dstFrames);
+    if (result.channels != channels || result.sampleRate != rate) return false;
+    result.samples.resize(static_cast<std::size_t>(dstFrames) * static_cast<std::size_t>(channels), 0.0f);
+    const std::int64_t srcLo = std::clamp<std::int64_t>(static_cast<std::int64_t>(std::floor(newMap.toSource(static_cast<double>(windowLo)))), 0, now.sourceLength - 1);
+    const std::int64_t srcHi = std::clamp<std::int64_t>(static_cast<std::int64_t>(std::ceil(newMap.toSource(static_cast<double>(windowHi)))), srcLo + 1, now.sourceLength);
+    const lpc::WavData sub = readWindow(sourceFile, now.sourceOffset + srcLo, srcHi - srcLo);
+    if (sub.channels != channels || sub.sampleRate != rate || sub.frames() <= 0) return false;
+    std::vector<lpc::FlexAnchor> anchors;
+    for (const lpc::FlexMarker& m : now.markers)
+        if (m.src > srcLo && m.src < srcHi && m.dst > windowLo && m.dst < windowHi) anchors.push_back({m.src - srcLo, m.dst - windowLo});
+    std::vector<std::int64_t> hits;
+    if (haveTransients) {
+        for (std::int64_t t : transients)
+            if (t > srcLo && t < srcHi) hits.push_back(t - srcLo);
+    } else {
+        hits = lpc::findTransients(sub, sensitivity);
+    }
+    const lpc::WavData fresh = lpc::renderFlexTime(sub, anchors, hits, params, windowHi - windowLo);
+    if (fresh.frames() != windowHi - windowLo) return false;
+    for (std::int64_t i = dirtyLo; i < dirtyHi; ++i) {
+        const double w = std::min({1.0, static_cast<double>(i - dirtyLo + 1) / static_cast<double>(seam), static_cast<double>(dirtyHi - i) / static_cast<double>(seam)});
+        for (int c = 0; c < channels; ++c) {
+            float& dst = result.samples[static_cast<std::size_t>(i * channels + c)];
+            const float add = fresh.samples[static_cast<std::size_t>((i - windowLo) * channels + c)];
+            dst = static_cast<float>(dst * (1.0 - w) + add * w);
+        }
+    }
+    out = std::move(result);
+    return true;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------- state
@@ -304,6 +370,10 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
         std::shared_ptr<lpc::PitchAnalysis> pitch;
         double sensitivity = 0.5;
         int token = 0;
+        bool incremental = false;  // only the stretch between the markers that moved is rendered again, into the sound rendered before
+        lpc::FlexData before;
+        std::filesystem::path previousFile;
+        std::int64_t previousOffset = 0;
     };
     std::vector<Job> jobs;
     FlexState& st = flexState();
@@ -319,6 +389,20 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
         job.sensitivity = sensitivityOf(job.params);
         job.dstFrames = row->lengthFrames;
         job.bake = needsBake(job.data, job.dstFrames);
+        {
+            // the region already plays a rendering made from this same sound with these notes: a change of markers alone can be patched into it
+            bool noPitchEdit = true;
+            for (const lpc::FlexNoteData& n : job.data.notes) noPitchEdit = noPitchEdit && neutral(n);
+            lpc::FlexData before = flexDataOf(*row);  // a region that was never flexed plays its own source: the same as a rendering without markers
+            for (const lpc::FlexNoteData& n : before.notes) noPitchEdit = noPitchEdit && neutral(n);
+            if (job.bake && !e.overrideTrack && noPitchEdit && before.sourceMediaId == job.data.sourceMediaId && before.sourceOffset == job.data.sourceOffset &&
+                before.sourceLength == job.data.sourceLength) {
+                job.incremental = true;
+                job.before = std::move(before);
+                job.previousFile = mediaPath(dir_, mediaPaths_.value(row->mediaId));
+                job.previousOffset = row->sourceOffsetFrames;
+            }
+        }
         job.source = mediaPath(dir_, mediaPaths_.value(QString::fromStdString(job.data.sourceMediaId.toString())));
         const FlexState::Entry entry = st.entries.value(windowKey(job.data));
         if (entry.transientsDone && entry.sensitivity == job.sensitivity) {
@@ -348,13 +432,44 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
             std::int64_t frames = 0;
             int channels = 0, sampleRate = 0;
             QString error;
+            bool keep = false;  // the region keeps the sound it plays: only its flex data changes
         };
         std::vector<Result> results;
         for (Job& job : jobs) {
             Result r;
             r.job = std::move(job);
             Job& j = r.job;
-            if (j.bake) {
+            bool patched = false;
+            if (j.bake && j.incremental) {
+                try {
+                    lpc::WavData out;
+                    bool unchanged = false;
+                    if (renderChanged(j.source, j.data, j.before, j.dstFrames, j.previousFile, j.previousOffset, j.transients, j.haveTransients, j.sensitivity, timeParams(j.mode, j.params), out, unchanged)) {
+                        patched = true;
+                        if (unchanged) {
+                            r.keep = true;
+                        } else {
+                            r.frames = out.frames();
+                            r.channels = out.channels;
+                            r.sampleRate = out.sampleRate;
+                            const std::filesystem::path audioDir = projectDir / "audio";
+                            std::filesystem::create_directories(audioDir);
+                            std::u16string stem = j.source.stem().u16string();
+                            if (const std::size_t at = stem.find(u" (flex"); at != std::u16string::npos) stem.erase(at);
+                            for (int n = 1;; ++n) {
+                                r.target = audioDir / (stem + u" (flex" + (n > 1 ? u" " + QString::number(n).toStdU16String() : std::u16string()) + u").wav");
+                                if (!std::filesystem::exists(r.target)) break;
+                            }
+                            lpc::writeWav(r.target, out.sampleRate > 0 ? out.sampleRate : rate, out.channels, out.samples, lpc::WavFormat::Pcm24);
+                            r.hash = hashOf(r.target);
+                        }
+                    }
+                } catch (const std::exception&) {
+                    patched = false;
+                    r.target.clear();
+                }
+            }
+            if (j.bake && !patched) {
                 try {
                     const lpc::WavData src = readWindow(j.source, j.data.sourceOffset, j.data.sourceLength);
                     lpc::WavData work = src;
@@ -423,7 +538,9 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
                 }
                 nlohmann::json region = nlohmann::json::parse(row->json, nullptr, false);
                 if (region.is_discarded()) continue;
-                if (j.bake) {
+                if (r.keep) {
+                    // the sound is the one the region plays already
+                } else if (j.bake) {
                     lpc::MediaItem item;
                     item.id = lpc::Uuid::random();
                     const std::u8string rel = (std::filesystem::path("audio") / r.target.filename()).generic_u8string();

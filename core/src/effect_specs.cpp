@@ -39,9 +39,9 @@ std::vector<EffectSpec> build() {
                   p("predelay", "Pre-Delay", "ms", 0, 200, 0), p("mix", "Mix", "%", 0, 100, 25)}});
     // Mastering Assistant: the parameters eq1..eq8 and gain are what the analysis found (the Reanalyze button writes them)
     {
-        std::vector<EffectParam> m{p("loudness", "Loudness", "%", -100, 100, 0), p("autoEq", "Auto EQ", "%", 0, 100, 100), p("excite", "Excite", "", 0, 1, 0),
-                                   p("character", "Character (0 Clean, 1 Valve, 2 Punch, 3 Transparent)", "", 0, 3, 0), p("bypass", "Bypass", "", 0, 1, 0),
-                                   p("compensate", "Loudness Compensation", "", 0, 1, 0), p("gain", "Analysed Gain", "dB", -24, 36, 0)};
+        std::vector<EffectParam> m{p("loudness", "Loudness", "%", -100, 100, 0), p("autoEq", "Auto EQ", "%", 0, 100, 100), p("excite", "Excite (on = 1)", "", 0, 1, 0),
+                                   p("character", "Character (0-3)", "", 0, 3, 0), p("bypass", "Bypass (on = 1)", "", 0, 1, 0),
+                                   p("compensate", "Loudness Comp. (on = 1)", "", 0, 1, 0), p("gain", "Analysed Gain", "dB", -24, 36, 0)};
         for (int i = 1; i <= 8; ++i) m.push_back(p(("eq" + std::to_string(i)).c_str(), ("Analysed EQ " + std::to_string(i)).c_str(), "dB", -12, 12, 0));
         v.push_back({kProcMastering, "Mastering Assistant", "Mastering", std::move(m)});
     }

@@ -143,12 +143,12 @@ TestCase {
         compare(out, [["t", "b"], ["t", ""]])
         compare(snd, [["t", "b"]])
     }
-    function test_slots_hide_when_asked_and_on_the_master() {
+    function test_slots_hide_when_asked_and_the_master_has_only_the_effects() {
         var s = createTemporaryObject(stripC, this, { showSlots: false })
         verify(!s.addInsertSlot.visible)
         verify(!s.outputSlot.visible)
         var m = createTemporaryObject(stripC, this, { info: { trackId: "m", name: "Stereo Out", color: "purple", kind: "master", master: true, gainDb: 0, pan: 0, inserts: [], sends: [] } })
-        verify(!m.addInsertSlot.visible)
+        verify(m.addInsertSlot.visible)   // the master has audio effects (Mastering Assistant)
     }
     function test_the_group_slot_shows_the_group_and_the_menu_chooses_one() {
         var s = createTemporaryObject(stripC, this)

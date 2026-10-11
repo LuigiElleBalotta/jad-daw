@@ -41,6 +41,7 @@ Panel {
     readonly property var inserts: info.inserts ?? []
     readonly property var sends: info.sends ?? []
     readonly property bool slotsVisible: showSlots && !master
+    readonly property bool fxVisible: showSlots  // the audio effects are on the master strip too (Mastering Assistant lives there)
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
 
     readonly property alias fader: fader
@@ -123,7 +124,7 @@ Panel {
         return effectNames[ins.processorId] ?? ins.processorId
     }
 
-    readonly property bool acceptsInserts: slotsVisible && !master && visible  // a place an insert can be dropped
+    readonly property bool acceptsInserts: fxVisible && visible  // a place an insert can be dropped
     property real dropLineY: 0
     property bool dropLineVisible: false
     // The place in the chain (0..n) the pointer is at, as the number of inserts whose centre is above `localY` (`skip`: the
@@ -463,7 +464,7 @@ Panel {
                 spacing: StripMetrics.spacing
                 Repeater {
                     id: insertRepeater
-                    model: root.slotsVisible ? root.inserts : []
+                    model: root.fxVisible ? root.inserts : []
                     delegate: StripSlot {
                         required property var modelData
                         required property int index
@@ -509,7 +510,7 @@ Panel {
                 StripSlot {
                     id: addInsertSlot
                     Layout.fillWidth: true
-                    visible: root.slotsVisible
+                    visible: root.fxVisible
                     text: "+"
                     onClicked: insertMenu.popup(addInsertSlot, 0, addInsertSlot.height)
                 }

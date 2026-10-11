@@ -2,6 +2,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
 #include <cmath>
+#include <complex>
+#include "lpc/fft.h"
 #include "lpc/flex_pitch.h"
 #include "lpc/flex_time.h"
 
@@ -94,6 +96,7 @@ TEST_CASE("flex time: a marker moves its transient, the ones before and after st
         const WavData out = renderFlexTime(d, {{hits[0], hits[0]}, {hits[1], hits[1] + frames(0.15)}, {hits[2], hits[2]}}, hits, p);
         const auto moved = findTransients(out);
         INFO(flexModeName(mode));
+        for (auto f : moved) std::fprintf(stderr, "%s found %.4f\n", flexModeName(mode), static_cast<double>(f) / kRate);
         REQUIRE(near(moved, 0.5));
         REQUIRE(near(moved, 1.15, 0.02));
         REQUIRE(near(moved, 1.5));
@@ -150,4 +153,53 @@ TEST_CASE("flex time: Automatic picks Slicing for hits, Monophonic for a tone", 
     REQUIRE(chooseFlexMode(toneWithHits(2.0, {})) == FlexMode::Monophonic);
     REQUIRE(flexModeFromName(flexModeName(FlexMode::Rhythmic)) == FlexMode::Rhythmic);
     REQUIRE(flexModeFromName("nonsense") == FlexMode::Off);
+}
+
+namespace {
+
+// the frequency of the strongest component of [from, to) between lo and hi Hz, from a Hann-windowed spectrum
+double strongestHz(const WavData& d, std::int64_t from, std::int64_t to, double lo, double hi, double* shareOfEnergy = nullptr) {
+    const int n = 32768;
+    Fft fft(n);
+    std::vector<std::complex<double>> z(static_cast<std::size_t>(n));
+    const std::int64_t len = std::min<std::int64_t>(to - from, n);
+    for (std::int64_t i = 0; i < len; ++i) z[static_cast<std::size_t>(i)] = d.samples[static_cast<std::size_t>(from + i)] * (0.5 - 0.5 * std::cos(2 * kPi * i / len));
+    fft.forward(z.data());
+    double best = 0, total = 0, inBand = 0;
+    int bestBin = 0;
+    for (int k = 1; k < n / 2; ++k) {
+        const double hz = static_cast<double>(k) * kRate / n, m = std::norm(z[static_cast<std::size_t>(k)]);
+        total += m;
+        if (hz >= lo && hz <= hi) { inBand += m; if (m > best) { best = m; bestBin = k; } }
+    }
+    if (shareOfEnergy) *shareOfEnergy = inBand / total;
+    return static_cast<double>(bestBin) * kRate / n;
+}
+
+}  // namespace
+
+TEST_CASE("flex time: the phase vocoder keeps the notes of a chord where they are while it stretches", "[flex][time][pv]") {
+    // three sustained sine tones at 220, 277.18 and 330 Hz, with a click at 0.5 s, 1.0 s, 1.5 s and 2.0 s
+    WavData d = toneWithHits(2.5, {0.5, 1.0, 1.5, 2.0}, false);
+    for (int i = 0; i < static_cast<int>(d.samples.size()); ++i) {
+        const double t = static_cast<double>(i) / kRate;
+        d.samples[static_cast<std::size_t>(i)] += static_cast<float>(0.1 * (std::sin(2 * kPi * 220.0 * t) + std::sin(2 * kPi * 277.18 * t) + std::sin(2 * kPi * 330.0 * t)));
+    }
+    const auto hits = findTransients(d);
+    REQUIRE(hits.size() == 4);
+    FlexTimeParams p;
+    p.mode = FlexMode::Polyphonic;
+    const WavData out = renderFlexTime(d, {{hits[0], hits[0]}, {hits[1], hits[1] + frames(0.2)}, {hits[2], hits[2]}}, hits, p);
+    REQUIRE(out.samples.size() == d.samples.size());
+    // between the first and third click the sound was stretched in the middle: 0.6 .. 0.95 s is stretched or untouched sound of the chord
+    double share = 0;
+    REQUIRE(strongestHz(out, frames(0.6), frames(1.0), 200, 240, &share) == Catch::Approx(220.0).margin(2.0));
+    REQUIRE(strongestHz(out, frames(0.6), frames(1.0), 300, 360) == Catch::Approx(330.0).margin(2.0));
+    REQUIRE(strongestHz(out, frames(0.6), frames(1.0), 260, 295) == Catch::Approx(277.18).margin(2.0));
+    // the clicks arrive on time
+    const auto moved = findTransients(out);
+    for (auto f : moved) std::fprintf(stderr, "chord found %.4f\n", static_cast<double>(f) / kRate);
+    REQUIRE(near(moved, static_cast<double>(hits[0]) / kRate));
+    REQUIRE(near(moved, static_cast<double>(hits[1]) / kRate + 0.2, 0.02));
+    REQUIRE(near(moved, static_cast<double>(hits[2]) / kRate));
 }

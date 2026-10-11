@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <cstring>
 
+#include "lpc/fft.h"
 #include "lpc/flex_pitch.h"
 
 namespace lpc {
@@ -233,6 +235,132 @@ std::vector<std::vector<float>> sliceRender(const Planar& x, const TimeMap& map,
     return out;
 }
 
+
+// ---------------------------------------------------------------- phase vocoder with identity phase locking (Laroche & Dolson, 1999)
+
+class PhaseVocoder {
+public:
+    PhaseVocoder(const Planar& x, const TimeMap& map) : x_(x), map_(map) {
+        n_ = 2048;
+        while (n_ * 2 <= 0.11 * x.rate) n_ *= 2;  // about 90 ms: 4096 at 44.1 and 48 kHz
+        hs_ = n_ / 4;
+        window_.resize(static_cast<std::size_t>(n_));
+        for (int i = 0; i < n_; ++i) window_[static_cast<std::size_t>(i)] = 0.5 - 0.5 * std::cos(2 * kPi * i / n_);
+    }
+
+    std::vector<std::vector<float>> run() const {
+        const std::int64_t len = x_.n;
+        std::vector<std::vector<float>> out;
+        for (const std::vector<float>& ch : x_.ch) out.push_back(runChannel(ch, len));
+        return out;
+    }
+
+private:
+    std::vector<float> runChannel(const std::vector<float>& in, std::int64_t len) const {
+        const int half = n_ / 2;
+        const Fft fft(n_);
+        std::vector<float> out(static_cast<std::size_t>(len), 0.0f);
+        std::vector<std::complex<double>> z(static_cast<std::size_t>(n_)), y(static_cast<std::size_t>(n_));
+        std::vector<double> mag(static_cast<std::size_t>(half + 1)), ph1(static_cast<std::size_t>(half + 1)), ph0(static_cast<std::size_t>(half + 1));
+        std::vector<double> psi(static_cast<std::size_t>(half + 1), 0.0);   // synthesis phases of the previous frame
+        std::vector<int> peaks;
+        bool first = true;
+        std::int64_t prevStart = 0;
+        for (std::int64_t m = -3;; ++m) {
+            const std::int64_t os = m * hs_;
+            if (os >= len) break;
+            const std::int64_t start = static_cast<std::int64_t>(std::llround(map_.toSource(static_cast<double>(os + half)) - half));
+            const std::int64_t hp = std::max<std::int64_t>(1, std::min<std::int64_t>(hs_, std::max<std::int64_t>(1, n_ / 8)));  // spacing of the two analysis frames
+            for (int i = 0; i < n_; ++i) {
+                const double w = window_[static_cast<std::size_t>(i)];
+                z[static_cast<std::size_t>(i)] = {w * at(in, start + i), w * at(in, start - hp + i)};
+            }
+            fft.forward(z.data());
+            for (int k = 0; k <= half; ++k) {
+                const std::complex<double> zk = z[static_cast<std::size_t>(k)], zn = std::conj(z[static_cast<std::size_t>((n_ - k) % n_)]);
+                const std::complex<double> x1 = 0.5 * (zk + zn);
+                const std::complex<double> x0 = std::complex<double>(0, -0.5) * (zk - zn);
+                mag[static_cast<std::size_t>(k)] = std::abs(x1);
+                ph1[static_cast<std::size_t>(k)] = std::arg(x1);
+                ph0[static_cast<std::size_t>(k)] = std::arg(x0);
+            }
+            // peaks: larger than the two neighbours on each side; every other bin belongs to the region of the nearest peak
+            peaks.clear();
+            for (int k = 2; k < half - 1; ++k)
+                if (mag[static_cast<std::size_t>(k)] > mag[static_cast<std::size_t>(k - 1)] && mag[static_cast<std::size_t>(k)] > mag[static_cast<std::size_t>(k - 2)] &&
+                    mag[static_cast<std::size_t>(k)] >= mag[static_cast<std::size_t>(k + 1)] && mag[static_cast<std::size_t>(k)] >= mag[static_cast<std::size_t>(k + 2)])
+                    peaks.push_back(k);
+            const bool unstretched = !first && std::llabs((start - prevStart) - hs_) <= 1;
+            if (first || unstretched) {
+                // no stretch here (or the very first frame): the analysis phases are the right ones
+                for (int k = 0; k <= half; ++k) psi[static_cast<std::size_t>(k)] = ph1[static_cast<std::size_t>(k)];
+            } else if (!peaks.empty()) {
+                std::vector<double> next(psi.size());
+                        for (std::size_t pi = 0; pi < peaks.size(); ++pi) {
+                    const int pk = peaks[pi];
+                    const int lo = pi == 0 ? 0 : (peaks[pi - 1] + pk) / 2 + 1;
+                    const int hi = pi + 1 == peaks.size() ? half : (pk + peaks[pi + 1]) / 2;
+                    // the frequency of the sinusoid at this peak, from how its phase moved over the spacing of the two frames
+                    const double omega = 2 * kPi * pk / n_;
+                    double delta = ph1[static_cast<std::size_t>(pk)] - ph0[static_cast<std::size_t>(pk)] - omega * static_cast<double>(hp);
+                    delta -= 2 * kPi * std::round(delta / (2 * kPi));
+                    const double inst = omega + delta / static_cast<double>(hp);
+                    const double peakPhase = psi[static_cast<std::size_t>(pk)] + inst * static_cast<double>(hs_);
+                    for (int k = lo; k <= hi; ++k) next[static_cast<std::size_t>(k)] = peakPhase + (ph1[static_cast<std::size_t>(k)] - ph1[static_cast<std::size_t>(pk)]);
+                }
+                psi.swap(next);
+            } else {
+                for (int k = 0; k <= half; ++k) psi[static_cast<std::size_t>(k)] = ph1[static_cast<std::size_t>(k)];
+            }
+            first = false;
+            prevStart = start;
+            for (int k = 0; k <= half; ++k) {
+                const std::complex<double> v = std::polar(mag[static_cast<std::size_t>(k)], psi[static_cast<std::size_t>(k)]);
+                y[static_cast<std::size_t>(k)] = v;
+                if (k > 0 && k < half) y[static_cast<std::size_t>(n_ - k)] = std::conj(v);
+            }
+            y[0] = {y[0].real(), 0.0};
+            y[static_cast<std::size_t>(half)] = {y[static_cast<std::size_t>(half)].real(), 0.0};
+            fft.inverse(y.data());
+            for (int i = 0; i < n_; ++i) {
+                const std::int64_t o = os + i;
+                if (o < 0 || o >= len) continue;
+                out[static_cast<std::size_t>(o)] += static_cast<float>(y[static_cast<std::size_t>(i)].real() * window_[static_cast<std::size_t>(i)] * (2.0 / 3.0));  // Hann^2 at 75% overlap adds up to 1.5
+            }
+        }
+        return out;
+    }
+
+    const Planar& x_;
+    const TimeMap& map_;
+    int n_ = 0, hs_ = 0;
+    std::vector<double> window_;
+};
+
+
+// The phase vocoder smears attacks over its long frames. Where an attack sits in an unstretched window, the original sound of the attack
+// is put back over the result (a short cross-fade at both ends).
+void spliceAttacks(const Planar& x, const TimeMap& used, const std::vector<std::int64_t>& transients, std::vector<std::vector<float>>& out) {
+    const std::int64_t pre = static_cast<std::int64_t>(0.003 * x.rate), post = static_cast<std::int64_t>(0.025 * x.rate);
+    const std::int64_t fadeIn = std::max<std::int64_t>(1, static_cast<std::int64_t>(0.002 * x.rate)), fadeOut = std::max<std::int64_t>(1, static_cast<std::int64_t>(0.006 * x.rate));
+    for (std::int64_t t : transients) {
+        const std::int64_t a = static_cast<std::int64_t>(std::llround(used.toDest(static_cast<double>(t - pre))));
+        const std::int64_t b = static_cast<std::int64_t>(std::llround(used.toDest(static_cast<double>(t + post))));
+        if (std::llabs((b - a) - (pre + post)) > 2) continue;  // that window is stretched: there is nothing to put back
+        for (std::size_t c = 0; c < x.ch.size(); ++c) {
+            for (std::int64_t i = -fadeIn; i < pre + post + fadeOut; ++i) {
+                const std::int64_t pos = a + i;
+                if (pos < 0 || pos >= x.n) continue;
+                double m = 1.0;
+                if (i < 0) m = 0.5 - 0.5 * std::cos(kPi * static_cast<double>(i + fadeIn) / fadeIn);
+                else if (i >= pre + post) m = 0.5 + 0.5 * std::cos(kPi * static_cast<double>(i - (pre + post)) / fadeOut);
+                const float orig = at(x.ch[c], t - pre + i);
+                out[c][static_cast<std::size_t>(pos)] = static_cast<float>(out[c][static_cast<std::size_t>(pos)] * (1.0 - m) + orig * m);
+            }
+        }
+    }
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------- names
@@ -294,9 +422,29 @@ TimeMap TimeMap::withProtectedTransients(const std::vector<std::int64_t>& transi
     if (pts_.size() < 2) return *this;
     const std::int64_t pre = std::max<std::int64_t>(1, static_cast<std::int64_t>(preMs * 0.001 * sampleRate));
     const std::int64_t post = std::max<std::int64_t>(1, static_cast<std::int64_t>(postMs * 0.001 * sampleRate));
-    std::vector<FlexAnchor> out(pts_.begin() + 1, pts_.end() - 1);
-    for (std::size_t i = 0; i + 1 < pts_.size(); ++i) {
-        const FlexAnchor a = pts_[i], b = pts_[i + 1];
+    const std::int64_t near = std::max<std::int64_t>(1, static_cast<std::int64_t>(0.002 * sampleRate));
+    // 1. a marker that sits on a transient (the usual case: that is what was dragged) gets an unstretched window around it
+    std::vector<FlexAnchor> first;
+    for (std::size_t i = 1; i + 1 < pts_.size(); ++i) {
+        const FlexAnchor a = pts_[i];
+        bool onTransient = false;
+        for (std::int64_t t : transients)
+            if (std::llabs(t - a.src) <= near) { onTransient = true; break; }
+        const FlexAnchor& prev = pts_[i - 1];
+        const FlexAnchor& next = pts_[i + 1];
+        if (onTransient && a.src - pre > prev.src && a.dst - pre > prev.dst && a.src + post < next.src && a.dst + post < next.dst) {
+            first.push_back({a.src - pre, a.dst - pre});
+            first.push_back(a);
+            first.push_back({a.src + post, a.dst + post});
+        } else {
+            first.push_back(a);
+        }
+    }
+    const TimeMap ext(length_, first);
+    // 2. transients inside a stretched stretch of sound get one too, and the stretch is taken up by the sound between them
+    std::vector<FlexAnchor> out(ext.pts_.begin() + 1, ext.pts_.end() - 1);
+    for (std::size_t i = 0; i + 1 < ext.pts_.size(); ++i) {
+        const FlexAnchor a = ext.pts_[i], b = ext.pts_[i + 1];
         const std::int64_t ls = b.src - a.src, ld = b.dst - a.dst;
         if (std::llabs(ls - ld) <= 1) continue;  // not stretched: nothing to protect
         std::vector<FlexAnchor> add;
@@ -304,7 +452,7 @@ TimeMap TimeMap::withProtectedTransients(const std::vector<std::int64_t>& transi
         std::int64_t windows = 0;
         for (std::int64_t t : transients) {
             if (t - pre <= lastSrc || t + post >= b.src) continue;
-            const std::int64_t td = static_cast<std::int64_t>(std::llround(toDest(static_cast<double>(t))));
+            const std::int64_t td = static_cast<std::int64_t>(std::llround(ext.toDest(static_cast<double>(t))));
             if (td - pre <= lastDst || td + post >= b.dst) continue;
             add.push_back({t - pre, td - pre});
             add.push_back({t + post, td + post});
@@ -355,7 +503,13 @@ std::vector<std::int64_t> findTransients(const WavData& d, double sensitivity) {
     const int back = 3, minGap = static_cast<int>(0.050 / (hop / static_cast<double>(p.rate)));
     const int around = static_cast<int>(0.040 / (hop / static_cast<double>(p.rate)));
     std::vector<double> rise(static_cast<std::size_t>(frames), 0.0);
-    for (std::int64_t k = back; k < frames; ++k) rise[static_cast<std::size_t>(k)] = std::max(0.0, e[static_cast<std::size_t>(k)] - e[static_cast<std::size_t>(k - back)]);
+    // how far the energy now stands above the loudest of the last 30 ms (a sound that merely beats against itself is not an attack)
+    const int lookBack = std::max(back + 1, static_cast<int>(0.030 / (hop / static_cast<double>(p.rate))));
+    for (std::int64_t k = back; k < frames; ++k) {
+        double recent = -100.0;
+        for (std::int64_t j = std::max<std::int64_t>(0, k - lookBack); j <= k - back + 1 && j < k; ++j) recent = std::max(recent, e[static_cast<std::size_t>(j)]);
+        rise[static_cast<std::size_t>(k)] = std::max(0.0, e[static_cast<std::size_t>(k)] - recent);
+    }
     std::vector<std::pair<std::int64_t, double>> peaks;  // (frame, rise)
     for (std::int64_t k = back; k < frames; ++k) {
         const double r = rise[static_cast<std::size_t>(k)];
@@ -413,8 +567,13 @@ WavData renderFlexTime(const WavData& src, const std::vector<FlexAnchor>& anchor
             out = Stretcher(x, map, params.grainMs, 0.0, false).run();
             break;
         }
+        case FlexMode::Polyphonic: {
+            const TimeMap used = params.preserveTransients ? map.withProtectedTransients(transients, src.sampleRate) : map;
+            out = PhaseVocoder(x, used).run();
+            if (params.preserveTransients) spliceAttacks(x, used, transients, out);
+            break;
+        }
         case FlexMode::Monophonic:
-        case FlexMode::Polyphonic:
         default: {
             const TimeMap used = params.preserveTransients ? map.withProtectedTransients(transients, src.sampleRate) : map;
             out = Stretcher(x, used, 50.0, 25.0, true).run();

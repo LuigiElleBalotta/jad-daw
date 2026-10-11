@@ -88,6 +88,7 @@ Rectangle {
             required inputMonitor
             required frozen
             required icon
+            required flexMode
             required gainDb
             required pan
             width: ListView.view.width
@@ -101,6 +102,8 @@ Rectangle {
             showSolo: { root.project.barItemsRevision; return root.project.barItem("th.solo") }
             showSliders: { root.project.barItemsRevision; return root.project.barItem("th.sliders") }
             trackColor: color
+            flexShown: root.project.flexView && kind === "audio"
+            onFlexModeRequested: (id, mode) => root.project.setTrackFlexMode(id, mode)
             number: index + 1
             selected: root.project.selectedTrackIds.indexOf(trackId) >= 0
             onSelectRequested: (id, mode) => root.project.selectTrack(id, mode)

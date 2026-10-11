@@ -17,6 +17,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/mixer_model.cpp
         bridge/project_controller.cpp
         bridge/project_controller_edit.cpp
+        bridge/project_controller_flex.cpp
         bridge/waveform_cache.cpp
         bridge/lcd_parse.cpp
         bridge/inspector_model.cpp
@@ -41,6 +42,8 @@ qt_add_qml_module(jad_ui_lib
         qml/Timeline.qml
         qml/Ruler.qml
         qml/RegionItem.qml
+        qml/FlexOverlay.qml
+        qml/FlexNoteStrip.qml
         qml/WaveformPreview.qml
         qml/TrackList.qml
         qml/Meter.qml

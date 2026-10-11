@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 #include <QVariantMap>
 #include <cstdint>
 #include <functional>
@@ -56,6 +57,8 @@ struct TrackRow {
     bool frozen = false;      // plays its rendered audio
     int transpose = 0, velocity = 0, keyLow = 0, keyHigh = 127, velocityLow = 1, velocityHigh = 127;  // the shaping of the notes of an instrument track
     QString icon;  // the key of the header picture ("" none)
+    QString flexMode;  // Flex on this audio track: "" off, or slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic, pitch
+    QVariantMap flexParams;
     QString patchId, patchName, instrument, outputId, outputName;  // outputId: the master's id when the output is the master ("" on the master)
     std::vector<InsertRow> inserts;
     std::vector<SendRow> sends;
@@ -90,6 +93,9 @@ struct RegionRow {
     double quantizeBeats = 0.0;             // 0: off
     QString takeGroup;                      // regions of a track with the same group are takes of one passage
     QString name;                           // the name of the region; empty: the track's name is shown
+    bool flexed = false;                    // the region has flex data
+    QVariantList flexMarkers;               // {index, frac (where it plays, 0..1 of the region), srcFrac (where it was)}
+    QVariantList flexNotes;                 // the Flex Pitch notes: {index, start, end (0..1 of the region), pitch (as it plays), original, and the edits}
 };
 
 // True when `a` and `b` hold the same ids in the same order: the models then update in place (dataChanged) instead of

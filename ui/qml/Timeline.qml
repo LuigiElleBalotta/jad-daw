@@ -258,6 +258,12 @@ Item {
             MenuSeparator { visible: regionContext.takeList.length > 0; height: visible ? implicitHeight : 0 }
             ThemedMenuItem { text: qsTr("Loop/Unloop Regions"); onTriggered: root.project.toggleLoopSelectedRegions() }
             ThemedMenuItem { text: qsTr("Mute/Unmute Regions"); onTriggered: root.project.toggleMuteSelectedRegions() }
+            MenuSeparator { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0 }
+            ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Reset All Flex Edits"); onTriggered: root.project.flexResetEdits() }
+            ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Slice at Transient Markers"); onTriggered: root.project.flexSlice(false) }
+            ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Slice at Flex Markers"); onTriggered: root.project.flexSlice(true) }
+            ThemedMenuItem { visible: root.project.flexAvailable(regionContext.regionId); height: visible ? implicitHeight : 0; text: qsTr("Create MIDI Track from Flex Pitch Data"); onTriggered: root.project.flexCreateMidiTrack(regionContext.regionId) }
+            MenuSeparator { }
             ThemedMenuItem { text: qsTr("Delete"); onTriggered: root.project.deleteRegions(root.project.selectedRegionIds) }
         }
         ThemedMenu {
@@ -335,6 +341,13 @@ Item {
                 onContextRequested: (id) => { root.forceActiveFocus(); regionContext.open(id) }
                 fadeInBeats: model.fadeInBeats
                 fadeOutBeats: model.fadeOutBeats
+                flexMode: root.project.tracks.flexModeAt(trackIndex)
+                flexView: root.project.flexView
+                flexMarkers: model.flexMarkers
+                flexNotes: model.flexNotes
+                onFlexAddRequested: (id, fraction, three) => root.project.flexAddMarker(id, fraction, three)
+                onFlexMarkerMoved: (id, index, fraction, slide) => root.project.flexMoveMarker(id, index, fraction, slide)
+                onFlexMarkerDeleted: (id, index) => root.project.flexDeleteMarker(id, index)
                 x: root.beatsToX(startBeats)
                 y: trackIndex * root.rowHeight - root.scrollY + 2
                 width: lengthBeats * root.pixelsPerBeat

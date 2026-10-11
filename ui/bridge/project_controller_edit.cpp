@@ -397,10 +397,13 @@ void ProjectController::setRegionNotes(const QString& regionId, const QVariantLi
 QVariantMap ProjectController::regionInfo(const QString& regionId) const {
     const RegionRow* row = regions_.find(regionId);
     if (!row) return {{"found", false}};
-    QString trackName;
+    QString trackName, flexMode;
     for (const TrackRow& t : allRows_)
-        if (t.id == row->trackId) trackName = t.name;
-    return {{"found", true}, {"trackId", row->trackId}, {"trackName", trackName}, {"startBeats", row->startBeats},
+        if (t.id == row->trackId) {
+            trackName = t.name;
+            flexMode = t.flexMode;
+        }
+    return {{"found", true}, {"trackId", row->trackId}, {"trackName", trackName}, {"flexMode", flexMode}, {"startBeats", row->startBeats},
             {"lengthBeats", row->lengthBeats}, {"audio", row->audio}, {"color", row->color}, {"mediaId", row->mediaId},
             {"sourceOffsetFrames", static_cast<double>(row->sourceOffsetFrames)}, {"lengthFrames", static_cast<double>(row->lengthFrames)},
             {"mediaFrames", static_cast<double>(row->mediaFrames)}};
@@ -3945,7 +3948,10 @@ QVariantMap ProjectController::unusedMedia() const {
     const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
     std::set<std::string> used;
     for (const lpc::Track& t : project.tracks) {
-        for (const lpc::Region& r : t.regions) used.insert(r.mediaId.toString());
+        for (const lpc::Region& r : t.regions) {
+            used.insert(r.mediaId.toString());
+            if (r.flex) used.insert(r.flex->sourceMediaId.toString());
+        }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
     }
     int count = 0;
@@ -3965,7 +3971,10 @@ void ProjectController::cleanUpProject() {
     const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
     std::set<std::string> used;
     for (const lpc::Track& t : project.tracks) {
-        for (const lpc::Region& r : t.regions) used.insert(r.mediaId.toString());
+        for (const lpc::Region& r : t.regions) {
+            used.insert(r.mediaId.toString());
+            if (r.flex) used.insert(r.flex->sourceMediaId.toString());
+        }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
     }
     nlohmann::json commands = nlohmann::json::array();

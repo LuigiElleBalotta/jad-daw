@@ -13,11 +13,12 @@ class TrackListModel : public QAbstractListModel {
     Q_OBJECT
     QML_ANONYMOUS
 public:
-    enum Role { TrackId = Qt::UserRole + 1, Name, Kind, Color, IsMaster, RegionCount, Mute, Solo, GainDb, Pan, RecordArm, InputMonitor, Hidden, Frozen, Icon };
+    enum Role { TrackId = Qt::UserRole + 1, Name, Kind, Color, IsMaster, RegionCount, Mute, Solo, GainDb, Pan, RecordArm, InputMonitor, Hidden, Frozen, Icon, FlexMode };
     explicit TrackListModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
     void reset(const std::vector<TrackRow>& rows);
     void setToggle(const QString& trackId, Role role, bool on);  // RecordArm or InputMonitor: one row, one dataChanged
     const TrackRow* find(const QString& trackId) const;
+    Q_INVOKABLE QString flexModeAt(int row) const { return row >= 0 && row < static_cast<int>(visible_.size()) ? rows_[visible_[static_cast<std::size_t>(row)]].flexMode : QString(); }  // Flex on this audio track
     Q_INVOKABLE QString nameAt(int row) const { return row >= 0 && row < static_cast<int>(visible_.size()) ? rows_[visible_[static_cast<std::size_t>(row)]].name : QString(); }
     Q_INVOKABLE QString kindAt(int row) const { return row >= 0 && row < static_cast<int>(visible_.size()) ? rows_[visible_[static_cast<std::size_t>(row)]].kind : QString(); }
     Q_INVOKABLE QString trackIdAt(int row) const { return row >= 0 && row < static_cast<int>(visible_.size()) ? rows_[visible_[static_cast<std::size_t>(row)]].id : QString(); }

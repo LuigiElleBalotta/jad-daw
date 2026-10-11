@@ -1,5 +1,7 @@
 #include "bridge/snapshot.h"
 
+#include "lpc/flex_model.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -94,6 +96,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         const bool shown = t.showInTracks || showHidden;
         tr.showInTracks = shown;
         tr.icon = QString::fromStdString(t.icon);
+        tr.flexMode = QString::fromStdString(t.flexMode);
+        for (const auto& [key, value] : t.flexParams) tr.flexParams.insert(QString::fromStdString(key), value);
         tr.hidden = !t.showInTracks;
         tr.patchId = QString::fromStdString(t.patchId);
         tr.instrument = t.instrument ? QString::fromStdString(t.instrument->processorId) : QString();
@@ -175,6 +179,26 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
                                   ? static_cast<std::int64_t>(std::llround(static_cast<double>(r.length) * p.sampleRate / 1e6))
                                   : static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(r.start + r.length, p.sampleRate) - p.tempoMap.ticksToSamples(r.start, p.sampleRate)));
             rr.name = QString::fromStdString(r.name);
+            if (r.flex) {
+                const lpc::FlexData& f = *r.flex;
+                rr.flexed = true;
+                const double total = static_cast<double>(std::max<std::int64_t>(1, rr.lengthFrames));
+                const lpc::TimeMap map(f.sourceLength, std::max<std::int64_t>(1, rr.lengthFrames), lpc::flexAnchors(f));
+                for (std::size_t i = 0; i < f.markers.size(); ++i)
+                    rr.flexMarkers.append(QVariantMap{{"index", static_cast<int>(i)},
+                                                      {"frac", static_cast<double>(f.markers[i].dst) / total},
+                                                      {"srcFrac", static_cast<double>(f.markers[i].src) / static_cast<double>(std::max<std::int64_t>(1, f.sourceLength))}});
+                for (std::size_t i = 0; i < f.notes.size(); ++i) {
+                    const lpc::FlexNoteData& n = f.notes[i];
+                    rr.flexNotes.append(QVariantMap{{"index", static_cast<int>(i)},
+                                                    {"start", map.toDest(static_cast<double>(n.start)) / total},
+                                                    {"end", map.toDest(static_cast<double>(n.start + n.length)) / total},
+                                                    {"pitch", n.pitch + n.semitones + n.fineCents / 100.0},
+                                                    {"original", n.pitch},
+                                                    {"semitones", n.semitones}, {"fineCents", n.fineCents}, {"correct", n.correct}, {"vibrato", n.vibrato},
+                                                    {"driftIn", n.driftIn}, {"driftOut", n.driftOut}, {"gainDb", n.gainDb}, {"formantCents", n.formantCents}});
+                }
+            }
             rr.fadeInBeats = r.fadeIn > 0 ? toBeats(p, r, r.start + r.fadeIn) - rr.startBeats : 0.0;
             rr.fadeOutBeats = r.fadeOut > 0 ? toBeats(p, r, r.start + r.length) - toBeats(p, r, r.start + r.length - r.fadeOut) : 0.0;
             rr.audio = t.kind == lpc::TrackKind::Audio;

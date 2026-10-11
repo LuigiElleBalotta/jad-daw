@@ -20,6 +20,8 @@ Item {
     property bool inputMonitor: false
     property bool frozen: false          // plays its rendered audio
     property string icon: ""             // Track > Assign Track Icon
+    property string flexMode: ""         // Flex on this audio track: "" off, else the algorithm
+    property bool flexShown: false       // Edit > Show Flex Pitch/Time on an audio track: the Flex button is there
     // Track > Configure Track Header: which parts of the header are shown
     property bool showIcon: true
     property bool showArm: true
@@ -52,6 +54,12 @@ Item {
     signal gainReleased(string id, real db)
     signal panReleased(string id, real pan)
     signal trackToggled(string trackId, string actionId, bool on)
+    signal flexModeRequested(string trackId, string mode)
+    readonly property alias flexButton: flexButton
+    readonly property var flexModes: [{ id: "", label: qsTr("Off") }, { id: "slicing", label: qsTr("Slicing") }, { id: "rhythmic", label: qsTr("Rhythmic") },
+                                      { id: "monophonic", label: qsTr("Monophonic") }, { id: "polyphonic", label: qsTr("Polyphonic") },
+                                      { id: "tempophone", label: qsTr("Tempophone") }, { id: "speed", label: qsTr("Speed") },
+                                      { id: "automatic", label: qsTr("Automatic") }, { id: "pitch", label: qsTr("Flex Pitch") }]
 
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
     readonly property string kindLabel: (({ "audio": "Au", "instrument": "Inst", "midi": "MIDI", "bus": "Bus", "aux": "Aux" })[kind] ?? kind) + (frozen ? " ❄" : "")  // a snowflake: frozen
@@ -182,6 +190,15 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.spacing[1]
             IconButton {
+                id: flexButton
+                objectName: "flexButton"
+                visible: root.flexShown
+                implicitWidth: 30; implicitHeight: 20
+                label: qsTr("Flex")
+                active: root.flexMode !== ""
+                onClicked: flexMenu.popup()
+            }
+            IconButton {
                 id: armButton
                 visible: root.showArm
                 implicitWidth: 20; implicitHeight: 20
@@ -213,6 +230,23 @@ Item {
                 active: root.solo
                 onClicked: root.soloToggled(root.trackId, !root.solo)
             }
+        }
+    }
+
+    ThemedMenu {  // the Flex Mode pop-up
+        id: flexMenu
+        objectName: "flexMenu"
+        Instantiator {
+            model: root.flexModes
+            delegate: ThemedMenuItem {
+                required property var modelData
+                text: modelData.label
+                checkable: true
+                checked: root.flexMode === modelData.id
+                onTriggered: root.flexModeRequested(root.trackId, modelData.id)
+            }
+            onObjectAdded: (index, object) => flexMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => flexMenu.removeItem(object)
         }
     }
 

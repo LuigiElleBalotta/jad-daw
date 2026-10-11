@@ -26,6 +26,37 @@ std::filesystem::path makeDemo(const TempDir& dir, const char8_t* name = u8"d.lp
     return proj;
 }
 
+
+// 4 s of mono sound at 48 kHz for the flex tests: a held 220 Hz tone with a noise burst at 0.5, 1.5 and 2.5 s (hits), or two sung-like
+// notes, A3 from 0.2 to 1.8 s and D4 from 2.0 to 3.6 s (notes)
+std::filesystem::path writeFlexClip(const std::filesystem::path& file, bool hits) {
+    const int rate = 48000, n = 4 * rate;
+    std::vector<float> v(static_cast<std::size_t>(n), 0.0f);
+    auto tone = [&](double from, double to, double hz) {
+        double phase = 0.0;
+        for (int i = static_cast<int>(from * rate); i < static_cast<int>(to * rate); ++i) {
+            phase += 2 * 3.14159265358979 * hz / rate;
+            double s = 0.0;
+            for (int h = 1; h <= 5; ++h) s += std::sin(h * phase) / h;
+            v[static_cast<std::size_t>(i)] += static_cast<float>((hits ? 0.12 : 0.3) * s);
+        }
+    };
+    if (hits) {
+        tone(0.0, 4.0, 220.0);
+        unsigned seed = 99;
+        for (double t : {0.5, 1.5, 2.5})
+            for (int i = 0; i < rate / 25; ++i) {
+                seed = seed * 1664525u + 1013904223u;
+                v[static_cast<std::size_t>(t * rate) + static_cast<std::size_t>(i)] += static_cast<float>(0.8 * (static_cast<double>(seed >> 8) / 8388608.0 - 1.0) * std::exp(-i / (rate * 0.006)));
+            }
+    } else {
+        tone(0.2, 1.8, 220.0);
+        tone(2.0, 3.6, 293.66);
+    }
+    lpc::writeWav(file, rate, 1, v, lpc::WavFormat::Float32);
+    return file;
+}
+
 }  // namespace
 
 // The value of one track row field (by role name) for the track `id`; invalid when there is no such track.
@@ -1295,6 +1326,121 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 2, 15000);   // the region became two sounds
         c.undo();
         QTRY_COMPARE(c.regions()->rowCount(), before + 1);
+    }
+    // ---- Flex Time and Flex Pitch
+    QString importFlexClip(jad::ProjectController& c, const TempDir& dir, const TempDir& other, bool hits, double atBeats, QString* audioTrackOut) {
+        const std::filesystem::path wav = writeFlexClip(other.path() / (hits ? "hits.wav" : "notes.wav"), hits);
+        const QString audioTrack = firstAudioTrackId(c);
+        *audioTrackOut = audioTrack;
+        const int before = c.regions()->rowCount();
+        c.importAudio(url(wav), audioTrack, atBeats);
+        [&] { QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 15000); }();
+        QString id;
+        for (int i = 0; i < c.regions()->rowCount(); ++i) {
+            const jad::RegionRow* r = c.regions()->find(c.regions()->regionIdAt(i));
+            if (r && r->audio && r->startBeats > atBeats - 1.0) id = r->id;
+        }
+        Q_UNUSED(dir);
+        return id;
+    }
+    void flexMarkerStretchesTheSoundBetweenMarkersAndEachEditIsOneUndoStep() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, true, 100.0, &track);
+        QVERIFY(!id.isEmpty());
+        const QString original = c.regions()->find(id)->mediaId;
+        c.setTrackFlexMode(track, "monophonic");
+        QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("monophonic"));
+        QTRY_VERIFY_WITH_TIMEOUT(c.flexTransients(id).size() >= 3, 15000);          // the analysis found the three hits
+        const QVariantList hits = c.flexTransients(id);
+        c.flexAddMarker(id, hits[1].toDouble(), true);                               // the lower half: the hit and its neighbours
+        QTRY_VERIFY(c.regions()->find(id)->flexed);
+        QCOMPARE(c.regions()->find(id)->flexMarkers.size(), 3);
+        QCOMPARE(c.regions()->find(id)->mediaId, original);                          // nothing moved yet: no new file
+        const int index = 1;
+        const double moved = c.regions()->find(id)->flexMarkers[index].toMap().value("frac").toDouble() + 0.05;
+        c.flexMoveMarker(id, index, moved, false);
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->mediaId != original, 30000); // the flexed sound was rendered and the region plays it
+        QVERIFY(countFiles(dir.path() / "d.lpc" / "audio") >= 2);
+        QCOMPARE(c.regions()->find(id)->flexMarkers.size(), 3);
+        QVERIFY(std::abs(c.regions()->find(id)->flexMarkers[index].toMap().value("frac").toDouble() - moved) < 0.001);
+        const QString baked = c.regions()->find(id)->mediaId;
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(id)->mediaId, original);                      // the move is one step
+        QVERIFY(std::abs(c.regions()->find(id)->flexMarkers[index].toMap().value("frac").toDouble() - moved) > 0.04);
+        c.redo();
+        QTRY_COMPARE(c.regions()->find(id)->mediaId, baked);
+        c.selectRegion(id, "replace");
+        c.flexResetEdits();                                                           // Reset All Flex Edits: the sound as recorded
+        QTRY_VERIFY_WITH_TIMEOUT(!c.regions()->find(id)->flexed, 15000);
+        QCOMPARE(c.regions()->find(id)->mediaId, original);
+    }
+    void flexSliceCutsTheRegionAtItsTransientsAndTheSoundIsKeptInTheFiles() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, true, 100.0, &track);
+        QVERIFY(!id.isEmpty());
+        const int before = c.regions()->rowCount();
+        c.setTrackFlexMode(track, "slicing");
+        QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("slicing"));
+        QTRY_VERIFY_WITH_TIMEOUT(c.flexTransients(id).size() >= 3, 15000);
+        c.selectRegion(id, "replace");
+        c.flexSlice(false);
+        QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 3, 15000);
+        c.undo();
+        QTRY_COMPARE(c.regions()->rowCount(), before);
+    }
+    void flexQuantizeMovesTheTransientsTowardsTheGrid() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, true, 100.0, &track);
+        QVERIFY(!id.isEmpty());
+        const QString original = c.regions()->find(id)->mediaId;
+        c.setTrackFlexMode(track, "monophonic");
+        QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("monophonic"));
+        QTRY_VERIFY_WITH_TIMEOUT(c.flexTransients(id).size() >= 3, 15000);
+        c.selectRegion(id, "replace");
+        c.flexQuantize(1.5, 100.0);                                                   // a grid of 1.5 beats (0.75 s at 120 bpm): the hits at 0.5, 1.5 and 2.5 s move to 0.75, 1.5 and 2.25 s
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->mediaId != original, 30000);
+        QVERIFY(c.regions()->find(id)->flexMarkers.size() >= 3);
+    }
+    void flexPitchFindsTheNotesAndAnEditMakesANewFileWithOneUndoStep() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, false, 100.0, &track);
+        QVERIFY(!id.isEmpty());
+        const QString original = c.regions()->find(id)->mediaId;
+        c.setTrackFlexMode(track, "pitch");
+        QTRY_COMPARE(trackField(c, track, "flexMode").toString(), QStringLiteral("pitch"));
+        QTRY_VERIFY_WITH_TIMEOUT(c.flexPitchNotes(id).size() == 2, 20000);          // A3 and D4
+        const QVariantList notes = c.flexPitchNotes(id);
+        QVERIFY(std::abs(notes[0].toMap().value("pitch").toDouble() - 57.0) < 0.3);
+        QVERIFY(std::abs(notes[1].toMap().value("pitch").toDouble() - 62.0) < 0.3);
+        c.flexNoteEdit(id, 0, {{"semitones", 3.0}});                                 // the first note up a minor third
+        QTRY_VERIFY_WITH_TIMEOUT(c.regions()->find(id)->mediaId != original, 30000);
+        QCOMPARE(c.regions()->find(id)->flexNotes.size(), 2);
+        QVERIFY(std::abs(c.regions()->find(id)->flexNotes[0].toMap().value("pitch").toDouble() - 60.0) < 0.3);
+        c.undo();
+        QTRY_COMPARE(c.regions()->find(id)->mediaId, original);
+        // the note that is dragged is heard (nothing to hear here without a device, but nothing must break)
+        c.flexNotePreview(id, 1, {{"semitones", 2.0}});
+        c.flexStopPreview();
+        // and the notes can become MIDI
+        const int tracksBefore = c.tracks()->rowCount();
+        c.flexCreateMidiTrack(id);
+        QTRY_COMPARE(c.tracks()->rowCount(), tracksBefore + 1);
     }
     void trimToSelectionKeepsOnlyTheChosenFramesOfTheRegion() {
         TempDir dir;

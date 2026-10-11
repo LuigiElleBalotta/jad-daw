@@ -15,6 +15,8 @@
 #include <deque>
 #include <functional>
 #include <filesystem>
+#include <map>
+#include <string>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -132,6 +134,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString overlapAudio READ overlapAudio WRITE setOverlapAudio NOTIFY recordingChanged)
     Q_PROPERTY(QString overlapMidi READ overlapMidi WRITE setOverlapMidi NOTIFY recordingChanged)
     Q_PROPERTY(bool lowLatencyMonitoring READ lowLatencyMonitoring WRITE setLowLatencyMonitoring NOTIFY recordingChanged)  // Record > Low Latency Monitoring Mode
+    Q_PROPERTY(bool flexView READ flexView WRITE setFlexView NOTIFY flexViewChanged)  // Edit > Show Flex Pitch/Time: the markers and notes are drawn
+    Q_PROPERTY(int flexBusy READ flexBusy NOTIFY flexBusyChanged)  // how many flex renderings are running
     Q_PROPERTY(bool useMusicalGrid READ useMusicalGrid WRITE setUseMusicalGrid NOTIFY recordingChanged)  // Record > Use Musical Grid: new audio takes follow the tempo (musical time)
     Q_PROPERTY(QString recordButtonMode READ recordButtonMode WRITE setRecordButtonMode NOTIFY recordingChanged)  // "toggle" (Record/Record Toggle) or "repeat" (Record/Record Repeat)
     Q_PROPERTY(bool allowQuickPunch READ allowQuickPunch WRITE setAllowQuickPunch NOTIFY punchChanged)  // Record while playing starts a take
@@ -528,6 +532,29 @@ public:
     Q_INVOKABLE void deleteProjectAlternative(const QString& name);
     // File > Project Management
     Q_INVOKABLE void showProjectFolder();
+    // ---- Flex Time and Flex Pitch (project_controller_flex.cpp)
+    bool flexView() const { return flexView_; }
+    void setFlexView(bool on);
+    int flexBusy() const { return flexBusy_; }
+    Q_INVOKABLE void setTrackFlexMode(const QString& trackId, const QString& mode);              // "" off, slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic, pitch
+    Q_INVOKABLE void setTrackFlexParam(const QString& trackId, const QString& key, double value);  // decay, sliceLength, loopLengthMs, loopOffsetMs, grainMs, sensitivity
+    Q_INVOKABLE bool flexAvailable(const QString& regionId) const;                               // an audio region on a track with Flex on
+    Q_INVOKABLE QVariantList flexTransients(const QString& regionId);                            // where the sound begins anew, as fractions of the region as it plays; empty until analysed
+    Q_INVOKABLE void flexAddMarker(const QString& regionId, double fraction, bool threeMarkers);  // at the transient near `fraction` (or there); three: with its neighbours
+    Q_INVOKABLE void flexMoveMarker(const QString& regionId, int index, double fraction, bool slide);  // the sound is stretched; slide: only the marker moves along the sound
+    Q_INVOKABLE void flexDeleteMarker(const QString& regionId, int index);
+    Q_INVOKABLE void flexNeutralMarker(const QString& regionId, int index);                      // back to where its sound was recorded
+    Q_INVOKABLE void flexResetEdits();                                                           // the selected regions play as recorded again
+    Q_INVOKABLE void flexSlice(bool atMarkers);                                                  // the selected regions are cut at their transients (or flex markers)
+    Q_INVOKABLE void flexQuantize(double gridBeats, double strengthPercent);                     // the transients of the selected regions move towards the grid
+    Q_INVOKABLE QVariantList flexPitchNotes(const QString& regionId);                            // the notes {index, start, end, pitch, original, edits...}; empty until analysed
+    Q_INVOKABLE void flexNoteEdit(const QString& regionId, int index, const QVariantMap& edit);  // keys: semitones, fineCents, correct, vibrato, driftIn, driftOut, gainDb, formantCents
+    Q_INVOKABLE void flexNoteTime(const QString& regionId, int index, double startFraction, double endFraction);
+    Q_INVOKABLE void flexNoteSplit(const QString& regionId, int index, double fraction);
+    Q_INVOKABLE void flexNoteJoin(const QString& regionId, int index);                           // with the note after it
+    Q_INVOKABLE void flexNotePreview(const QString& regionId, int index, const QVariantMap& edit);  // plays the note as it would sound with these edits, repeating, until flexStopPreview
+    Q_INVOKABLE void flexStopPreview();
+    Q_INVOKABLE void flexCreateMidiTrack(const QString& regionId);                               // a MIDI track with the notes of the region
     Q_INVOKABLE QVariantMap unusedMedia() const;  // {count, bytes} of the audio files that no region and no frozen track uses
     Q_INVOKABLE void cleanUpProject();            // removes them from the project and from the disk; the undo history goes (the files would be missing)
     // Track > Assign Track Icon: the picture in the header of the selected tracks ("" removes it). The keys are those of trackIconChoices().
@@ -818,6 +845,9 @@ signals:
     void commandSent(const QString& type);
     // A tool had nothing to do (no MIDI track, nothing selected, nothing to join): a toast, not an error.
     void notice(const QString& message);
+    void flexViewChanged();
+    void flexBusyChanged();
+    void flexAnalysisReady(const QString& regionId);
     void audioEnabledChanged();
     void mixerVisibleChanged();
     void panelsChanged();
@@ -1076,6 +1106,24 @@ private:
     void sendMarkers(const std::vector<MarkerRow>& rows);
     QHash<QString, double> meter_, hold_, reduction_;
     QString deviceError_;
+    // Flex: the analyses of the sounds, and the renderings in progress (all in project_controller_flex.cpp)
+    struct FlexState;
+    struct FlexEdit {
+        QString regionId;
+        lpc::FlexData data;
+        bool overrideTrack = false;  // render with this mode and these settings instead of the track's (they are about to be set)
+        std::string mode;
+        std::map<std::string, double> params;
+    };
+    FlexState& flexState();
+    bool flexView_ = false;
+    int flexBusy_ = 0;
+    bool flexStopped_ = false;  // the note under the mouse was let go: a clip that arrives late is not played
+    std::shared_ptr<FlexState> flex_;
+    void flexAnalyse(const QString& regionId);
+    void flexApply(std::vector<FlexEdit> edits, const nlohmann::json& prefix, const QString& what);
+    void flexApplyOne(const QString& regionId, const lpc::FlexData& data, const QString& what);
+    bool flexPrepare(const QString& regionId, lpc::FlexData& data, bool needNotes);  // the flex data of a region (made from the analysis when it has none yet)
     QString lastError_;
 };
 

@@ -28,6 +28,29 @@ Item {
     property real gainDragDb: NaN          // live feedback while the Gain tool drags
     property real slipDragPx: NaN          // live feedback while the Slip or Rotate tool drags
     property string regionName: ""        // its own name; empty: the track's
+    property string flexMode: ""          // the Flex mode of its track ("" off)
+    property bool flexView: false         // Edit > Show Flex Pitch/Time
+    property var flexMarkers: []          // {index, frac}
+    property var flexNotes: []            // the Flex Pitch notes it keeps
+    property var flexTransients: []       // fractions of the region where the sound begins anew (from the analysis)
+    property var analysedNotes: []        // the notes the analysis found, until the region keeps its own
+    readonly property bool flexActive: isAudio && !missing && flexView && flexMode !== ""
+    signal flexAddRequested(string id, real fraction, bool three)
+    signal flexMarkerMoved(string id, int index, real fraction, bool slide)
+    signal flexMarkerDeleted(string id, int index)
+    function refreshFlex() {
+        if (!flexActive || !project) { flexTransients = []; analysedNotes = []; return }
+        if (flexMode === "pitch") analysedNotes = project.flexPitchNotes(regionId)
+        else flexTransients = project.flexTransients(regionId)
+    }
+    onFlexActiveChanged: refreshFlex()
+    onFlexModeChanged: refreshFlex()
+    onFlexMarkersChanged: refreshFlex()
+    onFlexNotesChanged: refreshFlex()
+    Connections {
+        target: root.project ? root.project : null
+        function onFlexAnalysisReady(id) { if (id === root.regionId) root.refreshFlex() }
+    }
     signal gainRequested(string id, real db)
     signal renameRequested(string id)
     signal slipRequested(string id, real deltaBeats, bool rotate)
@@ -89,7 +112,7 @@ Item {
     Timer { id: debounce; interval: 120; onTriggered: root.requestPeaks() }
     onWidthChanged: debounce.restart()
     onVisibleChanged: debounce.restart()
-    onMediaIdChanged: debounce.restart()
+    onMediaIdChanged: { debounce.restart(); refreshFlex() }
     onLengthBeatsChanged: debounce.restart()   // trimmed: another stretch of the media
     Component.onCompleted: requestPeaks()
     Connections {
@@ -230,6 +253,10 @@ Track: %3")
             if (root.tool === "scissors") { root.splitRequested(root.regionId, root.startBeats + m.x / root.pixelsPerBeat); return }
             if (root.tool === "glue") { root.glueRequested(root.regionId); return }
             if (root.tool === "mute") { root.muteRequested(root.regionId); return }
+            if (root.tool === "flex") {  // a click in the upper half sets one flex marker, in the lower half three (the clicked transient and its neighbours)
+                if (root.flexActive) root.flexAddRequested(root.regionId, m.x / Math.max(1, root.width), m.y > root.height / 2)
+                return
+            }
             if (root.tool === "zoom") return  // the Zoom tool acts on the lane (Timeline), not on a region
             if (root.tool === "solo") { root.soloRequested(root.regionId); return }
             if (root.tool === "text") { root.renameRequested(root.regionId); return }
@@ -348,6 +375,23 @@ Track: %3")
     }
     Edge { isLeft: true; anchors.left: parent.left }
     Edge { isLeft: false; anchors.right: parent.right }
+
+    Loader {  // the Flex view: transients, flex markers, notes (over the body, under the fade handles)
+        anchors.fill: parent
+        active: root.flexActive
+        visible: !area.moving
+        sourceComponent: FlexOverlay {
+            project: root.project
+            regionId: root.regionId
+            mode: root.flexMode
+            markers: root.flexMarkers
+            notes: root.flexNotes.length > 0 ? root.flexNotes : root.analysedNotes
+            transients: root.flexTransients
+            tint: root.solid
+            onMarkerMoved: (index, fraction, slide) => root.flexMarkerMoved(root.regionId, index, fraction, slide)
+            onMarkerDeleted: (index) => root.flexMarkerDeleted(root.regionId, index)
+        }
+    }
 
     // the fade handles at the top corners of a selected audio region (pointer tool): drag sideways to set the fade
     component FadeHandle: Rectangle {

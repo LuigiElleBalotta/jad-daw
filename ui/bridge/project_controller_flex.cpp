@@ -1031,6 +1031,37 @@ void ProjectController::smartFollowRegion(const QString& regionId, bool on) {
     flexApplyOne(regionId, data, "Conforming to the project tempo");
 }
 
+void ProjectController::smartMoveBeat(const QString& regionId, int index, double fraction) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || !row->audio || !std::isfinite(fraction)) return;
+    lpc::FlexData data = flexDataOf(*row);
+    if (!data.beats || index < 0 || index >= static_cast<int>(data.beats->beats.size())) return;
+    const lpc::TimeMap map(data.sourceLength, row->lengthFrames, lpc::flexAnchors(data));
+    std::int64_t src = static_cast<std::int64_t>(std::llround(map.toSource(std::clamp(fraction, 0.0, 1.0) * static_cast<double>(row->lengthFrames))));
+    std::vector<std::int64_t>& beats = data.beats->beats;
+    const std::size_t i = static_cast<std::size_t>(index);
+    const std::int64_t lo = i > 0 ? beats[i - 1] + 1 : 0, hi = (i + 1 < beats.size() ? beats[i + 1] : data.sourceLength) - 1;
+    if (hi < lo) return;
+    src = std::clamp(src, lo, hi);
+    if (src == beats[i]) return;
+    beats[i] = src;
+    if (data.beats->follow && !smartMarkers(*row, data)) return;
+    flexApplyOne(regionId, data, data.beats->follow ? "Moving the beat" : "");
+}
+
+void ProjectController::smartDeleteBeat(const QString& regionId, int index) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || !row->audio) return;
+    lpc::FlexData data = flexDataOf(*row);
+    if (!data.beats || index < 0 || index >= static_cast<int>(data.beats->beats.size()) || data.beats->beats.size() <= 3) return;
+    data.beats->beats.erase(data.beats->beats.begin() + index);
+    const int bpb = std::max(1, data.beats->beatsPerBar);
+    if (index < data.beats->firstDownbeat) data.beats->firstDownbeat = ((data.beats->firstDownbeat - 1) % bpb + bpb) % bpb;
+    data.beats->anchor = 0.0;
+    if (data.beats->follow && !smartMarkers(*row, data)) return;
+    flexApplyOne(regionId, data, data.beats->follow ? "Deleting the beat" : "");
+}
+
 void ProjectController::smartShiftDownbeat(const QString& regionId, int beats) {
     const RegionRow* row = regions_.find(regionId);
     if (!host_ || !row || !row->audio) return;

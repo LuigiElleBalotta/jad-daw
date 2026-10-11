@@ -551,6 +551,8 @@ public:
     Q_INVOKABLE void smartFollow(bool on);                                                       // Flex & Follow for the selected audio regions: their beats conform to the project tempo (Flex is turned on for their track)
     Q_INVOKABLE void smartFollowRegion(const QString& regionId, bool on);
     Q_INVOKABLE void smartApplyRegionTempo(const QString& regionId);                             // the project tempo becomes the tempo found in the region
+    Q_INVOKABLE void smartMoveBeat(const QString& regionId, int index, double fraction);         // Smart Tempo beat markers: a beat is where the sound has it, at `fraction` of the region
+    Q_INVOKABLE void smartDeleteBeat(const QString& regionId, int index);
     Q_INVOKABLE void smartShiftDownbeat(const QString& regionId, int beats);                     // the bars of the region begin `beats` beats later (or earlier)
     Q_INVOKABLE QVariantList flexPitchCurves(const QString& regionId);                           // {index, points: [x0, y0, x1, y1, ...]} of each note: where it plays (0..1 of the region) and its pitch as edited
     Q_INVOKABLE QVariantList flexPitchNotes(const QString& regionId);                            // the notes {index, start, end, pitch, original, edits...}; empty until analysed

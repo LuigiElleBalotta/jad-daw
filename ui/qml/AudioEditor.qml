@@ -347,6 +347,8 @@ Rectangle {
                     markers: root.info.flexMarkers ?? []
                     transients: root.flexTransients
                     beats: root.info.beatFracs ?? []
+                    onBeatMoved: (index, fraction) => root.project.smartMoveBeat(root.regionId, index, fraction)
+                    onBeatDeleted: (index) => root.project.smartDeleteBeat(root.regionId, index)
                     tint: Theme.textPrimary
                     onMarkerMoved: (index, fraction, slide) => root.project.flexMoveMarker(root.regionId, index, fraction, slide)
                     onMarkerDeleted: (index) => root.project.flexDeleteMarker(root.regionId, index)

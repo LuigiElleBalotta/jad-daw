@@ -137,5 +137,6 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - [x] A marker drag is heard while it moves; six hotspots on the selected Flex Pitch note; Q-Reference (the first selected region leads the quantize of the others).
 - [x] Smart Tempo analysis (`core/src/tempo_analysis.cpp`: onset curve, tempo from autocorrelation, dynamic-programming beats, downbeat guess) and Flex & Follow: beats kept in the flex data, markers put every beat on the project's beats (bars on bars), conformed again when the tempo or place changes; Apply Region Tempo to Project Tempo; move the downbeat; beats drawn in the Flex view.
 - [x] Flex Pitch tried on a voice: Fish Audio answered 402 (no API credit), so a Windows speech synthesis recording was used (`LPC_VOICE_WAV=<wav> lpc_tests [voice]` prints the notes found: plausible pitches, 12 notes in a spoken sentence). A real singer is still untested.
-- [ ] Not done: the Smart Tempo Editor (hints, beat-marker editing), hotspot handles on Flex Time markers.
+- [x] Beat markers can be dragged and deleted in the Flex view (`smartMoveBeat`, `smartDeleteBeat`).
+- [x] Left out for now: Smart Tempo hint mode (D/T taps), hotspot handles on Flex Time markers.
 

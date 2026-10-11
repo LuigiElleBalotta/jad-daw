@@ -20,6 +20,8 @@ Item {
     signal markerDeleted(int index)
     signal markerDragging(int index, real fraction, bool slide)   // while it is dragged: the stretch can be heard
     signal markerDragEnded()
+    signal beatMoved(int index, real fraction)
+    signal beatDeleted(int index)
 
     // the pitch range of the notes, for drawing them
     readonly property real lowPitch: { let v = 127; for (const n of notes) v = Math.min(v, n.pitch); return notes.length ? v - 1 : 0 }
@@ -40,14 +42,26 @@ Item {
 
     Repeater {  // the beats found in the sound (Smart Tempo)
         model: root.pitchMode ? [] : root.beats
-        delegate: Rectangle {
+        delegate: Item {
+            id: beat
             required property real modelData
-            x: Math.round(modelData * root.width)
-            y: root.height - 10
-            width: 1
-            height: 10
-            color: "#7fd08a"
-            opacity: 0.8
+            required property int index
+            property real dragFrac: -1
+            objectName: "smartBeat" + index
+            x: Math.round((dragFrac >= 0 ? dragFrac : modelData) * root.width) - 4
+            y: root.height - 14
+            width: 9
+            height: 14
+            z: 4
+            Rectangle { x: 4; width: 1; height: parent.height; color: "#7fd08a"; opacity: 0.9 }
+            MouseArea {
+                anchors.fill: parent
+                preventStealing: true
+                cursorShape: Qt.SizeHorCursor
+                onPositionChanged: (m) => { if (pressed) beat.dragFrac = Math.max(0, Math.min(1, root.mapFromItem(beat, m.x, 0).x / Math.max(1, root.width))) }
+                onReleased: { const f = beat.dragFrac; beat.dragFrac = -1; if (f >= 0 && Math.abs(f - beat.modelData) * root.width >= 2) root.beatMoved(beat.index, f) }
+                onDoubleClicked: root.beatDeleted(beat.index)
+            }
         }
     }
 

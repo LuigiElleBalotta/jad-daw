@@ -564,6 +564,12 @@ public:
     Q_INVOKABLE void flexNotePreview(const QString& regionId, int index, const QVariantMap& edit);  // plays the note as it would sound with these edits, repeating, until flexStopPreview
     Q_INVOKABLE void flexMarkerPreview(const QString& regionId, int index, double fraction, bool slide);  // while a marker is dragged: the stretch around it is heard (repeating) until flexStopPreview
     Q_INVOKABLE void flexStopPreview();
+    // Mastering Assistant (on the stereo output): adding it analyses the project; Reanalyze does it again (the cycle only, when one is set)
+    Q_PROPERTY(bool masteringBusy READ masteringBusy NOTIFY masteringBusyChanged)
+    Q_INVOKABLE QString masterTrackId() const { return masterId_; }
+    Q_INVOKABLE void addMasteringAssistant();
+    Q_INVOKABLE void masteringAnalyse(const QString& trackId, int index);
+    Q_INVOKABLE QVariantMap masteringStats() const { return masteringStats_; }  // integratedLufs, momentaryMax, shortTermMax, range, truePeakDb of the last analysis
     Q_INVOKABLE void flexCreateMidiTrack(const QString& regionId);                               // a MIDI track with the notes of the region
     Q_INVOKABLE QVariantMap unusedMedia() const;  // {count, bytes} of the audio files that no region and no frozen track uses
     Q_INVOKABLE void cleanUpProject();            // removes them from the project and from the disk; the undo history goes (the files would be missing)
@@ -858,6 +864,8 @@ signals:
     void flexViewChanged();
     void flexBusyChanged();
     void flexAnalysisReady(const QString& regionId);
+    void masteringBusyChanged();
+    void masteringAnalysed();
     void audioEnabledChanged();
     void mixerVisibleChanged();
     void panelsChanged();
@@ -1138,8 +1146,12 @@ private:
     bool smartMarkers(const RegionRow& row, lpc::FlexData& data) const;  // the markers that put the beats of the sound on the project's beats
     void smartRefollow();                                                // after a change of tempo or position: the regions that follow conform again
     bool refollowQueued_ = false;
+    void masteringAfterAdd(const QString& master, int attempt);
+    bool masteringBusy_ = false;
+    QVariantMap masteringStats_;
     QHash<QString, QList<QPair<double, bool>>> hints_;  // taps waiting to be applied together (fraction of the region, downbeat)
     int hintSerial_ = 0;
+    bool masteringBusy() const { return masteringBusy_; }
     bool moveMarkerData(const QString& regionId, lpc::FlexData& data, int index, double fraction, bool slide) const;
     void flexMarkerPreviewRun(const QString& regionId, int index, double fraction, bool slide);
     bool flexPrepare(const QString& regionId, lpc::FlexData& data, bool needNotes);  // the flex data of a region (made from the analysis when it has none yet)

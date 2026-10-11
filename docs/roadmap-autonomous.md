@@ -142,3 +142,9 @@ Most stubs were never Mac-only: they are Logic features not written yet. Left ou
 - [x] Hints can be tapped while playing: Alt+D / Alt+T (plain D is List Editors), collected and applied as one edit.
 - [x] A round slide handle on each Flex Time marker (the marker moves along the sound, like Alt-drag).
 
+## 13. Mastering Assistant and Drum Replacement (the owner: "Farei drum replacement e mastering assistant sicuramente")
+
+- [x] Mastering Assistant: loudness measurement (BS.1770), mix analysis, `builtin.mastering` insert (correction EQ, characters, excite, loudness, limiter at -1 dB, bypass, compensation), Mix menu entry, window with Reanalyze, tests.
+- [ ] Drum Replacement: find the hits of a drum track, play samples from a sampler track (replace or double), sensitivity / mix controls.
+- [ ] Left for later: Session Players.
+

@@ -14,6 +14,7 @@ inline constexpr const char* kProcLimiter = "builtin.limiter";
 inline constexpr const char* kProcGate = "builtin.gate";
 inline constexpr const char* kProcDelay = "builtin.delay";
 inline constexpr const char* kProcReverb = "builtin.reverb";
+inline constexpr const char* kProcMastering = "builtin.mastering";
 
 // A hosted plug-in: "vst3:" and 32 lowercase hex digits.
 inline bool isVst3Id(std::string_view id) {

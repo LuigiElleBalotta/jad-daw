@@ -1541,6 +1541,29 @@ private slots:
         c.smartFollowRegion(id, false);
         QTRY_VERIFY_WITH_TIMEOUT(!c.regions()->find(id)->followTempo, 60000);
     }
+    void masteringAssistantAnalysesTheProjectAndWritesItsFindingsInOneUndoStep() {
+        TempDir dir, other;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        QString track;
+        const QString id = importFlexClip(c, dir, other, true, 0.0, &track);   // a few seconds of tone and hits
+        QVERIFY(!id.isEmpty());
+        const QString master = c.masterTrackId();
+        QVERIFY(!master.isEmpty());
+        QStringList notes;
+        QObject::connect(&c, &jad::ProjectController::notice, [&](const QString& m) { notes << m; });
+        c.addMasteringAssistant();
+        QTRY_VERIFY2_WITH_TIMEOUT(!c.masteringStats().isEmpty(), qPrintable(notes.join(" | ") + " ERR: " + c.lastError()), 20000);
+        const QVariantMap stats = c.masteringStats();
+        QVERIFY(stats.value("integratedLufs").toDouble() > -60.0);
+        const QVariantList inserts = c.trackInserts(master);
+        QVERIFY(!inserts.isEmpty());
+        const QVariantMap params = inserts.last().toMap().value("params").toMap();
+        QTRY_VERIFY_WITH_TIMEOUT(std::abs(c.trackInserts(master).last().toMap().value("params").toMap().value("gain").toDouble() - stats.value("gainDb").toDouble()) < 0.02, 20000);
+        c.undo();                                                                    // the findings are one step; the insert another
+        QTRY_VERIFY(std::abs(c.trackInserts(master).last().toMap().value("params").toMap().value("gain").toDouble()) < 0.001);
+    }
     void flexMarkerPreviewDoesNotBreakAnything() {
         TempDir dir, other;
         jad::ProjectController c(false);

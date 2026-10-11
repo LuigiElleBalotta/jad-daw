@@ -551,6 +551,7 @@ ApplicationWindow {
         "edit.flexSliceAtTransients": () => controller.flexSlice(false),
         "edit.flexSliceAtMarkers": () => controller.flexSlice(true),
         "edit.flexQuantize": () => controller.flexQuantize(controller.snapBeats > 0 ? controller.snapBeats : 0.25, 100),
+        "mix.masteringAssistant": () => controller.addMasteringAssistant(),
         "edit.smartFollowOn": () => controller.smartFollow(true),
         "edit.smartFollowOff": () => controller.smartFollow(false),
         "edit.smartApplyTempo": () => { const ids = controller.selectedRegionIds; if (ids.length > 0) controller.smartApplyRegionTempo(ids[0]) },

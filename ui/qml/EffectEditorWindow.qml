@@ -16,10 +16,12 @@ Window {
     property var pending: ({})          // parameter -> the value waiting to be sent while a drag runs
     property var curve: []
     property bool gesture: false
+    property var masterStats: ({})
+    readonly property bool isMastering: spec !== null && spec.id === "builtin.mastering"
 
     visible: trackId !== "" && spec !== null
     width: 520
-    height: Math.min(Screen.height - 80, 120 + (spec ? spec.params.length : 0) * 30 + (curveBox.visible ? 150 : 0))
+    height: Math.min(Screen.height - 80, 120 + (spec ? spec.params.length : 0) * 30 + (curveBox.visible ? 150 : 0) + (isMastering ? 80 - 9 * 30 : 0))
     minimumWidth: 420
     minimumHeight: 200
     title: spec ? qsTr("%1 - %2").arg(project.trackName(trackId)).arg(spec.name) : ""
@@ -114,6 +116,47 @@ Window {
             }
         }
 
+        Rectangle {  // Mastering Assistant: what the analysis found, and Reanalyze
+            id: masterBox
+            objectName: "masteringBox"
+            visible: root.isMastering
+            Layout.fillWidth: true
+            Layout.preferredHeight: 70
+            color: Theme.surfaceCanvas
+            radius: Theme.radiusControl
+            border.color: Theme.borderSubtle
+            Connections { target: root.project; function onMasteringAnalysed() { root.masterStats = root.project.masteringStats() } }
+            Row {
+                anchors.fill: parent
+                anchors.margins: Theme.spacing[2]
+                spacing: Theme.spacing[3]
+                Column {
+                    width: parent.width - reanalyze.width - Theme.spacing[3]
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        text: root.masterStats.integratedLufs !== undefined ? qsTr("Analysed: %1 LUFS-I   %2 LU range   %3 dBTP").arg(root.masterStats.integratedLufs.toFixed(1)).arg(root.masterStats.range.toFixed(1)).arg(root.masterStats.truePeakDb.toFixed(1)) : qsTr("Not analysed yet")
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontTypeLabelSize
+                    }
+                    Text {
+                        text: root.masterStats.gainDb !== undefined ? qsTr("Brings the mix to -14 LUFS (%1 dB), limited at -1 dBTP").arg(root.masterStats.gainDb.toFixed(1)) : qsTr("The Loudness knob centre is -14 LUFS; the output never goes above -1 dB")
+                        color: Theme.textSecondary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontTypeCaptionSize
+                    }
+                }
+                IconButton {
+                    id: reanalyze
+                    objectName: "masteringReanalyze"
+                    anchors.verticalCenter: parent.verticalCenter
+                    enabled: !root.project.masteringBusy
+                    label: root.project.masteringBusy ? qsTr("Analysing…") : (root.project.loopEndBeats > root.project.loopStartBeats ? qsTr("Reanalyze Section") : qsTr("Reanalyze"))
+                    onClicked: root.project.masteringAnalyse(root.trackId, root.index)
+                }
+            }
+        }
+
         Flickable {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -128,7 +171,7 @@ Window {
                 columnSpacing: Theme.spacing[3]
                 rowSpacing: Theme.spacing[1]
                 Repeater {
-                    model: root.spec ? root.spec.params : []
+                    model: root.spec ? root.spec.params.filter(p => !(root.isMastering && (p.name === "gain" || p.name.startsWith("eq")))) : []
                     delegate: RowLayout {
                         id: row
                         required property var modelData

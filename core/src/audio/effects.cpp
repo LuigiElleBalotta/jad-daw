@@ -307,6 +307,106 @@ private:
     float feedback_ = 0.84f, damp_ = 0.2f, wet1_ = 0, wet2_ = 0, dry_ = 1;
 };
 
+// ---------------------------------------------------------------- Mastering Assistant
+
+// The correction EQ (eight bands from the analysis, scaled by Auto EQ), a character, the loudness gain and a limiter at -1 dB.
+class MasteringProcessor final : public IProcessor {
+public:
+    MasteringProcessor(const ProcessorRef& ref, double sr)
+        : bypass_(param(ref, "bypass") >= 0.5), excite_(param(ref, "excite") >= 0.5), character_(static_cast<int>(std::lround(param(ref, "character")))),
+          limiter_(limiterRef(), sr), compressor_(compressorRef(static_cast<int>(std::lround(param(ref, "character")))), sr) {
+        const double amount = param(ref, "autoEq") / 100.0;
+        for (int i = 0; i < kBands; ++i) {
+            const double g = param(ref, ("eq" + std::to_string(i + 1)).c_str()) * amount;
+            if (i == 0) bands_[0] = lowShelf(sr, 60.0, g);
+            else if (i == kBands - 1) bands_[kBands - 1] = highShelf(sr, 11000.0, g);
+            else bands_[static_cast<std::size_t>(i)] = peaking(sr, kCentres[static_cast<std::size_t>(i)], g, 0.9);
+        }
+        // the character colours the balance a little
+        if (character_ == 1) { bands_[0] = lowShelf(sr, 80.0, param(ref, "eq1") * amount + 1.5); drive_ = 1.6f; }
+        if (character_ == 2) extra_ = peaking(sr, 2500.0, 1.5, 0.8);
+        totalGain_ = param(ref, "gain") + 0.06 * param(ref, "loudness");
+        gain_ = static_cast<float>(dbToLin(param(ref, "compensate") >= 0.5 ? 0.0 : totalGain_));
+        // a delay as long as the limiter's, so that bypassing does not shift the sound
+        delay_.assign(static_cast<std::size_t>(std::max(1, limiter_.latencySamples())), 0.0f);
+        delayR_ = delay_;
+        highpass_ = 1.0 - std::exp(-2.0 * kPi * 2500.0 / sr);
+    }
+    int latencySamples() const override { return limiter_.latencySamples(); }
+    void process(float* l, float* r, int frames) noexcept override {
+        if (bypass_) {
+            for (int i = 0; i < frames; ++i) {
+                const std::size_t d = pos_ % delay_.size();
+                const float ol = delay_[d], orr = delayR_[d];
+                delay_[d] = l[i];
+                delayR_[d] = r[i];
+                ++pos_;
+                l[i] = ol;
+                r[i] = orr;
+            }
+            return;
+        }
+        for (int i = 0; i < frames; ++i) {
+            double xl = l[i], xr = r[i];
+            for (std::size_t b = 0; b < bands_.size(); ++b) { xl = biquad(bands_[b], z_[b], 0, xl); xr = biquad(bands_[b], z_[b], 2, xr); }
+            if (character_ == 2) { xl = biquad(extra_, zx_, 0, xl); xr = biquad(extra_, zx_, 2, xr); }
+            if (excite_) {  // saturated highs mixed back in
+                lowL_ += highpass_ * (xl - lowL_);
+                lowR_ += highpass_ * (xr - lowR_);
+                xl += 0.12 * std::tanh(3.0 * (xl - lowL_));
+                xr += 0.12 * std::tanh(3.0 * (xr - lowR_));
+            }
+            if (drive_ > 1.0f) {  // tube-like soft saturation
+                xl = std::tanh(drive_ * xl) / std::tanh(static_cast<double>(drive_));
+                xr = std::tanh(drive_ * xr) / std::tanh(static_cast<double>(drive_));
+            }
+            l[i] = static_cast<float>(xl) * gain_;
+            r[i] = static_cast<float>(xr) * gain_;
+        }
+        compressor_.process(l, r, frames);
+        limiter_.process(l, r, frames);
+    }
+    float reductionDb() const noexcept override { return std::max(compressor_.reductionDb(), 0.0f); }
+    nlohmann::json describe() const override { return {{"id", kProcMastering}, {"bypass", bypass_}, {"gainDb", totalGain_}}; }
+
+private:
+    static constexpr int kBands = 8;
+    static constexpr std::array<double, kBands> kCentres{40, 100, 250, 630, 1600, 4000, 8000, 14000};
+    static ProcessorRef limiterRef() {
+        ProcessorRef r;
+        r.processorId = kProcLimiter;
+        r.params = {{"gain", 0.0}, {"ceiling", -1.0}, {"release", 120.0}};
+        return r;
+    }
+    static ProcessorRef compressorRef(int character) {
+        ProcessorRef r;
+        r.processorId = kProcCompressor;
+        // Clean: gentle; Valve: slow and warm; Punch: fast attack lets less through; Transparent: tight and light
+        static const double threshold[4] = {-14, -16, -18, -20}, ratio[4] = {1.5, 2.0, 2.5, 1.8}, attack[4] = {25, 40, 12, 8}, release[4] = {160, 220, 90, 120};
+        const int c = std::clamp(character, 0, 3);
+        r.params = {{"threshold", threshold[c]}, {"ratio", ratio[c]}, {"attack", attack[c]}, {"release", release[c]}, {"knee", 8.0}, {"makeup", 0.0}, {"mix", 100.0}};
+        return r;
+    }
+    static double biquad(const BiquadCoeffs& c, std::array<double, 4>& z, int off, double x) {
+        const double y = c.b0 * x + z[static_cast<std::size_t>(off)];
+        z[static_cast<std::size_t>(off)] = c.b1 * x - c.a1 * y + z[static_cast<std::size_t>(off) + 1];
+        z[static_cast<std::size_t>(off) + 1] = c.b2 * x - c.a2 * y;
+        return y;
+    }
+    bool bypass_, excite_;
+    int character_;
+    LimiterProcessor limiter_;
+    CompressorProcessor compressor_;
+    std::array<BiquadCoeffs, kBands> bands_;
+    std::array<std::array<double, 4>, kBands> z_{};
+    BiquadCoeffs extra_;
+    std::array<double, 4> zx_{};
+    float drive_ = 1.0f, gain_ = 1.0f;
+    double totalGain_ = 0.0, highpass_ = 0.2, lowL_ = 0.0, lowR_ = 0.0;
+    std::vector<float> delay_, delayR_;
+    std::size_t pos_ = 0;
+};
+
 }  // namespace
 
 std::unique_ptr<IProcessor> makeBuiltinEffect(const ProcessorRef& ref, double sampleRate) {
@@ -317,6 +417,7 @@ std::unique_ptr<IProcessor> makeBuiltinEffect(const ProcessorRef& ref, double sa
     if (id == kProcGate) return std::make_unique<GateProcessor>(ref, sampleRate);
     if (id == kProcDelay) return std::make_unique<DelayProcessor>(ref, sampleRate);
     if (id == kProcReverb) return std::make_unique<ReverbProcessor>(ref, sampleRate);
+    if (id == kProcMastering) return std::make_unique<MasteringProcessor>(ref, sampleRate);
     return nullptr;
 }
 

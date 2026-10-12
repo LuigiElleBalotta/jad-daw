@@ -60,6 +60,10 @@ def main():
         names = {t["name"] for t in tools}
         check({"open_project", "analyze_mix", "set_fader", "run_mastering_assistant", "undo", "commit_session"} <= names, "tools/list has %d tools" % len(tools))
 
+        prompts = c.call("prompts/list")["result"]["prompts"]
+        check({p["name"] for p in prompts} >= {"mix_check", "master_it", "recording_check"}, "prompts/list")
+        got = c.call("prompts/get", {"name": "master_it", "arguments": {"project": "X"}})["result"]
+        check("project X" in got["messages"][0]["content"]["text"], "prompts/get fills the project")
         err, state = c.tool("list_tracks", project=project)
         check(not err and len(state["tracks"]) > 0, "list_tracks")
         first = state["tracks"][0]

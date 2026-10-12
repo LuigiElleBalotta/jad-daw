@@ -24,6 +24,8 @@ Use `-DLPC_BUILD_CLI=OFF` to skip the CLI, or `-DLPC_WITH_JUCE=OFF` to build the
 
 ### The DAW's ears (MCP server)
 
+Guide for the assistant and for people: [docs/ai-assistant.md](docs/ai-assistant.md).
+
 `tools/mcp-ears/jad_ears_server.py` is a Model Context Protocol server (stdio, Python 3, no packages) that lets an AI assistant
 open a project, listen to the mix or to one track (loudness, spectrum, stereo, masking, problems, tempo), change faders, pans,
 inserts and sends, run the Mastering Assistant and render excerpts. Changes go to a copy of the project (`<project>.ai-session`),

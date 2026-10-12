@@ -203,6 +203,19 @@ def apply_commands(project, commands, what):
     return {"done": what, "undoSteps": n, "project": path}
 
 
+def compact(report):
+    """The reports are read by a model: the bands become two short lists and the empty overlaps are dropped."""
+    if isinstance(report, dict):
+        spec = report.get("spectrum")
+        if isinstance(spec, dict) and isinstance(spec.get("thirdOctaveBands"), list):
+            bands = spec.pop("thirdOctaveBands")
+            spec["bandsHz"] = [b["hz"] for b in bands]
+            spec["bandsDb"] = [b["db"] for b in bands]
+        if isinstance(report.get("overlapByBand"), list):
+            report["overlapByBand"] = [b for b in report["overlapByBand"] if b["overlap"] > 0.05]
+    return report
+
+
 # ----------------------------------------------------------------------------------------------------------- the tools
 
 def t_open_project(a):
@@ -609,6 +622,22 @@ TOOL_MAP = {name: (desc, schema, fn) for name, desc, schema, fn in TOOLS}
 
 # ------------------------------------------------------------------------------------------------------ the protocol
 
+PROMPTS = {
+    "mix_check": ("Listen to a mix and say what to fix.",
+                  "Listen to the mix of the project {project}: analyze_mix, then analyze_track for each track and compare_tracks for pairs that share the same range. Say in plain words what is wrong "
+                  "(balance, masking, stereo, dynamics, clipping, headroom) with the numbers behind it, in order of importance. Do not change anything yet."),
+    "mix_it": ("Balance and fix the mix, checking each change.",
+               "Mix the project {project}. If it is a folder, open_project first and work on the session. Analyze the mix and each track, then change one thing at a time (faders, pans, EQ, compression, "
+               "sends), analyze again after each change to check it did what you meant, and undo what did not help. Stop with a short list of what you changed and why; commit_session only if the user agrees."),
+    "master_it": ("Master the mix to streaming loudness.",
+                  "Master the project {project}: analyze_mix first, run_mastering_assistant, analyze_mix again and check the loudness is about -14 LUFS with a true peak under -1 dBTP. Report before and after, "
+                  "and what the correction EQ did. Compare the result with a reference file if the user gave one (import_audio, analyze_track)."),
+    "recording_check": ("Check the input level, noise and latency before recording.",
+                        "The app is linked (live). Use check_recording_setup while the performer plays the loudest part, report what to change at the preamp, and check again after the change. "
+                        "After the takes are recorded, use compare_takes on the track to rank them by sound."),
+}
+
+
 def send(message):
     sys.stdout.write(json.dumps(message, ensure_ascii=False) + "\n")
     sys.stdout.flush()
@@ -621,7 +650,7 @@ def call_tool(name, arguments):
     for key in schema.get("required", []):
         if key not in arguments:
             raise ToolError("missing argument: " + key)
-    result = fn(arguments)
+    result = compact(fn(arguments))
     project = arguments.get("project") or arguments.get("session")
     if project and (is_live(project) or os.path.isdir(norm(project))) and name not in ("open_project",):
         log(project, name, arguments, result if len(json.dumps(result)) < 2000 else "(long result)")
@@ -633,7 +662,7 @@ def handle(msg):
     mid = msg.get("id")
     params = msg.get("params") or {}
     if method == "initialize":
-        send({"jsonrpc": "2.0", "id": mid, "result": {"protocolVersion": params.get("protocolVersion", PROTOCOL), "capabilities": {"tools": {}},
+        send({"jsonrpc": "2.0", "id": mid, "result": {"protocolVersion": params.get("protocolVersion", PROTOCOL), "capabilities": {"tools": {}, "prompts": {}},
                                                        "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
                                                        "instructions": "Tools to look at and listen to a JAD Daw project. Start with open_project, then analyze_mix / analyze_track, change things with the set_* and add_insert tools, "
                                                                        "check again, and commit_session when the user agrees. Levels are dB; LUFS targets: about -14 for streaming."}})
@@ -653,8 +682,15 @@ def handle(msg):
             send({"jsonrpc": "2.0", "id": mid, "result": {"content": [{"type": "text", "text": "internal error: %s" % e}], "isError": True}})
     elif method in ("resources/list",):
         send({"jsonrpc": "2.0", "id": mid, "result": {"resources": []}})
-    elif method in ("prompts/list",):
-        send({"jsonrpc": "2.0", "id": mid, "result": {"prompts": []}})
+    elif method == "prompts/list":
+        send({"jsonrpc": "2.0", "id": mid, "result": {"prompts": [{"name": n, "description": d, "arguments": [{"name": "project", "description": "project folder, or live", "required": True}]} for n, (d, _t) in PROMPTS.items()]}})
+    elif method == "prompts/get":
+        name = params.get("name")
+        if name not in PROMPTS:
+            send({"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "unknown prompt " + str(name)}})
+        else:
+            project = (params.get("arguments") or {}).get("project", "live")
+            send({"jsonrpc": "2.0", "id": mid, "result": {"description": PROMPTS[name][0], "messages": [{"role": "user", "content": {"type": "text", "text": PROMPTS[name][1].replace("{project}", project)}}]}})
     elif mid is not None and not str(method).startswith("notifications/"):
         send({"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": "method not found: %s" % method}})
 

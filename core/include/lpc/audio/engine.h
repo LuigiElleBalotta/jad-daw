@@ -125,6 +125,8 @@ private:
     ClickVoice voices_[kClickVoices];
     void mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept;
     std::int64_t position_ = 0;
+    float masterGain_ = 1.0f, masterGainApplied_ = 1.0f;  // the Master strip (every output); the applied one ramps to the wanted one within a block
+    void applyMasterGain(float* outL, float* outR, float* const* extra, int extraPairs, int offset, int n) noexcept;
     std::int64_t loopStart_ = 0;
     std::int64_t loopEnd_ = 0;  // loop is on when loopEnd_ > loopStart_
 

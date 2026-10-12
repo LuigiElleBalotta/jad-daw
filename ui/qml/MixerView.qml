@@ -114,6 +114,12 @@ Item {
                     onSwiped: (kind, on, p, from) => flick.swipeTo(kind, on, p, from)
                 }
             }
+            MasterVolumeStrip {  // the Master: one fader for Stereo Out and every Output strip
+                project: root.project
+                visible: bar.scope !== "single" && bar.hiddenTypes["master"] !== true
+                width: visible ? implicitWidth : 0
+                height: strips.height
+            }
         }
     }
 }

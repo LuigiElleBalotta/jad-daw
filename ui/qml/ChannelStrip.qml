@@ -30,7 +30,7 @@ Panel {
     readonly property string trackId: info.trackId ?? ""
     // a gesture in flight belongs to the track it started on: showing another track drops it, no command
     onTrackIdChanged: { fader.cancel(); panKnob.cancel(); dragIndex = -1; renaming = false }
-    readonly property string trackName: (info.master && info.name === "Master") ? qsTr("Stereo Out") : (info.name ?? "")  // the master strip is Logic's Stereo Out
+    readonly property string trackName: (info.master && !volumeOnly && info.name === "Master") ? qsTr("Stereo Out") : (info.name ?? "")  // the master strip is Logic's Stereo Out
     readonly property string trackColor: info.color ?? "purple"
     readonly property string kind: info.kind ?? "audio"
     readonly property bool master: (info.master ?? false) || kind === "output"  // Stereo Out and the Output strips: no input, output or group slots
@@ -41,6 +41,7 @@ Panel {
     readonly property var inserts: info.inserts ?? []
     readonly property var sends: info.sends ?? []
     readonly property bool slotsVisible: showSlots && !master
+    property bool volumeOnly: false  // the Master strip: only the fader, the meter and the name (it scales every output)
     readonly property bool fxVisible: showSlots  // the audio effects are on the master strip too (Mastering Assistant lives there)
     readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
 
@@ -365,6 +366,9 @@ Panel {
     // the rows have fixed heights (StripMetrics) so that the legend of the Mixer lines up with every strip
     component FixedRow: Item {
         property real rowHeight
+        property bool keepWhenVolumeOnly: false
+        opacity: root.volumeOnly && !keepWhenVolumeOnly ? 0 : 1
+        enabled: opacity > 0
         Layout.fillWidth: true
         Layout.preferredHeight: rowHeight
     }
@@ -614,6 +618,7 @@ Panel {
             }
         }
         FixedRow {  // the track icon tile, in the colour of the strip type
+            keepWhenVolumeOnly: true
             rowHeight: StripMetrics.icon
             Rectangle {
                 anchors.centerIn: parent
@@ -735,6 +740,8 @@ Panel {
             spacing: Theme.spacing[1]
             IconButton {
                 id: muteButton
+                opacity: root.volumeOnly ? 0 : 1
+                enabled: !root.volumeOnly
                 implicitWidth: 28
                 implicitHeight: Theme.sizeControlCompact
                 label: "M"
@@ -806,7 +813,7 @@ Panel {
             }
             IconButton {  // dim, on the master strip
                 id: dimButton
-                visible: root.master
+                visible: root.master && !root.volumeOnly
                 implicitWidth: 28
                 implicitHeight: Theme.sizeControlCompact
                 label: "D"

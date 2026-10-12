@@ -48,7 +48,7 @@ namespace {
 
 std::string humanize(const std::string& type) {
     static const std::pair<const char*, const char*> names[] = {
-        {"add_track", "Add track"}, {"remove_track", "Delete track"}, {"set_strip", "Channel strip"}, {"set_tempo", "Tempo"}, {"remove_tempo", "Delete tempo change"},
+        {"add_track", "Add track"}, {"remove_track", "Delete track"}, {"set_strip", "Channel strip"}, {"set_tempo", "Tempo"}, {"set_master_volume", "Master volume"}, {"remove_tempo", "Delete tempo change"},
         {"set_signature", "Time signature"}, {"remove_signature", "Delete signature change"}, {"set_track_props", "Track properties"},
         {"add_media", "Add audio file"}, {"remove_media", "Remove audio file"}, {"add_region", "Add region"}, {"remove_region", "Delete region"},
         {"move_region", "Move region"}, {"replace_region", "Edit region"}, {"resize_region", "Resize region"}, {"split_region", "Split region"},

@@ -38,6 +38,7 @@ qt_add_qml_module(jad_ui_lib
         qml/FaderScale.qml
         qml/StripMetrics.qml
         qml/MeterScale.qml
+        qml/MasterVolumeStrip.qml
         qml/MixerLegend.qml
         qml/DbField.qml
         qml/MixerHeader.qml

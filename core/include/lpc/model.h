@@ -221,6 +221,7 @@ struct Project {
     std::vector<Group> groups;
     std::vector<Track> tracks;  // tracks[0] is the master track in a new project
     std::vector<MediaItem> mediaPool;
+    float masterVolumeDb = 0.0f;  // the Master strip: scales Stereo Out and every Output strip together (-96..24 dB)
 
     Project();
     explicit Project(Uuid masterId);

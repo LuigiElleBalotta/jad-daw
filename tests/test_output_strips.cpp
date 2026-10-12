@@ -140,3 +140,37 @@ TEST_CASE("output strips: the engine fills the extra buffers of the device and s
     CHECK(pair1 > 0.0);
     CHECK(pair2 == 0.0);  // pair 2 has no strip: silence, not the 9.0 the buffer held
 }
+
+TEST_CASE("master volume: one fader scales Stereo Out and the Output strips, is undoable and survives the JSON round trip", "[output][master]") {
+    Project p = makeDemoProject({});
+    Track strip = outputStrip(1);
+    REQUIRE(applyOk(p, {{"type", "add_track"}, {"track", strip}, {"index", -1}}));
+    REQUIRE(applyOk(p, {{"type", "set_output"}, {"trackId", keysOf(p)->id}, {"output", strip.id}}));
+    MediaStore media({}, false);
+    RenderOptions stereo;
+    stereo.tailSeconds = 0.1;
+    RenderOptions pair = stereo;
+    pair.outputPair = 1;
+    const double stereo0 = energy(renderOffline(p, media, stereo).interleaved);
+    const double pair0 = energy(renderOffline(p, media, pair).interleaved);
+    REQUIRE(stereo0 > 0.0);
+    REQUIRE(pair0 > 0.0);
+    const ApplyResult r = commandFromJson({{"type", "set_master_volume"}, {"gainDb", -6.0}})->apply(p);
+    REQUIRE(r.ok());
+    CHECK(p.masterVolumeDb == -6.0f);
+    // -6 dB is a quarter of the energy, on both outputs (the gain ramps within the first block: a small difference)
+    CHECK(std::abs(energy(renderOffline(p, media, stereo).interleaved) / stereo0 - 0.2512) < 0.01);
+    CHECK(std::abs(energy(renderOffline(p, media, pair).interleaved) / pair0 - 0.2512) < 0.01);
+    CHECK(checkProject(projectFromJson(toJson(p))) == std::nullopt);
+    CHECK(projectFromJson(toJson(p)).masterVolumeDb == -6.0f);
+    r.inverse->apply(p);  // the inverse command
+    CHECK(p.masterVolumeDb == 0.0f);
+    std::string code;
+    CHECK(!applyOk(p, {{"type", "set_master_volume"}, {"gainDb", 40.0}}, &code));
+    CHECK(code == "bad_value");
+    CHECK(!applyOk(p, {{"type", "set_master_volume"}, {"gainDb", -200.0}}));
+    // a project saved before the Master existed reads as 0 dB
+    json j = toJson(Project{});
+    j.erase("masterVolumeDb");
+    CHECK(projectFromJson(j).masterVolumeDb == 0.0f);
+}

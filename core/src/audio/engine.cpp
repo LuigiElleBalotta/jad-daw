@@ -66,6 +66,9 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
         case MsgKind::SetLowLatency:
             graph_.apply(m);
             break;
+        case MsgKind::SetMasterGain:
+            masterGain_ = m.strip.gain;
+            break;
         case MsgKind::SetLiveTarget:
             if (!liveTarget_.isNull()) graph_.liveNote(liveTarget_, false, 0, 0);  // nothing keeps ringing on the old target
             liveTarget_ = m.track;
@@ -245,6 +248,23 @@ void AudioEngine::mixAudition(float* outL, float* outR, int n) noexcept {
     auditionPosPub_.store(auditionPos_, std::memory_order_relaxed);
 }
 
+void AudioEngine::applyMasterGain(float* outL, float* outR, float* const* extra, int extraPairs, int offset, int n) noexcept {
+    const float from = masterGainApplied_, to = masterGain_;
+    masterGainApplied_ = to;
+    if (from == 1.0f && to == 1.0f) return;
+    const float step = (to - from) / static_cast<float>(n);
+    auto scale = [&](float* buf) {
+        float g = from;
+        for (int i = 0; i < n; ++i) {
+            g += step;
+            buf[offset + i] *= g;
+        }
+    };
+    scale(outL);
+    scale(outR);
+    for (int p = 0; p < 2 * extraPairs; ++p) scale(extra[p]);
+}
+
 void AudioEngine::processBlock(float* outL, float* outR, int frames, float* const* extra, int extraPairs) noexcept {
     drain();
     drainMidi();
@@ -276,6 +296,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames, float* cons
             graph_.setInput(inPtr_, inChannels_);
             graph_.render(position_, n, outL + done, outR + done);
             if (extraPairs > 0) graph_.copyOutputPairs(extra, extraPairs, done, n);
+            applyMasterGain(outL, outR, extra, extraPairs, done, n);
             if (clickOn_ && click_) mixClick(outL + done, outR + done, position_, n);
             if (recording_) capture(done, n);
             position_ += n;
@@ -284,6 +305,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames, float* cons
             graph_.setInput(inPtr_, inChannels_);
             graph_.render(position_, n, outL + done, outR + done, false);
             if (extraPairs > 0) graph_.copyOutputPairs(extra, extraPairs, done, n);
+            applyMasterGain(outL, outR, extra, extraPairs, done, n);
         } else {
             std::fill_n(outL + done, n, 0.0f);
             std::fill_n(outR + done, n, 0.0f);
@@ -295,7 +317,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames, float* cons
     inFrames_ = 0;
     inChannels_ = 0;
     positionPub_.store(position_, std::memory_order_relaxed);
-    masterPeakPub_.store(graph_.masterPeak(), std::memory_order_relaxed);
+    masterPeakPub_.store(graph_.masterPeak() * masterGain_, std::memory_order_relaxed);
 }
 
 }  // namespace lpc::audio

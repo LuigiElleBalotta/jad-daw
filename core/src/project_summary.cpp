@@ -22,6 +22,7 @@ json projectSummary(const Project& p) {
     json j;
     j["name"] = p.name;
     j["sampleRate"] = p.sampleRate;
+    j["masterVolumeDb"] = p.masterVolumeDb;
     j["tempo"] = json::array();
     for (const auto& e : p.tempoMap.tempos()) j["tempo"].push_back({{"beat", static_cast<double>(e.tick) / kPPQ}, {"bpm", e.bpm}});
     j["timeSignature"] = json::array();

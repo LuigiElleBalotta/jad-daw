@@ -372,12 +372,9 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     beatsPerBar_ = s.beatsPerBar;
     beatUnit_ = s.beatUnit;
     masterId_.clear();
-    masterGain_ = 0.0;
+    masterGain_ = s.masterVolumeDb;
     for (const TrackRow& t : s.tracks)
-        if (t.master) {
-            masterId_ = t.id;
-            masterGain_ = t.gainDb;
-        }
+        if (t.master) masterId_ = t.id;
     emit routingRevisionChanged();
     emit projectChanged();
     emit groupsChanged();
@@ -854,8 +851,8 @@ void ProjectController::setSignature(int numerator, int denominator) {
 }
 
 void ProjectController::setMasterGain(double db) {
-    if (masterId_.isEmpty()) return;
-    setGain(masterId_, db);
+    if (!host_ || !std::isfinite(db)) return;
+    sendCommand({{"type", "set_master_volume"}, {"gainDb", std::clamp(db, -96.0, 24.0)}});
 }
 
 void ProjectController::barBack() {

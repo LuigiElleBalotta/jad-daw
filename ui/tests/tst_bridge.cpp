@@ -422,7 +422,7 @@ private slots:
         QVERIFY(!c.lastError().isEmpty());
         QCOMPARE(c.signatureText(), QStringLiteral("3/4"));
     }
-    void masterGainGoesThroughSetStrip() {
+    void masterVolumeIsAProjectSetting() {
         TempDir dir;
         jad::ProjectController c(false);
         QVERIFY(c.openProject(url(makeDemo(dir))));
@@ -431,6 +431,13 @@ private slots:
         QTRY_COMPARE(c.masterGainDb(), -6.0);
         c.setMasterGain(1000.0);
         QTRY_COMPARE(c.masterGainDb(), 24.0);
+        // Stereo Out keeps its own fader
+        const auto roles = c.mixer()->roleNames();
+        const int last = c.mixer()->rowCount() - 1;
+        QVERIFY(c.mixer()->data(c.mixer()->index(last), roles.key("isMaster")).toBool());
+        QCOMPARE(c.mixer()->data(c.mixer()->index(last), roles.key("gainDb")).toDouble(), 0.0);
+        c.undo();  // one undo step takes the volume back
+        QTRY_COMPARE(c.masterGainDb(), -6.0);
     }
     void barNavigationNeverGoesBelowZero() {
         TempDir dir;

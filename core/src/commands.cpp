@@ -197,6 +197,23 @@ private:
     double bpm_;
 };
 
+class SetMasterVolumeCmd final : public Command {
+public:
+    explicit SetMasterVolumeCmd(float gainDb) : gainDb_(gainDb) {}
+    std::string type() const override { return "set_master_volume"; }
+    json toJson() const override { return {{"type", type()}, {"gainDb", gainDb_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        if (!(gainDb_ >= -96.0f && gainDb_ <= 24.0f)) return fail("bad_value", "the master volume is -96..24 dB");
+        const float previous = p.masterVolumeDb;
+        p.masterVolumeDb = gainDb_;
+        return success(makeSetMasterVolume(previous));
+    }
+
+private:
+    float gainDb_;
+};
+
 class RemoveTempoCmd final : public Command {
 public:
     explicit RemoveTempoCmd(Ticks tick) : tick_(tick) {}
@@ -1092,6 +1109,7 @@ private:
 CommandPtr makeAddTrack(Track track, int index) { return std::make_unique<AddTrackCmd>(std::move(track), index); }
 CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCmd>(trackId); }
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
+CommandPtr makeSetMasterVolume(float gainDb) { return std::make_unique<SetMasterVolumeCmd>(gainDb); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
@@ -1135,6 +1153,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("input")) patch.input = j["input"].get<int>();
             return makeSetStrip(j.at("trackId").get<Uuid>(), patch);
         }
+        if (type == "set_master_volume") return makeSetMasterVolume(j.at("gainDb").get<float>());
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());

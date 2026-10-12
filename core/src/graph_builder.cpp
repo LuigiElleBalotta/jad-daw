@@ -50,6 +50,13 @@ AudioMsg stripMsg(const Track& t) {
     return m;
 }
 
+AudioMsg masterGainMsg(const Project& p) {
+    AudioMsg m;
+    m.kind = MsgKind::SetMasterGain;
+    m.strip.gain = dbToLinear(p.masterVolumeDb);
+    return m;
+}
+
 AudioMsg configMsg(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     AudioMsg m;
     m.kind = MsgKind::SetConfig;
@@ -383,6 +390,7 @@ std::vector<AudioMsg> initialMessages(const Project& p, MediaStore& media, IPlug
     std::vector<AudioMsg> out;
     for (const Track& t : p.tracks) out.push_back(addMsg(buildNode(p, t, media, plugins, &pdc)));
     out.push_back(reorderMsg(p));
+    out.push_back(masterGainMsg(p));
     return out;
 }
 
@@ -424,6 +432,7 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
         }
     }
     if (structural || processingOrder(before) != processingOrder(after)) out.push_back(reorderMsg(after));
+    if (before.masterVolumeDb != after.masterVolumeDb) out.push_back(masterGainMsg(after));
     if (plan) *plan = planAfter;
     return out;
 }

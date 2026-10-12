@@ -399,6 +399,24 @@ def t_import_audio(a):
     return result
 
 
+def t_render_image(a):
+    """A PNG of the mix, a track or a file (spectrogram, waveform or spectrum) for a model that can look at pictures; the path is returned (open or read the file)."""
+    kind = a.get("kind", "spectrogram")
+    out = a.get("out") or os.path.join(tempfile.gettempdir(), "jad-%s-%d.png" % (kind, int(datetime.datetime.now().timestamp() * 1000)))
+    if a.get("file"):
+        target = [norm(a["file"])]
+    else:
+        target = [project_dir(a["project"])]
+        if a.get("track"):
+            track, _ = resolve_track(a["project"], a["track"])
+            target += ["--track", track["id"]]
+    report = run_cli(["analyze"] + target + range_args(a) + ["--no-tempo", "--image", out, "--kind", kind])
+    return {"image": out, "kind": kind, "how_to_read": {
+        "spectrogram": "time left to right, frequency bottom 20 Hz to top 20 kHz (logarithmic; white ticks at 100 Hz, 1 kHz, 10 kHz), brighter is louder",
+        "waveform": "peak envelope over time; blue normal, red where the signal reaches full scale (clipping); guides at half and full height",
+        "spectrum": "31 third-octave bars from 20 Hz to 20 kHz, height is level (-90 to 0 dBFS)"}[kind], "reading": report.get("reading", [])}
+
+
 def t_effects(a):
     return run_cli(["effects"])
 
@@ -603,6 +621,9 @@ TOOLS = [
      obj({"project": P, "from_seconds": FROM, "to_seconds": TO, "track": TRACK, "out": {"type": "string"}}, ["project"]), t_render_excerpt),
     ("import_audio", "Bring an audio file (wav, mp3, flac, aiff) into the session as a new track (or on an existing track), starting at start_seconds. Use it to add a reference track to compare with.",
      obj({"project": P, "file": {"type": "string"}, "track": TRACK, "name": {"type": "string"}, "start_seconds": {"type": "number"}}, ["project", "file"]), t_import_audio),
+    ("render_image", "A picture (PNG) of the mix, one track or a file: kind spectrogram, waveform or spectrum; look at it for what numbers hide (hum lines, clipped sections, "
+     "a missing band, where things happen in time). Returns the file path and how to read it.", obj({"project": P, "file": {"type": "string"}, "track": TRACK, "kind": {"type": "string", "enum": ["spectrogram", "waveform", "spectrum"]},
+     "from_seconds": FROM, "to_seconds": TO, "out": {"type": "string"}}), t_render_image),
     ("list_effects", "The built-in effects and instruments with every parameter: name, unit, minimum, maximum, default.", obj({}), t_effects),
     ("history", "What was changed in this session (the undo steps and the last calls).", obj({"project": P}, ["project"]), t_history),
     ("undo", "Undo the last change made in this session (or in the open app when the project is \"live\").", obj({"project": P, "steps": {"type": "integer"}}, ["project"]), t_undo),

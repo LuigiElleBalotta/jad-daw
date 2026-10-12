@@ -18,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include "lpc/audio_analysis.h"
+#include "lpc/audio_image.h"
 #include "lpc/wav.h"
 #include "lpc/audio_decode.h"
 #include "lpc/commands.h"
@@ -148,7 +149,7 @@ int cmdSnapshot(const std::vector<std::string>& args, std::ostream& out) {
 }
 
 int cmdAnalyze(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
-    const Options o = parseOptions(args, {"--track", "--seconds", "--region"}, {"--no-tempo"});
+    const Options o = parseOptions(args, {"--track", "--seconds", "--region", "--image", "--kind"}, {"--no-tempo"});
     if (o.positional.size() != 1) throw Usage{"analyze needs a project directory or an audio file"};
     const fs::path target = toPath(o.positional[0]);
     double from = 0, to = -1;
@@ -202,8 +203,19 @@ int cmdAnalyze(const std::vector<std::string>& args, std::ostream& out, std::ost
             what = "the whole mix";
         }
     }
+    if (const auto png = o.get("--image")) {  // a picture of the same audio, for a model that can look
+        const std::string kind = o.get("--kind").value_or("spectrogram");
+        Image img;
+        if (kind == "spectrogram") img = spectrogramImage(audio);
+        else if (kind == "waveform") img = waveformImage(audio);
+        else if (kind == "spectrum") img = spectrumImage(audio);
+        else throw Usage{"--kind must be spectrogram, waveform or spectrum"};
+        if (img.width == 0 || audio.frames() < 8192) throw Usage{"the audio is too short for a picture"};
+        writePng(toPath(*png), img);
+    }
     const AudioReport r = analyseAudio(audio, options);
     json j = toJson(r);
+    if (o.has("--image")) j["image"] = {{"file", *o.get("--image")}, {"kind", o.get("--kind").value_or("spectrogram")}};
     j["analysed"] = what;
     j["reading"] = describeReport(r);
     out << j.dump(1) << "\n";

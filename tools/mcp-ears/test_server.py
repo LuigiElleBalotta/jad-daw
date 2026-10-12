@@ -98,6 +98,8 @@ def main():
             check(not err and "score" in m, "compare_tracks")
         err, takes = c.tool("compare_takes", project=session, track="Tone")
         check(not err and len(takes["takes"]) == 1 and takes["bestBySound"], "compare_takes on one region: %s" % (takes if err else ""))
+        err, img = c.tool("render_image", project=session, track=first["name"], kind="spectrogram")
+        check(not err and os.path.getsize(img["image"]) > 500 and open(img["image"], "rb").read(4)[1:] == b"PNG", "render_image writes a PNG: %s" % (img if err else ""))
         err, eff = c.tool("list_effects")
         check(not err and any(e["id"] == "builtin.compressor" for e in eff["effects"]), "list_effects")
 

@@ -193,3 +193,36 @@ TEST_CASE("input stats: peak, usual level, floor, clipping, and the gain to chan
     for (int i = 0; i < 100; ++i) small.push(0.5f, 0.02);
     CHECK(small.summary().seconds < 0.25);
 }
+
+#include <filesystem>
+#include <fstream>
+#include "lpc/audio_image.h"
+
+TEST_CASE("images: a PNG with the right signature and size; the spectrogram puts a tone at its frequency", "[analysis][image]") {
+    WavData d = tone(1000.0, -10.0, 4.0);
+    const Image s = spectrogramImage(d, 200, 120);
+    REQUIRE(s.rgb.size() == 200u * 120u * 3u);
+    // brightest row of the middle column: 1 kHz on a log axis 20 Hz..20 kHz is at 57 % of the height from the bottom
+    int best = 0, bestY = 0;
+    for (int y = 0; y < 120; ++y) {
+        const int v = s.rgb[(static_cast<std::size_t>(y) * 200 + 100) * 3] + s.rgb[(static_cast<std::size_t>(y) * 200 + 100) * 3 + 1];
+        if (v > best) { best = v; bestY = y; }
+    }
+    CHECK(std::abs((119 - bestY) / 120.0 - 0.567) < 0.05);
+    const Image w = waveformImage(d, 100, 80);
+    CHECK(w.rgb.size() == 100u * 80u * 3u);
+    CHECK(spectrumImage(d, 310, 100).rgb.size() == 310u * 100u * 3u);
+    const std::vector<std::uint8_t> png = encodePng(w);
+    CHECK(png.size() > 100);
+    CHECK(png[1] == 'P');
+    CHECK(png[2] == 'N');
+    CHECK(png[3] == 'G');
+    CHECK_THROWS(encodePng(Image{}));
+    // clipping shows red in the waveform
+    WavData loud = tone(1000.0, 0.0, 1.0);
+    for (float& v : loud.samples) v = std::clamp(v * 2.0f, -1.0f, 1.0f);
+    const Image lw = waveformImage(loud, 50, 60);
+    bool red = false;
+    for (std::size_t i = 0; i + 2 < lw.rgb.size(); i += 3) red = red || (lw.rgb[i] == 255 && lw.rgb[i + 1] == 60);
+    CHECK(red);
+}

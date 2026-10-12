@@ -174,4 +174,6 @@ Rule: a feature is done only when it works end to end, has a test, is checked on
 - [x] B5. Recording assistant tools: input level check (peak, noise floor, clipping risk), gain staging suggestion, latency check, take comparison.
 - [x] B6. A guide for the AI (docs/ai-assistant.md): what each tool measures, target values (LUFS per platform, headroom, balance curves), a mixing and mastering checklist, example sessions; verified end to end on a real mp3 project.
 
+- [x] B7. Pictures for the ears: `render_image` (spectrogram, waveform with clipping in red, third-octave spectrum) as PNG of the mix, a track or a file (`lpc-cli analyze --image out.png --kind ...`, own PNG encoder in core); audio clips for models are the existing `render_excerpt` WAV.
+
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

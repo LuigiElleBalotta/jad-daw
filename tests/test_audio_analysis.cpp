@@ -163,6 +163,11 @@ TEST_CASE("input stats: peak, usual level, floor, clipping, and the gain to chan
     CHECK(!stats.summary().signal);
     CHECK(adviseInput(stats.summary()).messages.front().find("No signal") == 0);
 
+    stats.reset();  // room noise only: no gain advice
+    for (int i = 0; i < 200; ++i) stats.push(0.002f, 0.02);
+    CHECK(adviseInput(stats.summary()).gainChangeDb == 0.0);
+    CHECK(adviseInput(stats.summary()).messages.front().find("Only background") == 0);
+
     stats.reset();
     const float quiet = static_cast<float>(std::pow(10.0, -34.0 / 20.0)), loud = static_cast<float>(std::pow(10.0, -30.0 / 20.0));
     for (int i = 0; i < 500; ++i) stats.push(i % 5 == 0 ? loud : quiet, 0.02);

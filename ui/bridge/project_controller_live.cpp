@@ -3,6 +3,7 @@
 //   state                      the project as a mixer sees it (same JSON as `lpc-cli snapshot`)
 //   meters                     playhead, master peak and every track's peak and hold (dB), gain reduction
 //   apply  {commands: [...]}   commands of the project model, all in one undo step (one command is accepted as {command: {...}})
+//   arm {trackId, on} | record    arm an audio track, start recording (stop with "stop")
 //   inputs | reset_inputs     the recording assistant: level of each input since the last reset, gain advice, device latency
 //   play | stop | locate {seconds} | undo | redo | reset_peaks
 //   export {dir}               a copy of the project as it is now (saved or not) in `dir`, for `lpc-cli analyze` to listen to
@@ -110,6 +111,12 @@ void ProjectController::liveHandle(const json& request, std::function<void(const
             reply({{"ok", true}});
         } else if (op == "reset_peaks") {
             resetPeaks();
+            reply({{"ok", true}});
+        } else if (op == "arm") {  // {trackId, on}: the R button of an audio track
+            setTrackToggle(QStringLiteral("track.recordArm"), QString::fromStdString(request.value("trackId", std::string())), request.value("on", true));
+            reply({{"ok", true}});
+        } else if (op == "record") {
+            startRecording();
             reply({{"ok", true}});
         } else if (op == "reset_inputs") {
             for (auto& s : inputStats_) s.reset();

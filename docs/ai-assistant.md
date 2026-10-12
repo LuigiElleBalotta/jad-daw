@@ -32,6 +32,7 @@ Ready-made prompts: `mix_check`, `mix_it`, `master_it`, `recording_check`.
 | `compare_tracks` | masking between two tracks: where they pile up (score 0..1, worst bands in Hz) and advice |
 | `compare_takes` | each take (region) of a track analysed alone and ranked by clipping, headroom, level and noise |
 | `check_recording_setup` | listens to the armed inputs for some seconds: peak, usual level, noise floor, clipping, the dB to change at the preamp, round-trip latency |
+| `live_record` | arm an audio track of the running app and start recording; stop with `live_transport` |
 | `live_meters`, `live_status`, `live_transport` | the running app: peak and hold of every track, gain reduction, playhead, play/stop/locate |
 | `get_state`, `list_tracks`, `list_effects` | the project as a mixer sees it; the built-in effects with every parameter, unit and range |
 | `set_fader`, `set_pan`, `set_mute`, `set_solo`, `set_send_level`, `set_tempo`, `add_insert`, `set_insert_param`, `set_insert_bypass`, `remove_insert`, `import_audio`, `apply_commands` | the hands: each is one undo step |

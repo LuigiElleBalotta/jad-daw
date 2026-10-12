@@ -54,6 +54,11 @@ InputAdvice adviseInput(const InputSummary& s) {
         return a;
     }
     constexpr double kTarget = -10.0;  // dBFS peak
+    if (s.peakDb < -40.0) {  // room noise only: the performer has not played yet, so no gain can be advised
+        std::snprintf(buf, sizeof buf, "Only background level so far (peak %.1f dBFS): play or sing the loudest part for a few seconds, then check again before touching the gain.", s.peakDb);
+        a.messages.emplace_back(buf);
+        return a;
+    }
     if (s.clippedReadings > 0) {
         std::snprintf(buf, sizeof buf, "The input clipped (%d readings at full scale): turn the gain down by at least %.0f dB and play the loudest part again; a clipped take cannot be repaired.", s.clippedReadings,
                       std::max(6.0, std::ceil(s.peakDb - kTarget)));

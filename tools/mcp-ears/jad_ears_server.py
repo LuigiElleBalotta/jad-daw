@@ -564,6 +564,17 @@ def t_compare_takes(a):
             "note": "Ranked by clipping, headroom, level and noise only; timing, pitch and feel need a listener."}
 
 
+def t_live_record(a):
+    """Arm a track and record on the running app (the performer plays); stop with live_transport stop. The take lands on the track as a region."""
+    track, _ = resolve_track(LIVE, a["track"])
+    if track["kind"] != "audio":
+        raise ToolError("only audio tracks record")
+    live_request("arm", trackId=track["id"], on=bool(a.get("arm", True)))
+    if a.get("start"):
+        live_request("record")
+    return live_request("hello")
+
+
 def t_live_transport(a):
     action = a["action"]
     if action == "locate":
@@ -572,6 +583,8 @@ def t_live_transport(a):
         live_request(action)
     else:
         raise ToolError("action must be play, stop, locate or reset_peaks")
+    import time
+    time.sleep(0.2)  # the app updates its transport state on its next tick
     return live_request("hello")
 
 
@@ -677,6 +690,8 @@ TOOLS = [
      "whether it clips or hisses, how many dB to change at the preamp, and how big the latency is.", obj({"seconds": {"type": "number"}}), t_check_recording_setup),
     ("compare_takes", "Compare the takes (regions) of a track, each analysed alone: peak, loudness, clipping, noise floor, with a ranking by sound quality (not timing or pitch). "
      "Optional region_ids or take_group choose which.", obj({"project": P, "track": TRACK, "region_ids": {"type": "array", "items": {"type": "string"}}, "take_group": {"type": "string"}}, ["project", "track"]), t_compare_takes),
+    ("live_record", "Arm an audio track of the running app (arm: true/false) and optionally start recording (start: true); stop with live_transport stop. Check the level first with check_recording_setup.",
+     obj({"track": TRACK, "arm": {"type": "boolean"}, "start": {"type": "boolean"}}, ["track"]), t_live_record),
     ("live_transport", "Drive the transport of the running app: play, stop, locate (seconds), reset_peaks.", obj({"action": {"type": "string", "enum": ["play", "stop", "locate", "reset_peaks"]}, "seconds": {"type": "number"}}, ["action"]), t_live_transport),
     ("commit_session", "Write the session back to the original project (the original is kept as <project>.before-ai), or to another folder with `to`.",
      obj({"session": {"type": "string"}, "to": {"type": "string"}}, ["session"]), t_commit_session),

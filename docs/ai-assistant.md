@@ -36,6 +36,7 @@ Ready-made prompts: `mix_check`, `mix_it`, `master_it`, `recording_check`.
 | `get_state`, `list_tracks`, `list_effects` | the project as a mixer sees it; the built-in effects with every parameter, unit and range |
 | `set_fader`, `set_pan`, `set_mute`, `set_solo`, `set_send_level`, `set_tempo`, `add_insert`, `set_insert_param`, `set_insert_bypass`, `remove_insert`, `import_audio`, `apply_commands` | the hands: each is one undo step |
 | `run_mastering_assistant` | adds the Mastering Assistant to the master and fits it (correction EQ, gain, loudness compensation) to about -14 LUFS with a true peak at -1 dBTP |
+| `compare_audio` | two sounds, B minus A: loudness, peak, crest, stereo, and the tonal difference per third-octave band with the level difference removed; use it for before/after (render_excerpt first) and against a reference |
 | `render_image` | a PNG of the mix, a track or a file: spectrogram (time x log frequency, brighter is louder), waveform (clipping in red), third-octave spectrum; look at it for hum lines, clipped sections, a missing band |
 | `render_excerpt` | a 16-bit WAV of a range, or of one track alone, with its analysis |
 | `history`, `undo`, `commit_session` | step back; write the session to the original |

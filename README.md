@@ -39,7 +39,7 @@ With **Help > AI Assistant Link** on, the running app also listens on the loopba
 read its state and meters, change faders and inserts as undo steps of the app, drive the transport, and listen to a copy of the project as it is now.
 For recording, `check_recording_setup` listens to the armed inputs for a few seconds (peak, usual level, noise floor, clipping, the gain to change at the
 preamp, round-trip latency) and `compare_takes` analyses each take of a track alone and ranks them by clipping, headroom, level and noise.
-`render_image` makes a spectrogram, waveform or spectrum PNG for models that can look at pictures (`lpc-cli analyze --image`).
+`compare_audio` gives the tonal and loudness difference of two sounds (before/after, or against a reference). `render_image` makes a spectrogram, waveform or spectrum PNG for models that can look at pictures (`lpc-cli analyze --image`).
 Set `JAD_CLI` if `lpc-cli` is not in the build folders. Test: `python tools/mcp-ears/test_server.py`.
 
 ## UI

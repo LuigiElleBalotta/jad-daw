@@ -417,6 +417,46 @@ def t_render_image(a):
         "spectrum": "31 third-octave bars from 20 Hz to 20 kHz, height is level (-90 to 0 dBFS)"}[kind], "reading": report.get("reading", [])}
 
 
+def _report_of(src):
+    """src: {"file": path} or {"project": ..., "track": optional, "from_seconds", "to_seconds"}."""
+    if src.get("file"):
+        args = ["analyze", norm(src["file"])]
+    else:
+        args = ["analyze", project_dir(src["project"])]
+        if src.get("track"):
+            track, _ = resolve_track(src["project"], src["track"])
+            args += ["--track", track["id"]]
+    return run_cli(args + range_args(src) + ["--no-tempo"])
+
+
+def t_compare_audio(a):
+    """Two sounds side by side (a render before and after a change, the mix against a reference): the difference in loudness, level, stereo and every third-octave band (B minus A)."""
+    ra, rb = _report_of(a["a"]), _report_of(a["b"])
+    def band_map(r):
+        sp = r["spectrum"]
+        if "thirdOctaveBands" in sp:
+            return {b["hz"]: b["db"] for b in sp["thirdOctaveBands"]}
+        return dict(zip(sp["bandsHz"], sp["bandsDb"]))
+    ma, mb = band_map(ra), band_map(rb)
+    bands = [{"hz": hz, "diffDb": round(mb[hz] - ma[hz], 1)} for hz in ma if ma[hz] > -100 and mb.get(hz, -200) > -100]
+    # the overall level difference is not a tonal difference: show the bands relative to it
+    shift = round(rb["loudness"]["integratedLufs"] - ra["loudness"]["integratedLufs"], 2)
+    tonal = [{"hz": b["hz"], "diffDb": round(b["diffDb"] - shift, 1)} for b in bands]
+    notable = [b for b in tonal if abs(b["diffDb"]) >= 3.0]
+    say = []
+    say.append("B is %.1f LU %s than A (integrated)." % (abs(shift), "louder" if shift > 0 else "quieter"))
+    for b in sorted(notable, key=lambda x: -abs(x["diffDb"]))[:6]:
+        say.append("Around %d Hz B has %.1f dB %s than A, relative to the overall level." % (b["hz"], abs(b["diffDb"]), "more" if b["diffDb"] > 0 else "less"))
+    if abs(rb["stereo"]["widthPercent"] - ra["stereo"]["widthPercent"]) > 5:
+        say.append("Stereo width: A %.0f %%, B %.0f %%." % (ra["stereo"]["widthPercent"], rb["stereo"]["widthPercent"]))
+    if abs(rb["level"]["crestDb"] - ra["level"]["crestDb"]) > 2:
+        say.append("Crest factor: A %.1f dB, B %.1f dB (a lower one is more compressed)." % (ra["level"]["crestDb"], rb["level"]["crestDb"]))
+    return {"loudnessDiffLu": shift, "peakDiffDb": round(rb["level"]["peakDb"] - ra["level"]["peakDb"], 2),
+            "truePeakA": ra["loudness"]["truePeakDbtp"], "truePeakB": rb["loudness"]["truePeakDbtp"], "rangeLuA": ra["loudness"]["rangeLu"], "rangeLuB": rb["loudness"]["rangeLu"],
+            "crestA": ra["level"]["crestDb"], "crestB": rb["level"]["crestDb"], "stereoA": ra["stereo"], "stereoB": rb["stereo"],
+            "tonalDiffByBand": tonal, "reading": say}
+
+
 def t_effects(a):
     return run_cli(["effects"])
 
@@ -624,6 +664,9 @@ TOOLS = [
     ("render_image", "A picture (PNG) of the mix, one track or a file: kind spectrogram, waveform or spectrum; look at it for what numbers hide (hum lines, clipped sections, "
      "a missing band, where things happen in time). Returns the file path and how to read it.", obj({"project": P, "file": {"type": "string"}, "track": TRACK, "kind": {"type": "string", "enum": ["spectrogram", "waveform", "spectrum"]},
      "from_seconds": FROM, "to_seconds": TO, "out": {"type": "string"}}), t_render_image),
+    ("compare_audio", "Compare two sounds (B minus A): a render before and after a change (render_excerpt first), or the mix against a reference song. Gives the loudness, peak, "
+     "crest and stereo differences and the tonal difference per third-octave band with the overall level taken out. Each of a and b is {file} or {project, track?, from_seconds?, to_seconds?}.",
+     obj({"a": {"type": "object"}, "b": {"type": "object"}}, ["a", "b"]), t_compare_audio),
     ("list_effects", "The built-in effects and instruments with every parameter: name, unit, minimum, maximum, default.", obj({}), t_effects),
     ("history", "What was changed in this session (the undo steps and the last calls).", obj({"project": P}, ["project"]), t_history),
     ("undo", "Undo the last change made in this session (or in the open app when the project is \"live\").", obj({"project": P, "steps": {"type": "integer"}}, ["project"]), t_undo),

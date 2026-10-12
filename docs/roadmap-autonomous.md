@@ -175,5 +175,6 @@ Rule: a feature is done only when it works end to end, has a test, is checked on
 - [x] B6. A guide for the AI (docs/ai-assistant.md): what each tool measures, target values (LUFS per platform, headroom, balance curves), a mixing and mastering checklist, example sessions; verified end to end on a real mp3 project.
 
 - [x] B7. Pictures for the ears: `render_image` (spectrogram, waveform with clipping in red, third-octave spectrum) as PNG of the mix, a track or a file (`lpc-cli analyze --image out.png --kind ...`, own PNG encoder in core); audio clips for models are the existing `render_excerpt` WAV.
+- [x] B8. `compare_audio`: two sounds (before/after render, mix vs reference) side by side: loudness, peak, crest, stereo and tonal difference per band with the overall level taken out.
 
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

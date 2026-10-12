@@ -100,6 +100,8 @@ def main():
         check(not err and len(takes["takes"]) == 1 and takes["bestBySound"], "compare_takes on one region: %s" % (takes if err else ""))
         err, img = c.tool("render_image", project=session, track=first["name"], kind="spectrogram")
         check(not err and os.path.getsize(img["image"]) > 500 and open(img["image"], "rb").read(4)[1:] == b"PNG", "render_image writes a PNG: %s" % (img if err else ""))
+        err, cmp = c.tool("compare_audio", a={"project": session, "track": first["name"], "to_seconds": 2}, b={"file": os.path.join(session, "audio", "tone.wav")})
+        check(not err and "tonalDiffByBand" in cmp and cmp["reading"], "compare_audio: %s" % (cmp if err else ""))
         err, eff = c.tool("list_effects")
         check(not err and any(e["id"] == "builtin.compressor" for e in eff["effects"]), "list_effects")
 

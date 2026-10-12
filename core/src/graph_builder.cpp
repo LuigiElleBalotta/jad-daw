@@ -1,4 +1,5 @@
 #include "lpc/graph_builder.h"
+#include "lpc/validation.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
 
@@ -173,14 +174,14 @@ PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
     };
     for (const Uuid& id : order) {  // sources before the buses they feed
         const Track* t = p.findTrack(id);
-        if (!t || t->kind == TrackKind::Master) continue;
+        if (!t || isTerminal(t->kind)) continue;
         const int out = in[id] + latency[id];
         forEachEdge(*t, [&](bool, int, const Uuid& to) {
             if (auto it = in.find(to); it != in.end() && to != id) it->second = std::max(it->second, out);
         });
     }
     for (const Track& t : p.tracks) {
-        if (t.kind == TrackKind::Master) continue;
+        if (isTerminal(t.kind)) continue;
         EdgeDelays e;
         e.sends.assign(t.strip.sends.size(), 0);
         const int out = in[t.id] + latency[t.id];
@@ -193,7 +194,10 @@ PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
         });
         plan.edges[t.id] = std::move(e);
     }
-    if (master) plan.totalLatency = std::clamp(in[master->id] + latency[master->id], 0, kMaxPdcFrames);
+    int total = master ? in[master->id] + latency[master->id] : 0;
+    for (const Track& t : p.tracks)
+        if (t.kind == TrackKind::Output) total = std::max(total, in[t.id] + latency[t.id]);  // the longest path; an output pair whose strip has less plug-in delay than Stereo Out is not delayed to match
+    if (master) plan.totalLatency = std::clamp(total, 0, kMaxPdcFrames);
     return plan;
 }
 
@@ -214,6 +218,7 @@ void fillSendAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
 
 std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
+    cfg->outputPair = t.outputPair;
     if (t.freeze) {  // the rendered audio replaces the instrument, the regions and the inserts; the strip, the sends and the output stay live
         cfg->frozen = true;
         if (const MediaItem* item = p.findMedia(t.freeze->mediaId))

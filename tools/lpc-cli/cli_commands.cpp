@@ -54,7 +54,7 @@ constexpr const char* kUsage =
     "usage:\n"
     "  lpc-cli demo <project-dir>\n"
     "  lpc-cli info <project-dir>\n"
-    "  lpc-cli render <project-dir> <out.wav> [--seconds N] [--bits 16|24|32] [--track <id|name>]\n"
+    "  lpc-cli render <project-dir> <out.wav> [--seconds N] [--bits 16|24|32] [--track <id|name>] [--output N]\n"
     "  lpc-cli play <project-dir>\n"
     "  lpc-cli snapshot <project-dir> [--full]\n"
     "  lpc-cli analyze <project-dir|audio-file> [--track <id|name>] [--seconds a:b] [--region id] [--no-tempo] [--image out.png [--kind spectrogram|waveform|spectrum]]\n"
@@ -120,7 +120,7 @@ int cmdInfo(const std::vector<std::string>& args, std::ostream& out, std::ostrea
         << "tempo: " << project.tempoMap.tempos().front().bpm << " bpm (" << project.tempoMap.tempos().size() << " tempo events)\n"
         << "tracks: " << project.tracks.size() << "\n";
     for (const Track& t : project.tracks) {
-        static const char* kinds[] = {"audio", "midi", "instrument", "aux", "bus", "master"};
+        static const char* kinds[] = {"audio", "midi", "instrument", "aux", "bus", "master", "output"};
         out << "  - " << t.name << " [" << kinds[static_cast<int>(t.kind)] << "] regions=" << t.regions.size() << " gain=" << t.strip.gainDb
             << " dB pan=" << t.strip.pan << " sends=" << t.strip.sends.size() << "\n";
     }
@@ -135,7 +135,7 @@ int cmdInfo(const std::vector<std::string>& args, std::ostream& out, std::ostrea
 }
 
 int cmdRender(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
-    const Parsed p = parse(args, 1, {"--seconds", "--bits", "--track"});
+    const Parsed p = parse(args, 1, {"--seconds", "--bits", "--track", "--output"});
     if (p.positional.size() != 2) throw UsageError{"render needs a project directory and an output file"};
 
     std::optional<double> seconds;
@@ -148,6 +148,15 @@ int cmdRender(const std::vector<std::string>& args, std::ostream& out, std::ostr
         } catch (const std::exception&) {
             throw UsageError{"--seconds needs a non-negative number"};
         }
+    }
+    int outputPair = 0;
+    if (const auto o = p.get("--output")) {  // an Output strip's pair (1 = outputs 3-4); the default is Stereo Out
+        try {
+            outputPair = std::stoi(*o);
+        } catch (const std::exception&) {
+            outputPair = -1;
+        }
+        if (outputPair < 0 || outputPair > lpc::kMaxOutputPairs) throw UsageError{"--output is a pair from 0 (Stereo Out) to 8"};
     }
     WavFormat format = WavFormat::Pcm24;
     if (const auto b = p.get("--bits")) {
@@ -162,6 +171,7 @@ int cmdRender(const std::vector<std::string>& args, std::ostream& out, std::ostr
     if (const auto solo = p.get("--track")) project = soloTrackProject(std::move(project), *solo);  // only that track is heard
     MediaStore media(dir, /*streaming=*/false);  // memory sources: deterministic output
     RenderOptions options;
+    options.outputPair = outputPair;
     if (seconds) options.frames = static_cast<std::int64_t>(std::llround(std::min(*seconds * project.sampleRate, 1e15)));
     std::shared_ptr<lpc::IPluginHost> plugins;
     if (usesPlugins(project)) {

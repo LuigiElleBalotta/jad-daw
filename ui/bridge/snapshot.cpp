@@ -25,6 +25,7 @@ QString kindName(lpc::TrackKind k) {
         case lpc::TrackKind::Aux: return "aux";
         case lpc::TrackKind::Bus: return "bus";
         case lpc::TrackKind::Master: return "master";
+        case lpc::TrackKind::Output: return "output";
     }
     return "audio";
 }
@@ -118,7 +119,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
         }
         if (t.instrument)
             for (const auto& [name, value] : t.instrument->params) tr.instrumentParams.insert(QString::fromStdString(name), value);
-        if (!master) {
+        tr.outputPair = t.outputPair;
+        if (!master && t.kind != lpc::TrackKind::Output) {
             const lpc::Track* out = t.strip.output.isNull() ? p.master() : p.findTrack(t.strip.output);
             if (out) {
                 tr.outputId = QString::fromStdString(out->id.toString());

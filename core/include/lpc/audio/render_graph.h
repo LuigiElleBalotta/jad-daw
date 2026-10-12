@@ -114,6 +114,7 @@ struct TrackConfig {
     std::vector<std::unique_ptr<IProcessor>> inserts;
     std::vector<ParamAuto> paramAuto;
     std::vector<SendPlayback> sends;
+    int outputPair = 0;  // Output strips: the pair of device outputs they play on (1 = outputs 3-4)
     Uuid output;  // null = master
     DelayLine outputDelay;  // plug-in delay compensation of the output edge
     std::vector<std::shared_ptr<IFrameSource>> keepAlive;
@@ -168,6 +169,9 @@ public:
     bool liveNeeded() const noexcept;
     void allNotesOff() noexcept;
     float masterPeak() const noexcept { return masterPeak_; }
+    // After render(): the signal of the Output strips for `pairs` extra pairs of device outputs; extra[2 * (pair - 1)] and extra[2 * (pair - 1) + 1] get `n` frames at `offset`
+    // (pairs without a strip get silence).
+    void copyOutputPairs(float* const* extra, int pairs, int offset, int n) const noexcept;
     // The input of the block (one pointer per channel, already moved to the first frame that render() will play); tracks that are
     // monitored add it to their signal.
     void setInput(const float* const* channels, int numChannels) noexcept { input_ = channels; inputChannels_ = numChannels; }

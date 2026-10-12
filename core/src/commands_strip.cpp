@@ -64,10 +64,10 @@ public:
     ApplyResult apply(Project& p) const override {
         Track* t = p.findTrack(id_);
         if (!t) return fail("not_found", "no such track");
-        if (t->kind == TrackKind::Master) return fail("invalid_kind", "the master track has no output");
+        if (isTerminal(t->kind)) return fail("invalid_kind", "the master and the output tracks have no output");
         if (!output_.isNull()) {
             const Track* out = p.findTrack(output_);
-            if (!out || !isBusLike(out->kind) || out->id == id_)
+            if (!out || !isOutputTarget(out->kind) || out->id == id_)
                 return fail("bad_output", "output must be another existing bus or aux track (or null for master)");
             if (reaches(p, output_, id_)) return fail("cycle", "this output would create a routing loop");
         }

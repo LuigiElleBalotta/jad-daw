@@ -58,7 +58,7 @@ void InspectorModel::update(const std::vector<TrackRow>& tracks, const std::vect
                   {"quantizeBeats", shownRegion->quantizeBeats}};
     }
     for (const TrackRow& t : tracks)
-        if (t.kind == "bus" || t.kind == "aux") targets.append(QVariantMap{{"id", t.id}, {"name", t.name}});
+        if (t.kind == "bus" || t.kind == "aux" || t.kind == "output") targets.append(QVariantMap{{"id", t.id}, {"name", t.name}});
 
     const QString id = shown ? shown->id : QString();
     const bool same = track == track_ && output == output_ && region == region_ && smart == smart_ && targets == targets_ && id == shownTrackId_ && pinned == pinned_;

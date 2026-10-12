@@ -3768,6 +3768,48 @@ private slots:
         QVERIFY(!c.liveLinkOn());
         QVERIFY(!QFile::exists(jad::LiveLink::infoFilePath()));
     }
+    void outputStripsAreMadeOnDemandAndSitBeforeStereoOut() {
+        TempDir dir; const auto proj = dir.path() / "d.lpc";
+        std::filesystem::create_directories(proj); lpc::saveProject(lpc::makeDemoProject(proj), proj);
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(proj)));
+        QTRY_VERIFY(c.mixer()->rowCount() >= 3);
+        const auto roles = c.mixer()->roleNames();
+        const int before = c.mixer()->rowCount();
+        QString keys;  // an instrument track
+        for (int i = 0; i < before; ++i) {
+            const QVariantMap info = c.mixer()->data(c.mixer()->index(i), roles.key("info")).toMap();
+            if (info["kind"].toString() == "instrument") keys = info["trackId"].toString();
+        }
+        QVERIFY(!keys.isEmpty());
+        QVERIFY(c.targetsFor(keys).size() >= 1);  // the Reverb Bus
+        c.setOutput(keys, "newOutput:1");         // the strip of outputs 3-4 is made and the track routed to it
+        QTRY_COMPARE(c.mixer()->rowCount(), before + 1);
+        const int last = c.mixer()->rowCount() - 1;
+        QVERIFY(c.mixer()->data(c.mixer()->index(last), roles.key("isMaster")).toBool());  // Stereo Out stays last
+        const QVariantMap strip = c.mixer()->data(c.mixer()->index(last - 1), roles.key("info")).toMap();
+        QCOMPARE(strip["kind"].toString(), QStringLiteral("output"));
+        QCOMPARE(strip["name"].toString(), QStringLiteral("Out 3-4"));
+        // the track shows where it goes, and the strip is a target for the others
+        QString stripId = strip["trackId"].toString();
+        bool routed = false;
+        for (int i = 0; i < before; ++i) {
+            const QVariantMap info = c.mixer()->data(c.mixer()->index(i), roles.key("info")).toMap();
+            if (info["trackId"].toString() == keys) routed = info["outputId"].toString() == stripId && info["outputName"].toString() == "Out 3-4";
+        }
+        QVERIFY(routed);
+        bool offered = false;
+        for (const QVariant& t : c.targetsFor(keys)) offered = offered || t.toMap()["id"].toString() == stripId;
+        QVERIFY(offered);
+        c.setOutput(keys, "");  // back to Stereo Out
+        QTRY_VERIFY([&] {
+            for (int i = 0; i < before; ++i) {
+                const QVariantMap info = c.mixer()->data(c.mixer()->index(i), roles.key("info")).toMap();
+                if (info["trackId"].toString() == keys) return info["outputName"].toString() != "Out 3-4";
+            }
+            return false;
+        }());
+    }
     void announceStubEmitsANotice() {
         jad::ProjectController c(false);
         QSignalSpy spy(&c, &jad::ProjectController::notice);

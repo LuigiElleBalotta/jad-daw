@@ -51,7 +51,7 @@ void enumFromJson(const nlohmann::json& j, E& value, const std::pair<E, const ch
 
 const std::pair<TrackKind, const char*> kKinds[] = {
     {TrackKind::Audio, "audio"}, {TrackKind::Midi, "midi"}, {TrackKind::Instrument, "instrument"},
-    {TrackKind::Aux, "aux"},     {TrackKind::Bus, "bus"},   {TrackKind::Master, "master"}};
+    {TrackKind::Aux, "aux"},     {TrackKind::Bus, "bus"},   {TrackKind::Master, "master"}, {TrackKind::Output, "output"}};
 const std::pair<TimeBase, const char*> kBases[] = {{TimeBase::Musical, "musical"}, {TimeBase::Absolute, "absolute"}};
 
 }  // namespace
@@ -263,6 +263,7 @@ void to_json(nlohmann::json& j, const Track& t) {
     if (!t.flexMode.empty()) j["flexMode"] = t.flexMode;
     if (!t.flexParams.empty()) j["flexParams"] = t.flexParams;
     if (!t.showInTracks) j["showInTracks"] = false;
+    if (t.outputPair != 0) j["outputPair"] = t.outputPair;
     if (!t.parent.isNull()) j["parent"] = t.parent;
     if (!t.stack.empty()) j["stack"] = t.stack;
     if (!t.stackOpen) j["stackOpen"] = false;
@@ -287,6 +288,7 @@ void from_json(const nlohmann::json& j, Track& t) {
     j.at("automation").get_to(t.automation);
     const auto& inst = j.at("instrument");
     t.instrument = inst.is_null() ? std::nullopt : std::optional<ProcessorRef>(inst.get<ProcessorRef>());
+    t.outputPair = j.value("outputPair", 0);
     t.patchId = j.value("patchId", std::string());
     t.automationMode = j.value("automationMode", std::string("read"));
     t.delayMs = j.value("delayMs", 0.0);

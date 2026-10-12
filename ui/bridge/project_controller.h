@@ -818,7 +818,8 @@ public:
     Q_INVOKABLE void removeSend(const QString& sendId);
     Q_INVOKABLE void setSendLevel(const QString& sendId, double db);
     Q_INVOKABLE void setSendPreFader(const QString& sendId, bool on);
-    Q_INVOKABLE void setOutput(const QString& trackId, const QString& outputId);  // "" = master
+    Q_INVOKABLE void setOutput(const QString& trackId, const QString& outputId);  // "" = Stereo Out; "newOutput:<pair>" makes the Output strip of that pair first
+    static QString outputPairName(int pair);  // "Out 3-4" for pair 1  // "" = master
     // One undo step: a new bus that is hidden from the Tracks area, and a send (role "send") or the output (role "output") to it.
     // Starts plug-in hosting and the first scan when audio output is on (once). The application calls it at start-up; opening a
     // project calls it too, so a controller made without it still hosts plug-ins.

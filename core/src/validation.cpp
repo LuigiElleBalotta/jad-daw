@@ -71,7 +71,21 @@ MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r) {
     return std::nullopt;
 }
 
+MaybeError checkOutputTrack(const Project& p, const Track& t) {
+    if (t.kind != TrackKind::Output) {
+        if (t.outputPair != 0) return CommandError{"bad_value", "only an output track has an output pair"};
+        return std::nullopt;
+    }
+    if (t.outputPair < 1 || t.outputPair > kMaxOutputPairs) return CommandError{"bad_value", "an output track's pair is 1 (outputs 3-4) to 8 (outputs 17-18)"};
+    for (const Track& o : p.tracks)
+        if (o.kind == TrackKind::Output && o.outputPair == t.outputPair && o.id != t.id) return CommandError{"duplicate_id", "another output track already has this pair of outputs"};
+    if (!t.strip.output.isNull() || !t.strip.sends.empty()) return CommandError{"bad_output", "an output track ends the signal flow: no output and no sends"};
+    if (!t.regions.empty() || !t.alternatives.empty() || !t.stack.empty() || !t.parent.isNull() || t.freeze) return CommandError{"invalid_kind", "an output track holds no regions and is not a stack"};
+    return std::nullopt;
+}
+
 MaybeError checkSendFields(const Project& p, const Uuid& owner, const Send& s) {
+    if (const Track* from = p.findTrack(owner); from && isTerminal(from->kind)) return CommandError{"invalid_kind", "the master and the output tracks have no sends"};
     if (s.id.isNull()) return CommandError{"duplicate_id", "send id is missing"};
     if (!inRange(s.levelDb, -96.0f, 12.0f)) return CommandError{"bad_value", "send levelDb must be in [-96, 12]"};
     const Track* target = p.findTrack(s.targetTrackId);
@@ -233,6 +247,7 @@ MaybeError checkProject(const Project& p) {
         if (auto e = checkTrackProps(t.name, t.color)) return e;
         if (auto e = checkPatchId(t.patchId)) return e;
         if (auto e = checkShowInTracks(t.kind, t.showInTracks)) return e;
+        if (auto e = checkOutputTrack(p, t)) return e;
         if (!t.stack.empty() && ((t.stack != "folder" && t.stack != "summing") || t.kind != TrackKind::Bus)) return CommandError{"bad_value", "only a bus can be a Track Stack (folder or summing)"};
         if (!t.parent.isNull()) {
             int depth = 0;
@@ -257,8 +272,8 @@ MaybeError checkProject(const Project& p) {
             if (auto e = checkInsert(ins)) return e;
         if (!t.strip.output.isNull()) {
             const Track* out = p.findTrack(t.strip.output);
-            if (!out || !isBusLike(out->kind) || out->id == t.id)
-                return CommandError{"bad_output", "output must be another existing bus or aux track (or null for master)"};
+            if (!out || !isOutputTarget(out->kind) || out->id == t.id)
+                return CommandError{"bad_output", "output must be another existing bus, aux or output track (or null for master)"};
         }
         for (const Send& s : t.strip.sends) {
             if (auto e = checkSendFields(p, t.id, s)) return e;

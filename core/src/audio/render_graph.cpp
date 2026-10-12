@@ -335,7 +335,7 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     t.blockPeak = 0.0f;
     for (int i = 0; i < n; ++i) t.blockPeak = std::max({t.blockPeak, std::abs(l[i]), std::abs(r[i])});
 
-    if (t.kind == TrackKind::Master || !cfg) return;
+    if (t.kind == TrackKind::Master || t.kind == TrackKind::Output || !cfg) return;
     if (!muted) {
         for (SendPlayback& s : cfg->sends) {
             TrackNode* dst = find(s.target);
@@ -367,6 +367,21 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
             out->l[static_cast<std::size_t>(i)] += srcL[i];
             out->r[static_cast<std::size_t>(i)] += srcR[i];
         }
+    }
+}
+
+void RenderGraph::copyOutputPairs(float* const* extra, int pairs, int offset, int n) const noexcept {
+    for (int p = 0; p < pairs; ++p) {
+        std::fill_n(extra[2 * p] + offset, n, 0.0f);
+        std::fill_n(extra[2 * p + 1] + offset, n, 0.0f);
+    }
+    for (int i = 0; i < count_; ++i) {
+        const TrackNode& t = *nodes_[static_cast<std::size_t>(i)];
+        if (t.kind != TrackKind::Output || !t.config) continue;
+        const int pair = t.config->outputPair;
+        if (pair < 1 || pair > pairs) continue;
+        std::copy_n(t.l.data(), n, extra[2 * (pair - 1)] + offset);
+        std::copy_n(t.r.data(), n, extra[2 * (pair - 1) + 1] + offset);
     }
 }
 

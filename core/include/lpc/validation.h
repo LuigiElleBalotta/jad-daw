@@ -23,6 +23,10 @@ inline constexpr std::size_t kMaxInsertLabelBytes = 128;
 bool validBase64(const std::string& s);  // "" or standard base64 with padding
 
 inline bool isBusLike(TrackKind k) { return k == TrackKind::Bus || k == TrackKind::Aux; }
+// Where a track can send its signal: a bus, an aux or an Output strip (null: Stereo Out).
+inline bool isOutputTarget(TrackKind k) { return isBusLike(k) || k == TrackKind::Output; }
+// Master and Output strips end the graph: nothing is routed after them.
+inline bool isTerminal(TrackKind k) { return k == TrackKind::Master || k == TrackKind::Output; }
 
 MaybeError checkStripValues(float gainDb, float pan);
 MaybeError checkRegion(const Project& p, TrackKind kind, const Region& r);
@@ -36,6 +40,7 @@ bool validTrackName(const std::string& name);      // 1 to 64 UTF-8 code points,
 bool validPatchId(const std::string& id);          // 1 to 64 characters of A-Z a-z 0-9 . _ -
 MaybeError checkPatchId(const std::string& id);    // "" (no patch) or a valid id
 MaybeError checkTrackProps(const std::string& name, const std::string& color);
+MaybeError checkOutputTrack(const Project& p, const Track& t);  // Output tracks: a free pair 1..8, no output, no sends, no regions; others have pair 0
 MaybeError checkShowInTracks(TrackKind kind, bool show);  // only buses and auxes can be hidden
 bool validRelativeMediaPath(const std::string& path);
 // True when `goal` can be reached from `from` by following outputs and sends.

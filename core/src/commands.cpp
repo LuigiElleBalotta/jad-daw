@@ -70,12 +70,13 @@ private:
         if (track_.id.isNull() || p.findTrack(track_.id)) return CommandError{"duplicate_id", "track id missing or already used"};
         if (auto e = checkTrackProps(track_.name, track_.color)) return e;
         if (auto e = checkShowInTracks(track_.kind, track_.showInTracks)) return e;
+        if (auto e = checkOutputTrack(p, track_)) return e;
         if (index_ < -1 || index_ > static_cast<int>(p.tracks.size())) return CommandError{"bad_index", "track index out of range"};
         if (auto e = checkStripValues(track_.strip.gainDb, track_.strip.pan)) return e;
         if (!track_.strip.output.isNull()) {
             const Track* out = p.findTrack(track_.strip.output);
-            if (!out || !isBusLike(out->kind))
-                return CommandError{"bad_output", "output must be an existing bus or aux track (or null for master)"};
+            if (!out || !isOutputTarget(out->kind))
+                return CommandError{"bad_output", "output must be an existing bus, aux or output track (or null for master)"};
         }
         const bool wantsInstrument = track_.kind == TrackKind::Instrument;
         if (wantsInstrument != track_.instrument.has_value()) return CommandError{"invalid_kind", "exactly instrument tracks need an instrument"};

@@ -245,7 +245,7 @@ void AudioEngine::mixAudition(float* outL, float* outR, int n) noexcept {
     auditionPosPub_.store(auditionPos_, std::memory_order_relaxed);
 }
 
-void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
+void AudioEngine::processBlock(float* outL, float* outR, int frames, float* const* extra, int extraPairs) noexcept {
     drain();
     drainMidi();
     int done = 0;
@@ -255,6 +255,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
             n = static_cast<int>(std::min<std::int64_t>(n, countLeft_));
             std::fill_n(outL + done, n, 0.0f);
             std::fill_n(outR + done, n, 0.0f);
+            for (int p = 0; p < 2 * extraPairs; ++p) std::fill_n(extra[p] + done, n, 0.0f);
             if (countClick_) mixClickTrack(countClick_, outL + done, outR + done, countPos_, n);
             countPos_ += n;
             countLeft_ -= n;
@@ -274,6 +275,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
             for (int c = 0; c < inChannels_; ++c) inPtr_[c] = inBuf_[c].data() + std::min(done, static_cast<int>(inBuf_[c].size()));
             graph_.setInput(inPtr_, inChannels_);
             graph_.render(position_, n, outL + done, outR + done);
+            if (extraPairs > 0) graph_.copyOutputPairs(extra, extraPairs, done, n);
             if (clickOn_ && click_) mixClick(outL + done, outR + done, position_, n);
             if (recording_) capture(done, n);
             position_ += n;
@@ -281,9 +283,11 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames) noexcept {
             for (int c = 0; c < inChannels_; ++c) inPtr_[c] = inBuf_[c].data() + std::min(done, static_cast<int>(inBuf_[c].size()));
             graph_.setInput(inPtr_, inChannels_);
             graph_.render(position_, n, outL + done, outR + done, false);
+            if (extraPairs > 0) graph_.copyOutputPairs(extra, extraPairs, done, n);
         } else {
             std::fill_n(outL + done, n, 0.0f);
             std::fill_n(outR + done, n, 0.0f);
+            for (int p = 0; p < 2 * extraPairs; ++p) std::fill_n(extra[p] + done, n, 0.0f);
         }
         if (audition_) mixAudition(outL + blockStart, outR + blockStart, n);
         done += n;

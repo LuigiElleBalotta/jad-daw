@@ -61,6 +61,12 @@ namespace {
 struct EngineCallback final : lpc::IAudioCallback {
     explicit EngineCallback(lpc::audio::AudioEngine& e) : engine(e) {}
     void process(float* l, float* r, int n) noexcept override { engine.processBlock(l, r, n); }
+    void processMulti(float* const* outputs, int numOutputs, int n) noexcept override {
+        const int pairs = std::min((numOutputs - 2) / 2, lpc::kMaxOutputPairs);
+        engine.processBlock(outputs[0], outputs[1], n, outputs + 2, pairs);
+        for (int c = 2 + 2 * pairs; c < numOutputs; ++c)  // an odd channel left over
+            for (int i = 0; i < n; ++i) outputs[c][i] = 0.0f;
+    }
     void input(const float* const* channels, int numChannels, int n) noexcept override { engine.input(channels, numChannels, n); }
     lpc::audio::AudioEngine& engine;
 };
@@ -2003,7 +2009,28 @@ void ProjectController::setSendPreFader(const QString& sendId, bool on) {
     sendCommand({{"type", "set_send"}, {"sendId", sendId.toStdString()}, {"preFader", on}});
 }
 
+QString ProjectController::outputPairName(int pair) { return QStringLiteral("Out %1-%2").arg(2 * pair + 1).arg(2 * pair + 2); }
+
 void ProjectController::setOutput(const QString& trackId, const QString& outputId) {
+    if (outputId.startsWith(QStringLiteral("newOutput:"))) {  // an Output strip for that pair is made and the track routed to it, in one step
+        const int pair = outputId.mid(10).toInt();
+        if (pair < 1 || pair > lpc::kMaxOutputPairs || !tracks_.find(trackId)) return;
+        const std::string stripId = lpc::Uuid::random().toString();
+        nlohmann::json strip = {{"id", stripId},
+                                {"kind", "output"},
+                                {"name", outputPairName(pair).toStdString()},
+                                {"color", ""},
+                                {"outputPair", pair},
+                                {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()},
+                                           {"sends", nlohmann::json::array()}, {"output", lpc::Uuid{}.toString()}}},
+                                {"regions", nlohmann::json::array()},
+                                {"automation", nlohmann::json::array()},
+                                {"instrument", nullptr},
+                                {"showInTracks", false}};
+        sendCommand({{"type", "transaction"}, {"commands", nlohmann::json::array({{{"type", "add_track"}, {"index", -1}, {"track", strip}},
+                                                                                  {{"type", "set_output"}, {"trackId", trackId.toStdString()}, {"output", stripId}}})}});
+        return;
+    }
     sendCommand({{"type", "set_output"}, {"trackId", trackId.toStdString()}, {"output", outputId.isEmpty() ? lpc::Uuid{}.toString() : outputId.toStdString()}});
 }
 
@@ -2090,8 +2117,17 @@ QVariantList ProjectController::targetsFor(const QString& trackId) const {
         return false;
     };
     for (const TrackRow& b : allRows_) {
-        if ((b.kind != "bus" && b.kind != "aux") || b.id == trackId || reaches(b.id, trackId)) continue;
+        if ((b.kind != "bus" && b.kind != "aux" && b.kind != "output") || b.id == trackId || reaches(b.id, trackId)) continue;
         out.append(QVariantMap{{"id", b.id}, {"name", b.name}});
+    }
+    // the pairs of outputs the device has that have no Output strip yet: choosing one makes the strip
+    const TrackRow* self = find(trackId);
+    if (self && self->kind != "output") {
+        const int pairs = std::min((device_ ? device_->outputChannels() : 2) - 2, 2 * lpc::kMaxOutputPairs) / 2;
+        for (int k = 1; k <= pairs; ++k) {
+            const bool exists = std::any_of(allRows_.begin(), allRows_.end(), [k](const TrackRow& t) { return t.kind == "output" && t.outputPair == k; });
+            if (!exists) out.append(QVariantMap{{"id", QStringLiteral("newOutput:%1").arg(k)}, {"name", outputPairName(k)}});
+        }
     }
     return out;
 }

@@ -102,7 +102,7 @@ Options parseOptions(const std::vector<std::string>& args, const std::vector<std
 // own fader, inserts and the buses it feeds.
 Project soloed(Project p, const Track& keep) {
     for (Track& t : p.tracks)
-        if (t.id != keep.id && t.kind != TrackKind::Bus && t.kind != TrackKind::Aux && t.kind != TrackKind::Master) t.strip.mute = true;
+        if (t.id != keep.id && t.kind != TrackKind::Bus && t.kind != TrackKind::Aux && t.kind != TrackKind::Master && t.kind != TrackKind::Output) t.strip.mute = true;
     return p;
 }
 

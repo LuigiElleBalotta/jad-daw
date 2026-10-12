@@ -11,7 +11,10 @@
 
 namespace lpc {
 
-enum class TrackKind { Audio, Midi, Instrument, Aux, Bus, Master };
+// Master is "Stereo Out" (device outputs 1-2). An Output track is a strip for another pair of device outputs (`outputPair` 1 = outputs 3-4, 2 = 5-6, ...): tracks
+// and buses route to it like to a bus, and its signal goes to those device channels instead of to the master.
+enum class TrackKind { Audio, Midi, Instrument, Aux, Bus, Master, Output };
+inline constexpr int kMaxOutputPairs = 8;  // Output tracks: pairs 1..8 (outputs 3-4 ... 17-18, an XR18 has 18)
 enum class TimeBase { Musical, Absolute };
 
 struct MidiNote {
@@ -165,6 +168,7 @@ struct Track {
     std::string icon;     // the key of the picture shown in the track header (Track > Assign Track Icon); empty: none
     std::string flexMode;  // audio tracks: Flex on, with this algorithm (slicing, rhythmic, monophonic, polyphonic, tempophone, speed, automatic or pitch); empty: off
     std::map<std::string, double> flexParams;  // decay, sliceLength, loopLengthMs, loopOffsetMs, grainMs, sensitivity
+    int outputPair = 0;        // Output tracks: which pair of device outputs (1 = outputs 3-4); 0 for every other kind
     Uuid parent;               // Track Stacks: the stack this track belongs to (null: none)
     std::string stack;         // a bus that is a Track Stack: "folder" (only organizes its tracks) or "summing" (its tracks play through it); empty: not a stack
     bool stackOpen = true;     // a stack shows its tracks, or hides them

@@ -76,14 +76,20 @@ RenderResult renderOffline(const Project& p, MediaStore& media, const RenderOpti
 
     const int block = std::clamp(options.blockSize, 1, 65536);
     std::vector<float> l(static_cast<std::size_t>(block)), r(static_cast<std::size_t>(block));
+    const int pairs = std::clamp(options.outputPair, 0, kMaxOutputPairs);
+    std::vector<std::vector<float>> extraBuffers(static_cast<std::size_t>(2 * pairs), std::vector<float>(static_cast<std::size_t>(block)));
+    std::vector<float*> extra;
+    for (auto& b : extraBuffers) extra.push_back(b.data());
+    const float* leftOut = pairs > 0 ? extra[static_cast<std::size_t>(2 * (pairs - 1))] : l.data();
+    const float* rightOut = pairs > 0 ? extra[static_cast<std::size_t>(2 * (pairs - 1) + 1)] : r.data();
     for (std::int64_t pos = 0; pos < total + skip; pos += block) {
         const int n = static_cast<int>(std::min<std::int64_t>(block, total + skip - pos));
-        engine.processBlock(l.data(), r.data(), n);
+        engine.processBlock(l.data(), r.data(), n, extra.empty() ? nullptr : extra.data(), pairs);
         for (int i = 0; i < n; ++i) {
             const std::int64_t at = pos + i - skip;
             if (at < 0) continue;
-            out.interleaved[static_cast<std::size_t>(at * 2)] = l[static_cast<std::size_t>(i)];
-            out.interleaved[static_cast<std::size_t>(at * 2 + 1)] = r[static_cast<std::size_t>(i)];
+            out.interleaved[static_cast<std::size_t>(at * 2)] = leftOut[i];
+            out.interleaved[static_cast<std::size_t>(at * 2 + 1)] = rightOut[i];
         }
     }
     engine.collectGarbage();

@@ -43,6 +43,7 @@ struct AutoRow {
 struct TrackRow {
     QString id, name, kind, color;
     bool master = false, mute = false, solo = false;
+    int outputPair = 0;  // an Output strip: 1 = device outputs 3-4
     bool recordArm = false, inputMonitor = false, soloSafe = false;  // the R and I stubs: their state is kept by the controller
     double gainDb = 0.0, pan = 0.0;
     int input = 0;  // the recording input: 0 stereo 1+2, n mono input n

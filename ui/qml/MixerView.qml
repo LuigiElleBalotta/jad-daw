@@ -25,7 +25,7 @@ Item {
         if (bar.hiddenTypes[typeOf(info)] === true) return false
         if (bar.scope === "all") return true
         if (bar.scope === "single") return project.selectedTrackIds.indexOf(info.trackId) >= 0
-        return info.master || info.kind !== "bus"  // Tracks: the track strips and the master
+        return info.master || info.kind !== "bus"  // Tracks: the track strips, the Output strips and Stereo Out
     }
 
     clip: true
@@ -91,7 +91,7 @@ Item {
                 delegate: ProjectStrip {
                     id: strip
                     required property var model
-                    visible: !model.isMaster && root.shown(model.info)
+                    visible: !model.isMaster && model.info.kind !== "output" && root.shown(model.info)
                     width: visible ? implicitWidth : 0
                     height: strips.height
                     project: root.project
@@ -104,13 +104,13 @@ Item {
                 model: root.project.mixer
                 delegate: ProjectStrip {
                     required property var model
-                    visible: model.isMaster && root.shown(model.info)
+                    visible: (model.isMaster || model.info.kind === "output") && root.shown(model.info)
                     width: visible ? implicitWidth : 0
                     height: strips.height
                     project: root.project
                     info: model.info
                     longFader: bar.longFaders
-                    peak: root.project.masterPeak
+                    peak: model.isMaster ? root.project.masterPeak : (root.project.peaksRevision, root.project.trackPeak(model.info.trackId))
                     onSwiped: (kind, on, p, from) => flick.swipeTo(kind, on, p, from)
                 }
             }

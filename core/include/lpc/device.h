@@ -9,6 +9,13 @@ class IAudioCallback {
 public:
     virtual ~IAudioCallback() = default;
     virtual void process(float* outL, float* outR, int frames) noexcept = 0;
+    // The same for a device with more than two output channels: outputs[0] and [1] are Stereo Out, the next pairs are the Output strips. The default plays
+    // Stereo Out and silences the rest.
+    virtual void processMulti(float* const* outputs, int numOutputs, int frames) noexcept {
+        process(outputs[0], outputs[1], frames);
+        for (int c = 2; c < numOutputs; ++c)
+            for (int i = 0; i < frames; ++i) outputs[c][i] = 0.0f;
+    }
     // The device's input for the block that process() is called for next: one pointer per input channel (as many as the device has
     // open). Not called when the device has no input.
     virtual void input(const float* const* /*channels*/, int /*numChannels*/, int /*frames*/) noexcept {}
@@ -45,6 +52,7 @@ public:
         return open(request.sampleRate, request.bufferSize, callback, error);
     }
     virtual int inputChannels() const { return 0; }
+    virtual int outputChannels() const { return 2; }  // the output channels that are open (a multi-channel interface gives Output strips their pairs)
     virtual int roundTripLatency() const { return 0; }  // input + output latency in samples, as the device reports it
     // Opens the default output at exactly `sampleRate` (no resampling in Core). On failure returns false and
     // fills `error` with a message a user can act on.

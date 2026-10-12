@@ -30,10 +30,10 @@ Panel {
     readonly property string trackId: info.trackId ?? ""
     // a gesture in flight belongs to the track it started on: showing another track drops it, no command
     onTrackIdChanged: { fader.cancel(); panKnob.cancel(); dragIndex = -1; renaming = false }
-    readonly property string trackName: info.name ?? ""
+    readonly property string trackName: (info.master && info.name === "Master") ? qsTr("Stereo Out") : (info.name ?? "")  // the master strip is Logic's Stereo Out
     readonly property string trackColor: info.color ?? "purple"
     readonly property string kind: info.kind ?? "audio"
-    readonly property bool master: info.master ?? false
+    readonly property bool master: (info.master ?? false) || kind === "output"  // Stereo Out and the Output strips: no input, output or group slots
     readonly property real gainDb: info.gainDb ?? 0
     readonly property real pan: info.pan ?? 0
     readonly property bool mute: info.mute ?? false

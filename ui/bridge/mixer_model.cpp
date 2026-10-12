@@ -8,7 +8,9 @@ namespace jad {
 
 void MixerModel::reset(const std::vector<TrackRow>& rows) {
     std::vector<TrackRow> ordered = rows;
-    std::stable_partition(ordered.begin(), ordered.end(), [](const TrackRow& r) { return !r.master; });  // master goes last
+    // the tracks, then the Output strips, the master (Stereo Out) last
+    const auto rank = [](const TrackRow& r) { return r.master ? 2 : (r.kind == "output" ? 1 : 0); };
+    std::stable_sort(ordered.begin(), ordered.end(), [&](const TrackRow& a, const TrackRow& b) { return rank(a) < rank(b); });
     if (sameIds(rows_, ordered)) {
         rows_ = std::move(ordered);
         if (!rows_.empty()) emit dataChanged(index(0), index(static_cast<int>(rows_.size()) - 1));

@@ -72,7 +72,8 @@ public:
 
     // ---- audio thread
     void input(const float* const* channels, int numChannels, int frames) noexcept;  // the input for the next processBlock
-    void processBlock(float* outL, float* outR, int frames) noexcept;
+    // `extra` (optional): 2 * extraPairs buffers of `frames` samples for the Output strips (pair 1 = device outputs 3-4); they are filled, with silence where nothing plays.
+    void processBlock(float* outL, float* outR, int frames, float* const* extra = nullptr, int extraPairs = 0) noexcept;
 
     // ---- tests: only while the audio thread is stopped
     nlohmann::json describeForTest() const { return graph_.describe(); }

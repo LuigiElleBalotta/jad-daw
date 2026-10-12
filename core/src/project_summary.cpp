@@ -12,7 +12,7 @@ namespace {
 using nlohmann::json;
 
 const char* kindName(TrackKind k) {
-    static const char* names[] = {"audio", "midi", "instrument", "aux", "bus", "master"};
+    static const char* names[] = {"audio", "midi", "instrument", "aux", "bus", "master", "output"};
     return names[static_cast<int>(k)];
 }
 
@@ -78,6 +78,7 @@ json projectSummary(const Project& p) {
             for (const AutomationLane& l : t.automation) x["automation"].push_back({{"target", l.target}, {"points", static_cast<int>(l.points.size())}});
         }
         if (t.flexMode.size()) x["flexMode"] = t.flexMode;
+        if (t.outputPair != 0) x["outputPair"] = t.outputPair;
         if (!t.stack.empty()) x["stack"] = t.stack;
         if (!t.parent.isNull()) x["parent"] = t.parent.toString();
         if (!t.alternatives.empty()) {

@@ -1,5 +1,7 @@
 #include "juce_device.h"
 
+#include "lpc/model.h"
+
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -50,6 +52,24 @@ public:
             error = "no audio output device is available";
             return false;
         }
+        const int available = device->getOutputChannelNames().size();
+        const int wanted = std::min(available, 2 + 2 * kMaxOutputPairs);
+        if (wanted > 2 && device->getActiveOutputChannels().countNumberOfSetBits() != wanted) {  // an interface with more outputs: open them all for the Output strips
+            setup.useDefaultOutputChannels = false;
+            setup.outputChannels.clear();
+            setup.outputChannels.setRange(0, wanted, true);
+            const juce::String again = manager_.setAudioDeviceSetup(setup, true);
+            if (again.isNotEmpty()) {
+                error = again.toStdString();
+                return false;
+            }
+            device = manager_.getCurrentAudioDevice();
+            if (device == nullptr) {
+                error = "no audio output device is available";
+                return false;
+            }
+        }
+        outputs_ = device->getActiveOutputChannels().countNumberOfSetBits();
         inputs_ = device->getActiveInputChannels().countNumberOfSetBits();
         latency_ = device->getInputLatencyInSamples() + device->getOutputLatencyInSamples();
         rate_ = device->getCurrentSampleRate();
@@ -72,6 +92,7 @@ public:
     }
 
     int inputChannels() const override { return inputs_; }
+    int outputChannels() const override { return outputs_; }
     int roundTripLatency() const override { return latency_; }
     double sampleRate() const override { return rate_; }
     int bufferSize() const override { return block_; }
@@ -87,8 +108,7 @@ private:
         if (numOutputs <= 0) return;
         if (numInputs > 0 && inputs[0] != nullptr) callback_->input(inputs, numInputs, numSamples);
         if (numOutputs >= 2) {
-            callback_->process(outputs[0], outputs[1], numSamples);
-            for (int c = 2; c < numOutputs; ++c) juce::FloatVectorOperations::clear(outputs[c], numSamples);
+            callback_->processMulti(outputs, numOutputs, numSamples);
             return;
         }
         for (int done = 0; done < numSamples;) {  // mono device: mix both channels down
@@ -104,6 +124,7 @@ private:
     double rate_ = 0.0;
     int block_ = 0;
     int inputs_ = 0;
+    int outputs_ = 2;
     int latency_ = 0;
     std::vector<float> scratchL_, scratchR_;
 };

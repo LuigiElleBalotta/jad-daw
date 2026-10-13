@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(lpc VERSION 0.1.0 LANGUAGES CXX)
+project(lpc VERSION 0.1.0 LANGUAGES C CXX)  # C: third_party/stb/stb_vorbis.c; without it the macOS generator misses CMAKE_C_COMPILE_OBJECT
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

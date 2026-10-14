@@ -6,7 +6,7 @@ How to check: in Logic Pro open **Logic Pro > Key Commands > Edit** (or press Op
 write what Logic shows in the last column. Where it differs, change `shortcut` in `actions.json`, set
 `"verified": true`, and regenerate this file. `Ctrl` here is Cmd on macOS.
 
-Status: 3 of 41 default shortcuts verified.
+Status: 19 of 107 default shortcuts verified.
 
 Rows marked **yes** were confirmed by at least one published source; every other default is a proposal.
 
@@ -14,12 +14,16 @@ Rows marked **yes** were confirmed by at least one published source; every other
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
-| `file.new` | File > New… | `Ctrl+N` | no | |
+| `file.new` | File > New… | `Ctrl+Shift+N` | no | |
+| `file.newFromTemplate` | File > New from Template… | `Ctrl+N` | no | |
 | `file.open` | File > Open… | `Ctrl+O` | no | |
-| `file.close` | File > Close Project | `Ctrl+W` | no | |
+| `file.close` | File > Close | `Ctrl+W` | no | |
+| `file.closeProject` | File > Close Project | `Ctrl+Alt+W` | no | |
 | `file.save` | File > Save | `Ctrl+S` | no | |
 | `file.saveAs` | File > Save As… | `Ctrl+Shift+S` | no | |
+| `file.print` | File > Print… | `Ctrl+P` | no | |
 | `file.importAudio` | File > Import Audio File… | `Ctrl+Shift+I` | no | |
+| `file.preferences` | File > Preferences… | `Ctrl+,` | no | |
 | `file.quit` | File > Quit | `Ctrl+Q` | no | |
 
 ## Edit
@@ -28,65 +32,137 @@ Rows marked **yes** were confirmed by at least one published source; every other
 |---|---|---|---|---|
 | `edit.undo` | Edit > Undo | `Ctrl+Z` | no | |
 | `edit.redo` | Edit > Redo | `Ctrl+Shift+Z` | no | |
+| `edit.undoHistory` | Edit > Undo History… | `Ctrl+Alt+Z` | no | |
 | `edit.cut` | Edit > Cut | `Ctrl+X` | no | |
 | `edit.copy` | Edit > Copy | `Ctrl+C` | no | |
 | `edit.paste` | Edit > Paste | `Ctrl+V` | no | |
-| `edit.duplicate` | Edit > Duplicate | `Ctrl+D` | no | |
+| `edit.pasteReplace` | Edit > Paste Replace | `Ctrl+Shift+V` | no | |
 | `edit.delete` | Edit > Delete | `Delete` | no | |
-| `edit.selectAll` | Edit > Select All | `Ctrl+A` | no | |
-| `edit.deselectAll` | Edit > Deselect All | `Ctrl+Shift+A` | no | |
-| `edit.splitAtPlayhead` | Edit > Split Regions at Playhead | `Ctrl+T` | no | |
-| `edit.joinRegions` | Edit > Join Regions | `Ctrl+J` | no | |
+| `edit.duplicate` | Edit > Duplicate | `Ctrl+D` | no | |
+| `edit.selectAll` | Edit/Select > All | `Ctrl+A` | no | |
+| `edit.selectAllFollowing` | Edit/Select > All Following | `Shift+F` | no | |
+| `edit.selectAllInsideLocators` | Edit/Select > All Inside Locators | `Shift+L` | no | |
+| `edit.selectMutedRegions` | Edit/Select > Muted Regions | `Shift+M` | no | |
+| `edit.selectOverlappedRegions` | Edit/Select > Overlapped Regions | `Shift+O` | no | |
+| `edit.selectSameColoredRegions` | Edit/Select > Same-Colored Regions | `Shift+C` | no | |
+| `edit.selectSimilarRegions` | Edit/Select > Similar Regions | `Shift+S` | no | |
+| `edit.selectEqualRegions` | Edit/Select > Equal Regions | `Shift+E` | no | |
+| `edit.deselectAll` | Edit/Select > Deselect All | `Shift+D` | **yes** | |
+| `edit.selectInvertSelection` | Edit/Select > Invert Selection | `Shift+I` | no | |
+| `edit.hideFlexPitchTime` | Edit > Show Flex Pitch/Time | `Ctrl+F` | no | |
 | `tool.pencil` | Edit/Tool > Pencil Tool | `P` | **yes** | |
+| `edit.splitAtPlayhead` | Edit/Split > Regions at Playhead | `Ctrl+T` | **yes** | |
+| `edit.splitRegionsAtLocators` | Edit/Split > Regions at Locators | `Ctrl+Alt+T` | no | |
+| `edit.joinRegions` | Edit/Bounce and Join > Join | `Ctrl+J` | **yes** | |
+| `edit.moveToRecordedPosition` | Edit/Move > To Recorded Position | `Ctrl+Alt+Shift+R` | no | |
+| `edit.moveNudgeLeft` | Edit/Move > Nudge Left | `Alt+Left` | no | |
+| `edit.moveNudgeRight` | Edit/Move > Nudge Right | `Alt+Right` | no | |
+| `edit.trimRemoveOverlaps` | Edit/Trim > Remove Overlaps | `\` | no | |
+| `edit.openInExternalSampleEditor` | Edit > Open in External Sample Editor | `Shift+W` | no | |
 
 ## Track
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
-| `track.newAudio` | Track > New Audio Track | `Ctrl+Alt+N` | no | |
-| `track.delete` | Track > Delete Track | `Ctrl+Backspace` | no | |
-| `track.mute` | Track > Mute | `M` | no | |
-| `track.solo` | Track > Solo | `S` | no | |
+| `track.newTracks` | Track > New Tracks… | `Ctrl+Alt+N` | no | |
+| `track.newAudio` | Track > New Audio Track | `Ctrl+Alt+A` | **yes** | |
+| `track.newInstrument` | Track > New Software Instrument Track | `Ctrl+Alt+S` | no | |
+| `track.newSessionPlayerSiTrack` | Track > New Session Player SI Track… | `Ctrl+Alt+U` | no | |
+| `track.newExternalMidiTrack` | Track > New External MIDI Track | `Ctrl+Alt+X` | no | |
+| `track.rename` | Track > Rename Track | `Shift+Return` | no | |
+| `track.delete` | Track > Delete Track | `Ctrl+Backspace` | **yes** | |
+| `track.deleteUnusedTracks` | Track > Delete Unused Tracks | `Ctrl+Shift+Backspace` | no | |
+| `track.createTrackStack` | Track > Create Track Stack… | `Ctrl+Shift+D` | no | |
+| `track.flattenStack` | Track > Flatten Stack | `Ctrl+Shift+U` | no | |
+| `track.globalTracks` | Track > Show Global Tracks | `G` | no | |
+| `track.showOutputTrack` | Track > Show Output Track | `Ctrl+Shift+M` | no | |
+| `track.toggleHideView` | Track > Toggle Hide View | `H` | no | |
+| `track.configureTrackHeader` | Track > Configure Track Header… | `Alt+T` | no | |
 
 ## Navigate
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
-| `transport.playStop` | Navigate > Play/Stop | `Space` | **yes** | |
-| `transport.toStart` | Navigate > Go to Beginning | `Return` | no | |
-| `transport.barBack` | Navigate > Previous Bar | `,` | no | |
-| `transport.barForward` | Navigate > Next Bar | `.` | no | |
-| `transport.goToPosition` | Navigate > Go to Position… | `/` | no | |
-| `transport.loop` | Navigate > Cycle | `C` | **yes** | |
+| `transport.goToPosition` | Navigate/Go To > Position… | `/` | no | |
+| `transport.toStart` | Navigate/Go To > Beginning | `Return` | **yes** | |
+| `transport.barBack` | Navigate/Go To > Previous Bar | `,` | no | |
+| `transport.barForward` | Navigate/Go To > Next Bar | `.` | no | |
+| `navigate.scrollToSelection` | Navigate > Scroll to Selection | `Shift+<` | no | |
+| `navigate.setLocatorsBySelectionAndEnableCycle` | Navigate > Set Locators by Selection and Enable Cycle | `Ctrl+U` | no | |
+| `navigate.setRoundedLocatorsBySelectionAndEnableCycle` | Navigate > Set Rounded Locators by Selection and Enable Cycle | `U` | no | |
+| `navigate.moveLocatorsForwardByCycleLength` | Navigate > Move Locators Forward by Cycle Length | `Ctrl+Shift+.` | no | |
+| `navigate.moveLocatorsBackwardsByCycleLength` | Navigate > Move Locators Backwards by Cycle Length | `Ctrl+Shift+,` | no | |
+| `navigate.createMarker` | Navigate > Create Marker | `Alt+'` | no | |
 
 ## Record
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
-| `transport.record` | Record > Record | `R` | no | |
-| `transport.metronome` | Record > Metronome Click | `K` | no | |
+| `record.discardRecording` | Record/Record Button Options > Discard Recording and Return to Last Play Position | `Ctrl+.` | no | |
+
+## Mix
+
+| Action id | Menu path | Our default | Verified | Logic's default (fill in) |
+|---|---|---|---|---|
+| `mix.showAutomation` | Mix > Show Automation | `A` | no | |
+| `mix.enableAutomationQuickAccess` | Mix > Enable Automation Quick Access | `Ctrl+Alt+Shift+A` | no | |
+| `mix.groupSettings` | Mix > Group Settings | `Alt+Shift+G` | no | |
+| `mix.groupsActive` | Mix > Groups Active | `Shift+G` | no | |
 
 ## View
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
-| `view.library` | View > Library | `Y` | no | |
-| `view.inspector` | View > Inspector | `I` | no | |
-| `view.smartControls` | View > Smart Controls | `B` | no | |
-| `view.mixer` | View > Mixer | `X` | no | |
-| `view.editors` | View > Editors | `E` | no | |
-| `view.loops` | View > Loops | `O` | no | |
-| `view.zoomIn` | View > Zoom In | `+` | no | |
-| `view.zoomOut` | View > Zoom Out | `-` | no | |
+| `view.library` | View > Library | `Y` | **yes** | |
+| `view.inspector` | View > Inspector | `I` | **yes** | |
+| `view.mixer` | View > Mixer | `X` | **yes** | |
+| `view.smartControls` | View > Smart Controls | `B` | **yes** | |
+| `view.editors` | View > Editors | `E` | **yes** | |
+| `view.listEditors` | View > List Editors | `D` | no | |
+| `view.notePads` | View > Note Pads | `Ctrl+Alt+P` | no | |
+| `view.loops` | View > Loop Browser | `O` | **yes** | |
+| `view.browsers` | View > Browsers | `F` | no | |
+| `view.colors` | View > Colors | `Alt+C` | no | |
+| `view.zoomIn` | View/Zoom > Zoom In | `+` | no | |
+| `view.zoomOut` | View/Zoom > Zoom Out | `-` | no | |
+| `view.enterFullScreen` | View > Enter Full Screen | `Ctrl+Alt+F` | no | |
 
 ## Window
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
 | `window.minimize` | Window > Minimize | `Ctrl+M` | no | |
+| `window.cycleThroughWindows` | Window > Cycle Through Windows | `Ctrl+'` | no | |
+| `window.openMainWindow` | Window > Open Main Window | `Ctrl+1` | no | |
+| `window.openMixer` | Window > Open Mixer | `Ctrl+2` | no | |
+| `window.openSmartControls` | Window > Open Smart Controls | `Ctrl+3` | no | |
+| `window.openPianoRoll` | Window > Open Piano Roll | `Ctrl+4` | no | |
+| `window.openScoreEditor` | Window > Open Score Editor | `Ctrl+5` | no | |
+| `window.openAudioFileEditor` | Window > Open Audio File Editor | `Ctrl+6` | no | |
+| `window.openEventList` | Window > Open Event List | `Ctrl+7` | no | |
+| `window.openProjectAudio` | Window > Open Project Audio | `Ctrl+8` | no | |
+| `window.openMidiTransform` | Window > Open MIDI Transform | `Ctrl+9` | no | |
+| `window.showEventFloat` | Window > Show Event Float | `Alt+E` | no | |
+| `window.showRegionInspectorFloat` | Window > Show Region Inspector Float | `Alt+Shift+R` | no | |
+| `window.showMusicalTyping` | Window > Show Musical Typing | `Ctrl+K` | no | |
+| `window.showStepInputKeyboard` | Window > Show Step Input Keyboard | `Ctrl+Alt+K` | no | |
+| `mix.pluginWindow` | Window > Show All Plug-in Windows | `V` | no | |
 
 ## Help
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
-| `help.keyCommands` | Help > Key Commands… | `Alt+K` | no | |
+| `help.keyCommands` | Help > Key Commands… | `Alt+K` | **yes** | |
+
+## (no menu)
+
+| Action id | Menu path | Our default | Verified | Logic's default (fill in) |
+|---|---|---|---|---|
+| `transport.playStop` |  > Play/Stop | `Space` | **yes** | |
+| `transport.loop` |  > Cycle | `C` | **yes** | |
+| `transport.record` |  > Record | `R` | no | |
+| `transport.metronome` |  > Metronome Click | `K` | **yes** | |
+| `track.mute` |  > Mute | `M` | **yes** | |
+| `track.solo` |  > Solo | `S` | **yes** | |
+| `region.mute` |  > Mute Regions | `Alt+M` | no | |
+| `region.loop` |  > Loop/Unloop Regions | `L` | no | |

@@ -181,4 +181,43 @@ Rule: a feature is done only when it works end to end, has a test, is checked on
 Today: one Master track, stereo engine (device channels above 2 are cleared), "St Out" is only the label of the routing menu.
 - [x] C1 (the Master volume strip was added on 2026-10-12 at the owner's request). Multi-output engine and Output strips. Model: `TrackKind::Output` tracks with `outputPair` (0 = Out 1-2, 1 = Out 3-4, ...); the existing master is Out 1-2 and is shown in the Mixer as "Stereo Out" (its strip keeps inserts, so Mastering Assistant is there, plus a separate "Master" volume strip that scales every output when there is more than one); the Output menu of a track lists "Stereo Out" and the other pairs the device has; Output strips appear in the Mixer when the device has more outputs or something is routed to them (Output filter in the Mixer header); the engine renders each output pair into its device channels (JUCE device opens all outputs); offline render and bounce keep mixing Stereo Out only unless a pair is chosen; tests (graph with two output pairs, JSON round trip, routing menu, bridge), screenshot of the Mixer.
 
+### D. Reverse-engineering pass on the real Logic Pro 11.2 (the owner, 2026-10-14: set up REA, then "aggiorna la documentazione... ed estrai gli asset")
+- [x] D1. REA (`github.com/morluto/rea`) set up for Claude Code, with Hopper and a self-built Ghidra 12.1.4 (native decompiler compiled from source,
+      macOS releases don't ship one) as its two providers.
+- [x] D2. `docs/logic-reference/color-tokens.md`: ~836 named semantic colour tokens read out of `Assets.car` (Display P3, converted to sRGB), curated to the
+      ones relevant to the Mixer/Tracks/LCD, with hex values; confirms Logic's workspace is one fixed dark theme (not light/dark adaptive).
+- [x] D3. `smart-controls-and-editors.md` extended with the exact Smart Control knob set and order for Logic's Compressor, Limiter, Noise Gate, Echo/Delay
+      Designer/Tape Delay and PlatinumVerb/SilverVerb (from `ControlsViewParameters.plist`) — a direct reference for giving jad-daw's own built-ins the same
+      Smart Controls knobs.
+- [x] D4. `shortcuts-check.md` / `actions.json`: 16 more shortcuts marked verified (3 → 19 of 107) by reading them live off the running Key Command
+      Assignments window (search field + screenshot, via a one-off accessibility pass — REA's own native-UI tool needed its hardcoded compile timeout raised
+      locally, its `swiftc` step takes ~90 s on this machine against a 60 s default). Two open questions recorded in `asset-reference.md`: Logic splits Zoom
+      into Horizontal/Vertical (no single +/- "Zoom In"), and `transport.goToPosition`'s key rendered ambiguously on this machine's keyboard layout.
+- [x] D5. Extracted material (colour tokens, plug-in parameter JSON, legacy mixer bitmaps, live screenshots) kept in `../logic-pro-reference/`, a sibling
+      folder outside git (Apple's assets, not ours to commit); pointer and method in `docs/logic-reference/asset-reference.md`.
+
+## E. Behaviour gaps found against the real Logic Pro 11.2, not yet fixed in code (the owner, 2026-10-14: "vince Logic, non jad-daw")
+Found with a disposable test project and the AppleScript-menu-enumeration + Quartz-coordinate-click method in `docs/logic-reference/behavior-check-2026-10-14.md`
+(read that file for the full evidence before touching any of these). Each is a real behaviour/structure mismatch, not a shortcut.
+- [ ] E1. Automation mode slot: Logic's popup is **Read / Touch / Latch / Write** only, no "Off" entry — check whether jad-daw's Off state should be
+      removed/renamed, or whether Logic really does have an Off state reachable some other way before changing anything. Logic's popup also has
+      "Record Automation with Audio Regions", "Trim" and "Relative" that jad-daw doesn't have.
+- [ ] E2. Track Stacks: Logic has **one** Track-menu command, "Create Track Stack…" (a dialog, presumably Folder vs. Summing inside it), not jad-daw's
+      two separate actions `track.createTrackStack` and a standalone "Create Folder Stack". Merge them into one command + dialog, or confirm via the
+      dialog's actual contents (not seen yet) before changing `actions.json`.
+- [ ] E3. Aux tracks: Logic creates an auxiliary channel strip from the **Mixer's Options menu** ("Create New Auxiliary Channel Strip", ⌃N — already in
+      `mixer.md`), not from Track > New. Move jad-daw's `track.newAux` (if it exists under the Track menu today) to match, or confirm it's already in
+      the Mixer and this is a non-issue.
+- [ ] E4. Menu *locations* (shortcuts are already right, only the menu path is wrong): Preferences is **Logic Pro > Settings** (no ellipsis, it's a
+      submenu), not File > Preferences; Key Commands is directly in the **Logic Pro** app menu, not under Help. Fix `actions.json`'s `menu` field for
+      `file.preferences` and `help.keyCommands` (and whatever UI chrome renders those menu paths).
+- [ ] E5. Record > Count-in goes to **1/4 through 9/4** (nine beat counts), jad-daw only offers up to 3/4 — extend the Count-in UI/engine to match.
+- [ ] E6. Record > Overlapping Audio Recordings is **two separate groups** depending on whether Cycle is on or off (Cycle Off: Create Take Folder /
+      Create New Track / Create Track Alternative; Cycle On: Create Take Folder / Create Tracks And Mute / Create Track Alternatives), not jad-daw's
+      one flat Take-Folder/Tracks/Tracks-and-Mute/Merge list for both states. "Create Track Alternative(s)" from a cycle recording isn't in jad-daw at
+      all today.
+- [ ] E7. Follow-up pass needed (not reached yet): Flex Time/Pitch and Smart Tempo behaviour, the minor dialogs (Project Settings, Bounce, Colors, I/O
+      Labels), and a second Edit-menu read with an actual region/note selected (the one read this session had nothing selected, so it isn't a fair
+      comparison against jad-daw's always-shown, just-disabled Edit menu items).
+
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

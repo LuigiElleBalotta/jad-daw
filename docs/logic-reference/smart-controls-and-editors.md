@@ -146,3 +146,32 @@ blobs/lines over the waveform, a bar ruler, and a different **left pane**: track
 **Q**, Strength slider 100), **Scale Quantize** (popups `Off` and a scale, **Q**), **Pitch Correction** slider (0) and **Gain** slider (0). The editor bar keeps
 the Flex popup (`Flex Pitch`), the tool popup, **Snap: Smart** and zoom. The track header keeps its row, and the Region Inspector keeps Fine Tune / Flex & Follow / Gain.
 Three different editing views therefore exist for audio: waveform (Flex Time modes), Smart Tempo, File, and the Flex Pitch pitch view.
+
+## Smart Control knob sets for the built-in plug-ins (from the app's own resources, 2026-10-14)
+
+`Contents/Resources/ControlsViewParameters.plist` in the Logic Pro 11.2 bundle lists, per built-in plug-in, exactly which
+parameters its Smart Controls panel exposes and in what order (`GBControlsViewParameterOrder`, each entry
+`"<internal index> <label>"`). This is a direct resource read, not a visual guess, and it covers several plug-ins jad-daw
+already ships under different names:
+
+| Logic plug-in | Smart Control knobs, in order |
+|---|---|
+| `Compressor` | Threshold · Ratio · Attack · Gain |
+| `Limiter` | Gain · Output Level |
+| `Noise Gate` | Threshold |
+| `Gain` | (single entry, no sub-order recorded) |
+| `Echo` | Time · Repeat · Color · Dry · Wet |
+| `Delay Designer` | Dry · Wet · Feedback Enable · Feedback Amount |
+| `Tape Delay` | Note · Deviation · Feedback · LFO Rate · LFO Depth · Low Cut · High Cut · Dry · Wet |
+| `PlatinumVerb` | Predelay · Reverb Time · High Cut · Spread · Dry · Wet |
+| `SilverVerb` | Room Size · Density/Time · Dry · Wet |
+
+jad-daw's own Compressor, Limiter, Noise Gate, Delay and Reverb are deliberate equivalents of these (see the README's
+Effects section); when jad-daw grows real Smart Controls knobs for them (today the panel falls back to generic
+`PARAM 1..8` for a track with no patch layout — see above), exposing the same four knobs in the same order for the
+Compressor, and Dry/Wet plus the two most audible knobs for Delay/Reverb, would match Logic's panel exactly rather than
+just being "close enough." No `Channel EQ` entry exists in this plist (Logic's multi-band EQ apparently doesn't route
+through the same generic Smart Controls knob list, maybe because its UI is the EQ curve itself).
+
+The full plist (47 plug-ins) is extracted as JSON in the external reference folder — see `asset-reference.md` — at
+`logic-pro-reference/icons-and-plists/ControlsViewParameters.json`.

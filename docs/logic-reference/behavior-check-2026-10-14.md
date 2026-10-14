@@ -95,9 +95,41 @@ means a literal "what does Logic's Edit menu show" comparison depends entirely o
 focus, and a single static snapshot (this one, nothing selected) isn't enough to validate or invalidate jad-daw's
 model either way. Worth a follow-up pass with an actual region/note selected in each editor.
 
+### Project Settings — one window, many more tabs than documented
+
+`File > Project Settings` is **one window** with an icon toolbar of **11 tabs**: General, Audio, Recording, Smart
+Tempo, MIDI, Score, Movie, Synchronization, Metronome, Tuning, Assets (confirmed: switching tabs stays in the same
+window, `Untitled 13.logicx - Project Settings`). jad-daw's roadmap describes Project Settings as one undifferentiated
+dialog ("name, rate, tempo, count-in, recording"); real Logic's **General** tab alone has three unrelated groups —
+**Project Type** (Use musical grid), **Opening Project** (Only load plug-ins needed for playback, Reset record enable
+state of Software Instrument tracks), **Automation** (Region automation takes priority over track automation, Use
+preset parameter value for regions without region automation) — none of which obviously map to "name, rate, tempo,
+count-in, recording." The other 10 tabs weren't read this session. This is a bigger dialog than jad-daw models today;
+worth a dedicated pass per tab before assuming today's single-panel Project Settings covers the same ground.
+
+### Flex Mode — present, exact algorithm list not re-confirmed this session
+
+The Inspector's Track section does have a **Flex Mode** control (confirmed: an `AXPopUpButton` reading "Off" exists
+in the accessibility tree at a fixed path, unlike the Mixer/Tracks canvas which exposes almost nothing — the
+Inspector sidebar, unlike the canvas, *is* a normal AppKit list and is AX-readable). Opening its menu to re-read the
+exact algorithm list (Slicing/Rhythmic/Monophonic/Polyphonic/Tempophone/Speed/Automatic/Flex Pitch, as jad-daw's
+README already lists, sourced from published documentation rather than this session) didn't succeed before time ran
+out — the popup didn't open from a plain `AXPress`, and pixel-coordinate clicking on it wasn't lined up correctly in
+the time available. Left as a to-do (`roadmap-autonomous.md` E7) rather than guessing.
+
+### One mishap, for the record
+
+While repeating the "new disposable project" setup a second time, the owner's real project window (`Luce Nel
+Profondo - Singolo.logicx`) closed unexpectedly — most likely a queued Return keystroke landed on the close-current-
+project prompt's default (highlighted) **Close** button instead of **Don't Close**. No edits had been made to that
+project in this or the first session (read-only observation only), so nothing was lost, but the window closing without
+explicit confirmation is exactly the failure mode the "never touch the user's project" rule exists to prevent. Flagged
+to the owner immediately; they confirmed it didn't matter this time. For any future session automating Logic Pro's
+GUI: don't assume a modal's default button is the safe one, and re-check the window list after every keystroke that
+could reach a confirmation dialog, not just after clicks.
+
 ## What this pass did not get to
 
-Flex Time/Pitch behaviour, Smart Tempo, and most of the minor dialogs (Project Settings, Bounce, Colors, I/O Labels)
-were not reached this session — time went into Mixer + menu structure, which surfaced more concrete, checkable
-mismatches per minute spent than screenshotting individual dialogs would have. The two techniques above make a
-follow-up pass on those areas straightforward; see `docs/roadmap-autonomous.md` section E for the itemised backlog.
+Smart Tempo behaviour and most of the minor dialogs (Bounce, Colors, I/O Labels, and 10 of Project Settings' 11 tabs)
+were not reached this session. The techniques above make a follow-up pass on those areas straightforward; see
+`docs/roadmap-autonomous.md` section E for the itemised backlog.

@@ -216,8 +216,14 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       Create New Track / Create Track Alternative; Cycle On: Create Take Folder / Create Tracks And Mute / Create Track Alternatives), not jad-daw's
       one flat Take-Folder/Tracks/Tracks-and-Mute/Merge list for both states. "Create Track Alternative(s)" from a cycle recording isn't in jad-daw at
       all today.
-- [ ] E7. Follow-up pass needed (not reached yet): Flex Time/Pitch and Smart Tempo behaviour, the minor dialogs (Project Settings, Bounce, Colors, I/O
-      Labels), and a second Edit-menu read with an actual region/note selected (the one read this session had nothing selected, so it isn't a fair
-      comparison against jad-daw's always-shown, just-disabled Edit menu items).
+- [ ] E8. Project Settings is **one window with 11 tabs** (General, Audio, Recording, Smart Tempo, MIDI, Score, Movie, Synchronization, Metronome,
+      Tuning, Assets), not the single "name, rate, tempo, count-in, recording" panel the roadmap describes. The General tab alone has three groups
+      (Project Type/Opening Project/Automation) that don't map to that description. Needs a per-tab pass before assuming today's single panel covers it.
+- [ ] E9. Flex Mode control confirmed present in the Inspector (Track section, a real `AXPopUpButton`, currently "Off") but its algorithm menu wasn't
+      successfully opened this session to re-confirm the exact list against jad-daw's (Slicing/Rhythmic/Monophonic/Polyphonic/Tempophone/Speed/
+      Automatic/Flex Pitch, sourced from published docs, not yet from a live read) — needs its own pixel-coordinate pass, see `behavior-check-2026-10-14.md`.
+- [ ] E7. Follow-up pass needed (not reached yet): Flex Time/Pitch and Smart Tempo *behaviour* (not just the menu, which E9 covers), the remaining minor
+      dialogs (Bounce, Colors, I/O Labels, 10 of Project Settings' 11 tabs — see E8), and a second Edit-menu read with an actual region/note selected
+      (the one read this session had nothing selected, so it isn't a fair comparison against jad-daw's always-shown, just-disabled Edit menu items).
 
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

@@ -257,8 +257,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       **Tenth pass:** `CCompressorFET::GainRedCurve` decompiled — a fourth circuit, back to closed-form: same shared knee (0.6151-1.1925) as SSL/Opto,
       single time constant, then `(x+1)^-4` (a much steeper power than Opto's -1.2, matching a FET/1176-style "grabby" onset) rescaled linearly. Four
       compressor circuits now decompiled, four genuinely different nonlinearities on one shared knee shape. Full writeup in `docs/logic-reference/mixer.md`.
-      Open: `CCompressorLP`'s curve, the ClassA ratio-table function pointers, `CBiquadChainDualRateFX::FillResponseLUT`'s own math, and the Match EQ's
-      reference-model factory/selection.
+      **Eleventh pass:** `CCompressorLP::GainRedCurve` decompiled — a fifth strategy, a 1024-entry linearly-interpolated lookup table (no knee/power-law
+      math at all). "LP" = Platinum, Logic's clean/modern digital model, fitting its plain table-driven precision vs. the analog-modeled circuits'
+      curve math. **All six stock Compressor circuits now at least partially characterized** (five distinct engineering strategies: SSL/Opto/FET
+      closed-form algebra on a shared knee, DBX Hermite-table, LP linear-table, ClassA discrete-ratio architecture with its curve itself still untraced).
+      Open: `CCompressorClassA`'s own curve, the ClassA ratio-table function pointers, `CBiquadChainDualRateFX::FillResponseLUT`'s own math, and the
+      Match EQ's reference-model factory/selection.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

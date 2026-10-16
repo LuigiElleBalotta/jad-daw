@@ -285,9 +285,19 @@ by count):
   photoresistive response. Four circuits decompiled now, four distinct nonlinearities on top of one shared knee
   shape: SSL (linear-ish envelope + secondary limiter), Opto (`x^−1.2` → Michaelis-Menten saturation), DBX (table
   lookup), FET (`(x+1)^−4` → linear rescale).
-  `CCompressorLP` and `CCompressorClassA` (has its own `CalcRatio`) remain unexamined — structurally
-  confirmed as further separate, non-shared implementations (each has its own `Coefficients`/`GainRedCurve`/
-  `Process`/`OnReset`, like the three already decompiled) but not decompiled this pass.
+- **`CCompressorLP`** (`GainRedCurve`, decompiled, eleventh pass) — a *fifth* strategy: a **1024-entry lookup table**
+  (indices 0–1023, clamped for interpolation at 1022) read with plain **linear interpolation** between adjacent
+  points — no cubic knee, no power law, no spline, just the finest-resolution table of any circuit here. "LP" almost
+  certainly stands for **Platinum**, Logic's clean/modern digital compressor model — a precise, table-driven curve
+  fits that "transparent, no character" design brief far better than the analog-modeled power-law/knee curves used
+  by SSL/Opto/FET. `CCompressorClassA`'s own `GainRedCurve` (only its `Coefficients`/ratio-table were examined)
+  remains the one circuit whose actual curve shape is still unknown.
+
+**All six stock Compressor circuits are now at least partially characterized** — five genuinely different
+engineering strategies for the "same" effect: SSL (dual envelope + shared cubic knee + secondary limiter stage),
+Opto (shared knee + `x^−1.2` power + Michaelis-Menten saturation), FET (shared knee + `(x+1)^−4` power + linear
+rescale), DBX (Hermite-spline table), LP/Platinum (1024-point linearly-interpolated table), ClassA (discrete
+ratio presets from a small constant+function-pointer table, curve itself not yet traced).
 - `CLimiterFX::Coefficients` turned out to be a thin forwarder into `CLimiter::Coefficients` (the real implementation,
   not decompiled this pass) plus one special case: parameter index `6` toggles something per-channel across every
   linked channel object (`0.0 < value` as a bool) — likely a stereo-link/channel-count-dependent switch, not pinned

@@ -212,8 +212,13 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
 - [x] D8. Mastering Assistant: the `CAutoMaster` chain (loudness analysis, Match EQ, multiband compressor, limiter, saturation/waveshaper, spread,
       correlation) lives in `MADSP.framework`, not `MAMixer.framework` (that one's just the UI/view-models). The single "Loudness Macro" slider's exact
       piecewise-linear mappings to compressor gain, limiter gain/release, and waveshaper dry/wet are documented in `docs/logic-reference/mixer.md` — staged
-      engagement (limiter/saturation stay off below a threshold, then ramp linearly), not a uniform scale. Open: Match EQ model selection and the
-      compressor/limiter/MB-compressor's own per-band processing weren't decompiled.
+      engagement (limiter/saturation stay off below a threshold, then ramp linearly), not a uniform scale.
+      **Match EQ traced further (second pass):** it's a separate `CMatchEQFX` class with a 4-stage pipeline — capture a target spectrum (reference audio
+      file or built-in model), convert both source and target to a log-frequency dB curve (the same curve the UI graph draws), fade that curve to flat at
+      the spectral extremes (found/decompiled: averages per-channel spectra, finds where content drops within a threshold of the peak — i.e. separates
+      real content from noise floor — and fades over a configurable width there, which is *why* the UI has a Fade Extremes control), then turns the result
+      into smoothed, cached filter coefficients. Full writeup in `docs/logic-reference/mixer.md`. Open: the reference-model factory/selection, the actual
+      filter topology inside `Coefficients()` (a 126-basic-block dispatcher, not decompiled), and the compressor/limiter/MB-compressor's own processing.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

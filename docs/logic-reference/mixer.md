@@ -137,13 +137,46 @@ the saturation/waveshaper blend all stay off until the macro crosses a threshold
 linearly. This staged-engagement design is a concrete, reusable fact for jad-daw's own Mastering/Loudness macro, not
 just "turn a knob and multiply everything."
 
-**Open**: the Match EQ's spectral reference data/model selection (`SpectralReferenceDataFactory`,
-`SelectSpectralReferenceDataForModel`), the multiband compressor's own per-band thresholds, and the limiter/compressor's
-actual processing functions (`ProcessLimiter`, `ProcessMBCompressor`, `ProcessCompressor`) weren't decompiled this
-pass — they're each a further, deeper target if more detail is wanted.
+### Match EQ, traced further (2026-10-16, second pass)
+
+The actual Match EQ DSP is its own class, **`CMatchEQFX`** (not part of `CAutoMaster` itself — `CAutoMaster` just
+owns and drives one), found via `CAutoMaster::SetSpectralCorrectionAmountMacro`'s calls into
+`CMatchEQFX::UpdateCoeffAndCaches`. Its full pipeline, confirmed by method names and two decompiled functions:
+
+1. **Capture a target spectrum** — either from a reference audio file (`GenerateSpectrumFromAudioFile`/`...Finalize`/
+   `...Block`, run incrementally so it doesn't block audio) or from a built-in model (`SpectralReferenceDataFactory`,
+   `SelectSpectralReferenceDataForModel` — not traced further this pass), stored per-channel as `CSpecData` (raw FFT
+   magnitude spectra).
+2. **Convert to a log-frequency dB curve** for both the source and target (`FFTMagSpecToLogResponse`,
+   `GraphRelXToFreq`/`GraphFreqToRelX` — these are also what draws the Match EQ's on-screen curve, so the graph the
+   user sees *is* the actual correction curve, not a separate visualization).
+3. **Fade the curve to flat at the spectral extremes** — `FadeExtremesFromCurrent(thresholdOffset, fadeWidth1,
+   fadeWidth2, ...)`, decompiled: it averages the per-channel magnitude spectra, finds the lowest and highest
+   frequency bin whose level is within `thresholdOffset` dB of the overall peak (i.e. "where the reference's content
+   actually starts and stops" vs. near-silence/noise floor), then produces four bin indices marking fade-in/fade-out
+   windows of width `fadeWidth1`/`fadeWidth2` around those edges. This is exactly why the UI's Match EQ has a
+   "Fade Extremes" control: without it, the correction curve would try to boost frequencies where the reference had
+   no real energy (just noise floor), creating wild, meaningless gain at the spectrum's edges.
+4. **`Coefficients(float, int)`** turns the (possibly macro-scaled, possibly extreme-faded) target curve into actual
+   filter coefficients, smoothed over time (`Smooth`) and cached (`UpdateCoeffAndCaches`,
+   `UpdateIRInFilterCores` — "IR" here reads as the filter's impulse response/coefficient set, not a convolution
+   reverb). This function itself is a large parameter dispatcher (126 basic blocks) — its exact filter topology
+   (parametric biquad bank vs. something else) wasn't traced into further this pass; the pipeline above it is
+   the useful, confirmed fact.
+
+`CAutoMaster::SetSpectralCorrectionAmountMacro`'s own blend (decompiled): for a macro value `p` in the plugin's own
+0-100 UI range, it computes `p×0.01 − 1.0` (always ≤ 0 in that range) and, when ≤ 0, just applies the stored target
+curve directly with no extra blending — the interpolation-toward-a-different-target branch only activates if `p`
+somehow exceeds 100, so in normal use the macro doesn't blend two different target curves, it scales how hard the
+curve is applied (the third coefficient it sets is literally `p × 0.005`, i.e. half of `p` as a 0..0.5 fraction).
+
+**Open**: `SpectralReferenceDataFactory`/model selection, the multiband compressor's own per-band thresholds, and the
+limiter/compressor/MB-compressor's actual processing functions (`ProcessLimiter`, `ProcessMBCompressor`,
+`ProcessCompressor`) weren't decompiled — each is a further, deeper target if more detail is wanted.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, `CAutoMaster` class at
-`0x5f8db0`-`0x60bd50` and `CAutoMasterShell`/`CAutoMasterFX` wrappers. Pure numeric facts, not ported code.
+`0x5f8db0`-`0x60bd50`, `CAutoMasterShell`/`CAutoMasterFX` wrappers, and `CMatchEQFX` at `0x254cc0`-`0x25f290`. Pure
+numeric facts and architecture, not ported code.
 
 ## Related settings
 

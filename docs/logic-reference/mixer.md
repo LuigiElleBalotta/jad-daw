@@ -160,9 +160,17 @@ owns and drives one), found via `CAutoMaster::SetSpectralCorrectionAmountMacro`'
 4. **`Coefficients(float, int)`** turns the (possibly macro-scaled, possibly extreme-faded) target curve into actual
    filter coefficients, smoothed over time (`Smooth`) and cached (`UpdateCoeffAndCaches`,
    `UpdateIRInFilterCores` — "IR" here reads as the filter's impulse response/coefficient set, not a convolution
-   reverb). This function itself is a large parameter dispatcher (126 basic blocks) — its exact filter topology
-   (parametric biquad bank vs. something else) wasn't traced into further this pass; the pipeline above it is
-   the useful, confirmed fact.
+   reverb). **Fully decompiled this pass** (126 basic blocks — it's one big parameter-ID dispatcher, one case per
+   settable value, each ending in a call to `UpdateCoeffAndCaches`). This settles the open filter-topology question:
+   the correction is **not** applied in the FFT/frequency domain at all — the gain- and Q-setting cases call directly
+   into a member **`CBiquadChain`** (`CBiquadChain::SetGaindB`, `::SetQ`, `::CalcCoeffs` per band index). So the FFT
+   machinery above is purely *analysis* (deriving the target curve); the real-time correction itself is a classic
+   **parametric biquad filter bank**, one biquad per band, each with its own gain/Q recalculated when its coefficient
+   changes — the efficient, low-latency choice for a mastering insert, not an FFT-domain convolution. Four of the
+   dispatcher's cases are an identical linear search ("find the table index of the first frequency bin ≥ a target
+   frequency") against the same shared frequency table, storing into four different fields — almost certainly the
+   Match EQ's user-facing band-boundary markers (low/high fade edges, etc.), consistent with the Fade Extremes
+   mechanism above. One case sets a fixed `-3.0` literal into `SetQ`, purpose not pinned down further.
 
 `CAutoMaster::SetSpectralCorrectionAmountMacro`'s own blend (decompiled): for a macro value `p` in the plugin's own
 0-100 UI range, it computes `p×0.01 − 1.0` (always ≤ 0 in that range) and, when ≤ 0, just applies the stored target

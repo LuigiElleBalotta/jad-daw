@@ -217,8 +217,10 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       file or built-in model), convert both source and target to a log-frequency dB curve (the same curve the UI graph draws), fade that curve to flat at
       the spectral extremes (found/decompiled: averages per-channel spectra, finds where content drops within a threshold of the peak — i.e. separates
       real content from noise floor — and fades over a configurable width there, which is *why* the UI has a Fade Extremes control), then turns the result
-      into smoothed, cached filter coefficients. Full writeup in `docs/logic-reference/mixer.md`. Open: the reference-model factory/selection, the actual
-      filter topology inside `Coefficients()` (a 126-basic-block dispatcher, not decompiled), and the compressor/limiter/MB-compressor's own processing.
+      into smoothed, cached filter coefficients. **`Coefficients()` fully decompiled (third pass, at the owner's request):** it's a 126-block parameter
+      dispatcher whose gain/Q cases call straight into a member `CBiquadChain` (`SetGaindB`/`SetQ`/`CalcCoeffs` per band) — confirms the correction is
+      applied as a **parametric biquad filter bank**, not FFT-domain convolution; the FFT/spectrum work above is analysis-only. Full writeup in
+      `docs/logic-reference/mixer.md`. Open: the reference-model factory/selection and the compressor/limiter/MB-compressor's own processing functions.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

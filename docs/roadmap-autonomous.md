@@ -219,8 +219,13 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       real content from noise floor — and fades over a configurable width there, which is *why* the UI has a Fade Extremes control), then turns the result
       into smoothed, cached filter coefficients. **`Coefficients()` fully decompiled (third pass, at the owner's request):** it's a 126-block parameter
       dispatcher whose gain/Q cases call straight into a member `CBiquadChain` (`SetGaindB`/`SetQ`/`CalcCoeffs` per band) — confirms the correction is
-      applied as a **parametric biquad filter bank**, not FFT-domain convolution; the FFT/spectrum work above is analysis-only. Full writeup in
-      `docs/logic-reference/mixer.md`. Open: the reference-model factory/selection and the compressor/limiter/MB-compressor's own processing functions.
+      applied as a **parametric biquad filter bank**, not FFT-domain convolution; the FFT/spectrum work above is analysis-only.
+      **Fourth pass (at the owner's request):** loudness measurement is confirmed as **ITU-R BS.1770/EBU R128** — `CLoudnessMeter`'s own method names
+      (`AnalyseMomentaryLoudness`/`...Short...`/`...Integrated...`/`...LoudnessRange`, `SetupPreFilter` for K-weighting, histogram-based relative gating)
+      match the standard exactly, independently confirming jad-daw's own BS.1770 choice matches Apple's real implementation. And `AutoAdjustLimiter` is not
+      a closed-form curve at all — it's a small iterative controller (render a trial chunk, measure loudness, add the error onto a running gain-in-dB,
+      re-render, up to 5 attempts or until within 0.2 dB/LU). Full writeup in `docs/logic-reference/mixer.md`. Open: the reference-model factory/selection
+      and the limiter's/compressor's/MB-compressor's actual per-sample processing loops (as opposed to the auto-adjustment logic, now covered).
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

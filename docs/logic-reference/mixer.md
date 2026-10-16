@@ -178,13 +178,40 @@ curve directly with no extra blending — the interpolation-toward-a-different-t
 somehow exceeds 100, so in normal use the macro doesn't blend two different target curves, it scales how hard the
 curve is applied (the third coefficient it sets is literally `p × 0.005`, i.e. half of `p` as a 0..0.5 fraction).
 
+### Loudness measurement is ITU-R BS.1770/EBU R128 (2026-10-16, fourth pass — at the owner's request)
+
+`AnalyzeLoudness` (the function `AutoAdjustLimiter` below calls to measure where it stands) is a thin chunking loop
+that feeds audio into a separate **`CLoudnessMeter`** object. That object's own methods settle the question
+unambiguously: `AnalyseMomentaryLoudness`, `AnalyseShortLoudness`, `AnalyseIntegratedLoudness`,
+`AnalyseLoudnessRange` — the exact **Momentary / Short-term / Integrated / Loudness Range** terminology of the
+standard, not generic names — plus `SetupPreFilter` (the standard's two-stage K-weighting pre-filter),
+`IsLFEChannel`/`IsSideChannel` (channel-weighting exclusions BS.1770 specifies), and, most tellingly,
+`AddLoudnessToHistogram`/`GetRelativeGateIndex`/`GetPercentileOfHistogram`/`HistogramIndexForLoudnessDb` — the
+histogram-based **relative gating** step that is BS.1770's specific, distinctive integrated-loudness algorithm (not
+a simple running average). **This independently confirms jad-daw's own stated choice of BS.1770/EBU R128 for
+loudness matches Apple's actual implementation**, architecturally — another case (like the phase vocoder) of Apple
+using the same published standard jad-daw already builds on, not a secret in-house metric.
+
+### Limiter/compressor auto-adjustment is iterative, not a closed-form curve
+
+`CAutoMaster::AutoAdjustLimiter(startGain, targetLoudness, ...)`, fully decompiled: it is **not** a formula — it's a
+small closed-loop controller. Each iteration: render a trial chunk through the limiter at the current gain,
+re-measure loudness via `AnalyzeLoudness`, compute `error = target − measured`, add that error directly onto the
+running gain-in-dB (`gain_dB += error`), convert to linear via the standard `10^(gain_dB / 20)` (clamped to ±100 dB),
+and re-render. It stops as soon as `|error| ≤ 0.2` (dB/LU) or after **5 attempts total** (1 initial measurement + 4
+adjustment loops), whichever comes first — a simple integral (accumulate-the-error) controller with a tight
+convergence budget, not an elaborate model. The function returns the total gain delta it ended up applying. This is
+a genuinely useful fact for jad-daw's own Mastering Assistant: don't look for a formula mapping "target loudness" to
+"limiter gain" — measure, adjust, remeasure, a handful of times, same as Apple does.
+
 **Open**: `SpectralReferenceDataFactory`/model selection, the multiband compressor's own per-band thresholds, and the
-limiter/compressor/MB-compressor's actual processing functions (`ProcessLimiter`, `ProcessMBCompressor`,
-`ProcessCompressor`) weren't decompiled — each is a further, deeper target if more detail is wanted.
+limiter's/compressor's actual sample-processing loops (`ProcessLimiter`, `ProcessMBCompressor`, `ProcessCompressor` —
+as opposed to the auto-*adjustment* logic above, which is now covered) weren't decompiled.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, `CAutoMaster` class at
-`0x5f8db0`-`0x60bd50`, `CAutoMasterShell`/`CAutoMasterFX` wrappers, and `CMatchEQFX` at `0x254cc0`-`0x25f290`. Pure
-numeric facts and architecture, not ported code.
+`0x5f8db0`-`0x60bd50`, `CAutoMasterShell`/`CAutoMasterFX` wrappers, `CMatchEQFX` at `0x254cc0`-`0x25f290`, and
+`CLoudnessMeter`/`CLoudnessMeterFX`/`CLoudnessMeterShell` at `0x90bd70`-`0x90dd90`. Pure numeric facts and
+architecture, not ported code.
 
 ## Related settings
 

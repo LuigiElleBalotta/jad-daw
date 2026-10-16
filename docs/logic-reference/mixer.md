@@ -110,6 +110,41 @@ Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghid
 constants), not ported code — see `asset-reference.md` for the method and the reasoning on what gets kept as "facts"
 versus reimplemented from scratch.
 
+## Mastering Assistant — decompiled (2026-10-16)
+
+The Mastering Assistant that sits on the Output strip (`CAutoMasterShell`/`CAutoMaster` in `MADSP.framework`, ~140
+methods) is a full chain: input/output gain staging, loudness analysis (`AnalyzeLoudness`, `EstimateLoudnessMacrosBasedOnTargetLUFS`),
+a Match EQ (`ProcessMatchEQ`, with a factory/spectral-reference-data system — i.e. it fits the signal's spectrum toward
+a reference curve chosen by content type/model), a multiband compressor, a limiter, a saturation/waveshaper stage, a
+stereo-spread control, a correlation meter, and separate "Analyze" vs "Record"/"Bypass" run modes
+(`AnalyzeMode`/`RecordingMode`/`BypassMode`). It also supports an offline analysis pass on its own thread
+(`AnalyzeOfflineInNewThread`, with a progress callback) — matching the UI's "Analyzing…" progress state.
+
+The whole UI boils down to one user-facing control, the **Loudness Macro** slider (likely -1..+1 or similar), which
+several small, exact mapping functions turn into the underlying DSP parameters — these are plain piecewise-linear
+formulas, not ML or anything proprietary-looking:
+
+| Function | Formula (macro position `p`) |
+|---|---|
+| `CompressorInputGainFromLoudnessMacroPos` | `p ≤ 0: gain_dB = p × 13.1`  ·  `p > 0: gain_dB = p × 12.0` (asymmetric slope either side of center) |
+| `LimiterInputGainFromLoudnessMacroPos` | `p < 0.6: 2.8 dB` (flat)  ·  `p ≥ 0.6: 2.8 + 3.25×(p−0.6) dB` (reaches 4.1 dB at p=1) |
+| `LimiterReleaseFromLoudnessMacroPos` | `p < 0.4: 2.0 ms` (flat)  ·  `p ≥ 0.4: 2.0 + 44×(p−0.4)/0.6 ms` (reaches 46 ms at p=1) |
+| `WaveShaperDryWetFactorFromLoudnessMacroPos` | `p < 0.4: wet=0`  ·  `p ≥ 0.4: wet=(p−0.4)/0.6`, `dry = 1−wet` |
+
+So pushing the macro up doesn't scale everything uniformly: the compressor responds across the whole range (and
+responds *more* to pulling it down than pushing it up, 13.1 vs 12.0 dB/unit), while the limiter, its release time, and
+the saturation/waveshaper blend all stay off until the macro crosses a threshold (0.4 or 0.6) and then ramp in
+linearly. This staged-engagement design is a concrete, reusable fact for jad-daw's own Mastering/Loudness macro, not
+just "turn a knob and multiply everything."
+
+**Open**: the Match EQ's spectral reference data/model selection (`SpectralReferenceDataFactory`,
+`SelectSpectralReferenceDataForModel`), the multiband compressor's own per-band thresholds, and the limiter/compressor's
+actual processing functions (`ProcessLimiter`, `ProcessMBCompressor`, `ProcessCompressor`) weren't decompiled this
+pass — they're each a further, deeper target if more detail is wanted.
+
+Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, `CAutoMaster` class at
+`0x5f8db0`-`0x60bd50` and `CAutoMasterShell`/`CAutoMasterFX` wrappers. Pure numeric facts, not ported code.
+
 ## Related settings
 
 Settings > View > Mixer: show Mastering Assistant button, open plug-in window on insertion, show recent plug-in list, peak hold 800 ms, IEC Type I return

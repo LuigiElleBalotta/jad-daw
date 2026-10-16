@@ -33,3 +33,35 @@ Move the regions of influence of the peaks to their new bins directly, fixing th
 - **YIN** (de Cheveigné & Kawahara, 2002): difference function d(t) = sum (x[j] - x[j+t])^2, cumulative mean normalisation d'(t) = d(t) / mean(d(1..t)), absolute threshold 0.1 (first dip below it, else the global minimum), parabolic interpolation, best local estimate. Window 25 ms, range 40-800 Hz.
 - **pYIN** (Mauch & Dixon, 2014): replace the threshold by a Beta-distributed prior over 100 thresholds (0.01..1); each threshold picks a period, the weights add up per period, the missing mass is the "unvoiced" probability. The candidates go to an HMM (pitch bins of 10 cents, one voiced and one unvoiced state per pitch, voicing switch 0.01, pitch jump triangular up to 25 bins), decoded by Viterbi. Frame 2048, hop 256 at 44.1 kHz.
 - **Note tracker** (the pYIN/Tony `MonoNote` model): states per pitch (3 pitches per semitone, 69 semitones from MIDI 35): attack, stable, silent. Self-transitions 0.9, 0.99, 0.9999; stable to silent 0.01; silent to the attack of another pitch weighted by a Gaussian of the distance in semitones (sigma 0.7, more than half a semitone and less than 13). Observation: nearest candidate, likelihood p^0.1 times a Gaussian of the pitch distance (sigma 5 semitones in attack, 0.8 in stable); the silent state takes 1 - P(pitched), P(pitched) mixed with a 0.7 prior at weight 0.5. Decoded by Viterbi; a note starts at an attack state and ends at silence or the next attack.
+
+## What Logic 11.2 itself actually runs (decompiled, 2026-10-16)
+
+Static analysis of `MAMusicAnalysis.framework` (x86_64 slice via REA + Ghidra 12.1.4) — the analysis/detection side; the
+actual time-stretch rendering engine lives in `MADSP.framework` under a `BeatBreaker`/`SliceHandler` class family not
+yet decompiled this pass. This section is **what Apple does**, kept separate from "DSP above is ours" by design —
+Apple's architecture is a fact worth knowing, not something to port.
+
+- **Onset/transient detection is CNN-based**, not classic spectral-flux or HFC: `CMetroStrategyOnsetDetectionCNN`
+  (plus an `...Online` streaming variant) and `CMetroModuleStreamingTransientsCNN` exist as real classes, alongside
+  function names `beat_tracker_mpsmodel_init/run/destroy` — **MPS = Metal Performance Shaders**, i.e. Logic 11's
+  transient/onset detector runs a small on-device neural network (likely a CoreML model under MPS), not a hand-tuned
+  DSP heuristic. A non-CNN streaming-transients path (`CMetroModuleStreamingTransients`, no "CNN" suffix) also exists,
+  so the CNN path may be one of several strategies rather than the only one (`CMetroStrategyBeatTracker` looks like a
+  strategy-selector base class).
+- **Beat/downbeat tracking is HMM + Viterbi**, matching the dynamic-programming family (closer to Ellis 2007 than to
+  anything ML): `CMetroBeatTrackerHMM`, `CMetroDownBeatTrackerHMM`, `CMetroJointBeatHMM`, and
+  `CMetroJointTimeSigBeatHMM` (so time signature and beat/downbeat can be estimated jointly, not as separate passes),
+  decoded via `CMetroBeatTrackerHMMBacktracker`/`...BacktrackerOptimized` (a Viterbi backtrack, with a
+  `BacktrackerMatrix` helper). `CMetroConstantBeatDetector` and `CMetroVariableBeatDetector` suggest separate
+  fixed-tempo vs. tempo-varying code paths, which would match the UI's Smart Tempo "Keep/Adapt/Automatic" modes from
+  `behavior-check-2026-10-14.md`.
+- A `TempoWeighting` class (`ComputeWeighting`, `ProcessDatapoint`) exists for scoring tempo/beat hypotheses; not
+  decompiled this pass (not a simple one-line formula like the Mastering Assistant mappings).
+
+**Open**: the actual time-stretch/slice algorithm per Flex mode (Slicing/Rhythmic/Monophonic/Polyphonic/Tempophone/
+Speed) — the `BeatBreaker`/`SliceHandler` class in `MADSP.framework` (seen earlier via `SetPanStart`/`SetPanSlope`/
+`SetPanCurve` on its slice handler, suggesting each slice gets its own pan envelope across a crossfade) is the next
+concrete target, along with whichever class actually does the audio resampling/overlap-add for the non-slicing modes.
+
+Source: static analysis of `MAMusicAnalysis.framework/MAMusicAnalysis` (x86_64 slice) via REA + Ghidra 12.1.4. Class/
+function names only (confirms architecture family), no pseudocode ported.

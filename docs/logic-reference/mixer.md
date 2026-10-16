@@ -378,15 +378,33 @@ frequency points (not a sine-table shortcut; `MapChanEQSineTable` is a separate,
 "DualRate" in the class name suggests it's built to stay correct across a sample-rate change, recalculating rather
 than reusing stale coefficients.
 
-**Open**: `CCompressorLP`/`FET`'s own curve functions, `CCompressorClassA`'s ratio-table function pointers, and
-`CBiquadChainDualRateFX::FillResponseLUT`'s own biquad math.
+### Match EQ's model factory (twelfth pass)
+
+`CAutoMaster::MatchEQFactory` builds the Mastering Assistant's own dedicated `CMatchEQFX` instance (separate from the
+standalone Match EQ plugin) with mastering-sensible hardcoded defaults, decompiled:
+- Three default float fields: **0.8, 6.0, 0.5** (exact values; which UI-facing control each backs wasn't traced).
+- Default **fade-extremes boundaries** computed at **30 Hz, 50 Hz, 7,500 Hz and 15,000 Hz** (with the same
+  near-Nyquist safety fallback seen in `FadeExtremesFromCurve` earlier) — so out of the box, the Assistant's Match EQ
+  leaves sub-30Hz rumble and anything above 15kHz alone by default, only correcting the "useful" 50Hz–7.5kHz range
+  unless told otherwise. A sensible, mastering-appropriate default range, not an arbitrary one.
+
+`CAutoMaster::SelectSpectralReferenceDataForModel(modelIndex)` is a one-line table lookup: it indexes a static array
+of model structs (each holding a data length, a float spectrum pointer, and a secondary pointer) at `this+0x4a8` and
+feeds the selected one straight into `CMatchEQFX::SetSpecData`. This confirms the architecture — a small set of
+**built-in reference spectra** (presumably per content type, e.g. "Pop", "EDM", etc., matching the UI's model
+picker) stored as precomputed data, selected by plain index — but not the model count, labels, or actual spectral
+data, which weren't read out of the binary this pass.
+
+**Open**: `CCompressorLP`/`CCompressorClassA`'s own curve functions (LP done in the eleventh pass — see above;
+ClassA's curve remains untraced), `CCompressorClassA`'s ratio-table function pointers,
+`CBiquadChainDualRateFX::FillResponseLUT`'s own biquad math (33 basic blocks of SIMD complex arithmetic, not
+decompiled this pass), and the actual reference-model table contents.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,
-`CLimiterFX`/`CLimiter` at `0xce360`-`0xd3a00`. Pure numeric facts and architecture, not ported code.
-
-Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, `CAutoMaster` class at
-`0x5f8db0`-`0x60bd50`, `CAutoMasterShell`/`CAutoMasterFX` wrappers, `CMatchEQFX` at `0x254cc0`-`0x25f290`, and
+`CLimiterFX`/`CLimiter` at `0xce360`-`0xd3a00`, `CAutoMaster::MatchEQFactory` at `0x5ff730`,
+`SelectSpectralReferenceDataForModel` at `0x600270`, `CAutoMaster` class at `0x5f8db0`-`0x60bd50`,
+`CAutoMasterShell`/`CAutoMasterFX` wrappers, `CMatchEQFX` at `0x254cc0`-`0x25f290`, and
 `CLoudnessMeter`/`CLoudnessMeterFX`/`CLoudnessMeterShell` at `0x90bd70`-`0x90dd90`. Pure numeric facts and
 architecture, not ported code.
 

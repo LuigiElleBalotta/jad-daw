@@ -241,8 +241,14 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       **Seventh pass:** `CCompressorDBX::GainRedCurve` decompiled — a *third* distinct implementation strategy (not a closed-form curve like SSL/Opto at
       all): a cubic-Hermite-interpolated lookup table (`CHermiteTableLookUp`), fed by `log(clamp(level,1e-6,1e6)) × 0.05211534 + offset`. Three circuits,
       three genuinely different engineering approaches. `CLimiterFX::Coefficients` turned out to be a thin forwarder into `CLimiter::Coefficients` (not
-      yet decompiled) plus one per-channel toggle at parameter index 6. Open: `CCompressorLP`/`ClassA`/`FET`'s own curves, `CLimiter::Coefficients`
-      itself, and `CChannelEQShell`'s LUT contents; the Match EQ's reference-model factory/selection also remains open.
+      yet decompiled) plus one per-channel toggle at parameter index 6.
+      **Eighth pass:** `CLimiter::Coefficients` and `CCompressorClassA::Coefficients` decompiled — both clean enum-indexed dispatchers. `CLimiter`
+      confirms sample-rate-adaptive lookahead (48 samples <50kHz, 24 <100kHz, 0 ≥100kHz) and reuses the same fast bit-hack `log2`→dB polynomial
+      internally, not just for metering; every compressor/limiter decompiled so far shares one `exp(-2300/(time*sampleRate))` time-constant formula.
+      `CCompressorClassA` appears to offer discrete ratio presets (a 4-entry constant table, each with its own function pointer) rather than a
+      continuous ratio knob — 1176-style fixed-ratio buttons, not a VCA-style continuous control. Full writeup in `docs/logic-reference/mixer.md`. Open:
+      the ratio table's actual 4 values/functions, `CCompressorLP`/`FET`'s own curves, and `CChannelEQShell`'s LUT contents; the Match EQ's
+      reference-model factory/selection also remains open.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

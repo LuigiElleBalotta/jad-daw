@@ -291,6 +291,39 @@ knee shape, number of envelope time constants, and the nonlinearity itself, not 
 values. The exact SSL knee bounds (0.6151/1.1925) and Opto exponent/saturation constants (−1.2, 37.15, 100) are
 reusable as-is if a matching circuit character is wanted.
 
+### `CLimiter::Coefficients` and `CCompressorClassA::Coefficients` (eighth pass)
+
+Both are clean, enum-indexed parameter dispatchers (unlike `CMatchEQFX`'s 126-block one) — easy, reliable decompiles.
+
+`CLimiter::Coefficients` (the real implementation `CLimiterFX` forwards to): an 8-case switch, each case validating
+its input range and returning a **numeric error code `0x3ed` (1005)** when out of range (gain params clamped to
+±100, a release-like param to 0–10, others to 0–2000 — i.e. Logic's own internal parameter validation uses sentinel
+error codes, not exceptions, at this layer). Two notable architecture facts:
+- **Sample-rate-adaptive lookahead**: a lookahead/delay buffer size is chosen as **48 samples below 50 kHz, 24
+  samples below 100 kHz, 0 at ≥100 kHz** (only when a channel/stereo-link flag is also set) — the limiter's
+  lookahead is a fixed sample count, not a fixed time, and shrinks at higher sample rates rather than staying
+  constant in milliseconds.
+- The exact same **fast bit-hack `log2`→dB polynomial** found earlier in `CAutoMaster::ProcessLimiter`
+  (`(e + m − 0.33985×(m−1.5)² − 0.9150375) × ±6.0206003`) is reused **internally** here too (sign flipped, so it's
+  computing an attenuation rather than a readout) — confirming it's a shared, general-purpose fast-log utility used
+  wherever Logic needs dB from a linear value in a hot path, not something special-cased for one meter.
+- Release/attack-style envelope coefficients throughout reuse the same `exp(−2300/(time×sampleRate))`-shaped
+  constant seen across every compressor/limiter decompiled so far — `−2300` is evidently Logic's one shared
+  "time-constant-to-coefficient" magic number for this whole plugin family, not circuit-specific.
+
+`CCompressorClassA::Coefficients`: mostly ordinary gain (`10^(±0.05x)`) and envelope-coefficient cases (same `-2300`
+family, with cases 6/7 combining two time-derived coefficients multiplicatively — a program-dependent release
+scaled by another parameter, a real analog-modeling detail). One case stands out: **case `0xd` reads a ratio value
+from a small (4-entry) constant table *and* a matching function-pointer from a second table at the same index**,
+then converts the selected ratio `r` into a slope pair `r/(r−1)` and its complement. This strongly suggests
+`CCompressorClassA` offers a small set of **discrete ratio presets, each potentially routed to its own processing
+function**, not a continuously variable ratio knob — consistent with real FET/Class-A hardware compressors (e.g. a
+1176-style "4 ratio buttons") rather than the continuously-variable ratio of a VCA design. The 4 actual ratio values
+and function pointers weren't read out of the data tables this pass.
+
+Source (eighth pass): `CLimiter::Coefficients` at `0xd0bc0`, `CCompressorClassA::Coefficients` at `0x9bd90`, both in
+`MADSP.framework/MADSP`.
+
 ### Noise Gate — clean, fully named parameter set
 
 `CNoisegateFX` has one plainly-named setter per UI control: `SetThreshold`, `SetAttack`, `SetReleaseTime`,

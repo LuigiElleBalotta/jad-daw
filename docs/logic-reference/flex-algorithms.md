@@ -41,13 +41,35 @@ actual time-stretch rendering engine lives in `MADSP.framework` under a `BeatBre
 yet decompiled this pass. This section is **what Apple does**, kept separate from "DSP above is ours" by design —
 Apple's architecture is a fact worth knowing, not something to port.
 
-- **Onset/transient detection is CNN-based**, not classic spectral-flux or HFC: `CMetroStrategyOnsetDetectionCNN`
-  (plus an `...Online` streaming variant) and `CMetroModuleStreamingTransientsCNN` exist as real classes, alongside
-  function names `beat_tracker_mpsmodel_init/run/destroy` — **MPS = Metal Performance Shaders**, i.e. Logic 11's
-  transient/onset detector runs a small on-device neural network (likely a CoreML model under MPS), not a hand-tuned
-  DSP heuristic. A non-CNN streaming-transients path (`CMetroModuleStreamingTransients`, no "CNN" suffix) also exists,
-  so the CNN path may be one of several strategies rather than the only one (`CMetroStrategyBeatTracker` looks like a
-  strategy-selector base class).
+- **Onset/transient detection and beat/downbeat/tempo tracking both run real CoreML neural networks**, confirmed by
+  inspecting the compiled models directly (not just class names) — `MAMachineLearning.framework/.../Resources/*.mlmodelc`
+  on this machine, read with a plain `metadata.json`/`model.espresso.net` read, no decompiler needed since these are
+  Apple's own shipped model files, not obfuscated:
+  - **`OnsetDetectionCNN.mlmodelc`** — a small classic CNN: input `[3, 80, 15]` (3 channels × 80 mel-ish bands × 15
+    frames of context), `Convolution → LeakyReLU → MaxPool` ×2, then `BatchNorm → Flatten → InnerProduct(dense) →
+    Sigmoid` ×2, output a single scalar (per-frame onset probability). This is architecturally a near-exact match
+    for **Schlüter & Böck's 2014 ISMIR CNN onset detector** (80-band mel spectrogram, small context window, LeakyReLU,
+    max-pooling) — a well-known *published* method, confirming Apple built on established MIR research rather than
+    inventing an undisclosed technique. `computePrecision: Float16`, available back to macOS 10.13 (an older, simpler
+    model than the one below).
+  - **`DownbeatTrackerCondMPS.mlmodelc`** — a much bigger multi-task model: input `input_melspec` `[1, 4096, 131]`
+    (4096 frames × 131 mel bands), five simultaneous outputs: `output_beats`, `output_downbeats`,
+    `output_beats_no_downbeats` (all `[1,4096,1]` per-frame activations), **`output_tempo`** `[1,4096,251]` (a
+    251-bin tempo histogram per frame) and **`output_bpb`** `[1,4096,13]` (a 13-class beats-per-bar/time-signature
+    classification per frame). Its op histogram (dozens of `conv`/`matmul`/`relu`/`elu` plus `softmax` on the tempo
+    and bpb heads) is consistent with a modern joint CNN/TCN beat-downbeat-tempo-meter tracker, the kind published by
+    Böck and collaborators (e.g. the `madmom` line of research) rather than a classical DSP pipeline. Metadata
+    confirms it was trained in **TensorFlow 2.6.5** and converted via **coremltools 7.2**, available from macOS 13+
+    (so added later than the onset model). "MPS" in the name = Metal Performance Shaders, matching the
+    `beat_tracker_mpsmodel_init/run/destroy` function names found in the C++ layer below.
+  - The classical **HMM + Viterbi** layer described next most likely consumes these networks' raw per-frame
+    activations/histograms as its *observations* and turns them into a clean, temporally consistent beat/downbeat
+    sequence — a standard, published hybrid "neural activation function + HMM/DBN decoder" MIR architecture (the same
+    shape as Böck's own `madmom` beat tracker), not two unrelated systems.
+  - `CMetroStrategyOnsetDetectionCNN` (plus an `...Online` streaming variant) and `CMetroModuleStreamingTransientsCNN`
+    are the C++ wrappers around the onset model; a non-CNN streaming-transients path (`CMetroModuleStreamingTransients`,
+    no "CNN" suffix) also exists, so the CNN path may be one of several selectable strategies
+    (`CMetroStrategyBeatTracker` looks like a strategy-selector base class).
 - **Beat/downbeat tracking is HMM + Viterbi**, matching the dynamic-programming family (closer to Ellis 2007 than to
   anything ML): `CMetroBeatTrackerHMM`, `CMetroDownBeatTrackerHMM`, `CMetroJointBeatHMM`, and
   `CMetroJointTimeSigBeatHMM` (so time signature and beat/downbeat can be estimated jointly, not as separate passes),

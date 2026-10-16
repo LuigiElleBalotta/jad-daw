@@ -55,8 +55,29 @@ Apple's architecture is a fact worth knowing, not something to port.
   `BacktrackerMatrix` helper). `CMetroConstantBeatDetector` and `CMetroVariableBeatDetector` suggest separate
   fixed-tempo vs. tempo-varying code paths, which would match the UI's Smart Tempo "Keep/Adapt/Automatic" modes from
   `behavior-check-2026-10-14.md`.
-- A `TempoWeighting` class (`ComputeWeighting`, `ProcessDatapoint`) exists for scoring tempo/beat hypotheses; not
-  decompiled this pass (not a simple one-line formula like the Mastering Assistant mappings).
+- **`TempoWeighting::ComputeWeighting`** (decompiled, messier than the Mastering Assistant mappings — this function
+  still has unstripped debug `std::cout` logging in the shipped binary) scores nearby tempo/beat-datapoint hypotheses
+  by two independent linear-decay factors multiplied together:
+  - **BPM distance**: `weight × (1 − |bpm_diff| / 120)`, hard-cut to 0 once `|bpm_diff| ≥ 60` — candidates more than
+    an octave-ish of tempo away from the hypothesis don't contribute at all, and the contribution fades linearly
+    inside that window.
+  - **Rank distance**: `weight × (1 − 0.1 × rank_distance)`, i.e. linear fade to zero at the 10th-nearest ranked
+    datapoint — only the ~10 closest-ranked candidates matter at all.
+  - The accumulated weighting is then normalized by its own max and rescaled by `(valid_datapoint_count / 15)`, so a
+    tempo hypothesis backed by many corroborating datapoints is trusted more than one resting on a few.
+- **`CMetroBeatHMMPhaseObserver::TransitionProb(prevState, candidateState)`** — the actual HMM transition/observation
+  probability for beat-phase tracking — reduces to `GaussianTable(mean=0, sigma=10/3, x=phase_error)`, where
+  `phase_error` is the (mod-wrapped) difference between the expected next-beat phase (from the current tempo-node's
+  BPM and a `floor`-quantized position) and the candidate's phase. **Sigma = 10/3 ≈ 3.33** (in sub-beat tick units) is
+  an exact, previously-unknown constant: it sets how forgiving the beat tracker is about a candidate beat landing
+  slightly off the predicted grid before the HMM penalizes it. One early-exit: if a per-observer field is negative
+  (read as "no established tempo yet", e.g. the very first beat), the function returns `1.0` unconditionally — no
+  phase penalty before there's anything to compare against.
+- Tempo-range bounding exists as its own mechanism, separate from the HMM's per-step probabilities:
+  `BeatTrackerHints::ComputeMinAndMaxTempoFromHints`, `CMetroBeatMapping::SetPreferedTempoRange`, and
+  `CMetroJointHMMConfiguration::UpdateActiveTransitionsWithTempoRange` prune the HMM's state space to a tempo window
+  (from user hints and/or already-decided candidates) before running Viterbi, rather than searching the full tempo
+  range on every pass.
 
 **Correction**: `BeatBreaker`/`SliceHandler` (seen via `SetPanStart`/`SetPanSlope`/`SetPanCurve`) turned out to be a
 *different* feature — Logic's "Beat Breaker" MIDI FX plugin (a pattern-based step slicer/glitcher with its own

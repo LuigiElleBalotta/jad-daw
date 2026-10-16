@@ -258,11 +258,23 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       reading marker names; a real Chord global track would be the faithful way to do it. Its own editing UI wasn't opened (didn't want to touch
       Apple's demo content) — needs a follow-up to see how it's populated/edited before building against it. Also: Logic has an **Arrangement** global
       track jad-daw doesn't have at all.
-- [ ] E7. Still open: Flex Time/Pitch and Smart Tempo *DSP behaviour* — **blocked this session**: Apple's two bundled demo projects (Artist Song 1 & 2)
-      turned out to be 100% software-instrument/Session-Player based, no recorded audio regions to run Flex Time on, and macOS's own system sounds are
-      too short (~1s) to say anything about transient/tempo detection quality. Needs either a real recording or a music file from the owner (ask first,
-      don't assume) before this can be tested. Also still open: a second Edit-menu read with an actual region/note selected (two attempts to
-      right-click-create a MIDI region to select failed this session — likely a coordinate miss, not a real behaviour finding; retry with the Pencil
-      tool instead of a context-menu region creation next time), and the Chord global track's own UI (see E16).
+- [x] E7 (partly closed, 2026-10-16 second follow-up). Flex Time on real audio tested at last, using Apple's own bundled Apple Loop
+      (`/Library/Audio/Apple Loops/Apple/01 Hip Hop/Safe And Sound Beat.caf` — not the owner's files) imported into a disposable area of a demo project.
+      Findings: turning on Flex for a track with content pops a confirmation dialog jad-daw doesn't have ("Do you want to turn on Flex for track X?");
+      Logic's own default algorithm is **Flex Time - Slicing** (not Automatic, despite Automatic being listed first in E9's menu); **Flex Mode**
+      (Track Inspector, the algorithm picker) and **Flex & Follow** (Region Inspector, a plain On/Off checkbox) are two separate controls that jad-daw's
+      README wording conflates into one; transient tick marks are confirmed real and rendering correctly once Flex is on, matching jad-daw's description.
+      Not confirmed: the yellow flex-markers-with-handles distinct from the transient ticks (E17), and why an Apple Loop region shows "Follow Tempo &
+      Pitch" where a plain recording shows "Flex & Follow" in the same Inspector slot (E18). Smart Tempo analysis quality itself (not just the Flex
+      picker) remains untested — still open below.
+- [ ] E17. Flex markers (the yellow, draggable handles jad-daw's README describes, distinct from the thin transient tick marks) weren't confirmed
+      visually distinct from the transients in the Track/File editor used this session — try the upper Tracks-area Flex view instead, or click a
+      transient directly, next time.
+- [ ] E18. Inspector shows **"Follow Tempo & Pitch"** for an Apple-Loop-tagged audio region vs **"Flex & Follow"** for a plain recorded region, same
+      slot — likely depends on embedded Apple Loop tempo metadata. Worth confirming before jad-daw treats these as the same field.
+- [ ] E7. Still open: Smart Tempo *analysis quality* (does jad-daw's beat/tempo detection match Logic's on the same real audio — not yet compared), a
+      second Edit-menu read with an actual region/note selected (two attempts to right-click-create a MIDI region to select failed in the first
+      follow-up session — likely a coordinate miss; the macOS automation tools available now, see note in `behavior-check-2026-10-14.md`, make this
+      much more tractable next time), and the Chord global track's own UI (see E16).
 
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

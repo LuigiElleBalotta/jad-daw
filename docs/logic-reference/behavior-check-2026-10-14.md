@@ -311,6 +311,52 @@ Two things worth keeping from this detour:
   a Preset popup, and a chord-progression timeline using triangular beat markers — visually consistent with jad-daw's
   own chord-progression-driven Session Player editor.
 
+### Flex Time on real audio — tested at last (2026-10-16, second follow-up)
+
+Unblocked E7 using a legitimate source: Apple's own `/Library/Audio/Apple Loops/Apple/01 Hip Hop/Safe And Sound Beat.caf`
+(a real drum loop shipped with Logic, 29.5 s, 44.1 kHz stereo — not the owner's personal files, and not a demo project
+this time). Imported onto a fresh Audio track with File > Import Audio File, in a disposable area of `Artist Song
+2.logicx` (Apple's own demo project; not saved afterwards). New findings, all from direct observation:
+
+- **Turning on Flex for a track with real content asks for confirmation first**: *"Do you want to turn on Flex for
+  track 'Audio 1'?"* with **Cancel** / **Turn on Flex** — not documented anywhere in jad-daw today. (On an empty track
+  with no regions, by contrast, the Flex Mode popup just switches instantly with no prompt — the prompt is specifically
+  about there being real audio to analyse.)
+- **The default algorithm Logic picks when Flex is first turned on is "Flex Time - Slicing"** — confirmed in the Track
+  editor's own local toolbar, which shows the active Flex Time algorithm by name. If jad-daw's Flex Mode picker needs
+  a sensible default instead of "Off", Slicing is the real one Logic uses, not Automatic (even though Automatic is
+  first in the picker's own list — see the earlier Flex Mode finding above).
+- **"Flex & Follow" and "Flex Mode" are two different controls, not one** — correcting an assumption in this session's
+  earlier Flex Mode note. **Flex Mode** (Off / Flex Pitch / Flex Time - *seven algorithms*) lives in the **Track**
+  Inspector section and picks the algorithm. **Flex & Follow** lives in the **Region** Inspector section and is a
+  plain **On/Off checkbox** — it's the per-region Smart Tempo "should this region's tempo follow/be followed"
+  toggle, not an algorithm choice. jad-daw's single "Flex & Follow" README wording conflates what are really two
+  separate, differently-scoped controls.
+- **Transient marks are real and visible once Flex is on**: thin vertical tick marks appear through the waveform at
+  the detected transients (confirmed with a pixel crop — `logic-pro-reference/live-ui-screenshots/
+  flex-transient-marks-zoom.png`), matching jad-daw's README ("the transients the analysis found (thin marks)").
+  The yellow flex markers-with-handles jad-daw also describes weren't confirmed distinctly from the transient ticks
+  in the time available (they may only render in the upper Tracks-area Flex view rather than the lower Track/File
+  editor used here, or need a click on a transient to appear) — worth a quick follow-up, but the core transient-
+  detection behaviour itself is confirmed real and working as documented.
+- Imported **Apple Loop audio** shows **"Follow Tempo & Pitch"** (checked) in the Region inspector, while a plain
+  audio region on an empty track showed **"Flex & Follow"** (Off) in the same inspector slot — the field's label (and
+  possibly its exact behaviour) depends on whether the file carries Apple Loop tempo metadata. Not fully chased down;
+  flagged for whoever looks at this next.
+
+### Method note: use macOS's own Snapshot/Click/Type automation, not pixel-coordinate guessing
+
+Partway through this session the owner made `mcp__macos-mcp__*` tools available (Snapshot, Click, Type, Shortcut,
+App, Wait, etc.) — a real accessibility-driven automation layer, a significant upgrade over the raw-Quartz-click
+technique from the first pass. `Snapshot(use_vision: true)` returns every interactive element's exact role, label and
+click coordinates *and* an annotated screenshot in one call, which made every interaction in this section (opening
+files, confirming dialogs, reading field values) far more reliable than estimating pixel positions from a plain
+screenshot. One real gotcha hit repeatedly: **running a Bash/osascript command switches focus to Terminal**, so a
+`mcp__macos-mcp__App(mode: "switch", name: "Logic Pro")` is needed before every interactive macos-mcp call that
+follows a Bash call, or the click/keystroke silently goes to the wrong app. Also hit: the Go-to-Folder sheet's text
+field mangled `/` characters typed via `Type` into `-`; using the Open-dialog's own Search field (which matches
+Spotlight-style filename search) instead of typing a path sidestepped this reliably.
+
 ## What this pass did not get to
 
 Smart Tempo behaviour and most of the minor dialogs (Bounce, Colors, I/O Labels, and 10 of Project Settings' 11 tabs)

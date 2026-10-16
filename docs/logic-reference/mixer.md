@@ -204,9 +204,18 @@ convergence budget, not an elaborate model. The function returns the total gain 
 a genuinely useful fact for jad-daw's own Mastering Assistant: don't look for a formula mapping "target loudness" to
 "limiter gain" — measure, adjust, remeasure, a handful of times, same as Apple does.
 
-**Open**: `SpectralReferenceDataFactory`/model selection, the multiband compressor's own per-band thresholds, and the
-limiter's/compressor's actual sample-processing loops (`ProcessLimiter`, `ProcessMBCompressor`, `ProcessCompressor` —
-as opposed to the auto-*adjustment* logic above, which is now covered) weren't decompiled.
+`AutoAdjustMBCompressor` follows the same family of trick as the limiter, decompiled but not fully traced through
+(it's a large, multi-buffer-juggling loop, over usage-limit budget to fully unpack this pass): it steps a trial gain
+in **+2 dB increments** (`gain_dB`, converted via the same `10^(gain_dB/20)` each step), applies it to one or two
+band buffers via `vDSP_vsmul` (so at least two compressor bands get scaled, matching "multiband"), runs
+`ProcessMBCompressor` on a trial chunk, reads back a measured value at a fixed offset (almost certainly gain
+reduction or achieved compression amount) and accumulates a margin term (`min(measured, 0.99 − measured)`) — the
+same shape as the limiter's measure/adjust loop, but working in fixed 2 dB steps rather than the limiter's
+error-proportional steps, and against a compression-amount target rather than a loudness target. **Open**: this
+loop's exact exit condition wasn't resolved (relies on an internal abort flag not traced to its setter), and
+`SpectralReferenceDataFactory`/model selection and the limiter's/compressor's actual sample-processing loops
+(`ProcessLimiter`, `ProcessMBCompressor`, `ProcessCompressor` themselves, as opposed to the auto-adjustment logic
+that drives them, which is now covered) weren't decompiled.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, `CAutoMaster` class at
 `0x5f8db0`-`0x60bd50`, `CAutoMasterShell`/`CAutoMasterFX` wrappers, `CMatchEQFX` at `0x254cc0`-`0x25f290`, and

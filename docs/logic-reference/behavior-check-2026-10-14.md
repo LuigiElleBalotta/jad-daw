@@ -194,6 +194,67 @@ and "User" (custom Long/Short names). **Output 1-2 is already labelled "Stereo O
 match. jad-daw's README says I/O Labels "names the inputs" only; real Logic names inputs, outputs *and* buses, with
 separate long/short strings and a driver-name-vs-custom-name toggle — a noticeably bigger feature than documented.
 
+### Create New Track dialog — full structure (2026-10-16)
+
+`File > New Tracks…` or the "+" above the track list opens **Create New Track**: four category tiles, each with its
+own sub-options —
+
+- **MIDI**: Software Instrument, External MIDI
+- **Pattern**: Software Instrument, External MIDI
+- **Session Player**: Drummer, Bass Player, Keyboard Player *(three, not two)*
+- **Audio**: Mic or Line, Guitar or Bass
+
+— and a **Details** panel that changes with the selected category (for Audio: Audio Input/Output popups, Ascending/
+Load Default Patch/Open Library on the input side, Ascending/Input Monitoring/Record Enable on the output side, each
+side showing its device name). A **Number of tracks to create** field and Cancel/Create close it. The category last
+used persists across the session (this one defaulted to Audio because that's what was created earlier in this
+session) — an earlier design note in `2026-10-09-vst3-instruments-design.md` recorded it defaulting to MIDI > Software
+Instrument on a fresh app state, which is consistent, not contradictory. Reference screenshots:
+`logic-pro-reference/live-ui-screenshots/{new-project-chooser,create-new-track-dialog}.png`.
+
+### Project Settings, more tabs — and a major Metronome correction
+
+Continuing from the General tab (above):
+
+- **Audio** tab has its own sub-tabs (General/Channel Strips). General: Sample Rate, Spatial Audio, Surround Format,
+  and **Pan Law** (`-3 dB Compensated` by default, with an "Apply Pan Law compensation to stereo balancers" checkbox)
+  — a real DSP-relevant setting (how a centred pan knob splits power vs. amplitude between L/R) that jad-daw's pan
+  implementation should be checked against, not just a cosmetic setting.
+- **Recording** tab: "When Beginning" is a **Count-in vs. Pre-roll radio choice** (not just Count-in) — Pre-roll plays
+  audio before the playhead instead of silent-counting bars; jad-daw only has Count-in. Plus "Allow tempo change
+  recording", "Automatically colorize takes", MIDI data reduction / erase duplicates, and a separate Audio Recording
+  Path folder picker.
+- **Smart Tempo** tab: **Project Tempo Mode is Keep / Adapt / Automatic** — the LCD doc (`lcd.md`) currently says the
+  states are "KEEP and OFF" besides ADAPT; **"Automatic" is the real third state, not "Off."** Also here: separate
+  Flex & Follow defaults for new recordings vs. imported files (each Off/other + a "Trim start of new regions"
+  checkbox), an Export Tempo Resolution setting, and Free Tempo Recording's "Default Tempo Behavior" (Ask / apply
+  recorded tempo / apply average tempo / keep project tempo) — none of which jad-daw's Smart Tempo models today.
+- **MIDI** tab has its own sub-tabs (General/Input Filter/Chase/Clip Length): "Send After Loading Project" options,
+  MIDI Thru settings. Low priority — compatibility-with-old-MIDI-gear territory, not core DAW behaviour.
+- **Tuning** tab: software instrument pitch (cents/Hz), a tuning-table system (Equal Tempered / Fixed microtonal
+  presets like "Ethnic - Arabic" / a custom User stretch table / Hermode Tuning). Low priority for jad-daw today.
+- **Metronome** tab — **this is the important one.** `Record > Metronome Settings…` was confirmed (by opening it) to
+  be a shortcut into this *exact same* Project Settings tab, not a separate dialog. Its actual structure: Options
+  (Simple mode, Click while recording [+ "Only during count-in"], Click while playing, Polyphonic clicks), then
+  **Source**: an Audio Click section (named "**Klopfgeist**" — that's Logic's internal click-synth's real name) with
+  one row each for **Bar / Group / Beat / Division**, each row a **Note + Velocity** pair (defaults G5/127, D#5/119,
+  C5/112, C2/60-unchecked), plus Tone and Volume sliders and an Output routing popup; and a parallel **MIDI Click**
+  section with Channel/Note/Velocity per the same four rows plus a Port popup.
+
+  **This does not match jad-daw's README at all.** jad-daw describes Metronome Settings as choosing how a bar is
+  *counted* — "beats `1 2 3 4`, eighths `1 & 2 &`, sixteenths `1 e & a`, or grouped `1 la li 2 la li`" — plus a custom
+  WAV file per spoken count. Real Logic 11.2 has no such counting-pattern UI anywhere in this dialog: it's entirely
+  about the *pitch and velocity* of up to four accent levels (bar/group/beat/subdivision), for both its own synthesised
+  click and an outgoing MIDI click, not about spoken/sampled count words. Either jad-daw's description is from a much
+  older Logic version, is conflating this with something else (GarageBand's metronome, or a different app), or was
+  never verified against the real app. **This needs the owner's attention before any more metronome work happens** —
+  it's a foundational mismatch in a described, "done" feature, not a minor detail.
+
+### Edit menu with a selection — still not reached
+
+The context-sensitivity question from the first pass (`Edit menu is contextual, not static`, above) wasn't resolved
+this follow-up either — still on the backlog as part of E7.
+
 ## What this pass did not get to
 
 Smart Tempo behaviour and most of the minor dialogs (Bounce, Colors, I/O Labels, and 10 of Project Settings' 11 tabs)

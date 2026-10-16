@@ -234,8 +234,24 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
 - [ ] E12. `Mix > I/O Labels…` names **inputs, outputs and buses** (table: Channel/Provided by Driver/User-toggle/Long/Short), not just inputs as the
       README says. Output 1-2 is already labelled "Stereo Output" in Logic itself, confirming jad-daw's "Stereo Out" naming direction. Extend jad-daw's
       I/O Labels feature to cover outputs/buses and the driver-name-vs-custom-name toggle.
-- [ ] E7. Follow-up pass still needed: Flex Time/Pitch and Smart Tempo *behaviour* (the algorithm picker's structure is now covered by E9, but not
-      whether jad-daw's DSP output matches), 10 of Project Settings' 11 tabs (see E8), and a second Edit-menu read with an actual region/note selected
-      (the one read this session had nothing selected, so it isn't a fair comparison against jad-daw's always-shown, just-disabled Edit menu items).
+- [x] E8 (continued, 2026-10-16). Read 6 of Project Settings' 11 tabs: Audio (Pan Law `-3 dB Compensated` — check jad-daw's pan law against this),
+      Recording (Count-in **vs. Pre-roll radio choice**, jad-daw only has Count-in), Smart Tempo (rich: Flex & Follow defaults per
+      new-recording/imported-file, Export Tempo Resolution, Free Tempo Recording behaviour), MIDI (Send-After-Loading / MIDI Thru, low priority),
+      Tuning (microtonal tables, Hermode Tuning, low priority), Metronome (see E13). Score/Movie/Synchronization/Assets still unread.
+- [ ] E13. **Metronome Settings is fundamentally different from what the README describes — needs the owner's attention before further metronome
+      work.** Confirmed `Record > Metronome Settings…` opens the *same* Project Settings > Metronome tab (not a separate dialog). Real structure: Audio
+      Click ("**Klopfgeist**", Logic's click-synth's actual name) and MIDI Click sections, each with one Note+Velocity (or Channel+Note+Velocity) row
+      per accent level — **Bar, Group, Beat, Division** — plus Tone/Volume/Output. **There is no counting-pattern UI** (no "beats 1 2 3 4 / eighths
+      1 & 2 & / sixteenths / grouped" choice, no per-count custom WAV file) anywhere in it. jad-daw's README describes exactly that counting-pattern
+      model as already implemented. Either the README is describing an older Logic version, a different app, or a feature that was never checked
+      against 11.2 — this is a foundational mismatch in a "done" feature, not a wording nitpick.
+- [ ] E14. LCD doc correction: Smart Tempo's project tempo states are **Keep / Adapt / Automatic** (confirmed in Project Settings), not "Keep and Off"
+      as `lcd.md` currently says — "Automatic" is the real third state.
+- [ ] E15. Create New Track dialog's full structure confirmed (4 categories x 2-3 sub-options each, a Details panel that changes per category, Number
+      of tracks to create) — see `behavior-check-2026-10-14.md` for the complete breakdown and reference screenshots.
+- [ ] E7. Follow-up pass still needed: Flex Time/Pitch and Smart Tempo *DSP behaviour* (the algorithm picker's structure is now covered by E9, but not
+      whether jad-daw's DSP output matches), Project Settings' Score/Movie/Synchronization/Assets tabs, and a second Edit-menu read with an actual
+      region/note selected (the one read this session had nothing selected, so it isn't a fair comparison against jad-daw's always-shown, just-disabled
+      Edit menu items).
 
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

@@ -267,11 +267,17 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       Not confirmed: the yellow flex-markers-with-handles distinct from the transient ticks (E17), and why an Apple Loop region shows "Follow Tempo &
       Pitch" where a plain recording shows "Flex & Follow" in the same Inspector slot (E18). Smart Tempo analysis quality itself (not just the Flex
       picker) remains untested — still open below.
-- [ ] E17. Flex markers (the yellow, draggable handles jad-daw's README describes, distinct from the thin transient tick marks) weren't confirmed
-      visually distinct from the transients in the Track/File editor used this session — try the upper Tracks-area Flex view instead, or click a
-      transient directly, next time.
-- [ ] E18. Inspector shows **"Follow Tempo & Pitch"** for an Apple-Loop-tagged audio region vs **"Flex & Follow"** for a plain recorded region, same
-      slot — likely depends on embedded Apple Loop tempo metadata. Worth confirming before jad-daw treats these as the same field.
+- [x] E17 (closed, 2026-10-16 third follow-up). Flex markers confirmed by actually selecting the **Flex Tool** (its own tool-popup entry) and
+      clicking the region's upper half: one flag-shaped marker appeared with a vertical guide line, exactly matching jad-daw's "one marker in
+      the upper half" description. **Correction: the marker rendered blue (the track's own colour), not yellow** — jad-daw's README should
+      probably say "the track's colour" rather than a fixed yellow, unless confirmed otherwise on a differently-coloured track.
+- [x] E18 (closed). Confirmed structurally with a plain (non-Apple-Loop) import: **Flex & Follow** is a real 4-state popup — **Off / On /
+      On + Align Bars / On + Align Bars and Beats** (menu header "Flex Time and Smart Tempo") — for ordinary audio, while an Apple-Loop-tagged
+      file shows the simpler **Follow Tempo & Pitch** checkbox in the same Inspector slot. The control's type (popup vs. checkbox) and label
+      both depend on the file's Apple Loop metadata.
+- [x] Correction to the earlier Flex-default note: **Flex Mode's real default is "Automatic"**, not "Slicing" — the "Slicing" observation was
+      specific to that session's track state. Automatic immediately resolves to and displays a specific algorithm, e.g. "Flex Time - Automatic
+      (Polyphonic)"; a new **Complex:** checkbox appears in the Track Inspector only while Flex Mode is Automatic.
 - [ ] E7. Still open: Smart Tempo *analysis quality* (does jad-daw's beat/tempo detection match Logic's on the same real audio — not yet compared), a
       second Edit-menu read with an actual region/note selected (two attempts to right-click-create a MIDI region to select failed in the first
       follow-up session — likely a coordinate miss; the macOS automation tools available now, see note in `behavior-check-2026-10-14.md`, make this

@@ -357,6 +357,32 @@ follows a Bash call, or the click/keystroke silently goes to the wrong app. Also
 field mangled `/` characters typed via `Type` into `-`; using the Open-dialog's own Search field (which matches
 Spotlight-style filename search) instead of typing a path sidestepped this reliably.
 
+### E17/E18 resolved (2026-10-16, third follow-up)
+
+- **Flex Mode's real default is "Automatic", confirmed correctly this time** — the earlier "Slicing" finding was specific to that session's
+  state (likely inherited from a prior choice). On a genuinely fresh track, turning on **Enable Flex** in the track header (a checkbox the
+  README doesn't mention by that name, next to Mute/Solo/Record/Input Monitoring — see `logic-pro-reference/live-ui-screenshots/
+  flex-track-header-automatic-polyphonic.png`) shows the Inspector's Track section as **Flex Mode: Automatic**, with a new **Complex:**
+  checkbox (checked) that appears only in this mode. The track header's own popup then displays the *resolved* choice in parentheses —
+  **"Flex Time - Automatic (Polyphonic)"** for this particular audio — i.e. Automatic really is the default, it just immediately names the
+  algorithm it picked rather than showing the word "Automatic" alone.
+- **The Flex tool and its marker are real and were triggered directly**: selecting **Flex Tool** from the tool popup (its own distinct entry,
+  alongside Pencil/Eraser/Scissors/etc.) and clicking the **upper half** of the region placed exactly **one** marker — matching jad-daw's
+  README ("one marker where you click the upper half… three in the lower half") precisely. The marker renders as a **flag/pin shape with a
+  vertical guide line through the waveform** (not literally resembling a draggable "handle" so much as a flag-and-pin), confirmed with a
+  pixel crop (`logic-pro-reference/live-ui-screenshots/flex-marker-handle-zoom.png`).
+- **Correction to the README's own wording: the marker was blue, not yellow**, in this session — matching the Audio track's own blue colour
+  (the same blue used for the track icon and Mixer strip, per `mixer.md`'s "blue audio" track-colour note). Either Flex markers are tinted by
+  the track's colour rather than being a fixed yellow, or the "yellow" in jad-daw's README was observed on a track that happened to be
+  yellow. Either way, treating it as "the track's own colour" rather than a hardcoded yellow is the safer assumption until checked on
+  more track colours.
+- E18 (Flex & Follow vs. Follow Tempo & Pitch) is now fully resolved: a **plain imported file** (tested with macOS's own
+  `/System/Library/Sounds/Glass.aiff`, not the owner's files) shows **"Flex & Follow"** as a real **popup with four states — Off, On,
+  On + Align Bars, On + Align Bars and Beats** (menu header: "Flex Time and Smart Tempo") in the Region Inspector. An **Apple-Loop-tagged
+  file** (`Safe And Sound Beat.caf`) shows **"Follow Tempo & Pitch"** as a plain **checkbox** in the exact same Inspector slot instead. The
+  field's role (popup vs. checkbox) and label both depend on whether the source file carries Apple Loop tempo/pitch metadata — confirmed
+  structurally, not guessed.
+
 ## What this pass did not get to
 
 Smart Tempo behaviour and most of the minor dialogs (Bounce, Colors, I/O Labels, and 10 of Project Settings' 11 tabs)

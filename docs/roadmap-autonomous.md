@@ -228,8 +228,17 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       **Fifth pass:** `ProcessLimiter`/`ProcessMBCompressor` themselves fully decompiled — both are orchestration (gain staging, buffer chunking, margin
       bookkeeping), not the DSP kernel: the actual limiting/compression curve is behind a runtime-polymorphic `CGen`-family object this static pass can't
       name concretely. `ProcessLimiter` does yield one clean, reusable fact: its dB meter readout is computed via a fast IEEE-754 bit-hack `log2`→dB
-      approximation (`dB ≈ (e + m − 0.33985×(m−1.5)² − 0.9150375) × 6.0206003`). Full writeup in `docs/logic-reference/mixer.md`. Open: the concrete
-      limiter/compressor DSP class (would need tracing a vtable pointer to runtime type) and the Match EQ's reference-model factory/selection.
+      approximation (`dB ≈ (e + m − 0.33985×(m−1.5)² − 0.9150375) × 6.0206003`).
+      **Sixth pass (at the owner's request — stock Compressor/EQ specifically, for their special mixer-strip UI):** found the concrete class family
+      directly (searching for the standalone plugins beat tracing `CAutoMaster`'s vtable pointer) — `CCompressorBase` + six circuit-model subclasses
+      (`SSL`, `Opto`, `DBX`, `LP`, `ClassA`, `FET`) matching Logic's "Circuit Type" selector, each with its own distinct curve (SSL: dual time-constant +
+      soft-knee cubic at exact bounds 0.6151–1.1925 + a secondary limiter stage; Opto: single time constant + the same knee shape + a power-law/
+      Michaelis-Menten saturation curve, `powf(x,-1.2)` then `37.15y/(37.15y+100)`) — real, structurally distinct circuit emulations, not reskinned
+      numbers. Also found `CNoisegateFX` (fully named setters: Threshold/Attack/Release/Hold/Reduction/Lookahead/Keylisten/KeyFilter, plus a
+      hysteresis/reopen threshold derived from the main one) and `CChannelEQShell` (confirms its curve-preview data — `GetResponseLUT`/`GetFreqTable`/
+      `GetRelXTable` — is the same data driving the actual filter, computed via a sine-table shortcut rather than per-pixel biquad evaluation). Full
+      writeup in `docs/logic-reference/mixer.md`. Open: the remaining four compressor circuits' own curves, `CLimiterFX::Coefficients`, and
+      `CChannelEQShell`'s LUT contents; the Match EQ's reference-model factory/selection also remains open.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

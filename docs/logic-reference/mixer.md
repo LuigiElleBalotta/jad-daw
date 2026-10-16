@@ -236,10 +236,78 @@ Both fully decompiled. Neither contains the actual limiting/compression math:
 **Conclusion for this thread**: `CAutoMaster`'s "Process*" methods are consistently an **orchestration layer** —
 buffer chunking, gain staging, dB/linear conversions, margin/meter bookkeeping — while the actual limiting/
 compression curve (ratio, knee, attack/release) lives in a separate, runtime-polymorphic object (`CGen`-derived)
-that this static entry point never names concretely. Finding that class would need tracing the vtable pointer at
-`this+0x5d8`/`+0x5f0` to whatever concrete type populates it (likely a shared `CLimiter`/`CCompressor`-family class
-used across multiple Logic plugins, not unique to Mastering Assistant) — a further, separate target, not attempted
-this pass. `SpectralReferenceDataFactory`/model selection also remains open.
+that this static entry point never names concretely. `SpectralReferenceDataFactory`/model selection also remains
+open. **Update, sixth pass:** the concrete class family behind that vtable pointer is now identified — see the
+stock Compressor/Noise Gate/Limiter/Channel EQ section below, found by searching for the standalone plugins
+directly rather than tracing the pointer.
+
+## Stock plugins: Compressor, Noise Gate, Limiter, Channel EQ (2026-10-16, sixth pass — at the owner's request, "almeno eq e compressore")
+
+These are the plugins with special mixer-channel-strip UI (no normal plugin slot icon; the EQ gets a curve-preview
+thumbnail and the Compressor gets its own purple Gain Reduction meter bar directly in the strip, per
+`behavior-check-2026-10-14.md`/`mixer.md`'s channel-strip layout notes). Found in `MADSP.framework` directly (not
+reached via Mastering Assistant's vtable — faster and gives the real concrete classes).
+
+### Compressor — a real `CCompressorBase` + six distinct circuit-model subclasses
+
+`CCompressorBase` holds the shared plumbing every circuit type uses: `SetSCInput`/`SetLimitInput` (separate
+sidechain vs. built-in limiter input), `SetGRBuffer`/`GetMeter`/**`GetGainReduction_dB`** (the purple bar's data
+source — `log2f(linear_gr) × 6.0206003`, floored at **−400 dB** when the linear value is below `1e-20`),
+`CalcAutoGain`, `DoSmoothGR`, `CalcRelease`, and its own built-in **output limiter stage**
+(`LimiterGainRedCurve`/`ProcessLimiter` — confirming the stock Compressor has an internal safety limiter, not just
+a compressor). Six concrete subclasses, matching Logic's "Circuit Type" selector one-to-one by behavior (not just
+by count):
+
+- **`CCompressorSSL`** (`GainRedCurve`, decompiled) — models a VCA bus-compressor envelope: **two time constants**
+  from the same release setting (`exp(−2300/(2×release))` fast, `exp(−2300/(6×release))` slow — a real dual-stage
+  release, matching how actual SSL-style bus compressors behave), a **soft-knee cubic correction** active only in a
+  narrow input range **0.6151 to 1.1925** (`(x−0.6151)³ − kneeOffset`), and a secondary SIMD-vectorized peak-limiting
+  pass after the main envelope (a genuine two-detector design: compressor + limiter, not one curve doing both).
+- **`CCompressorOpto`** (`GainRedCurve`, decompiled) — models a photocell/opto compressor: only **one** (slower)
+  time constant (no fast stage — matches real opto compressors' single program-dependent release), the *same*
+  0.6151–1.1925 knee-correction shape as SSL (a shared base curve family, re-parameterized per circuit — not
+  independently reinvented each time), then a genuinely different nonlinear stage: **`powf(x, −1.2)`** followed by
+  a **saturating rational curve `37.15y / (37.15y + 100)`** — the classic Michaelis-Menten-shaped response used to
+  model a light-dependent resistor's nonlinearity, not a generic compressor curve.
+- `CCompressorDBX` (classic VCA, dbx-style, with its own `CdbxGainRedCurve` helper class — `CalcCurve`/
+  `ProcessSample`), `CCompressorLP`, `CCompressorClassA` (has its own `CalcRatio`), and `CCompressorFET` exist as
+  further distinct circuit models — not decompiled this pass, but structurally confirmed as separate, non-shared
+  curve implementations (each has its own `Coefficients`/`GainRedCurve`/`Process`/`OnReset`, exactly like SSL/Opto).
+
+**For jad-daw**: if/when its own Compressor grows circuit-type variants, this confirms each one should be a genuinely
+different curve shape (not a shared curve with different numbers) — Apple's own "Vintage"-style models differ in
+knee shape, number of envelope time constants, and the nonlinearity itself, not just ratio/threshold/release knob
+values. The exact SSL knee bounds (0.6151/1.1925) and Opto exponent/saturation constants (−1.2, 37.15, 100) are
+reusable as-is if a matching circuit character is wanted.
+
+### Noise Gate — clean, fully named parameter set
+
+`CNoisegateFX` has one plainly-named setter per UI control: `SetThreshold`, `SetAttack`, `SetReleaseTime`,
+`SetHoldTime`, `SetReduction`, `SetLookahead`, `SetKeylisten` (key-input listen/solo), `DoDirectMix`, plus
+`SetKeyFilter` (a filter on the key/trigger signal, separate from the main signal) and `RegionGate`/`PeakTracking`/
+`CalcEnvelope` for its detection side. `SetThreshold` (decompiled): standard `10^(dB/20)`, but **clamped so a
+positive dB threshold is impossible** (silently forced to 0 dB = unity, i.e. the UI's threshold range effectively
+tops out at 0 dB), floored at −100 dB. It also derives a *second* linear value from a second, not-fully-resolved
+`exp10f` call scaled by the same base — almost certainly the gate's **hysteresis/reopen threshold** (a classic
+noise-gate design: the gate opens at the set threshold but doesn't close again until the signal drops further
+below it, to avoid chattering) rather than one single on/off point.
+
+### Channel EQ — the curve-preview data, confirmed
+
+`CChannelEQShell` (the strip's built-in EQ) exposes exactly the data a curve-preview thumbnail needs:
+`GetResponseLUT`, `GetFreqTable`, `GetUnityResponse`, `GetResponsePoints`, `GetRelXTable`, and
+`AllocateAndFillStaticTables`/`MapChanEQSineTable` (suggesting the frequency-response curve is computed from a
+precomputed sine lookup table rather than evaluating each biquad's transfer function per pixel — a performance
+shortcut worth matching if jad-daw's own mixer-strip EQ preview ever needs to redraw at high frequency). Not
+decompiled further this pass; the method names alone confirm the UI preview curve and the actual filter response
+are the same underlying data (as already found for Match EQ's graph), not a separate illustrative drawing.
+
+**Open**: `CCompressorDBX`/`LP`/`ClassA`/`FET`'s own curve functions, `CLimiterFX::Coefficients` (takes a clean
+`eCoeffIndex` enum — the next easy target), and `CChannelEQShell`'s actual LUT contents/filter math.
+
+Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
+at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,
+`CLimiterFX`/`CLimiter` at `0xce360`-`0xd3a00`. Pure numeric facts and architecture, not ported code.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, `CAutoMaster` class at
 `0x5f8db0`-`0x60bd50`, `CAutoMasterShell`/`CAutoMasterFX` wrappers, `CMatchEQFX` at `0x254cc0`-`0x25f290`, and

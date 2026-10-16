@@ -253,8 +253,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       labelled ratios; the matching function-pointer table, which is what actually differs per preset, wasn't read). `CChannelEQShell::
       AllocateAndFillStaticTables` decompiled and gives the exact curve-preview frequency axis formula (`freq[i] = 20×10^(3×i/(N-1))`, a plain 20Hz-20kHz
       log axis) — also **corrects** the earlier guess that the curve uses a sine-table shortcut: the real response comes from
-      `CBiquadChainDualRateFX::FillResponseLUT`, an actual biquad evaluation per point (`MapChanEQSineTable` is unrelated). Full writeup in
-      `docs/logic-reference/mixer.md`.
+      `CBiquadChainDualRateFX::FillResponseLUT`, an actual biquad evaluation per point (`MapChanEQSineTable` is unrelated).
+      **Tenth pass:** `CCompressorFET::GainRedCurve` decompiled — a fourth circuit, back to closed-form: same shared knee (0.6151-1.1925) as SSL/Opto,
+      single time constant, then `(x+1)^-4` (a much steeper power than Opto's -1.2, matching a FET/1176-style "grabby" onset) rescaled linearly. Four
+      compressor circuits now decompiled, four genuinely different nonlinearities on one shared knee shape. Full writeup in `docs/logic-reference/mixer.md`.
+      Open: `CCompressorLP`'s curve, the ClassA ratio-table function pointers, `CBiquadChainDualRateFX::FillResponseLUT`'s own math, and the Match EQ's
+      reference-model factory/selection.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

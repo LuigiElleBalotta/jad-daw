@@ -277,7 +277,15 @@ by count):
   consecutive table points combined via the classic Catmull-Rom-style cubic blend). So where SSL and Opto compute
   their gain reduction algebraically every sample, DBX looks it up from a precomputed curve — a third, genuinely
   different engineering approach for a third circuit character, not just different constants in the same shape.
-  `CCompressorLP`, `CCompressorClassA` (has its own `CalcRatio`), and `CCompressorFET` remain unexamined — structurally
+- **`CCompressorFET`** (`GainRedCurve`, decompiled, tenth pass) — a *fourth* circuit, back to a closed-form curve: the
+  *same* shared soft-knee cubic (0.6151–1.1925) as SSL/Opto, a single time constant (like Opto, no fast/slow split),
+  then a distinctly steeper nonlinearity: **`(x+1)^−4`** (exponent exactly `−4.0`) rescaled linearly by
+  `y×0.665397 + 0.08`, then `×1.341567`. A much steeper power than Opto's `−1.2` — consistent with real FET
+  compressors (1176-style) having a far more sudden, "grabby" gain-reduction onset than an opto cell's slow,
+  photoresistive response. Four circuits decompiled now, four distinct nonlinearities on top of one shared knee
+  shape: SSL (linear-ish envelope + secondary limiter), Opto (`x^−1.2` → Michaelis-Menten saturation), DBX (table
+  lookup), FET (`(x+1)^−4` → linear rescale).
+  `CCompressorLP` and `CCompressorClassA` (has its own `CalcRatio`) remain unexamined — structurally
   confirmed as further separate, non-shared implementations (each has its own `Coefficients`/`GainRedCurve`/
   `Process`/`OnReset`, like the three already decompiled) but not decompiled this pass.
 - `CLimiterFX::Coefficients` turned out to be a thin forwarder into `CLimiter::Coefficients` (the real implementation,

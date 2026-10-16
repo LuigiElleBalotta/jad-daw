@@ -107,15 +107,38 @@ preset parameter value for regions without region automation) — none of which 
 count-in, recording." The other 10 tabs weren't read this session. This is a bigger dialog than jad-daw models today;
 worth a dedicated pass per tab before assuming today's single-panel Project Settings covers the same ground.
 
-### Flex Mode — present, exact algorithm list not re-confirmed this session
+### Flex Mode — exact menu read live (2026-10-16 follow-up)
 
-The Inspector's Track section does have a **Flex Mode** control (confirmed: an `AXPopUpButton` reading "Off" exists
-in the accessibility tree at a fixed path, unlike the Mixer/Tracks canvas which exposes almost nothing — the
-Inspector sidebar, unlike the canvas, *is* a normal AppKit list and is AX-readable). Opening its menu to re-read the
-exact algorithm list (Slicing/Rhythmic/Monophonic/Polyphonic/Tempophone/Speed/Automatic/Flex Pitch, as jad-daw's
-README already lists, sourced from published documentation rather than this session) didn't succeed before time ran
-out — the popup didn't open from a plain `AXPress`, and pixel-coordinate clicking on it wasn't lined up correctly in
-the time available. Left as a to-do (`roadmap-autonomous.md` E7) rather than guessing.
+The Inspector's Track section **Flex Mode** popup (an `AXPopUpButton`, unlike the Mixer/Tracks canvas which exposes
+almost nothing to accessibility — the Inspector sidebar *is* a normal AppKit list) opened on a retry and was read
+directly from the screenshot:
+
+```
+✓ Off
+Flex Pitch
+——————————
+Flex Time - Automatic
+Flex Time - Monophonic
+Flex Time - Slicing
+Flex Time - Rhythmic
+Flex Time - Polyphonic
+Flex Time - Speed (FX)
+Flex Time - Tempophone (FX)
+```
+
+jad-daw's README lists the same eight algorithms (Slicing, Rhythmic, Monophonic, Polyphonic, Tempophone, Speed,
+Automatic, Flex Pitch) but as one flat list — real Logic's menu has real structure jad-daw's doesn't model:
+- **"Off" is the default, separate, top entry** (not just "no algorithm chosen" within one list).
+- **"Flex Pitch" sits with Off, above a separator**, not grouped with the Flex *Time* algorithms.
+- The seven Flex Time algorithms share a **"Flex Time - " label prefix**, and crucially the **order is different**:
+  Logic goes Automatic, Monophonic, Slicing, Rhythmic, Polyphonic, Speed, Tempophone — jad-daw's README order is
+  Slicing, Rhythmic, Monophonic, Polyphonic, Tempophone, Speed, Automatic (Automatic last instead of first).
+- **Speed and Tempophone are suffixed "(FX)"** in Logic's own menu — i.e. Apple itself flags those two as effects/
+  special-case algorithms, distinct from the other five "proper" time-stretch algorithms. jad-daw's flat list doesn't
+  carry that distinction anywhere (worth deciding whether the Flex popup should visually separate them the same way).
+
+This is a UI/menu-structure finding only — it doesn't speak to whether jad-daw's actual Monophonic/Polyphonic/WSOLA/
+phase-vocoder DSP (`flex-algorithms.md`) sounds right, only to how the picker should be grouped, ordered and labelled.
 
 ### One mishap, for the record
 
@@ -127,6 +150,49 @@ explicit confirmation is exactly the failure mode the "never touch the user's pr
 to the owner immediately; they confirmed it didn't matter this time. For any future session automating Logic Pro's
 GUI: don't assume a modal's default button is the safe one, and re-check the window list after every keystroke that
 could reach a confirmation dialog, not just after clicks.
+
+### Bounce dialog — much richer than documented
+
+`File > Bounce` is a **submenu** (Regions in Place…, Tracks in Place…, And Replace All Tracks…, Project or Section…) —
+"Project or Section…" opens the dialog jad-daw's README describes, titled **`Bounce "Output 1-2"`** (confirms the
+Output-strip naming: the project's main stereo output is internally "Output 1-2", labelled "Stereo Output" in I/O
+Labels — see below). The dialog itself:
+
+- **Destination is a multi-select checklist**, not a single format choice: Uncompressed / MP3 / M4A: AAC / Burn to
+  CD/DVD — you can bounce to several destinations from one pass, not pick one.
+- Only when **Uncompressed** is checked do File Type / Bit Depth / Format / Dithering apply. **File Type is AIFF /
+  WAVE / CAF** (confirmed by opening the menu) — **no FLAC**. jad-daw's own FLAC export (own encoder, `third_party`-free)
+  is a genuine addition beyond Logic, not a gap — worth keeping, not worth hiding.
+- **Sample Rate is a dropdown in the dialog itself** (48 kHz shown) — Logic can bounce at a different rate than the
+  project's, with conversion; jad-daw's bounce presumably always matches the project rate.
+- **Start/End are explicit bar-position fields** (`1 1 1 1` to `129 1 1 1`), not jad-daw's "whole project / cycle area"
+  binary choice — Logic's dialog always shows a concrete range (defaulting to project start/end, or the cycle range)
+  that can be typed into directly.
+- **Mode: Offline** is a dropdown (implying a Realtime option exists too), plus **Bounce 2nd Cycle Pass**, **Add to
+  Project** and **Add to Music** checkboxes jad-daw doesn't have.
+- **Normalize is a dropdown ("Off"/presumably On/Peak modes)**, not jad-daw's simple "normalize to -0.3 dBFS" flag.
+
+### Colors window — a real 16×3 palette, not yet in jad-daw
+
+`View > Colors` opens a small borderless panel: **16 columns × 3 rows = 48 swatches**. Row 1 is the full-saturation
+hue sweep (orange → yellow → green → cyan → blue → purple → magenta), row 2 the same 16 hues at a darker/more muted
+variant, row 3 darker still. No numeric/hex labels are shown in the UI itself. jad-daw's codebase doesn't appear to
+have a dedicated colour-picker component yet for `Track > Assign Track Color…` (searched `ui/qml` for a
+ColorPicker/ColorPalette component and found none) — this is a real gap to fill, not a correction to an existing one.
+A screenshot is saved at `logic-pro-reference/live-ui-screenshots/colors-window.png`; pixel-sampling it for exact hex
+wasn't reliable enough this session (swatch-grid alignment kept landing on the gaps between cells) — worth a cleaner
+re-extraction (e.g. a higher-resolution capture, or hunting for the palette in a resource file instead of a
+screenshot) before jad-daw commits to exact values, but the **16×3 structure itself is solid**.
+
+### I/O Labels — covers outputs and buses too, not just inputs
+
+`Mix > I/O Labels…` opens a **table**, columns **Channel | Provided by Driver | User | Long | Short**, one row per
+physical channel *and* per stereo pair *and* per bus: Input 1–6, Output 1–4, Input 1-2/3-4/5-6, Output 1-2/3-4, then
+Bus 1–7+ (list continues past what was captured). Each row has a radio toggle between "use the driver-provided name"
+and "User" (custom Long/Short names). **Output 1-2 is already labelled "Stereo Output" (Long) / "Stereo Output"
+(Short)** — confirms jad-daw's "Stereo Out" strip-naming convention is on the right track, if not an exact string
+match. jad-daw's README says I/O Labels "names the inputs" only; real Logic names inputs, outputs *and* buses, with
+separate long/short strings and a driver-name-vs-custom-name toggle — a noticeably bigger feature than documented.
 
 ## What this pass did not get to
 

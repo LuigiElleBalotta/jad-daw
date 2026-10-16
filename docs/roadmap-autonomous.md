@@ -219,11 +219,23 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
 - [ ] E8. Project Settings is **one window with 11 tabs** (General, Audio, Recording, Smart Tempo, MIDI, Score, Movie, Synchronization, Metronome,
       Tuning, Assets), not the single "name, rate, tempo, count-in, recording" panel the roadmap describes. The General tab alone has three groups
       (Project Type/Opening Project/Automation) that don't map to that description. Needs a per-tab pass before assuming today's single panel covers it.
-- [ ] E9. Flex Mode control confirmed present in the Inspector (Track section, a real `AXPopUpButton`, currently "Off") but its algorithm menu wasn't
-      successfully opened this session to re-confirm the exact list against jad-daw's (Slicing/Rhythmic/Monophonic/Polyphonic/Tempophone/Speed/
-      Automatic/Flex Pitch, sourced from published docs, not yet from a live read) — needs its own pixel-coordinate pass, see `behavior-check-2026-10-14.md`.
-- [ ] E7. Follow-up pass needed (not reached yet): Flex Time/Pitch and Smart Tempo *behaviour* (not just the menu, which E9 covers), the remaining minor
-      dialogs (Bounce, Colors, I/O Labels, 10 of Project Settings' 11 tabs — see E8), and a second Edit-menu read with an actual region/note selected
+- [x] E9. Flex Mode menu read live (2026-10-16): **Off, Flex Pitch, (sep), Flex Time - Automatic/Monophonic/Slicing/Rhythmic/Polyphonic/Speed (FX)/
+      Tempophone (FX)**. jad-daw's README has the same 8 algorithms but as one flat list in a different order (Automatic last instead of first) and
+      without the "Flex Time -" grouping or the "(FX)" marking Apple itself puts on Speed and Tempophone. Update the Flex popup's grouping/order/labels
+      in `smart-controls-and-editors.md` and the UI to match; the underlying DSP quality question is separate (see `flex-algorithms.md`).
+- [ ] E10. Bounce dialog is far richer than `README`/roadmap describe: Destination is a **multi-select checklist** (Uncompressed/MP3/M4A: AAC/Burn to
+      CD-DVD, can bounce to several at once), File Type is **AIFF/WAVE/CAF only — no FLAC** (jad-daw's own FLAC export is an addition beyond Logic, keep
+      it), a **Sample Rate** dropdown (bounce at a different rate than the project), explicit **Start/End bar fields** instead of a binary whole-project/
+      cycle choice, a **Mode: Offline/(Realtime?)** dropdown, **Bounce 2nd Cycle Pass**, **Add to Project**, **Add to Music**, and **Normalize as a
+      dropdown** not a single flag. See `behavior-check-2026-10-14.md` for the full breakdown before touching the Bounce dialog code.
+- [ ] E11. `View > Colors` is a real **16×3 = 48-swatch palette** (16 hues × 3 lightness variants) for `Track > Assign Track Color…`; jad-daw has no
+      colour-picker component for that command yet (searched `ui/qml`, found none) — this is new work, not a correction. Exact hex values need a
+      cleaner re-extraction (screenshot pixel-sampling wasn't reliable); the 16×3 structure itself is confirmed.
+- [ ] E12. `Mix > I/O Labels…` names **inputs, outputs and buses** (table: Channel/Provided by Driver/User-toggle/Long/Short), not just inputs as the
+      README says. Output 1-2 is already labelled "Stereo Output" in Logic itself, confirming jad-daw's "Stereo Out" naming direction. Extend jad-daw's
+      I/O Labels feature to cover outputs/buses and the driver-name-vs-custom-name toggle.
+- [ ] E7. Follow-up pass still needed: Flex Time/Pitch and Smart Tempo *behaviour* (the algorithm picker's structure is now covered by E9, but not
+      whether jad-daw's DSP output matches), 10 of Project Settings' 11 tabs (see E8), and a second Edit-menu read with an actual region/note selected
       (the one read this session had nothing selected, so it isn't a fair comparison against jad-daw's always-shown, just-disabled Edit menu items).
 
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

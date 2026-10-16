@@ -277,6 +277,40 @@ miss rather than a real behaviour difference, since jad-daw's own note on this (
 instrument track offers Create MIDI Region") was presumably itself verified against real Logic at some point. Left
 on the backlog (E7) rather than drawing a conclusion from a failed click.
 
+### Flex Time DSP — blocked, plus two bonus findings from Apple's demo projects
+
+Tried to get real recorded audio to test Flex Time transient detection/marker rendering against jad-daw's own DSP
+(`flex-algorithms.md`). Both of Apple's bundled demo projects (`Contents/Resources/Demo Projects/Artist Songs/Artist
+Song {1,2}.logicx` — legitimate to open, shipped with the app for exactly this kind of exploration, no personal/
+copyright concern) turned out to be **entirely software-instrument and Session Player based** (Drum Machine Designer-
+style kits: "Trap Door", "Big Room", synth/bass/string instrument tracks) — **no recorded audio regions in either
+one**, so Flex Time (audio-only) couldn't be exercised. MacOs's own short system sounds (`/System/Library/Sounds/*.aiff`)
+would work technically but are ~1 second long, too short to say anything about transient/tempo detection quality.
+**This needs either a real recording or a music file from the owner (with explicit permission — not assumed) to test
+properly; left open on E7.**
+
+Two things worth keeping from this detour:
+- **Session Player regions carry a version-migration dialog.** Opening either demo project's Drummer region shows:
+  *"This Drummer region was created in a previous version of Logic Pro. Convert to MIDI to preserve the original
+  state, or update to new Session Player performance."* with **Convert** / **Update** buttons (not clicked — don't
+  want to modify Apple's shipped demo content). Confirms Session Player regions are versioned and Logic offers an
+  explicit migration path rather than silently reinterpreting old data. jad-daw's own Session Player
+  (`Regenerate Session Player Part`) doesn't have an equivalent "this was made by an older engine version" concept
+  yet — probably fine to skip (jad-daw's generator doesn't have version history the way Apple's multi-release engine
+  does), but worth knowing the real behaviour exists.
+- **Logic Pro 11.2 has a real Chord global track — correcting an explicit jad-daw claim.** The Global Tracks add-list
+  in both demos reads, unambiguously (confirmed with a pixel-level crop, not a guess): **Arrangement, Marker, Tempo,
+  Signature, Chord**. jad-daw's README states, about Session Players, "no following of a Chord Track (**there is
+  none**)" — that's wrong for 11.2; Logic has a genuine Chord global track as a fifth, available lane alongside
+  Marker/Tempo/Signature (which jad-daw already has) and Arrangement (which jad-daw doesn't). This one wasn't opened/
+  populated in the demos (not clicked, to avoid touching Apple's shipped content), so its exact editing UI and how it
+  feeds Session Players isn't confirmed yet — but its *existence* is solid evidence, not speculation. Given jad-daw's
+  Session Players already read chord progressions from marker names as a substitute, a real Chord global track would
+  be the more faithful (if bigger) way to do it — worth a dedicated follow-up.
+- **The Session Player chord editor is confirmed** in both demos: a lower "Session Player" pane with **Chords** mode,
+  a Preset popup, and a chord-progression timeline using triangular beat markers — visually consistent with jad-daw's
+  own chord-progression-driven Session Player editor.
+
 ## What this pass did not get to
 
 Smart Tempo behaviour and most of the minor dialogs (Bounce, Colors, I/O Labels, and 10 of Project Settings' 11 tabs)

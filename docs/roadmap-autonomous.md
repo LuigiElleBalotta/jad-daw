@@ -253,9 +253,16 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       view-only Score is the right scope unless real engraving is ever committed to), Movie (confirms "left out for good" is right), Synchronization
       (external-hardware-sync, low priority), Assets (Project Package copy-on-import checkboxes — distinct from jad-daw's unused-audio cleanup, a real
       but minor gap). Full breakdown and screenshots in `behavior-check-2026-10-14.md`.
-- [ ] E7. Still open: Flex Time/Pitch and Smart Tempo *DSP behaviour* (the algorithm picker's structure is covered by E9, but not whether jad-daw's DSP
-      output matches Logic's), and a second Edit-menu read with an actual region/note selected (two attempts to right-click-create a MIDI region to
-      select failed this session — likely a coordinate miss, not a real behaviour finding; don't draw conclusions from it, just retry with a cleaner
-      approach next time, e.g. the Pencil tool instead of a context-menu region creation).
+- [ ] E16. **Logic Pro 11.2 has a real Chord global track** (confirmed via Global Tracks add-list: Arrangement, Marker, Tempo, Signature, **Chord**),
+      contradicting jad-daw's own README ("no following of a Chord Track (there is none)"). jad-daw's Session Players currently fake a chord source by
+      reading marker names; a real Chord global track would be the faithful way to do it. Its own editing UI wasn't opened (didn't want to touch
+      Apple's demo content) — needs a follow-up to see how it's populated/edited before building against it. Also: Logic has an **Arrangement** global
+      track jad-daw doesn't have at all.
+- [ ] E7. Still open: Flex Time/Pitch and Smart Tempo *DSP behaviour* — **blocked this session**: Apple's two bundled demo projects (Artist Song 1 & 2)
+      turned out to be 100% software-instrument/Session-Player based, no recorded audio regions to run Flex Time on, and macOS's own system sounds are
+      too short (~1s) to say anything about transient/tempo detection quality. Needs either a real recording or a music file from the owner (ask first,
+      don't assume) before this can be tested. Also still open: a second Edit-menu read with an actual region/note selected (two attempts to
+      right-click-create a MIDI region to select failed this session — likely a coordinate miss, not a real behaviour finding; retry with the Pencil
+      tool instead of a context-menu region creation next time), and the Chord global track's own UI (see E16).
 
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

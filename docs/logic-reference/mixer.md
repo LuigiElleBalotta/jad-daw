@@ -76,6 +76,40 @@ So 0 dB sits at about **74 %** of the travel from the bottom, which is what our 
 Meter scale (a separate narrow bar to the right of the fader, labels in dB below full scale, top to bottom): 0, 3, 6, 9, 12, 15, 18, 21, 24, 30, 35, 40, 45, 50, 60.
 The bar is dark grey while silent; the cap is a wide metallic grey handle with horizontal ridges.
 
+## Pan Law — decompiled (2026-10-16)
+
+Phase 1 (UI only) found the Project Settings > Audio setting **Pan Law: "-3 dB Compensated"** (default), with an
+"Apply Pan Law compensation to stereo balancers" checkbox (see `behavior-check-2026-10-14.md`). This pass opened
+`MADSP.framework` (the DSP engine, not the UI) with Ghidra via REA to find the actual numbers behind that label.
+
+**Base per-channel law**, `CStereoMixer::SetPanForChannel(int channel, float pan)` — `pan` in [-100, 100]:
+
+```
+t      = pan / 200 + 0.5        // normalized 0..1
+gainL  = 1 - t²
+gainR  = 1 - (1 - t)²
+```
+
+This is a **quadratic law**, not the textbook equal-power (sin/cos, center = -3.01 dB exactly) or linear (center =
+-6.02 dB) law. At center (`t = 0.5`): `gainL = gainR = 0.75` = **-2.498 dB**, not literally -3 dB. At a hard
+left/right pan, the far channel's gain is exactly 0 and the near channel's gain is exactly 1 (0 dB).
+
+**Compensation**, `CMixer::SetCompensated(bool)` — when enabled and the mixer's pan-law mode field equals `2`, every
+channel's gain is scaled by the float constant `0x3faaaaab` = **4/3** (= **+2.498 dB**), i.e. the exact reciprocal of
+the 0.75 center dip above: `0.75 × 4/3 = 1.0`. So "compensated" means *center pan is unity gain (0 dB) and the hard
+L/R ends end up +2.5 dB over unity*, not that the whole curve shifts by a flat -3 dB. When compensation is off, the
+constant used is `0x3f800000` = 1.0 (no scaling) and the hard L/R ends are at 0 dB while center dips -2.5 dB.
+
+**Open**: the pan-law mode field (seen taking at least the value `2`) almost certainly selects among the other named
+presets visible in the UI (0 dB / -3 dB / -4.5 dB Compensated / -6 dB / -6 dB Compensated); only mode `2`'s
+compensation constant (4/3) was traced this pass. The other modes' exact multipliers are unresolved — a follow-up
+would trace `CMixer`'s pan-law-mode setter and whatever reads offset `+0x90` to apply the scale during `Process`.
+
+Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, functions at `0x905b40`
+(`CStereoMixer::SetPanForChannel`) and `0x1cc450` (`CMixer::SetCompensated`). Pure numeric facts (formulas and
+constants), not ported code — see `asset-reference.md` for the method and the reasoning on what gets kept as "facts"
+versus reimplemented from scratch.
+
 ## Related settings
 
 Settings > View > Mixer: show Mastering Assistant button, open plug-in window on insertion, show recent plug-in list, peak hold 800 ms, IEC Type I return

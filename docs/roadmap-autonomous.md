@@ -196,6 +196,28 @@ Today: one Master track, stereo engine (device channels above 2 are cleared), "S
 - [x] D5. Extracted material (colour tokens, plug-in parameter JSON, legacy mixer bitmaps, live screenshots) kept in `../logic-pro-reference/`, a sibling
       folder outside git (Apple's assets, not ours to commit); pointer and method in `docs/logic-reference/asset-reference.md`.
 
+### D (Phase 2). Binary decompilation for algorithm-level detail (the owner, 2026-10-16: UI phase done, "prima scopri la UI e poi decompila per dettagli algoritmici"; private, non-distributed study project — see owner's explicit scope note below)
+Static analysis of Logic's own frameworks (`MADSP.framework` = DSP engine, `MAMixer.framework` = mixer UI/view-models only) via REA + Ghidra 12.1.4,
+universal binaries thinned to x86_64 with `lipo` first (Ghidra v1 can't import a fat Mach-O directly). `REA_GHIDRA_STARTUP_TIMEOUT_MS` raised from the
+330 s default to 1,800,000 (30 min) in `~/.claude.json`'s `rea` server env — `MADSP` is 26 MB and auto-analysis alone exceeded the default on this
+machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, ~10-20 min for MADSP).
+- [x] D6. Metronome ("Klopfgeist") confirmed at the engine level, not just in the Settings UI: a real `CKnock`/`CKnockBackplane`/`CKnockShell`/`CKnockVoice`
+      class family synthesising the click from a resonant filter excited per tick (128-entry cutoff lookup table, `Q = clamp(-1.39×reso²+1.4, 0.01, 1.4)`),
+      with `TonalityToReso(t) = 1-(1-t)³` and a Level/Velocity crossfade (`LevelViaVel`) — not sample playback. Written up in
+      `docs/logic-reference/behavior-check-2026-10-14.md` under the existing Metronome mismatch note.
+- [x] D7. Pan Law exact formula: `CStereoMixer::SetPanForChannel` is a **quadratic** law (`gainL=1-t²`, `gainR=1-(1-t)²`, t=pan/200+0.5), center dip
+      **-2.498 dB**, not the textbook equal-power/-3.01 dB or linear/-6.02 dB law. `CMixer::SetCompensated` applies a `4/3` (+2.498 dB) multiplier for the
+      UI's "-3 dB Compensated" default — the exact reciprocal of the dip, so "compensated" means unity gain at center, not a flat -3 dB shift. Full writeup
+      in `docs/logic-reference/mixer.md`. Open: the other named Pan Law presets' (0 dB / -4.5 dB / -6 dB, compensated or not) exact multipliers weren't traced.
+- [ ] D8. Mastering Assistant (loudness/EQ algorithm internals, `MAMixer.framework`'s `MasteringAssistant` classes) — not yet started.
+- [ ] D9. Flex Time DSP internals (`MAMusicAnalysis.framework`, which algorithm family each of Automatic/Monophonic/Slicing/Rhythmic/Polyphonic/Speed/Tempophone
+      actually runs) — not yet started.
+
+**Scope note (the owner, 2026-10-16, after an initial caution about shipping decompiled/derived code in a public repo):** this repository is private and
+not distributed; the owner explicitly wants exact algorithm facts extracted by decompilation and reused (adapted/improved) in jad-daw, not just treated as
+reference facts for an independent reimplementation. D6/D7 above are plain numeric formulas/constants either way (no literal code copied). If this repo's
+distribution status ever changes (made public, shared, published), this decision should be revisited before any more literally-derived algorithm code ships.
+
 ## E. Behaviour gaps found against the real Logic Pro 11.2, not yet fixed in code (the owner, 2026-10-14: "vince Logic, non jad-daw")
 Found with a disposable test project and the AppleScript-menu-enumeration + Quartz-coordinate-click method in `docs/logic-reference/behavior-check-2026-10-14.md`
 (read that file for the full evidence before touching any of these). Each is a real behaviour/structure mismatch, not a shortcut.

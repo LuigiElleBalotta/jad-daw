@@ -250,6 +250,22 @@ Continuing from the General tab (above):
   never verified against the real app. **This needs the owner's attention before any more metronome work happens** —
   it's a foundational mismatch in a described, "done" feature, not a minor detail.
 
+  **Decompiled confirmation, 2026-10-16** (Phase 2, static analysis of `MADSP.framework/MADSP` x86_64 via REA +
+  Ghidra): the "Klopfgeist" click is a real internal class hierarchy (`CKnock`, `CKnockBackplane`, `CKnockShell`,
+  `CKnockVoice`), confirming it's **synthesised in real time by a resonant filter excited per tick, not a sample
+  playback of a WAV file**:
+  - `CKnockVoice::CalcCoeffs` computes a 2-pole resonant filter's cutoff (linearly interpolated from a 128-entry
+    frequency lookup table indexed by the tick's note number) and its Q, with `Q = clamp(-1.39 × reso² + 1.4, 0.01, 1.4)`.
+  - `CKnockBackplane::TonalityToReso(t) = 1 - (1 - t)³` maps the UI's "Tonality" knob (0..1) onto that `reso` input —
+    a cubic ease-out curve, exact and purely numeric.
+  - `CKnockBackplane::Start` blends the base **Level** with **velocity** as `level = (1 - levelViaVel) × baseLevel +
+    levelViaVel × velocity`, i.e. the "LevelViaVel" knob is a 0..1 crossfade between a fixed level and MIDI velocity,
+    not a simple multiply.
+  - Level-in-dB-to-linear elsewhere in the same class family uses the standard `gain = 10^(dB/20)`.
+
+  This matches the UI-observed model (per-accent-level Note+Velocity+Tone/Volume) and rules out any "spoken count
+  word" or sample-based implementation at the engine level too, not just in the Settings dialog.
+
 ### Project Settings, the last 4 tabs — low priority, briefly
 
 - **Score**: its own 7 sub-tabs (Global, Numbers & Names, Tablature, Chords & Grids, Clefs & Signatures, Layout, MIDI

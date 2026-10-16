@@ -209,9 +209,19 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       **-2.498 dB**, not the textbook equal-power/-3.01 dB or linear/-6.02 dB law. `CMixer::SetCompensated` applies a `4/3` (+2.498 dB) multiplier for the
       UI's "-3 dB Compensated" default — the exact reciprocal of the dip, so "compensated" means unity gain at center, not a flat -3 dB shift. Full writeup
       in `docs/logic-reference/mixer.md`. Open: the other named Pan Law presets' (0 dB / -4.5 dB / -6 dB, compensated or not) exact multipliers weren't traced.
-- [ ] D8. Mastering Assistant (loudness/EQ algorithm internals, `MAMixer.framework`'s `MasteringAssistant` classes) — not yet started.
-- [ ] D9. Flex Time DSP internals (`MAMusicAnalysis.framework`, which algorithm family each of Automatic/Monophonic/Slicing/Rhythmic/Polyphonic/Speed/Tempophone
-      actually runs) — not yet started.
+- [x] D8. Mastering Assistant: the `CAutoMaster` chain (loudness analysis, Match EQ, multiband compressor, limiter, saturation/waveshaper, spread,
+      correlation) lives in `MADSP.framework`, not `MAMixer.framework` (that one's just the UI/view-models). The single "Loudness Macro" slider's exact
+      piecewise-linear mappings to compressor gain, limiter gain/release, and waveshaper dry/wet are documented in `docs/logic-reference/mixer.md` — staged
+      engagement (limiter/saturation stay off below a threshold, then ramp linearly), not a uniform scale. Open: Match EQ model selection and the
+      compressor/limiter/MB-compressor's own per-band processing weren't decompiled.
+- [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
+      Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
+      identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate
+      `CEAGrainTrain` class (likely the percussive/slicing-mode engine). Confirms jad-daw's own published-algorithm choice (phase vocoder + WSOLA split)
+      already matches Apple's real architecture. Full writeup in `docs/logic-reference/flex-algorithms.md`. Open: which named Flex mode maps to the phase
+      vocoder vs. the grain train, and each one's exact parameters, weren't traced.
+      (`MAMusicAnalysis.framework`'s onset/beat-tracking side was covered separately in the same file: CNN-based onset detection via Metal Performance
+      Shaders, HMM+Viterbi beat/downbeat tracking with a joint time-signature-beat model.)
 
 **Scope note (the owner, 2026-10-16, after an initial caution about shipping decompiled/derived code in a public repo):** this repository is private and
 not distributed; the owner explicitly wants exact algorithm facts extracted by decompilation and reused (adapted/improved) in jad-daw, not just treated as

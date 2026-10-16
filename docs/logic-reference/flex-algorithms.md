@@ -58,10 +58,46 @@ Apple's architecture is a fact worth knowing, not something to port.
 - A `TempoWeighting` class (`ComputeWeighting`, `ProcessDatapoint`) exists for scoring tempo/beat hypotheses; not
   decompiled this pass (not a simple one-line formula like the Mastering Assistant mappings).
 
-**Open**: the actual time-stretch/slice algorithm per Flex mode (Slicing/Rhythmic/Monophonic/Polyphonic/Tempophone/
-Speed) — the `BeatBreaker`/`SliceHandler` class in `MADSP.framework` (seen earlier via `SetPanStart`/`SetPanSlope`/
-`SetPanCurve` on its slice handler, suggesting each slice gets its own pan envelope across a crossfade) is the next
-concrete target, along with whichever class actually does the audio resampling/overlap-add for the non-slicing modes.
+**Correction**: `BeatBreaker`/`SliceHandler` (seen via `SetPanStart`/`SetPanSlope`/`SetPanCurve`) turned out to be a
+*different* feature — Logic's "Beat Breaker" MIDI FX plugin (a pattern-based step slicer/glitcher with its own
+save/load "Pattern" files), not Flex Time's engine. Corrected below.
 
-Source: static analysis of `MAMusicAnalysis.framework/MAMusicAnalysis` (x86_64 slice) via REA + Ghidra 12.1.4. Class/
-function names only (confirms architecture family), no pseudocode ported.
+### The actual Flex Time stretch engine: "Elastic Audio" (decompiled, 2026-10-16)
+
+Found in `MADSP.framework` by searching for the published time-stretch techniques `flex-algorithms.md` already cites
+(WSOLA/phase-vocoder terms) rather than guessing a product-facing name — and it worked immediately:
+
+- **`CElasticAudio::eElasticAudioType`** is a real enum — "Elastic Audio" is Apple's own internal engineering name
+  for Flex Time (this matches, independently, the name Avid uses for the equivalent Pro Tools feature — apparently
+  shared industry terminology, not something copied between them).
+- **`CEAPhaseVocoder`** (`CEA` = `C`+`ElasticAudio`) is a textbook phase vocoder implementation, confirmed by its own
+  method names using the exact terms from Laroche & Dolson 1999 (already in this file, above): `SetFFTSizeAndSamplerate`,
+  `CreateWindow`/`SetWindowType` (`ePVWindowtype`), `SetHopFraction`, **`SetLaminationMode` (`ePVLamination`)** — Laroche
+  & Dolson's own paper names their phase-locking scheme "lamination" — and `EnableTransientDetection`, `PitchShift`,
+  `PhaseAdjust`. It takes a `WarpMarkerProvider`/`CWarpMarkerChecker`, matching the UI's Flex marker model exactly: the
+  phase vocoder stretches *between* user/analysis-placed markers, not the whole file uniformly.
+- A separate **`CEAGrainTrain`** class (`CEAGrainTrain::Create`, taking a `CWarpMarkerChecker` and `CEAPhaseVocoderData`)
+  exists alongside the phase vocoder — almost certainly the granular/transient-preserving engine behind the
+  percussive Flex modes (Slicing/Rhythmic), paralleling this file's own WSOLA-vs-phase-vocoder split (percussive →
+  grain/transient-locked, harmonic/polyphonic → phase vocoder) rather than Apple using one algorithm for everything.
+- `CStretchFeederPrimitiveFloat::phasevocoder` and `CSFSliceDice::makePhaseVocoderInstruction` are further plumbing
+  around the same phase vocoder core, used by the "Sample Editor"/Flex workflow's stretch feeder.
+
+This is a strong independent confirmation that jad-daw's own published-algorithm approach (phase vocoder per Laroche
+& Dolson, WSOLA for transient material) already matches Apple's actual architecture, not just its observable
+behaviour — Apple did not invent a secret, unrelated DSP technique for Flex Time.
+
+**Open**: which Flex mode (Automatic/Monophonic/Polyphonic/Slicing/Rhythmic/Speed/Tempophone) maps to the phase
+vocoder vs. the grain train, and the exact lamination/window parameters used by each, weren't traced this pass —
+`CEAPhaseVocoder::SetTransposeAndTempo`/`SetTransposeAndStretchfactor` (both taking an `eElasticPreRenderMode`) are
+the next concrete entry points for that.
+
+Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, classes at `0x960460`
+(`CEAGrainTrain`) and `0x961470`-`0x96a990` (`CEAPhaseVocoder`/`CEAPhaseVocoderProcessor`). Class/method names only —
+these confirm the algorithm family and parameters (FFT size, window type, hop fraction, lamination mode), not ported
+pseudocode.
+
+---
+
+Source for the Smart Tempo section above: static analysis of `MAMusicAnalysis.framework/MAMusicAnalysis` (x86_64
+slice) via REA + Ghidra 12.1.4. Class/function names only (confirms architecture family), no pseudocode ported.

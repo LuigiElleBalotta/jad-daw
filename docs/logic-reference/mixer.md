@@ -211,11 +211,35 @@ band buffers via `vDSP_vsmul` (so at least two compressor bands get scaled, matc
 `ProcessMBCompressor` on a trial chunk, reads back a measured value at a fixed offset (almost certainly gain
 reduction or achieved compression amount) and accumulates a margin term (`min(measured, 0.99 − measured)`) — the
 same shape as the limiter's measure/adjust loop, but working in fixed 2 dB steps rather than the limiter's
-error-proportional steps, and against a compression-amount target rather than a loudness target. **Open**: this
-loop's exact exit condition wasn't resolved (relies on an internal abort flag not traced to its setter), and
-`SpectralReferenceDataFactory`/model selection and the limiter's/compressor's actual sample-processing loops
-(`ProcessLimiter`, `ProcessMBCompressor`, `ProcessCompressor` themselves, as opposed to the auto-adjustment logic
-that drives them, which is now covered) weren't decompiled.
+error-proportional steps, and against a compression-amount target rather than a loudness target. This loop's exact
+exit condition wasn't resolved (relies on an internal abort flag not traced to its setter).
+
+### `ProcessLimiter`/`ProcessMBCompressor` themselves: orchestration, not the DSP kernel (fifth pass)
+
+Both fully decompiled. Neither contains the actual limiting/compression math:
+
+- **`ProcessLimiter(macroPos, this, buffer, startFlag)`** — sets the limiter's input gain from `macroPos` (same
+  `10^(clamp(x,-100,100)/20)` conversion as everywhere else in this class), calls a **virtual** `ProcessGenInplace`
+  to do the real per-sample work (a `CGen`-family object resolved only at runtime, not a concrete class this static
+  pass can follow), then computes a gain-reduction **meter readout in dB** from the object's resulting state using a
+  neat **fast bit-hack `log2`→dB approximation**: unpack the IEEE-754 float's mantissa as `m ∈ [1,2)` and exponent
+  `e` via bit masking, then `dB ≈ (e + m − 0.33985×(m−1.5)² − 0.9150375) × 6.0206003`, where `6.0206003 = 20/log2(10)`
+  is the exact log2-to-dB-of-amplitude conversion constant and the quadratic term is a minimax polynomial
+  approximation to `log2(m)` over `[1,2)`. A genuinely reusable fact for any dB meter that wants to avoid a real
+  `log10f` call per sample — pure, exact numerics.
+- **`ProcessMBCompressor(this, sampleCount, startFlag)`** — purely a chunked buffer-feeding loop (splits the signal
+  into pieces no larger than a fixed internal block size, rewires per-band input/output pointers for up to N bands,
+  checks an abort flag every chunk) that ends each chunk with a call through the **same kind of virtual dispatch**
+  (vtable slot) as the limiter — plus the identical `0.99 − measured` margin-accumulation line seen in
+  `AutoAdjustMBCompressor`, confirming that margin bookkeeping happens on *every* call, not just during auto-adjust.
+
+**Conclusion for this thread**: `CAutoMaster`'s "Process*" methods are consistently an **orchestration layer** —
+buffer chunking, gain staging, dB/linear conversions, margin/meter bookkeeping — while the actual limiting/
+compression curve (ratio, knee, attack/release) lives in a separate, runtime-polymorphic object (`CGen`-derived)
+that this static entry point never names concretely. Finding that class would need tracing the vtable pointer at
+`this+0x5d8`/`+0x5f0` to whatever concrete type populates it (likely a shared `CLimiter`/`CCompressor`-family class
+used across multiple Logic plugins, not unique to Mastering Assistant) — a further, separate target, not attempted
+this pass. `SpectralReferenceDataFactory`/model selection also remains open.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, `CAutoMaster` class at
 `0x5f8db0`-`0x60bd50`, `CAutoMasterShell`/`CAutoMasterFX` wrappers, `CMatchEQFX` at `0x254cc0`-`0x25f290`, and

@@ -224,8 +224,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       (`AnalyseMomentaryLoudness`/`...Short...`/`...Integrated...`/`...LoudnessRange`, `SetupPreFilter` for K-weighting, histogram-based relative gating)
       match the standard exactly, independently confirming jad-daw's own BS.1770 choice matches Apple's real implementation. And `AutoAdjustLimiter` is not
       a closed-form curve at all — it's a small iterative controller (render a trial chunk, measure loudness, add the error onto a running gain-in-dB,
-      re-render, up to 5 attempts or until within 0.2 dB/LU). Full writeup in `docs/logic-reference/mixer.md`. Open: the reference-model factory/selection
-      and the limiter's/compressor's/MB-compressor's actual per-sample processing loops (as opposed to the auto-adjustment logic, now covered).
+      re-render, up to 5 attempts or until within 0.2 dB/LU); `AutoAdjustMBCompressor` is the same shape with fixed +2 dB steps instead.
+      **Fifth pass:** `ProcessLimiter`/`ProcessMBCompressor` themselves fully decompiled — both are orchestration (gain staging, buffer chunking, margin
+      bookkeeping), not the DSP kernel: the actual limiting/compression curve is behind a runtime-polymorphic `CGen`-family object this static pass can't
+      name concretely. `ProcessLimiter` does yield one clean, reusable fact: its dB meter readout is computed via a fast IEEE-754 bit-hack `log2`→dB
+      approximation (`dB ≈ (e + m − 0.33985×(m−1.5)² − 0.9150375) × 6.0206003`). Full writeup in `docs/logic-reference/mixer.md`. Open: the concrete
+      limiter/compressor DSP class (would need tracing a vtable pointer to runtime type) and the Match EQ's reference-model factory/selection.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

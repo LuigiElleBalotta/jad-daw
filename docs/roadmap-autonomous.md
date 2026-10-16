@@ -224,9 +224,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate
-      `CEAGrainTrain` class (likely the percussive/slicing-mode engine). Confirms jad-daw's own published-algorithm choice (phase vocoder + WSOLA split)
-      already matches Apple's real architecture. Full writeup in `docs/logic-reference/flex-algorithms.md`. Open: which named Flex mode maps to the phase
-      vocoder vs. the grain train, and each one's exact parameters, weren't traced.
+      `CEAGrainTrain` class (an internal building block, not a top-level mode — see below). Confirms jad-daw's own published-algorithm choice (phase
+      vocoder + WSOLA split) already matches Apple's real architecture.
+      **Mode→engine mapping resolved (third pass, at the owner's request):** `CElasticAudio::CreateElasticAudioObject`'s factory switch is the ground-truth
+      list of every engine `eElasticAudioType` can instantiate: `CEATempophon`=Tempophone, `CEAPhaseVocoder`=Polyphonic, `CEAMonophonic`=Monophonic (all
+      exact name matches), plus `CSFStretch`/`CEAResampler`/`CSFSlice`/`CSFSliceDice`/`CEAFlexPitch(_PV)` (inferred/unclear mapping to Speed/Slicing/
+      Rhythmic/Flex Pitch — see the doc for per-value confidence). Full writeup in `docs/logic-reference/flex-algorithms.md`.
       (`MAMusicAnalysis.framework`'s onset/beat-tracking side was covered separately in the same file: CNN-based onset detection via Metal Performance
       Shaders, HMM+Viterbi beat/downbeat tracking with a joint time-signature-beat model.)
 

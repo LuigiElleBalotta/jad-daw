@@ -130,10 +130,32 @@ This is a strong independent confirmation that jad-daw's own published-algorithm
 & Dolson, WSOLA for transient material) already matches Apple's actual architecture, not just its observable
 behaviour — Apple did not invent a secret, unrelated DSP technique for Flex Time.
 
-**Open**: which Flex mode (Automatic/Monophonic/Polyphonic/Slicing/Rhythmic/Speed/Tempophone) maps to the phase
-vocoder vs. the grain train, and the exact lamination/window parameters used by each, weren't traced this pass —
-`CEAPhaseVocoder::SetTransposeAndTempo`/`SetTransposeAndStretchfactor` (both taking an `eElasticPreRenderMode`) are
-the next concrete entry points for that.
+### Mode → engine mapping, resolved (2026-10-16, third pass)
+
+Found the actual factory: **`CElasticAudio::CreateElasticAudioObject(eElasticAudioType, ...)`**, a `switch` that
+`new`s one specific engine class per enum value — this is the authoritative, exhaustive map of every "Elastic Audio"
+engine implementation that exists, decompiled in full:
+
+| `eElasticAudioType` | Engine class | Flex-mode name (confidence) |
+|---|---|---|
+| 1 | `CSFStretch` | unclear — a generic "stretch" wrapper, possibly backing **Automatic**'s default choice |
+| 2 | `CEAResampler` | **Speed (FX)** (inferred — plain resampling is exactly what varispeed-style "Speed" does: pitch tied to rate, no time-correction) |
+| 3 | `CSFSlice` | **Slicing** (inferred from name: "SF" + "Slice") |
+| 4 | `CEATempophon` | **Tempophone (FX)** — exact name match, high confidence |
+| 5 | `CEAPhaseVocoder` | **Polyphonic** — matches the phase-vocoder deep-dive above, high confidence |
+| 6 | `CEAMonophonic` | **Monophonic** — exact name match, high confidence |
+| 7 | `CSFSliceDice` | **Rhythmic** (inferred — a more aggressive/compound slicer than plain `CSFSlice`) |
+| 8 | `CEAFlexPitch` | Flex Pitch's own main engine (not a Flex *Time* mode) |
+| 9 | `CEAFlexPitch_PV` | Flex Pitch's phase-vocoder variant, used when Flex Pitch also needs to time-stretch |
+
+So the earlier `CEAGrainTrain`/`CEAGrainer` classes found in the first pass turn out to be **internal building blocks
+used by one or more of these** (e.g. by `CSFSlice`/`CSFSliceDice`), not top-level dispatch targets themselves — the
+factory above is the complete, ground-truth list of what "Elastic Audio" can actually instantiate. Values 4/5/6 are
+confirmed by literal name match to the UI; 2/3/7 are plausible but inferred from naming alone, not traced into their
+own code; 1 remains genuinely unclear.
+
+Source: `CElasticAudio::CreateElasticAudioObject` at `0x91e920` in `MADSP.framework/MADSP`, decompiled in full (a
+small, clean switch — no complexity concerns here, unlike `CMatchEQFX::Coefficients`).
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4, classes at `0x960460`
 (`CEAGrainTrain`) and `0x961470`-`0x96a990` (`CEAPhaseVocoder`/`CEAPhaseVocoderProcessor`). Class/method names only —

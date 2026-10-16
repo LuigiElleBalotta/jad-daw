@@ -269,10 +269,21 @@ by count):
   independently reinvented each time), then a genuinely different nonlinear stage: **`powf(x, −1.2)`** followed by
   a **saturating rational curve `37.15y / (37.15y + 100)`** — the classic Michaelis-Menten-shaped response used to
   model a light-dependent resistor's nonlinearity, not a generic compressor curve.
-- `CCompressorDBX` (classic VCA, dbx-style, with its own `CdbxGainRedCurve` helper class — `CalcCurve`/
-  `ProcessSample`), `CCompressorLP`, `CCompressorClassA` (has its own `CalcRatio`), and `CCompressorFET` exist as
-  further distinct circuit models — not decompiled this pass, but structurally confirmed as separate, non-shared
-  curve implementations (each has its own `Coefficients`/`GainRedCurve`/`Process`/`OnReset`, exactly like SSL/Opto).
+- **`CCompressorDBX`** (`GainRedCurve`, decompiled, seventh pass) — a *third*, structurally different implementation
+  strategy again: not a closed-form curve at all, a **lookup table read with cubic Hermite spline interpolation**
+  (a dedicated `CHermiteTableLookUp` helper class does the interpolation; the table itself is filled elsewhere, not
+  traced this pass). The input path: clamp the level to `[1e-6, 1e6]`, take its natural log, scale by the constant
+  `0.05211534` and add a threshold-dependent offset, then use that as a fractional index into the table (4
+  consecutive table points combined via the classic Catmull-Rom-style cubic blend). So where SSL and Opto compute
+  their gain reduction algebraically every sample, DBX looks it up from a precomputed curve — a third, genuinely
+  different engineering approach for a third circuit character, not just different constants in the same shape.
+  `CCompressorLP`, `CCompressorClassA` (has its own `CalcRatio`), and `CCompressorFET` remain unexamined — structurally
+  confirmed as further separate, non-shared implementations (each has its own `Coefficients`/`GainRedCurve`/
+  `Process`/`OnReset`, like the three already decompiled) but not decompiled this pass.
+- `CLimiterFX::Coefficients` turned out to be a thin forwarder into `CLimiter::Coefficients` (the real implementation,
+  not decompiled this pass) plus one special case: parameter index `6` toggles something per-channel across every
+  linked channel object (`0.0 < value` as a bool) — likely a stereo-link/channel-count-dependent switch, not pinned
+  down further.
 
 **For jad-daw**: if/when its own Compressor grows circuit-type variants, this confirms each one should be a genuinely
 different curve shape (not a shared curve with different numbers) — Apple's own "Vintage"-style models differ in
@@ -302,8 +313,8 @@ shortcut worth matching if jad-daw's own mixer-strip EQ preview ever needs to re
 decompiled further this pass; the method names alone confirm the UI preview curve and the actual filter response
 are the same underlying data (as already found for Match EQ's graph), not a separate illustrative drawing.
 
-**Open**: `CCompressorDBX`/`LP`/`ClassA`/`FET`'s own curve functions, `CLimiterFX::Coefficients` (takes a clean
-`eCoeffIndex` enum — the next easy target), and `CChannelEQShell`'s actual LUT contents/filter math.
+**Open**: `CCompressorLP`/`ClassA`/`FET`'s own curve functions, `CLimiter::Coefficients` (the real implementation
+`CLimiterFX` forwards to), and `CChannelEQShell`'s actual LUT contents/filter math.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,

@@ -237,8 +237,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       numbers. Also found `CNoisegateFX` (fully named setters: Threshold/Attack/Release/Hold/Reduction/Lookahead/Keylisten/KeyFilter, plus a
       hysteresis/reopen threshold derived from the main one) and `CChannelEQShell` (confirms its curve-preview data — `GetResponseLUT`/`GetFreqTable`/
       `GetRelXTable` — is the same data driving the actual filter, computed via a sine-table shortcut rather than per-pixel biquad evaluation). Full
-      writeup in `docs/logic-reference/mixer.md`. Open: the remaining four compressor circuits' own curves, `CLimiterFX::Coefficients`, and
-      `CChannelEQShell`'s LUT contents; the Match EQ's reference-model factory/selection also remains open.
+      writeup in `docs/logic-reference/mixer.md`.
+      **Seventh pass:** `CCompressorDBX::GainRedCurve` decompiled — a *third* distinct implementation strategy (not a closed-form curve like SSL/Opto at
+      all): a cubic-Hermite-interpolated lookup table (`CHermiteTableLookUp`), fed by `log(clamp(level,1e-6,1e6)) × 0.05211534 + offset`. Three circuits,
+      three genuinely different engineering approaches. `CLimiterFX::Coefficients` turned out to be a thin forwarder into `CLimiter::Coefficients` (not
+      yet decompiled) plus one per-channel toggle at parameter index 6. Open: `CCompressorLP`/`ClassA`/`FET`'s own curves, `CLimiter::Coefficients`
+      itself, and `CChannelEQShell`'s LUT contents; the Match EQ's reference-model factory/selection also remains open.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

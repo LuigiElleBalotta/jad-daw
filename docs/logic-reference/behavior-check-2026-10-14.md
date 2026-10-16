@@ -250,10 +250,32 @@ Continuing from the General tab (above):
   never verified against the real app. **This needs the owner's attention before any more metronome work happens** —
   it's a foundational mismatch in a described, "done" feature, not a minor detail.
 
+### Project Settings, the last 4 tabs — low priority, briefly
+
+- **Score**: its own 7 sub-tabs (Global, Numbers & Names, Tablature, Chords & Grids, Clefs & Signatures, Layout, MIDI
+  Meaning, Colors) of notation-engraving settings (margins, spacing, pedal position, beaming slant, symbol fonts...).
+  jad-daw's Score is intentionally view-only; this confirms real engraving control is a whole separate feature domain,
+  not a few missing checkboxes — not worth chasing unless jad-daw commits to real score editing.
+- **Movie**: position/region-border timecode fields, Movie Volume, Mute, "Movie Settings…" — matches the roadmap's
+  "left out for good" call on Movie.
+- **Synchronization**: its own 4 sub-tabs (General/Audio/MIDI/Unitor); General has Sync Mode (Internal/external),
+  Frame Rate, MTC validation, Bar-Position-to-SMPTE mapping. External-hardware-sync territory, low priority.
+- **Assets**: "Project Package" checkboxes for what gets copied into the project folder on import (audio files,
+  Sampler/Alchemy/Ultrabeat audio, Space Designer impulse responses, movie file, Apple Sound Library content). Related
+  to, but distinct from, jad-daw's "Project Management" (which cleans up *unused* audio) — this is about copy-on-import
+  behaviour instead. Minor, but a real gap if jad-daw ever imports Sampler-style content.
+
+All 11 Project Settings tabs have now been read at least once; screenshots for all of them are in
+`logic-pro-reference/live-ui-screenshots/projset-*.png`.
+
 ### Edit menu with a selection — still not reached
 
 The context-sensitivity question from the first pass (`Edit menu is contextual, not static`, above) wasn't resolved
-this follow-up either — still on the backlog as part of E7.
+this follow-up either. A right-click on an empty part of the new MIDI track (to create a region the way jad-daw's own
+README says Logic supports) didn't produce a visible context menu in two attempts this session — likely a coordinate
+miss rather than a real behaviour difference, since jad-daw's own note on this ("right-click on an empty part of an
+instrument track offers Create MIDI Region") was presumably itself verified against real Logic at some point. Left
+on the backlog (E7) rather than drawing a conclusion from a failed click.
 
 ## What this pass did not get to
 

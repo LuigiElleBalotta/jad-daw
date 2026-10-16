@@ -249,9 +249,13 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       as `lcd.md` currently says — "Automatic" is the real third state.
 - [ ] E15. Create New Track dialog's full structure confirmed (4 categories x 2-3 sub-options each, a Details panel that changes per category, Number
       of tracks to create) — see `behavior-check-2026-10-14.md` for the complete breakdown and reference screenshots.
-- [ ] E7. Follow-up pass still needed: Flex Time/Pitch and Smart Tempo *DSP behaviour* (the algorithm picker's structure is now covered by E9, but not
-      whether jad-daw's DSP output matches), Project Settings' Score/Movie/Synchronization/Assets tabs, and a second Edit-menu read with an actual
-      region/note selected (the one read this session had nothing selected, so it isn't a fair comparison against jad-daw's always-shown, just-disabled
-      Edit menu items).
+- [x] E8 (closed, 2026-10-16). All 11 Project Settings tabs now read at least once. Score (7 sub-tabs of notation engraving, confirms jad-daw's
+      view-only Score is the right scope unless real engraving is ever committed to), Movie (confirms "left out for good" is right), Synchronization
+      (external-hardware-sync, low priority), Assets (Project Package copy-on-import checkboxes — distinct from jad-daw's unused-audio cleanup, a real
+      but minor gap). Full breakdown and screenshots in `behavior-check-2026-10-14.md`.
+- [ ] E7. Still open: Flex Time/Pitch and Smart Tempo *DSP behaviour* (the algorithm picker's structure is covered by E9, but not whether jad-daw's DSP
+      output matches Logic's), and a second Edit-menu read with an actual region/note selected (two attempts to right-click-create a MIDI region to
+      select failed this session — likely a coordinate miss, not a real behaviour finding; don't draw conclusions from it, just retry with a cleaner
+      approach next time, e.g. the Pencil tool instead of a context-menu region creation).
 
 Notes: commit and push after each item; run the full ctest before each push; do not stop at "analysis only" for a feature that has a UI.

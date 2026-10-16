@@ -249,6 +249,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       continuous ratio knob — 1176-style fixed-ratio buttons, not a VCA-style continuous control. Full writeup in `docs/logic-reference/mixer.md`. Open:
       the ratio table's actual 4 values/functions, `CCompressorLP`/`FET`'s own curves, and `CChannelEQShell`'s LUT contents; the Match EQ's
       reference-model factory/selection also remains open.
+      **Ninth pass:** read the ClassA ratio table directly — `{0.0, 3.0, 7.0, 0.0}`, giving slopes 0/1.5/1.167/0 (doesn't map cleanly onto classic
+      labelled ratios; the matching function-pointer table, which is what actually differs per preset, wasn't read). `CChannelEQShell::
+      AllocateAndFillStaticTables` decompiled and gives the exact curve-preview frequency axis formula (`freq[i] = 20×10^(3×i/(N-1))`, a plain 20Hz-20kHz
+      log axis) — also **corrects** the earlier guess that the curve uses a sine-table shortcut: the real response comes from
+      `CBiquadChainDualRateFX::FillResponseLUT`, an actual biquad evaluation per point (`MapChanEQSineTable` is unrelated). Full writeup in
+      `docs/logic-reference/mixer.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

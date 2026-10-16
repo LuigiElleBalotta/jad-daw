@@ -318,8 +318,11 @@ from a small (4-entry) constant table *and* a matching function-pointer from a s
 then converts the selected ratio `r` into a slope pair `r/(r−1)` and its complement. This strongly suggests
 `CCompressorClassA` offers a small set of **discrete ratio presets, each potentially routed to its own processing
 function**, not a continuously variable ratio knob — consistent with real FET/Class-A hardware compressors (e.g. a
-1176-style "4 ratio buttons") rather than the continuously-variable ratio of a VCA design. The 4 actual ratio values
-and function pointers weren't read out of the data tables this pass.
+1176-style "4 ratio buttons") rather than the continuously-variable ratio of a VCA design. The 4 constant-table
+values themselves (read directly, ninth pass): **`{0.0, 3.0, 7.0, 0.0}`** — giving slopes `0/(0−1)=0`, `3/2=1.5`,
+`7/6≈1.167`, `0` for indices 0–3. These don't read as classic labelled ratios (2:1/4:1/8:1/20:1); whether they map
+onto the UI's ratio steps directly or feed some other internal scaling wasn't resolved — the function-pointer table
+at the same index (what actually differs per preset) wasn't read.
 
 Source (eighth pass): `CLimiter::Coefficients` at `0xd0bc0`, `CCompressorClassA::Coefficients` at `0x9bd90`, both in
 `MADSP.framework/MADSP`.
@@ -336,18 +339,29 @@ tops out at 0 dB), floored at −100 dB. It also derives a *second* linear value
 noise-gate design: the gate opens at the set threshold but doesn't close again until the signal drops further
 below it, to avoid chattering) rather than one single on/off point.
 
-### Channel EQ — the curve-preview data, confirmed
+### Channel EQ — the curve-preview data, confirmed and corrected (ninth pass)
 
-`CChannelEQShell` (the strip's built-in EQ) exposes exactly the data a curve-preview thumbnail needs:
-`GetResponseLUT`, `GetFreqTable`, `GetUnityResponse`, `GetResponsePoints`, `GetRelXTable`, and
-`AllocateAndFillStaticTables`/`MapChanEQSineTable` (suggesting the frequency-response curve is computed from a
-precomputed sine lookup table rather than evaluating each biquad's transfer function per pixel — a performance
-shortcut worth matching if jad-daw's own mixer-strip EQ preview ever needs to redraw at high frequency). Not
-decompiled further this pass; the method names alone confirm the UI preview curve and the actual filter response
-are the same underlying data (as already found for Match EQ's graph), not a separate illustrative drawing.
+`CChannelEQShell` (the strip's built-in EQ) exposes exactly the data a curve-preview thumbnail needs: `GetResponseLUT`,
+`GetFreqTable`, `GetUnityResponse`, `GetResponsePoints`, `GetRelXTable`. **`AllocateAndFillStaticTables` decompiled**
+gives the exact, clean formula for the graph's frequency axis — correcting an earlier guess that it used a
+precomputed sine table (that's a different, unrelated method; the real curve math is a genuine biquad evaluation):
 
-**Open**: `CCompressorLP`/`ClassA`/`FET`'s own curve functions, `CLimiter::Coefficients` (the real implementation
-`CLimiterFX` forwards to), and `CChannelEQShell`'s actual LUT contents/filter math.
+```
+for i in 0..N-1:
+    relX[i]  = i / (N-1)                         // linear 0..1 position along the displayed x-axis
+    freq[i]  = 20 × 10^(3 × i/(N-1))              // Hz, log-spaced: 20 Hz at i=0, 20,000 Hz at i=N-1
+```
+
+A plain **20 Hz–20 kHz logarithmic frequency axis**, N points evenly spaced in log-frequency (and so evenly spaced
+in on-screen x position too, via the parallel linear `relX` table) — the standard EQ-display layout, now an exact,
+reusable formula rather than an assumption. The actual response values come from
+**`CBiquadChainDualRateFX::FillResponseLUT`** — a real biquad transfer-function evaluation at each of the N
+frequency points (not a sine-table shortcut; `MapChanEQSineTable` is a separate, unrelated method not examined).
+"DualRate" in the class name suggests it's built to stay correct across a sample-rate change, recalculating rather
+than reusing stale coefficients.
+
+**Open**: `CCompressorLP`/`FET`'s own curve functions, `CCompressorClassA`'s ratio-table function pointers, and
+`CBiquadChainDualRateFX::FillResponseLUT`'s own biquad math.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,

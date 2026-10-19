@@ -18,6 +18,7 @@ Window {
     property bool gesture: false
     property var masterStats: ({})
     readonly property bool isMastering: spec !== null && spec.id === "builtin.mastering"
+    readonly property bool isMatchEq: spec !== null && spec.id === "builtin.matcheq"
 
     visible: trackId !== "" && spec !== null
     width: 520
@@ -79,6 +80,46 @@ Window {
         anchors.margins: Theme.spacing[3]
         spacing: Theme.spacing[2]
 
+        RowLayout {  // Logic's factory presets of this effect (Compressor, Channel EQ, Noise Gate, Limiter, Adaptive Limiter)
+            id: presetRow
+            objectName: "presetRow"
+            readonly property var menuData: root.spec && root.index !== -2 ? root.project.effectPresetMenu(root.spec.id) : []
+            visible: menuData.length > 0
+            Layout.fillWidth: true
+            Text { text: qsTr("Preset"); Layout.preferredWidth: 130; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeLabelSize }
+            IconButton {
+                objectName: "presetButton"
+                implicitHeight: 24
+                label: qsTr("Factory Presets")
+                onClicked: presetMenu.popup()
+            }
+            Item { Layout.fillWidth: true }
+            ThemedMenu {
+                id: presetMenu
+                ThemedMenuItem { text: qsTr("Default"); onTriggered: { root.flush(); root.project.applyEffectPreset(root.trackId, root.index, root.spec.id, "", "") } }
+                MenuSeparator {}
+                Instantiator {
+                    model: presetRow.menuData
+                    delegate: ThemedMenu {
+                        id: categoryMenu
+                        required property var modelData
+                        title: modelData.category !== "" ? modelData.category : qsTr("Other")
+                        Instantiator {
+                            model: categoryMenu.modelData.names
+                            delegate: ThemedMenuItem {
+                                required property string modelData
+                                text: modelData
+                                onTriggered: { root.flush(); root.project.applyEffectPreset(root.trackId, root.index, root.spec.id, categoryMenu.modelData.category, modelData) }
+                            }
+                            onObjectAdded: (index, object) => categoryMenu.insertItem(index, object)
+                            onObjectRemoved: (index, object) => categoryMenu.removeItem(object)
+                        }
+                    }
+                    onObjectAdded: (index, object) => presetMenu.insertMenu(index + 2, object)
+                    onObjectRemoved: (index, object) => presetMenu.removeMenu(object)
+                }
+            }
+        }
         RowLayout {  // External MIDI: the port the notes go to
             visible: root.index === -2 && root.insert !== null && root.insert.processorId === "builtin.external"
             Layout.fillWidth: true
@@ -130,6 +171,63 @@ Window {
             }
         }
 
+        Rectangle {  // Match EQ: the reference curve, Learn, and the correction it found
+            id: matchBox
+            objectName: "matchEqBox"
+            visible: root.isMatchEq
+            Layout.fillWidth: true
+            Layout.preferredHeight: 190
+            color: Theme.surfaceCanvas
+            radius: Theme.radiusControl
+            border.color: Theme.borderSubtle
+            property string curveName: ""
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Theme.spacing[2]
+                spacing: Theme.spacing[2]
+                RowLayout {
+                    Layout.fillWidth: true
+                    SelectField {
+                        objectName: "matchEqCurve"
+                        Layout.fillWidth: true
+                        choices: root.project.matchEqCurveNames()
+                        value: matchBox.curveName
+                        placeholder: qsTr("Reference curve")
+                        onChosen: (c) => matchBox.curveName = c
+                    }
+                    IconButton {
+                        objectName: "matchEqLearn"
+                        implicitHeight: 24
+                        enabled: !root.project.masteringBusy && matchBox.curveName !== ""
+                        label: root.project.masteringBusy ? qsTr("Analysing…") : qsTr("Learn")
+                        onClicked: root.project.matchEqLearn(root.trackId, root.index, matchBox.curveName)
+                    }
+                }
+                Canvas {  // the correction of each third-octave band
+                    id: matchBars
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.reset()
+                        ctx.strokeStyle = Theme.borderSubtle
+                        ctx.beginPath(); ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2); ctx.stroke()
+                        if (!root.spec) return
+                        const n = 31
+                        const w = width / n
+                        ctx.fillStyle = Theme.accentPrimary
+                        for (let i = 0; i < n; ++i) {
+                            const p = root.spec.params.find(q => q.name === "b" + i)
+                            const v = Math.max(-18, Math.min(18, p ? root.valueOf(p) : 0))
+                            const h = v / 18 * (height / 2)
+                            ctx.fillRect(i * w + 1, h >= 0 ? height / 2 - h : height / 2, Math.max(1, w - 2), Math.abs(h))
+                        }
+                    }
+                    Connections { target: root; function onInsertChanged() { matchBars.requestPaint() } }
+                    onWidthChanged: requestPaint()
+                }
+            }
+        }
         Rectangle {  // Mastering Assistant: what the analysis found, and Reanalyze
             id: masterBox
             objectName: "masteringBox"
@@ -208,7 +306,7 @@ Window {
                 columnSpacing: Theme.spacing[3]
                 rowSpacing: Theme.spacing[1]
                 Repeater {
-                    model: root.spec ? root.spec.params.filter(p => !(root.isMastering && (p.name === "gain" || p.name === "compTrim" || p.name.startsWith("eq")))) : []
+                    model: root.spec ? root.spec.params.filter(p => !(root.isMastering && (p.name === "gain" || p.name === "compTrim" || p.name.startsWith("eq"))) && !(root.isMatchEq && /^b[0-9]+$/.test(p.name))) : []
                     delegate: RowLayout {
                         id: row
                         required property var modelData

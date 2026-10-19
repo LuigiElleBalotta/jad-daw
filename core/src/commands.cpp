@@ -152,6 +152,7 @@ public:
         if (patch_.mute) j["mute"] = *patch_.mute;
         if (patch_.solo) j["solo"] = *patch_.solo;
         if (patch_.input) j["input"] = *patch_.input;
+        if (patch_.mono) j["mono"] = *patch_.mono;
         return j;
     }
 
@@ -165,6 +166,7 @@ public:
         if (patch_.pan) { prev.pan = t->strip.pan; t->strip.pan = *patch_.pan; }
         if (patch_.mute) { prev.mute = t->strip.mute; t->strip.mute = *patch_.mute; }
         if (patch_.solo) { prev.solo = t->strip.solo; t->strip.solo = *patch_.solo; }
+        if (patch_.mono) { prev.mono = t->strip.mono; t->strip.mono = *patch_.mono; }
         if (patch_.input) {
             if (*patch_.input < 0 || *patch_.input > 64) return fail("bad_value", "the input must be 0 (stereo 1+2) or a channel from 1 to 64");
             prev.input = t->strip.input;
@@ -212,6 +214,22 @@ public:
 
 private:
     float gainDb_;
+};
+
+class SetPanLawCmd final : public Command {
+public:
+    explicit SetPanLawCmd(PanLaw law) : law_(law) {}
+    std::string type() const override { return "set_pan_law"; }
+    json toJson() const override { return {{"type", type()}, {"law", panLawName(law_)}}; }
+
+    ApplyResult apply(Project& p) const override {
+        const PanLaw previous = p.panLaw;
+        p.panLaw = law_;
+        return success(makeSetPanLaw(previous));
+    }
+
+private:
+    PanLaw law_;
 };
 
 class RemoveTempoCmd final : public Command {
@@ -1110,6 +1128,7 @@ CommandPtr makeAddTrack(Track track, int index) { return std::make_unique<AddTra
 CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCmd>(trackId); }
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
 CommandPtr makeSetMasterVolume(float gainDb) { return std::make_unique<SetMasterVolumeCmd>(gainDb); }
+CommandPtr makeSetPanLaw(PanLaw law) { return std::make_unique<SetPanLawCmd>(law); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
@@ -1151,9 +1170,15 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("mute")) patch.mute = j["mute"].get<bool>();
             if (j.contains("solo")) patch.solo = j["solo"].get<bool>();
             if (j.contains("input")) patch.input = j["input"].get<int>();
+            if (j.contains("mono")) patch.mono = j["mono"].get<bool>();
             return makeSetStrip(j.at("trackId").get<Uuid>(), patch);
         }
         if (type == "set_master_volume") return makeSetMasterVolume(j.at("gainDb").get<float>());
+        if (type == "set_pan_law") {
+            PanLaw law;
+            if (!panLawFromName(j.at("law").get<std::string>(), law)) throw std::runtime_error("unknown pan law");
+            return makeSetPanLaw(law);
+        }
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());

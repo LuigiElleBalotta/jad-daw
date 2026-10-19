@@ -23,6 +23,7 @@
 #include "lpc/commands.h"
 #include "lpc/device.h"
 #include "lpc/media_store.h"
+#include "lpc/effect_presets.h"
 #include "lpc/patch_library.h"
 #include "lpc/model_json.h"
 #include "lpc/project_host.h"
@@ -87,6 +88,18 @@ std::shared_ptr<const lpc::PatchLibrary> loadPatchCatalogue() {
     }
 }
 
+std::shared_ptr<const lpc::EffectPresetLibrary> loadEffectPresets() {
+    const QString resource = QStringLiteral(":/qt/qml/Jad/patches/effect_presets.json");
+    QFile file(resource);
+    if (!file.open(QIODevice::ReadOnly)) return std::make_shared<lpc::EffectPresetLibrary>(lpc::EffectPresetLibrary::fromJson(nlohmann::json::object(), resource.toStdString()));
+    try {
+        const QByteArray bytes = file.readAll();
+        return std::make_shared<lpc::EffectPresetLibrary>(lpc::EffectPresetLibrary::fromJson(nlohmann::json::parse(bytes.constData(), bytes.constData() + bytes.size()), resource.toStdString()));
+    } catch (const std::exception&) {
+        return std::make_shared<lpc::EffectPresetLibrary>(lpc::EffectPresetLibrary::fromJson(nlohmann::json::object(), resource.toStdString()));
+    }
+}
+
 std::optional<lpc::TrackKind> kindFromName(const QString& k) {
     if (k == "audio") return lpc::TrackKind::Audio;
     if (k == "instrument") return lpc::TrackKind::Instrument;
@@ -144,6 +157,7 @@ ProjectController::ProjectController(bool openAudioDevice, QObject* parent) : QO
     connect(&timer_, &QTimer::timeout, this, &ProjectController::tick);
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::trackTogglesChanged);
     patches_ = loadPatchCatalogue();
+    effectPresets_ = loadEffectPresets();
     for (const lpc::PatchProblem& p : patches_->problems()) qWarning().noquote() << "patch catalogue:" << QString::fromStdString(p.where) << QString::fromStdString(p.message);
     library_.setLibrary(patches_.get());
     connect(this, &ProjectController::selectionChanged, this, &ProjectController::refreshPanels);

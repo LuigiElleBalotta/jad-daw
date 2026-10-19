@@ -64,6 +64,7 @@ void from_json(const nlohmann::json& j, TimeBase& b) { enumFromJson(j, b, kBases
 void to_json(nlohmann::json& j, const Strip& s) {
     j = {{"gainDb", s.gainDb}, {"pan", s.pan}, {"mute", s.mute}, {"solo", s.solo}, {"inserts", s.inserts}, {"sends", s.sends}, {"output", s.output}};
     if (s.input != 0) j["input"] = s.input;  // written only when set: older projects and files stay as they were
+    if (s.mono) j["mono"] = true;
 }
 
 void from_json(const nlohmann::json& j, Strip& s) {
@@ -75,6 +76,7 @@ void from_json(const nlohmann::json& j, Strip& s) {
     j.at("sends").get_to(s.sends);
     j.at("output").get_to(s.output);
     s.input = j.value("input", 0);
+    s.mono = j.value("mono", false);
 }
 
 void to_json(nlohmann::json& j, const AutomationPoint& p) {
@@ -338,6 +340,7 @@ nlohmann::json toJson(const Project& p) {
     if (!p.groups.empty()) j["groups"] = p.groups;  // only when there are some: older files stay as they were
     if (p.key != "C major") j["key"] = p.key;
     if (p.masterVolumeDb != 0.0f) j["masterVolumeDb"] = p.masterVolumeDb;
+    if (p.panLaw != PanLaw::Minus3Comp) j["panLaw"] = panLawName(p.panLaw);
     return j;
 }
 
@@ -354,6 +357,7 @@ Project projectFromJson(const nlohmann::json& j) {
     j.at("mediaPool").get_to(p.mediaPool);
     if (j.contains("groups")) j.at("groups").get_to(p.groups);
     p.masterVolumeDb = j.value("masterVolumeDb", 0.0f);
+    if (!panLawFromName(j.value("panLaw", std::string("minus3comp")), p.panLaw)) throw std::runtime_error("unknown pan law");
     const auto masters = std::count_if(p.tracks.begin(), p.tracks.end(),
                                        [](const Track& t) { return t.kind == TrackKind::Master; });
     if (masters != 1) throw std::runtime_error("project must contain exactly one master track");

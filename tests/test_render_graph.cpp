@@ -523,3 +523,29 @@ TEST_CASE("RenderGraph: the level of a send follows its automation", "[graph][au
     REQUIRE(s.l[900] > 1.0f);      // half way: the send is about a half
     REQUIRE(s.l[1700] == Catch::Approx(1.0f).margin(0.01));   // the send is silent, the direct signal stays
 }
+
+TEST_CASE("graph: a mono strip is panned with the pan law, a stereo strip is balanced", "[graph][panlaw]") {
+    StripParams mono = strip(1.0f, 1.0f);  // hard right
+    mono.mono = true;
+    mono.panLaw = PanLaw::Minus3Comp;
+    Rig m;
+    m.addNode(1, TrackKind::Audio, m.dcConfig(0.5f, 0, 1000), mono);
+    m.addMaster();
+    const Stereo hard = m.render(400);
+    requireAll(hard.l, 100, 400, 0.0f);
+    requireAll(hard.r, 100, 400, 0.5f * 4.0f / 3.0f, 1e-5f);  // +2.5 dB at the end of the compensated law
+
+    mono.pan = 0.0f;
+    Rig c;
+    c.addNode(1, TrackKind::Audio, c.dcConfig(0.5f, 0, 1000), mono);
+    c.addMaster();
+    const Stereo centre = c.render(400);
+    requireAll(centre.l, 100, 400, 0.5f, 1e-5f);  // compensated: unity at the centre
+    requireAll(centre.r, 100, 400, 0.5f, 1e-5f);
+
+    mono.panLaw = PanLaw::Minus3;
+    Rig u;
+    u.addNode(1, TrackKind::Audio, u.dcConfig(0.5f, 0, 1000), mono);
+    u.addMaster();
+    requireAll(u.render(400).l, 100, 400, 0.5f * 0.75f, 1e-5f);
+}

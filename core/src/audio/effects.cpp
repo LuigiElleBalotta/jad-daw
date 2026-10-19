@@ -6,7 +6,9 @@
 #include <complex>
 #include <vector>
 
+#include "lpc/audio/eq_filters.h"
 #include "lpc/effect_specs.h"
+#include "lpc/match_eq.h"
 #include "lpc/processor_ids.h"
 
 namespace lpc::audio {
@@ -29,57 +31,69 @@ double dbToLin(double db) { return std::pow(10.0, db / 20.0); }
 double linToDb(double lin) { return 20.0 * std::log10(std::max(lin, 1e-9)); }
 // the coefficient of a one-pole smoother that reaches 63 % in `ms` milliseconds
 double smoothing(double ms, double sampleRate) { return std::exp(-1.0 / (std::max(ms, 0.01) * 0.001 * sampleRate)); }
+// Logic's compressors and limiters all use one time-constant formula (MADSP, decompiled): exp(-2300 / (ms * sampleRate)), i.e. the envelope
+// has fallen to a tenth (-20 dB) after `ms`. A time of 0 is an instant response.
+double settling(double ms, double sampleRate) { return ms <= 0.0 ? 0.0 : std::exp(-2302.585 / (ms * sampleRate)); }
+
+// One biquad section per channel pair, direct form II transposed
+struct Section {
+    BiquadCoeffs c;
+    double z[4] = {0, 0, 0, 0};
+    double l(double x) {
+        const double y = c.b0 * x + z[0];
+        z[0] = c.b1 * x - c.a1 * y + z[1];
+        z[1] = c.b2 * x - c.a2 * y;
+        return y;
+    }
+    double r(double x) {
+        const double y = c.b0 * x + z[2];
+        z[2] = c.b1 * x - c.a1 * y + z[3];
+        z[3] = c.b2 * x - c.a2 * y;
+        return y;
+    }
+};
 
 // ---------------------------------------------------------------- Channel EQ
 
-struct BiquadCoeffs {
-    double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+struct EqBandDef {
+    const char* key;
+    int kind;  // 0 low cut, 1 low shelf, 2 peak, 3 high shelf, 4 high cut
 };
+constexpr std::array<EqBandDef, 8> kEqBands{{{"lc", 0}, {"ls", 1}, {"p1", 2}, {"p2", 2}, {"p3", 2}, {"p4", 2}, {"hs", 3}, {"hc", 4}}};
 
-// the RBJ cookbook filters
-BiquadCoeffs lowShelf(double sr, double f, double gainDb) {
-    const double A = std::pow(10.0, gainDb / 40.0), w = 2 * kPi * std::min(f, 0.45 * sr) / sr, c = std::cos(w), s = std::sin(w);
-    const double alpha = s / 2.0 * std::sqrt(2.0), sq = 2.0 * std::sqrt(A) * alpha;  // shelf slope 1
-    const double a0 = (A + 1) + (A - 1) * c + sq;
-    return {A * ((A + 1) - (A - 1) * c + sq) / a0, 2 * A * ((A - 1) - (A + 1) * c) / a0, A * ((A + 1) - (A - 1) * c - sq) / a0,
-            -2 * ((A - 1) + (A + 1) * c) / a0, ((A + 1) + (A - 1) * c - sq) / a0};
-}
-BiquadCoeffs highShelf(double sr, double f, double gainDb) {
-    const double A = std::pow(10.0, gainDb / 40.0), w = 2 * kPi * std::min(f, 0.45 * sr) / sr, c = std::cos(w), s = std::sin(w);
-    const double alpha = s / 2.0 * std::sqrt(2.0), sq = 2.0 * std::sqrt(A) * alpha;
-    const double a0 = (A + 1) - (A - 1) * c + sq;
-    return {A * ((A + 1) + (A - 1) * c + sq) / a0, -2 * A * ((A - 1) + (A + 1) * c) / a0, A * ((A + 1) + (A - 1) * c - sq) / a0,
-            2 * ((A - 1) - (A + 1) * c) / a0, ((A + 1) - (A - 1) * c - sq) / a0};
-}
-BiquadCoeffs peaking(double sr, double f, double gainDb, double q) {
-    const double A = std::pow(10.0, gainDb / 40.0), w = 2 * kPi * std::min(f, 0.45 * sr) / sr, c = std::cos(w), alpha = std::sin(w) / (2.0 * q);
-    const double a0 = 1 + alpha / A;
-    return {(1 + alpha * A) / a0, -2 * c / a0, (1 - alpha * A) / a0, -2 * c / a0, (1 - alpha / A) / a0};
-}
-
-std::array<BiquadCoeffs, 5> eqBands(const ProcessorRef& ref, double sr) {
-    return {lowShelf(sr, param(ref, "lowFreq"), param(ref, "lowGain")),
-            peaking(sr, param(ref, "m1Freq"), param(ref, "m1Gain"), param(ref, "m1Q")),
-            peaking(sr, param(ref, "m2Freq"), param(ref, "m2Gain"), param(ref, "m2Q")),
-            peaking(sr, param(ref, "m3Freq"), param(ref, "m3Gain"), param(ref, "m3Q")),
-            highShelf(sr, param(ref, "highFreq"), param(ref, "highGain"))};
+// The sections of every band that is on, in the order low cut ... high cut
+std::vector<BiquadCoeffs> eqSections(const ProcessorRef& ref, double sr) {
+    std::vector<BiquadCoeffs> out;
+    for (const EqBandDef& b : kEqBands) {
+        const std::string k = b.key;
+        if (param(ref, (k + "On").c_str()) < 0.5) continue;
+        const double f = param(ref, (k + "Freq").c_str()), q = param(ref, (k + "Q").c_str());
+        switch (b.kind) {
+            case 0:
+            case 4: {
+                const int order = static_cast<int>(std::lround(param(ref, (k + "Slope").c_str())));
+                for (const BiquadCoeffs& c : cutFilter(sr, f, order, q, b.kind == 0)) out.push_back(c);
+                break;
+            }
+            case 1: out.push_back(lowShelf(sr, f, param(ref, (k + "Gain").c_str()), q)); break;
+            case 3: out.push_back(highShelf(sr, f, param(ref, (k + "Gain").c_str()), q)); break;
+            default: out.push_back(peaking(sr, f, param(ref, (k + "Gain").c_str()), q)); break;
+        }
+    }
+    return out;
 }
 
 class EqProcessor final : public IProcessor {
 public:
-    EqProcessor(const ProcessorRef& ref, double sr) : bands_(eqBands(ref, sr)), out_(static_cast<float>(dbToLin(param(ref, "outGain")))) {}
+    EqProcessor(const ProcessorRef& ref, double sr) : out_(static_cast<float>(dbToLin(param(ref, "masterGain")))) {
+        for (const BiquadCoeffs& c : eqSections(ref, sr)) sections_.push_back(Section{c});
+    }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
             double xl = l[i], xr = r[i];
-            for (std::size_t b = 0; b < bands_.size(); ++b) {  // direct form II transposed
-                const BiquadCoeffs& c = bands_[b];
-                double yl = c.b0 * xl + z_[b][0], yr = c.b0 * xr + z_[b][2];
-                z_[b][0] = c.b1 * xl - c.a1 * yl + z_[b][1];
-                z_[b][1] = c.b2 * xl - c.a2 * yl;
-                z_[b][2] = c.b1 * xr - c.a1 * yr + z_[b][3];
-                z_[b][3] = c.b2 * xr - c.a2 * yr;
-                xl = yl;
-                xr = yr;
+            for (Section& s : sections_) {
+                xl = s.l(xl);
+                xr = s.r(xr);
             }
             l[i] = static_cast<float>(xl) * out_;
             r[i] = static_cast<float>(xr) * out_;
@@ -88,40 +102,161 @@ public:
     nlohmann::json describe() const override { return {{"id", kProcEq}}; }
 
 private:
-    std::array<BiquadCoeffs, 5> bands_;
-    std::array<std::array<double, 4>, 5> z_{};
+    std::vector<Section> sections_;
     float out_;
+};
+
+// ---------------------------------------------------------------- Match EQ (a bank of third-octave peaking filters)
+
+class MatchEqProcessor final : public IProcessor {
+public:
+    MatchEqProcessor(const ProcessorRef& ref, double sr) {
+        const double amount = param(ref, "amount") / 100.0;
+        for (int i = 0; i < kMatchEqBands; ++i) {
+            const double g = param(ref, ("b" + std::to_string(i)).c_str()) * amount;
+            if (std::abs(g) < 0.05) continue;
+            sections_.push_back(Section{peaking(sr, matchEqBandFreq(i), g, 4.318)});  // Q of a third-octave band
+        }
+    }
+    void process(float* l, float* r, int frames) noexcept override {
+        for (int i = 0; i < frames; ++i) {
+            double xl = l[i], xr = r[i];
+            for (Section& s : sections_) {
+                xl = s.l(xl);
+                xr = s.r(xr);
+            }
+            l[i] = static_cast<float>(xl);
+            r[i] = static_cast<float>(xr);
+        }
+    }
+    nlohmann::json describe() const override { return {{"id", kProcMatchEq}}; }
+
+private:
+    std::vector<Section> sections_;
 };
 
 // ---------------------------------------------------------------- Compressor
 
+// The circuit types of Logic's Compressor (values as stored in its presets) differ in more than numbers (MADSP, docs/logic-reference/mixer.md):
+// SSL (Studio VCA) has two release time constants, Opto one that grows with the depth, DBX a fixed soft knee and RMS, FET a much faster attack,
+// Platinum is the plain digital one. The curves themselves are tables in Logic and were not extracted; these are the same behaviours made
+// with a conventional gain computer.
+struct CircuitTraits {
+    double attackScale = 1.0;
+    double minKneeDb = 0.0;
+    bool rms = false;           // forces RMS detection
+    bool dualRelease = false;   // two release followers (fast and slow), like the SSL bus compressor
+    bool optoRelease = false;   // the release slows down with the depth of the reduction
+    double saturation = 0.0;    // soft saturation of the output, 0 = none
+};
+
+CircuitTraits circuitTraits(int circuit) {
+    CircuitTraits t;
+    switch (circuit) {
+        case 1: case 2: t.dualRelease = true; t.saturation = 0.15; t.minKneeDb = 6; break;  // Class A R / U
+        case 3: t.attackScale = 2.0; t.saturation = 0.1; break;                              // Vintage VCA
+        case 4: t.dualRelease = true; break;                                                 // Studio VCA
+        case 5: t.attackScale = 0.25; t.saturation = 0.2; break;                             // Studio FET
+        case 6: t.optoRelease = true; t.minKneeDb = 12; t.rms = true; t.attackScale = 2.0; break;  // Vintage Opto
+        case 7: t.attackScale = 0.3; t.saturation = 0.3; break;                              // Vintage FET
+        case 8: t.rms = true; t.minKneeDb = 10; break;                                       // Classic VCA (dbx)
+        default: break;                                                                      // 0 Platinum Digital
+    }
+    return t;
+}
+
 class CompressorProcessor final : public IProcessor {
 public:
     CompressorProcessor(const ProcessorRef& ref, double sr)
-        : threshold_(param(ref, "threshold")), ratio_(param(ref, "ratio")), knee_(param(ref, "knee")), makeup_(param(ref, "makeup")),
-          mix_(param(ref, "mix") / 100.0), attack_(smoothing(param(ref, "attack"), sr)), release_(smoothing(param(ref, "release"), sr)) {}
+        : traits_(circuitTraits(static_cast<int>(std::lround(param(ref, "circuit"))))), threshold_(param(ref, "threshold")), ratio_(param(ref, "ratio")),
+          mix_(param(ref, "mix") / 100.0), limiterOn_(param(ref, "limiter") >= 0.5), limiterThreshold_(dbToLin(param(ref, "limiterThreshold"))),
+          distortion_(static_cast<int>(std::lround(param(ref, "outputDistortion")))), sr_(sr) {
+        kneeDb_ = std::max(param(ref, "knee") * 20.0, traits_.minKneeDb);
+        rms_ = param(ref, "peakRms") >= 0.5 || traits_.rms;
+        const double release = param(ref, "release");
+        attack_ = settling(param(ref, "attack") * traits_.attackScale, sr);
+        release_ = settling(release, sr);
+        releaseFast_ = settling(release * 0.5, sr);  // the two constants of the dual release: 1 : 3 around the release time
+        releaseSlow_ = settling(release * 3.0, sr);
+        releaseMs_ = release;
+        dual_ = traits_.dualRelease || param(ref, "autoRelease") >= 0.5;
+        rmsCoef_ = std::exp(-1.0 / (0.01 * sr));
+        double makeup = param(ref, "gain");
+        if (param(ref, "autoGain") >= 0.5) makeup += -threshold_ * (1.0 - 1.0 / ratio_);  // what the reduction takes off a signal at 0 dBFS
+        makeup_ = dbToLin(std::min(makeup, 40.0));
+        limiterRelease_ = settling(50.0, sr);
+    }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
-            const double level = linToDb(std::max(std::abs(static_cast<double>(l[i])), std::abs(static_cast<double>(r[i]))));
-            const double over = level - threshold_;
-            double target;  // the gain change in dB (0 or less)
-            if (2 * over < -knee_) target = 0;
-            else if (knee_ > 0 && 2 * std::abs(over) <= knee_) target = (1.0 / ratio_ - 1.0) * (over + knee_ / 2) * (over + knee_ / 2) / (2 * knee_);
-            else target = over * (1.0 / ratio_ - 1.0);
-            const double coef = target < reduction_ ? attack_ : release_;  // deeper: attack, shallower: release
-            reduction_ = coef * reduction_ + (1 - coef) * target;
-            const float gain = static_cast<float>(dbToLin(reduction_ + makeup_));
-            l[i] = static_cast<float>(l[i] * (1 - mix_) + l[i] * gain * mix_);
-            r[i] = static_cast<float>(r[i] * (1 - mix_) + r[i] * gain * mix_);
+            const double inL = l[i], inR = r[i];
+            double det;
+            if (rms_) {
+                meanSquare_ = rmsCoef_ * meanSquare_ + (1.0 - rmsCoef_) * 0.5 * (inL * inL + inR * inR);
+                det = std::sqrt(meanSquare_);
+            } else {
+                det = std::max(std::abs(inL), std::abs(inR));
+            }
+            const double over = linToDb(det) - threshold_;
+            const double slope = 1.0 - 1.0 / ratio_;
+            double target;  // the reduction asked for, in dB (0 or more)
+            if (2 * over < -kneeDb_) target = 0;
+            else if (kneeDb_ > 0 && 2 * std::abs(over) <= kneeDb_) target = slope * (over + kneeDb_ / 2) * (over + kneeDb_ / 2) / (2 * kneeDb_);
+            else target = slope * over;
+            if (dual_) {
+                follow(fast_, target, releaseFast_);
+                follow(slow_, target, releaseSlow_);
+                reduction_ = 0.5 * (fast_ + slow_);
+            } else if (traits_.optoRelease) {
+                // the cell lets go more slowly the harder it was driven
+                const double coef = settling(releaseMs_ * (1.0 + reduction_ / 6.0), sr_);
+                follow(reduction_, target, coef);
+            } else {
+                follow(reduction_, target, release_);
+            }
+            const double gain = dbToLin(-reduction_) * makeup_;
+            double wl = inL * gain, wr = inR * gain;
+            if (limiterOn_) {
+                const double peak = std::max(std::abs(wl), std::abs(wr));
+                const double need = peak > limiterThreshold_ ? limiterThreshold_ / peak : 1.0;
+                limiterGain_ = need < limiterGain_ ? need : limiterRelease_ * limiterGain_ + (1.0 - limiterRelease_) * 1.0;
+                limiterGain_ = std::min(limiterGain_, need);
+                wl *= limiterGain_;
+                wr *= limiterGain_;
+            }
+            wl = shape(wl);
+            wr = shape(wr);
+            l[i] = static_cast<float>(inL * (1.0 - mix_) + wl * mix_);
+            r[i] = static_cast<float>(inR * (1.0 - mix_) + wr * mix_);
         }
-        blockReduction_ = static_cast<float>(-reduction_);
+        blockReduction_ = static_cast<float>(reduction_);
     }
     float reductionDb() const noexcept override { return std::max(0.0f, blockReduction_); }
     nlohmann::json describe() const override { return {{"id", kProcCompressor}, {"reductionDb", reduction_}}; }
 
 private:
-    double threshold_, ratio_, knee_, makeup_, mix_, attack_, release_;
-    double reduction_ = 0.0;
+    // deeper than now: the attack; shallower: the release (`coef` = 0 is instant)
+    void follow(double& state, double target, double releaseCoef) const {
+        const double coef = target > state ? attack_ : releaseCoef;
+        state = coef * state + (1.0 - coef) * target;
+    }
+    double shape(double x) const {
+        if (traits_.saturation > 0.0) x = x + traits_.saturation * (std::tanh(x) - x);  // a little rounding of the peaks
+        switch (distortion_) {
+            case 1: return x / std::sqrt(1.0 + x * x);                                      // soft
+            case 2: return x / std::pow(1.0 + std::pow(std::abs(x), 6.0), 1.0 / 6.0);      // hard
+            case 3: return std::clamp(x, -1.0, 1.0);                                        // clip
+            default: return x;
+        }
+    }
+    CircuitTraits traits_;
+    double threshold_, ratio_, mix_;
+    bool limiterOn_;
+    double limiterThreshold_;
+    int distortion_;
+    double sr_;
+    double kneeDb_ = 0, attack_ = 0, release_ = 0, releaseFast_ = 0, releaseSlow_ = 0, releaseMs_ = 100, rmsCoef_ = 0, makeup_ = 1, limiterRelease_ = 0;
+    bool rms_ = false, dual_ = false;
+    double meanSquare_ = 0.0, reduction_ = 0.0, fast_ = 0.0, slow_ = 0.0, limiterGain_ = 1.0;
     float blockReduction_ = 0.0f;
 };
 
@@ -132,8 +267,9 @@ public:
     // `truePeak`: the level is also looked for between the samples (a cubic through the neighbours, four times oversampled), so that what
     // comes out stays under the ceiling as a reconstructed signal too, not only as samples
     LimiterProcessor(const ProcessorRef& ref, double sr, bool truePeak = false)
-        : truePeak_(truePeak), gain_(static_cast<float>(dbToLin(param(ref, "gain")))), ceiling_(static_cast<float>(dbToLin(param(ref, "ceiling")))),
-          look_(std::max(1, static_cast<int>(0.001 * sr))), release_(smoothing(param(ref, "release"), sr)), attack_(smoothing(0.25, sr)),
+        : truePeak_(truePeak || param(ref, "truePeak") >= 0.5), softKnee_(param(ref, "softKnee") >= 0.5), gain_(static_cast<float>(dbToLin(param(ref, "gain")))),
+          ceiling_(static_cast<float>(dbToLin(param(ref, "ceiling")))), look_(std::max(1, static_cast<int>(std::lround(param(ref, "lookahead") * 0.001 * sr)))),
+          release_(smoothing(param(ref, "release"), sr)), attack_(smoothing(std::min(0.25, param(ref, "lookahead") * 0.25), sr)),
           needs_(static_cast<std::size_t>(look_ + 1), 1.0f), delayL_(static_cast<std::size_t>(look_), 0.0f), delayR_(static_cast<std::size_t>(look_), 0.0f) {}
     int latencySamples() const override { return look_; }
     void process(float* l, float* r, int frames) noexcept override {
@@ -148,8 +284,13 @@ public:
                 h_[0][2] = h_[0][1]; h_[0][1] = h_[0][0]; h_[0][0] = inL;
                 h_[1][2] = h_[1][1]; h_[1][1] = h_[1][0]; h_[1][0] = inR;
             }
-            needs_[pos_ % needs_.size()] = peak > ceiling_ ? ceiling_ / peak : 1.0f;
-            float target = 1.0f;  // the strongest reduction asked for in the last millisecond: it is in place before the loud sample leaves
+            float need = peak > ceiling_ ? ceiling_ / peak : 1.0f;
+            if (softKnee_ && need >= 1.0f && peak > 0.0f) {  // the reduction starts 1.5 dB before the ceiling and joins the hard curve smoothly
+                const double over = linToDb(peak) - linToDb(ceiling_);
+                if (over > -1.5) need = static_cast<float>(dbToLin(-(over + 1.5) * (over + 1.5) / 6.0));
+            }
+            needs_[pos_ % needs_.size()] = need;
+            float target = 1.0f;  // the strongest reduction asked for in the last lookahead: it is in place before the loud sample leaves
             for (const float n : needs_) target = std::min(target, n);
             const double coef = target < gain_state_ ? attack_ : release_;
             gain_state_ = static_cast<float>(coef * gain_state_ + (1 - coef) * target);
@@ -169,7 +310,7 @@ private:
     static float cubicPoint(float a, float b, float c, float d, float t) {
         return b + 0.5f * t * (c - a + t * (2.0f * a - 5.0f * b + 4.0f * c - d + t * (3.0f * (b - c) + d - a)));
     }
-    bool truePeak_;
+    bool truePeak_, softKnee_;
     float h_[2][3] = {{0, 0, 0}, {0, 0, 0}};  // the last three input samples of each channel
     float gain_, ceiling_;
     int look_;
@@ -179,33 +320,96 @@ private:
     float gain_state_ = 1.0f;
 };
 
+// The Adaptive Limiter: a true-peak limiter with a long lookahead; the mode sets how quickly it recovers (low, average, high)
+ProcessorRef adaptiveLimiterRef(const ProcessorRef& ref) {
+    ProcessorRef r;
+    r.processorId = kProcLimiter;
+    static const double release[3] = {200.0, 100.0, 40.0};
+    const int mode = std::clamp(static_cast<int>(std::lround(param(ref, "mode"))), 0, 2);
+    r.params = {{"gain", std::clamp(param(ref, "gain") + param(ref, "inputScale"), 0.0, 24.0)},
+                {"lookahead", std::min(param(ref, "lookahead"), 10.0)}, {"softKnee", 1.0}, {"release", release[mode]}, {"ceiling", param(ref, "ceiling")}, {"truePeak", 1.0}};
+    return r;
+}
+
+class AdaptiveLimiterProcessor final : public IProcessor {
+public:
+    AdaptiveLimiterProcessor(const ProcessorRef& ref, double sr) : limiter_(adaptiveLimiterRef(ref), sr, true), removeDc_(param(ref, "removeDc") >= 0.5), dc_(1.0 - std::exp(-2.0 * kPi * 5.0 / sr)) {}
+    int latencySamples() const override { return limiter_.latencySamples(); }
+    void process(float* l, float* r, int frames) noexcept override {
+        if (removeDc_) {
+            for (int i = 0; i < frames; ++i) {
+                meanL_ += dc_ * (l[i] - meanL_);
+                meanR_ += dc_ * (r[i] - meanR_);
+                l[i] = static_cast<float>(l[i] - meanL_);
+                r[i] = static_cast<float>(r[i] - meanR_);
+            }
+        }
+        limiter_.process(l, r, frames);
+    }
+    nlohmann::json describe() const override { return {{"id", kProcAdaptiveLimiter}}; }
+
+private:
+    LimiterProcessor limiter_;
+    bool removeDc_;
+    double dc_, meanL_ = 0.0, meanR_ = 0.0;
+};
+
 // ---------------------------------------------------------------- Noise gate
 
 class GateProcessor final : public IProcessor {
 public:
     GateProcessor(const ProcessorRef& ref, double sr)
-        : threshold_(param(ref, "threshold")), floor_(dbToLin(param(ref, "range"))), hold_(static_cast<int>(param(ref, "hold") * 0.001 * sr)),
-          attack_(smoothing(param(ref, "attack"), sr)), release_(smoothing(param(ref, "release"), sr)), decay_(smoothing(5.0, sr)) {}
+        : threshold_(param(ref, "threshold")), closeThreshold_(param(ref, "threshold") + param(ref, "hysteresis")), floor_(dbToLin(param(ref, "range"))),
+          hold_(static_cast<int>(param(ref, "hold") * 0.001 * sr)), attack_(smoothing(param(ref, "attack"), sr)), release_(smoothing(param(ref, "release"), sr)),
+          decay_(smoothing(5.0, sr)), look_(static_cast<int>(std::lround(param(ref, "lookahead") * 0.001 * sr))),
+          keyFilter_(param(ref, "keyFilter") >= 0.5), delayL_(static_cast<std::size_t>(std::max(1, look_)), 0.0f), delayR_(static_cast<std::size_t>(std::max(1, look_)), 0.0f) {
+        if (keyFilter_) {
+            key_[0].c = secondOrderPass(sr, param(ref, "keyLowCut"), 0.7071, true);
+            key_[1].c = secondOrderPass(sr, param(ref, "keyHighCut"), 0.7071, false);
+        }
+    }
+    int latencySamples() const override { return look_; }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
-            const double x = std::max(std::abs(static_cast<double>(l[i])), std::abs(static_cast<double>(r[i])));
+            double kl = l[i], kr = r[i];
+            if (keyFilter_) {  // the detector listens through the side-chain filter
+                for (Section& s : key_) {
+                    kl = s.l(kl);
+                    kr = s.r(kr);
+                }
+            }
+            const double x = std::max(std::abs(kl), std::abs(kr));
             env_ = std::max(x, env_ * decay_);
             const double db = linToDb(env_);
             if (db > threshold_) { open_ = true; held_ = hold_; }
-            else if (open_ && db < threshold_ - 3.0) { if (held_ > 0) --held_; else open_ = false; }  // 3 dB of hysteresis, then the hold time
+            else if (open_ && db < closeThreshold_) { if (held_ > 0) --held_; else open_ = false; }  // the hysteresis, then the hold time
             const double target = open_ ? 1.0 : floor_;
             const double coef = target > gain_ ? attack_ : release_;
             gain_ = coef * gain_ + (1 - coef) * target;
-            l[i] = static_cast<float>(l[i] * gain_);
-            r[i] = static_cast<float>(r[i] * gain_);
+            float outL = l[i], outR = r[i];
+            if (look_ > 0) {  // the audio waits as long as the detector looks ahead
+                const std::size_t d = pos_ % delayL_.size();
+                outL = delayL_[d];
+                outR = delayR_[d];
+                delayL_[d] = l[i];
+                delayR_[d] = r[i];
+                ++pos_;
+            }
+            l[i] = static_cast<float>(outL * gain_);
+            r[i] = static_cast<float>(outR * gain_);
         }
     }
     nlohmann::json describe() const override { return {{"id", kProcGate}, {"open", open_}}; }
 
 private:
-    double threshold_, floor_;
+    double threshold_, closeThreshold_, floor_;
     int hold_;
     double attack_, release_, decay_;
+    int look_;
+    bool keyFilter_;
+    Section key_[2];
+    std::vector<float> delayL_, delayR_;
+    std::size_t pos_ = 0;
     double env_ = 0.0, gain_ = 1.0;
     bool open_ = false;
     int held_ = 0;
@@ -396,7 +600,7 @@ private:
     static ProcessorRef limiterRef() {
         ProcessorRef r;
         r.processorId = kProcLimiter;
-        r.params = {{"gain", 0.0}, {"ceiling", -1.0}, {"release", 30.0}};
+        r.params = {{"gain", 0.0}, {"ceiling", -1.0}, {"release", 30.0}, {"lookahead", 1.0}, {"softKnee", 0.0}, {"truePeak", 1.0}};
         return r;
     }
     // `levelLufs`: the loudness of the mix before the insert (the analysis stored the gain that brings it to -14), so the threshold sits a few dB above it
@@ -407,7 +611,8 @@ private:
         static const double above[4] = {4, 3, 2, 3}, ratio[4] = {1.6, 2.0, 2.5, 1.8}, attack[4] = {25, 40, 12, 8}, release[4] = {160, 220, 90, 120};
         const int c = std::clamp(character, 0, 3);
         const double threshold = std::clamp(levelLufs + above[c], -60.0, 0.0);
-        r.params = {{"threshold", threshold}, {"ratio", ratio[c]}, {"attack", attack[c]}, {"release", release[c]}, {"knee", 8.0}, {"makeup", 0.0}, {"mix", 100.0}};
+        r.params = {{"circuit", 0.0}, {"threshold", threshold}, {"ratio", ratio[c]}, {"attack", attack[c]}, {"release", release[c]}, {"autoRelease", 0.0},
+                    {"gain", 0.0}, {"autoGain", 0.0}, {"knee", 0.4}, {"peakRms", 0.0}, {"outputDistortion", 0.0}, {"limiter", 0.0}, {"mix", 100.0}};
         return r;
     }
     static double biquad(const BiquadCoeffs& c, std::array<double, 4>& z, int off, double x) {
@@ -435,8 +640,10 @@ private:
 std::unique_ptr<IProcessor> makeBuiltinEffect(const ProcessorRef& ref, double sampleRate) {
     const std::string& id = ref.processorId;
     if (id == kProcEq) return std::make_unique<EqProcessor>(ref, sampleRate);
+    if (id == kProcMatchEq) return std::make_unique<MatchEqProcessor>(ref, sampleRate);
     if (id == kProcCompressor) return std::make_unique<CompressorProcessor>(ref, sampleRate);
     if (id == kProcLimiter) return std::make_unique<LimiterProcessor>(ref, sampleRate);
+    if (id == kProcAdaptiveLimiter) return std::make_unique<AdaptiveLimiterProcessor>(ref, sampleRate);
     if (id == kProcGate) return std::make_unique<GateProcessor>(ref, sampleRate);
     if (id == kProcDelay) return std::make_unique<DelayProcessor>(ref, sampleRate);
     if (id == kProcReverb) return std::make_unique<ReverbProcessor>(ref, sampleRate);
@@ -446,12 +653,8 @@ std::unique_ptr<IProcessor> makeBuiltinEffect(const ProcessorRef& ref, double sa
 
 double eqResponseDb(const ProcessorRef& ref, double sampleRate, double freq) {
     const double w = 2 * kPi * freq / sampleRate;
-    const std::complex<double> z1 = std::polar(1.0, -w), z2 = std::polar(1.0, -2 * w);
-    double db = param(ref, "outGain");
-    for (const BiquadCoeffs& c : eqBands(ref, sampleRate)) {
-        const std::complex<double> num = c.b0 + c.b1 * z1 + c.b2 * z2, den = 1.0 + c.a1 * z1 + c.a2 * z2;
-        db += 20.0 * std::log10(std::max(std::abs(num / den), 1e-12));
-    }
+    double db = param(ref, "masterGain");
+    for (const BiquadCoeffs& c : eqSections(ref, sampleRate)) db += 20.0 * std::log10(std::max(std::abs(biquadResponse(c, w)), 1e-12));
     return db;
 }
 

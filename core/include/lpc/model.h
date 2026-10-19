@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "lpc/pan_law.h"
 #include "lpc/tempo_map.h"
 #include "lpc/uuid.h"
 
@@ -118,6 +119,7 @@ struct Strip {
     std::vector<Send> sends;
     Uuid output;  // null = master
     int input = 0;  // the audio input the track records: 0 = inputs 1 and 2 as stereo, n >= 1 = input n as mono
+    bool mono = false;  // channel format: a mono strip is panned with the project's pan law, a stereo strip uses the balancer
     bool operator==(const Strip&) const = default;
 };
 
@@ -221,6 +223,7 @@ struct Project {
     std::vector<Group> groups;
     std::vector<Track> tracks;  // tracks[0] is the master track in a new project
     std::vector<MediaItem> mediaPool;
+    PanLaw panLaw = PanLaw::Minus3Comp;  // Project Settings > Audio > Pan Law
     float masterVolumeDb = 0.0f;  // the Master strip: scales Stereo Out and every Output strip together (-96..24 dB)
 
     Project();

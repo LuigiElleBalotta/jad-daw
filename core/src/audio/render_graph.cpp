@@ -314,8 +314,12 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     const float gain = cfg && !cfg->volumeAuto.empty() ? autoValue(cfg->volumeAuto, blockStart) : t.strip.gain;
     const float pan = cfg && !cfg->panAuto.empty() ? autoValue(cfg->panAuto, blockStart) : t.strip.pan;
     const float g = muted ? 0.0f : gain;
-    const float targetL = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
-    const float targetR = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
+    // a mono strip is a panner (folded to mono, the project's pan law), a stereo strip a balancer
+    const PanGains pg = t.strip.mono ? panGains(t.strip.panLaw, pan) : balanceGains(pan);
+    if (t.strip.mono)
+        for (int i = 0; i < n; ++i) l[i] = r[i] = 0.5f * (l[i] + r[i]);
+    const float targetL = g * pg.l;
+    const float targetR = g * pg.r;
     if (!t.smoothInit) {
         t.smoothL = targetL;
         t.smoothR = targetR;

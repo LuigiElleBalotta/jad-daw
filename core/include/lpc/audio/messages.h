@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "lpc/pan_law.h"
 #include "lpc/uuid.h"
 
 namespace lpc::audio {
@@ -12,6 +13,8 @@ struct StripParams {
     float pan = 0.0f;
     bool mute = false;
     bool solo = false;
+    bool mono = false;  // a mono channel strip: the signal is folded to mono and panned with the project's pan law; a stereo strip uses the balancer
+    PanLaw panLaw = PanLaw::Minus3Comp;
 };
 
 // A heap object handed between threads. Whoever receives it last (always the project thread)

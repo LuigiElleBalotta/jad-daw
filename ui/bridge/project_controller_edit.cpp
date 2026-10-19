@@ -1418,6 +1418,49 @@ QVariantList ProjectController::effectSpecs() const {
     return specs;
 }
 
+QVariantList ProjectController::effectPresetMenu(const QString& processorId) const {
+    QVariantList out;
+    if (!effectPresets_) return out;
+    const std::string id = processorId.toStdString();
+    for (const std::string& cat : effectPresets_->categories(id)) {
+        QStringList names;
+        for (const lpc::EffectPreset& p : effectPresets_->presets(id))
+            if (p.category == cat) names.append(QString::fromStdString(p.name));
+        out.append(QVariantMap{{"category", QString::fromStdString(cat)}, {"names", names}});
+    }
+    return out;
+}
+
+void ProjectController::applyEffectPreset(const QString& trackId, int index, const QString& processorId, const QString& category, const QString& name) {
+    if (!effectPresets_) return;
+    const std::string id = processorId.toStdString();
+    const lpc::EffectSpec* spec = lpc::findEffectSpec(id);
+    if (!spec) return;
+    std::map<std::string, double> params;
+    if (name.isEmpty()) {
+        params = effectPresets_->defaults(id);
+    } else {
+        const lpc::EffectPreset* preset = effectPresets_->find(id, category.toStdString(), name.toStdString());
+        if (!preset) return;
+        params = preset->params;
+    }
+    nlohmann::json commands = nlohmann::json::array();
+    for (const lpc::EffectParam& p : spec->params) {
+        nlohmann::json c = {{"type", "set_insert_param"}, {"trackId", trackId.toStdString()}, {"index", index}, {"param", p.name}};
+        const auto it = params.find(p.name);
+        c["value"] = it == params.end() ? nlohmann::json(nullptr) : nlohmann::json(it->second);
+        commands.push_back(c);
+    }
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
+QStringList ProjectController::matchEqCurveNames() const {
+    QStringList out;
+    if (effectPresets_)
+        for (const std::string& n : effectPresets_->matchEqNames()) out.append(QString::fromStdString(n));
+    return out;
+}
+
 QVariantList ProjectController::trackInserts(const QString& trackId) const {
     QVariantList out;
     for (const TrackRow& t : allRows_) {

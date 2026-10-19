@@ -13,6 +13,7 @@ struct StripPatch {
     std::optional<bool> mute;
     std::optional<bool> solo;
     std::optional<int> input;  // the recording input: 0 stereo 1+2, n mono input n (0..64)
+    std::optional<bool> mono;  // channel format: mono (panned with the pan law) or stereo (balancer)
 };
 
 struct TrackPatch {
@@ -34,6 +35,7 @@ CommandPtr makeAddTrack(Track track, int index = -1);  // index -1 appends
 CommandPtr makeRemoveTrack(Uuid trackId);
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch);
 CommandPtr makeSetMasterVolume(float gainDb);  // the Master strip
+CommandPtr makeSetPanLaw(PanLaw law);  // Project Settings > Audio > Pan Law
 CommandPtr makeSetTempo(Ticks tick, double bpm);
 CommandPtr makeRemoveTempo(Ticks tick);
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch);

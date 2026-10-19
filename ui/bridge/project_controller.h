@@ -45,6 +45,7 @@ class LiveLink;
 namespace lpc {
 class MediaStore;
 class PatchLibrary;
+class EffectPresetLibrary;
 class ProjectHost;
 struct InsertSlot;
 struct DrumHit;
@@ -297,6 +298,12 @@ public:
     Q_INVOKABLE void closeEffectEditor();
     Q_INVOKABLE QVariantList effectSpecs() const;                    // the built-in effects and their parameters (effect_specs.h)
     Q_INVOKABLE QVariantList instrumentSpecs() const;                // the built-in instruments and their parameters
+    // Logic's factory presets of a built-in effect: [{category, names: [...]}] (a preset without a category is listed under ""), applied in one undo step
+    // (name "" = Logic's own default of that effect); the Match EQ target curves
+    Q_INVOKABLE QVariantList effectPresetMenu(const QString& processorId) const;
+    Q_INVOKABLE void applyEffectPreset(const QString& trackId, int index, const QString& processorId, const QString& category, const QString& name);
+    Q_INVOKABLE QStringList matchEqCurveNames() const;
+    Q_INVOKABLE void matchEqLearn(const QString& trackId, int index, const QString& curveName);  // reads the track's sound, writes the correction towards the curve
     // An instrument track's instrument: the choice (params start at their defaults) and one parameter of it (one undo step each)
     Q_INVOKABLE void setInstrument(const QString& trackId, const QString& processorId);
     Q_INVOKABLE QStringList midiOutputNames() const;                  // the MIDI output ports of the system
@@ -985,6 +992,7 @@ private:
     PluginsModel plugins_;
     bool pluginManagerOpen_ = false;
     std::shared_ptr<const lpc::PatchLibrary> patches_;  // the built-in catalogue; also read on the project thread
+    std::shared_ptr<const lpc::EffectPresetLibrary> effectPresets_;  // Logic's factory plug-in presets and Match EQ curves
     std::vector<TrackRow> allRows_;                     // every track of the last snapshot, the master included
     std::vector<RegionRow> regionRows_;
     struct ClipRegion {

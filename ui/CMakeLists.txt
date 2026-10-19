@@ -5,6 +5,7 @@ set_source_files_properties(qml/Theme.qml qml/ActionHub.qml qml/InsertDrag.qml q
 set_source_files_properties(${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf PROPERTIES QT_RESOURCE_ALIAS fonts/InterVariable.ttf)
 set_source_files_properties(actions/actions.json PROPERTIES QT_RESOURCE_ALIAS actions/actions.json)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/core/data/patches.json PROPERTIES QT_RESOURCE_ALIAS patches/patches.json)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/core/data/effect_presets.json PROPERTIES QT_RESOURCE_ALIAS patches/effect_presets.json)
 
 qt_add_library(jad_ui_lib STATIC)
 qt_add_qml_module(jad_ui_lib
@@ -19,6 +20,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/project_controller_edit.cpp
         bridge/project_controller_flex.cpp
         bridge/project_controller_mastering.cpp
+        bridge/project_controller_matcheq.cpp
         bridge/project_controller_stacks.cpp
         bridge/project_controller_live.cpp
         bridge/live_link.cpp
@@ -177,6 +179,7 @@ qt_add_qml_module(jad_ui_lib
         ${CMAKE_SOURCE_DIR}/assets/fonts/InterVariable.ttf
         actions/actions.json
         ${CMAKE_SOURCE_DIR}/core/data/patches.json
+        ${CMAKE_SOURCE_DIR}/core/data/effect_presets.json
 )
 target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent Qt6::Network lpc_core)
 target_include_directories(jad_ui_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bridge ${CMAKE_CURRENT_SOURCE_DIR}/actions)

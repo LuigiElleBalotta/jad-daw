@@ -290,14 +290,28 @@ by count):
   points — no cubic knee, no power law, no spline, just the finest-resolution table of any circuit here. "LP" almost
   certainly stands for **Platinum**, Logic's clean/modern digital compressor model — a precise, table-driven curve
   fits that "transparent, no character" design brief far better than the analog-modeled power-law/knee curves used
-  by SSL/Opto/FET. `CCompressorClassA`'s own `GainRedCurve` (only its `Coefficients`/ratio-table were examined)
-  remains the one circuit whose actual curve shape is still unknown.
+  by SSL/Opto/FET.
+- **`CCompressorClassA`** (`GainRedCurve`, decompiled, thirteenth pass) — turns out to be a *sixth* strategy, but
+  not the one its `Coefficients` function implied: not a pure discrete-ratio dispatch, a **table lookup like
+  LP/DBX**. `GainRedCurve` reads through a **1024-entry table** at `this+0xb0` (indices 0–1023, linear
+  interpolation between adjacent entries exactly like LP's table — same mechanism, different table contents),
+  indexed by `input_level × 1023 × m_fThresholdOffset[ratioIndex]` clamped to `[0, 1023]` — i.e. the single-sample
+  path (`n==1`) and the block path both scale the input by the *selected ratio preset's* threshold-offset constant
+  (the same 4-entry `{0.0, 3.0, 7.0, 0.0}` table from `Coefficients`) before the table lookup, rather than computing
+  the ratio curve algebraically every sample. After interpolation, the result is further clamped against
+  `min(1.0, 1/(input × envelope × makeup))` — a safety ceiling tied to the smoothed envelope/makeup-gain state —
+  before the final `× makeup` multiply. So the real architecture is: `Coefficients()` picks one of 4 ratio presets
+  and converts it to a threshold-scaling constant; `GainRedCurve()` always walks the *same* 1024-entry table, just
+  re-scaled by whichever preset is active — a hybrid of ClassA's "discrete ratio buttons" UI behavior and LP's
+  table-driven curve mechanism, not a fifth closed-form power-law curve like SSL/Opto/FET.
 
-**All six stock Compressor circuits are now at least partially characterized** — five genuinely different
-engineering strategies for the "same" effect: SSL (dual envelope + shared cubic knee + secondary limiter stage),
-Opto (shared knee + `x^−1.2` power + Michaelis-Menten saturation), FET (shared knee + `(x+1)^−4` power + linear
-rescale), DBX (Hermite-spline table), LP/Platinum (1024-point linearly-interpolated table), ClassA (discrete
-ratio presets from a small constant+function-pointer table, curve itself not yet traced).
+**All six stock Compressor circuits are now fully characterized** — five genuinely different engineering
+strategies for the "same" effect, two of which (LP and ClassA) share the same 1024-entry linear-interpolation
+lookup mechanism while differing in what fills the table and how it's indexed: SSL (dual envelope + shared cubic
+knee + secondary limiter stage), Opto (shared knee + `x^−1.2` power + Michaelis-Menten saturation), FET (shared
+knee + `(x+1)^−4` power + linear rescale), DBX (Hermite-spline table), LP/Platinum (1024-point linearly-interpolated
+table, continuous curve), ClassA (same 1024-point linear-interpolation mechanism, but indexed via a discrete
+ratio-preset threshold-scaling constant — 4 ratio buttons feeding one shared table).
 - `CLimiterFX::Coefficients` turned out to be a thin forwarder into `CLimiter::Coefficients` (the real implementation,
   not decompiled this pass) plus one special case: parameter index `6` toggles something per-channel across every
   linked channel object (`0.0 < value` as a bool) — likely a stereo-link/channel-count-dependent switch, not pinned
@@ -395,10 +409,12 @@ feeds the selected one straight into `CMatchEQFX::SetSpecData`. This confirms th
 picker) stored as precomputed data, selected by plain index — but not the model count, labels, or actual spectral
 data, which weren't read out of the binary this pass.
 
-**Open**: `CCompressorLP`/`CCompressorClassA`'s own curve functions (LP done in the eleventh pass — see above;
-ClassA's curve remains untraced), `CCompressorClassA`'s ratio-table function pointers,
-`CBiquadChainDualRateFX::FillResponseLUT`'s own biquad math (33 basic blocks of SIMD complex arithmetic, not
-decompiled this pass), and the actual reference-model table contents.
+**Open**: `CCompressorClassA`'s ratio-table function pointers (what actually fills/differs in its 1024-entry table
+per preset — `GainRedCurve` just reads the table, doesn't build it), `CBiquadChainDualRateFX::FillResponseLUT`'s
+own biquad math (33 basic blocks of SIMD complex arithmetic, not decompiled this pass), and the actual
+reference-model table contents.
+
+Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `MADSP.framework/MADSP`.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,

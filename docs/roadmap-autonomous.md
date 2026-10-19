@@ -264,9 +264,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       **Twelfth pass:** `CAutoMaster::MatchEQFactory` decompiled — the Mastering Assistant's own dedicated Match EQ instance defaults its fade-extremes
       boundaries to 30Hz/50Hz (low) and 7.5kHz/15kHz (high), leaving rumble and air alone by default. `SelectSpectralReferenceDataForModel` confirms a
       static table of built-in reference spectra selected by index (count/contents/labels not read). Full writeup in `docs/logic-reference/mixer.md`.
-      This closes the main Mastering Assistant / stock-plugin DSP sweep for this session. Open (low priority, future pass): `CCompressorClassA`'s own
-      curve and ratio-table function pointers, `CBiquadChainDualRateFX::FillResponseLUT`'s own biquad math (33-block SIMD complex arithmetic), and the
-      actual reference-model table contents.
+      **Thirteenth pass:** `CCompressorClassA::GainRedCurve` decompiled — it's not a standalone fifth closed-form curve after all, it's a *sixth*
+      strategy: the same 1024-entry linear-interpolation table mechanism as LP/Platinum, but indexed by `input × 1023 × threshold-offset[ratioIndex]`
+      (the 4-entry ratio-preset constant from `Coefficients`) rather than a continuous formula. So ClassA's "4 ratio buttons" UI behavior is implemented
+      by re-scaling one shared table, not by routing to 4 different curve functions. **All six stock Compressor circuits are now fully characterized.**
+      Open (low priority, future pass): `CCompressorClassA`'s ratio-table function pointers (what fills the table per preset — `GainRedCurve` only reads
+      it), `CBiquadChainDualRateFX::FillResponseLUT`'s own biquad math (33-block SIMD complex arithmetic), and the actual reference-model table contents.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

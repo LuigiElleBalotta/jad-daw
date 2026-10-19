@@ -6,7 +6,8 @@ reverse-engineering effort (Smart Tempo's beat/onset detectors — see `flex-alg
 other model's `metadata.json` (CoreML's own machine-readable schema: input/output tensor shapes, the op histogram,
 the framework/tool versions used to export it) to catalog the rest, after `mixer.md`'s twentieth pass found that
 `CAnalogModelingMasteringChainFX` (behind the Mastering Assistant's Clean/Valve/Punch/Transparent menu) loads
-5 BNNS neural models via `std::vector<std::unique_ptr<IMil2BNNSModel>>`.
+BNNS neural models via `std::vector<std::unique_ptr<IMil2BNNSModel>>` (the twenty-second pass below pins the exact
+count at **6**, correcting the "5" read off the constructor's argument count alone).
 
 No official, human-readable name for any model below was found anywhere in the app bundle (checked: no matching
 strings outside the compiled binaries/models themselves) — only the bundle's own internal codenames, which read as
@@ -43,10 +44,61 @@ a conditioning input matching a device-type selector) — a real-time neural aud
 modeling (amp/pedal/preamp emulation). **`MKGerm`/`MK2Germ`** ("Germanium") is the strongest naming hint: Germanium
 transistors are a specific, well-known vintage fuzz/distortion-circuit material, which fits a neural *analog
 circuit* model far better than any other interpretation. With 11 distinct codenames here (8 "big" + 3 "small") but
-`CAnalogModelingMasteringChainFX` only loading 5 at a time, **most of these almost certainly serve more than one
-feature** — which ones back the Mastering Assistant's Analog Model menu specifically, and which (if any) back
-something else (e.g. the stock amp/pedal plugins), wasn't established this pass; that needs either live-instance
-inspection or tracing references from a different binary, not attempted.
+`CAnalogModelingMasteringChainFX` only loading 6 at a time (corrected below), **most of these almost certainly
+serve more than one feature** — which ones back the Mastering Assistant's Analog Model menu specifically, and
+which (if any) back something else (e.g. the stock amp/pedal plugins), is now partly narrowed down (see below) but
+not fully pinned to individual Valve/Punch/Transparent slots.
+
+## Tracing the loader: `MAMachineLearning.framework` and the exact model count (twenty-second pass)
+
+Following up on exactly which models back the Analog Model menu — the user chose to trace a second binary rather
+than use the live UI for this. `MADSP.framework`'s `CAnalogModelingMasteringChainFX` doesn't hardcode model names
+itself: its real constructor (`CAnalogModelingMasteringChainFXC2Efml`, the one `CAutoMaster::SetupTeardownAMMC`
+actually calls) makes **six** calls to `MAMachineLearning::ModelFactory::createModel(RealtimeFXModel, float, Compile)`
+with enum values **10, 11, 12, 13, 14, 15** (not five, as a literal argument count on the other constructor overload
+suggested) — then passes the six resulting models into the 6-vector constructor. **This is the missing link**: six
+models requested, exactly matching the six `AMMCDeviceType` values found earlier (`SetAnalogModel`'s
+native/fallback pair for each of Valve/Punch/Transparent) — so each of the three menu entries really does draw on
+two separately-loaded models (one "native" Apple Silicon / ML path, one "fallback"), not a shared model reused
+across the pair.
+
+Opened `MAMachineLearning.x86_64` to find `ModelFactory::createModel` itself: it's a big `switch` on the
+`RealtimeFXModel` enum via a computed jump table that Ghidra's static analysis couldn't fully recover ("too many
+branches"), so the exact enum→codename assignment for all six cases wasn't pinned down byte-for-byte. What *was*
+recovered: the concrete `Mil2BNNSModel` class (the real implementation behind `IMil2BNNSModel`) takes a model-name
+string in its constructor, appends it to `MAMachineLearning::getResourcePath()` (the framework's own
+`Resources/` folder — confirming models load by name from exactly where the `.mlmodelc` files sit), and — for at
+least the `MKGerm`/`MK2Germ` case — a dedicated helper function (not inlined, unlike the shorter-named cases)
+picks the exact resource path by comparing the live sample rate against **44100.0 / 48000.0 / 88200.0 / 96000.0 /
+176400.0** (exact float equality checks, decompiled in full):
+
+| Sample rate | Resource loaded |
+|---|---|
+| 44100 Hz | `MKGerm_44_2km99ux63a_0568.mlmodelc` |
+| 48000 Hz | `MKGerm_48_vi7hgbg8ef_0833.mlmodelc` |
+| 88200 Hz | `MKGerm_88_dh6c3ygvgd_0130.mlmodelc` |
+| 96000 Hz | `MK2Germ_96_9ker9d6t67_0185.mlmodelc` (not a plain `MKGerm_96` — confirms `MK2Germ` is the 96 kHz member of this family, not a separate feature) |
+| 176400 Hz | `MKGerm88_uy2kv6feen_0560.mlmodelc` (a distinct, no-underscore-named file — the 88 kHz-era model reused at 4×44.1 kHz rather than a dedicated 176.4 kHz retrain) |
+| anything else | falls back to `MK2Germ_96` — the newest/highest-quality member, not the nearest rate |
+
+Searching the binary for every catalogued codename's exact resource-path string also turned up **two previously
+unknown files** neither `find` nor the earlier metadata sweep had reason to surface as distinct: a fifth `MKBO`
+variant (`MKBO_88_erdk8f5b7k_0467.mlmodelc`, alongside the four already catalogued) and the `MKGerm88` file above.
+The `MKBO_88_erdk8f5b7k_0467` string has **zero references anywhere in the binary** — it may be dead/orphaned
+data bundled but never loaded by any current code path, unlike every other path string found (all of which do
+have at least one reference). Every other codename's resource strings (`FEO`, `FS`, `FSQ`, `FTO`, `MTC`, `MTM`,
+`RTRHT`, `RTRST`) were confirmed present as literal embedded strings but, unlike `MKGerm`, are short enough that
+the compiler inlined their construction directly into the switch (via SSE `movups` immediate-string copies) rather
+than calling a shared helper — which is why their exact per-case sample-rate thresholds weren't individually
+decompiled this pass (would need manual disassembly of six separate inlined blocks whose jump-table target
+addresses Ghidra didn't resolve automatically; attempted partially, not completed).
+
+**Net result**: the "11 candidates, 5 (really 6) consumed" puzzle is now explained architecturally — `createModel`
+is a shared factory for *all* of Family A, `CAnalogModelingMasteringChainFX` requests exactly 6 of the 11 by enum
+value, and the sample-rate-to-file selection logic is confirmed (at least for one family) to be exact-float
+comparison with a sensible highest-quality fallback. Which 6 of the 11 codenames those enum values 10–15
+specifically are, and which two make up each Valve/Punch/Transparent native/fallback pair, remains unresolved —
+the jump table would need manual reconstruction to finish this exactly.
 
 ### Family B — "neural audio analyzer", unconditioned (`modelForStreaming`, 1024-sample blocks)
 

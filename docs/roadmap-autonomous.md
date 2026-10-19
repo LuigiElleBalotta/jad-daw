@@ -335,6 +335,15 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       consuming feature wasn't identified; and a small conventional-CNN family (`PT`/`RTPT`/`RTPTM`, no per-rate variants) where `RTPT`'s 360-element
       output matches the well-known CREPE pitch-estimator bin count, hinting at real-time pitch detection (not confirmed by any label). Full catalog
       in the new `docs/logic-reference/machine-learning-models.md`.
+      **Twenty-second pass:** user chose to trace a second binary rather than use the live UI to pin down which of the 11 candidate models back
+      Valve/Punch/Transparent. Found the missing link in `MADSP.framework`: `CAnalogModelingMasteringChainFX`'s real constructor makes 6 (not 5) calls
+      to `MAMachineLearning::ModelFactory::createModel(RealtimeFXModel enum 10-15, sampleRate, Compile)` - exactly matching the 6 `AMMCDeviceType`
+      native/fallback values found earlier. Opened `MAMachineLearning.framework` itself: `createModel`'s switch has a jump table Ghidra couldn't
+      recover automatically, so the exact enum-to-codename mapping for all 6 cases wasn't pinned down, but the `MKGerm`/`MK2Germ` case's own helper
+      function was fully decompiled - exact sample-rate thresholds (44100/48000/88200/96000/176400 Hz) and fallback behavior (unrecognized rates use
+      `MK2Germ_96`, the best model, not the nearest rate). Also found two previously-unknown bundled files (`MKBO_88_erdk8f5b7k_0467`, which has zero
+      references anywhere in the binary - possibly dead code - and `MKGerm88_uy2kv6feen_0560`, the actual 176.4kHz fallback). Full writeup in
+      `docs/logic-reference/machine-learning-models.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

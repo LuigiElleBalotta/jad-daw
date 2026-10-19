@@ -563,12 +563,13 @@ analog circuit simulation itself (what `CAnalogModelingMasteringChainFX` actuall
 inference like Smart Tempo, or classical nonlinear DSP) is a large, separate engine, not traced this pass.
 
 **Resolved (twentieth pass): it's neural-network inference, confirmed architecturally.** The class's own
-constructor signature settles the CoreML-vs-classical-DSP question directly — it takes **five**
-`std::vector<std::unique_ptr<IMil2BNNSModel>>` arguments. "BNNS" is Apple's **Basic Neural Network Subroutines**
+constructor signature settles the CoreML-vs-classical-DSP question directly — it takes several
+`std::vector<std::unique_ptr<IMil2BNNSModel>>` arguments (the exact count, **six**, confirmed in the twenty-second
+pass below). "BNNS" is Apple's **Basic Neural Network Subroutines**
 API (a low-level Accelerate-framework NN-inference backend); "Mil2BNNS" names an interface for a model compiled
 down from **MIL (Core ML's Model Intermediate Language)** to run through BNNS directly, bypassing the full CoreML
-runtime — the same general lineage as Smart Tempo's CNN, but a different, lighter-weight execution path, and **five
-separate models** (not one) are held at once. Decompiling the constructor (dense, mostly buffer/ownership
+runtime — the same general lineage as Smart Tempo's CNN, but a different, lighter-weight execution path, and
+**several separate models** are held at once. Decompiling the constructor (dense, mostly buffer/ownership
 bookkeeping, not attempted in full) shows it also builds a **per-path FFT-based up-sampler/down-sampler pair**
 (`CDownSampler`/`CUpSampler`, both `CFFTFilter`-based) for up to 6 internal paths — strongly suggesting the neural
 models run at one fixed internal rate and the engine resamples around them for any other project sample rate
@@ -596,9 +597,11 @@ not confirmed). Not pursued further.
 a quick win, see above) `CCompressorClassA`'s table-fill step. The per-band response-combination step and
 `CAnalogModelingMasteringChainFX`'s fundamental nature (BNNS neural inference, not classical DSP) are now
 resolved — see the nineteenth/twentieth-pass sections above, and the full ML-model catalog in
-`docs/logic-reference/machine-learning-models.md`. Which exact `.mlmodelc` files back Valve/Punch/Transparent (of
-the 11 architecturally-plausible candidates found) and their actual network weights remain unresolved — genuinely
-out of scope for static analysis at this depth.
+`docs/logic-reference/machine-learning-models.md` (twenty-second pass confirms **exactly 6** models are loaded,
+not 5, matching the 6 `AMMCDeviceType` native/fallback values). Which 6 of the 11 architecturally-plausible
+`modelForStreaming_2048` codenames those are — i.e. which two make up each Valve/Punch/Transparent pair — needs a
+full manual reconstruction of `ModelFactory::createModel`'s broken jump table (Ghidra couldn't recover it
+automatically); the actual network weights are genuinely out of scope for static analysis at this depth regardless.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.

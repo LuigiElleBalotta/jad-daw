@@ -572,11 +572,14 @@ separate models** (not one) are held at once. Decompiling the constructor (dense
 bookkeeping, not attempted in full) shows it also builds a **per-path FFT-based up-sampler/down-sampler pair**
 (`CDownSampler`/`CUpSampler`, both `CFFTFilter`-based) for up to 6 internal paths — strongly suggesting the neural
 models run at one fixed internal rate and the engine resamples around them for any other project sample rate
-(consistent with the separately-found `SamplerateSupported` method). The actual `.mlmodelc`/BNNS model files
-themselves weren't matched to specific filenames in the bundle this pass (`MAMachineLearning.framework`'s
-`Resources/` has dozens of cryptically-named `.mlmodelc` files for various sample rates, none obviously labeled
-"analog"/"valve"/"punch" — correlating them to this feature specifically wasn't attempted). The actual network
-topology/weights are out of scope for static analysis at this depth regardless.
+(consistent with the separately-found `SamplerateSupported` method). **Follow-up (twenty-first pass)**: catalogued
+every other model in `MAMachineLearning.framework/Resources/` by reading its CoreML `metadata.json` — full writeup
+in the new `docs/logic-reference/machine-learning-models.md`. Found an 11-model family (`FEO`/`FS`/`FSQ`/`FTO`/
+`MTC`/`MTM`/`RTRHT`/`RTRST`/`MKBO`/`MKGerm`/`MK2Germ`) with exactly the shape `CAnalogModelingMasteringChainFX`
+should want — audio in, audio out, a single conditioning scalar, WaveNet-style gated-conv architecture — with
+`MKGerm`/`MK2Germ` ("Germanium") a strong naming hint toward vintage analog-circuit modeling. Since the engine only
+loads 5 models at once but 11 candidates exist, which specific ones back Valve/Punch/Transparent (vs. some other
+feature) wasn't pinned down — see that doc for the full catalog and reasoning.
 
 **`CCompressorClassA`'s table-fill step, ruled out two candidates (seventeenth pass)**: neither `OnReset` nor the
 constructor (`CCompressorClassAC2ER9CProcDatal`) build the curve — the constructor only `bzero`s the whole
@@ -592,8 +595,9 @@ not confirmed). Not pursued further.
 **Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found), and (ruled out as
 a quick win, see above) `CCompressorClassA`'s table-fill step. The per-band response-combination step and
 `CAnalogModelingMasteringChainFX`'s fundamental nature (BNNS neural inference, not classical DSP) are now
-resolved — see the nineteenth/twentieth-pass sections above. What's left of the Analog Model engine
-(exact network topology/weights, matching specific `.mlmodelc` files to Valve/Punch/Transparent) is genuinely
+resolved — see the nineteenth/twentieth-pass sections above, and the full ML-model catalog in
+`docs/logic-reference/machine-learning-models.md`. Which exact `.mlmodelc` files back Valve/Punch/Transparent (of
+the 11 architecturally-plausible candidates found) and their actual network weights remain unresolved — genuinely
 out of scope for static analysis at this depth.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at

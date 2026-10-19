@@ -327,6 +327,14 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       scope for static analysis regardless. **This closes the main open-item list for this session's Mastering-Assistant/stock-plugin sweep** -
       remaining items (the 4 `AM_Curve_N` models' musical meaning, `CCompressorClassA`'s table-fill step) are minor and already ruled-out-as-quick-wins
       or unlabeled. Full writeup in `docs/logic-reference/mixer.md`.
+      **Twenty-first pass:** user asked to go deeper into `MAMachineLearning.framework`'s other models. Catalogued all ~20 remaining model names by
+      reading each one's CoreML `metadata.json` directly (no decompilation needed). Found a clean 3-family split: an 11-model "neural audio effect"
+      family (`FEO`/`FS`/`FSQ`/`FTO`/`MTC`/`MTM`/`RTRHT`/`RTRST`/`MKBO`/`MKGerm`/`MK2Germ`) with exactly the audio-in/audio-out/conditioning-scalar
+      shape `CAnalogModelingMasteringChainFX` should want (WaveNet-style gated-conv, PyTorch-trained) - `MKGerm`/`MK2Germ` ("Germanium") strongly hints
+      at vintage analog-circuit modeling; a structurally-related but unconditioned 6-model "analyzer" family (`G`/`G_SO`/`S`/`S_SO`/`T`/`TSO`) whose
+      consuming feature wasn't identified; and a small conventional-CNN family (`PT`/`RTPT`/`RTPTM`, no per-rate variants) where `RTPT`'s 360-element
+      output matches the well-known CREPE pitch-estimator bin count, hinting at real-time pitch detection (not confirmed by any label). Full catalog
+      in the new `docs/logic-reference/machine-learning-models.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

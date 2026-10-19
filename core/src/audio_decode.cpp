@@ -100,7 +100,12 @@ WavData decodeAiff(const std::filesystem::path& path) {
 
 WavData decodeMp3(const std::filesystem::path& path) {
     drmp3 mp3;
-    if (!drmp3_init_file_w(&mp3, path.c_str(), nullptr)) throw std::runtime_error("cannot read this MP3 file");
+#ifdef _WIN32
+    const bool opened = drmp3_init_file_w(&mp3, path.c_str(), nullptr);
+#else
+    const bool opened = drmp3_init_file(&mp3, path.c_str(), nullptr);
+#endif
+    if (!opened) throw std::runtime_error("cannot read this MP3 file");
     WavData out;
     out.sampleRate = static_cast<int>(mp3.sampleRate);
     out.channels = static_cast<int>(mp3.channels);
@@ -116,7 +121,11 @@ WavData decodeMp3(const std::filesystem::path& path) {
 }
 
 WavData decodeFlac(const std::filesystem::path& path) {
+#ifdef _WIN32
     drflac* flac = drflac_open_file_w(path.c_str(), nullptr);
+#else
+    drflac* flac = drflac_open_file(path.c_str(), nullptr);
+#endif
     if (!flac) throw std::runtime_error("cannot read this FLAC file");
     WavData out;
     out.sampleRate = static_cast<int>(flac->sampleRate);

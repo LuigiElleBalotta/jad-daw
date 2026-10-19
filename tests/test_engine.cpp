@@ -370,3 +370,24 @@ TEST_CASE("engine: live MIDI plays the target instrument with the transport stop
     REQUIRE(b.event.status == 0x80);
     REQUIRE(b.position == 9600 + 512);
 }
+
+TEST_CASE("engine: the built-in click is the Klopfgeist, a resonator that rings and dies, louder on the bar than on a division", "[engine][click]") {
+    auto render = [](std::uint8_t accent, std::uint8_t slot) {
+        AudioEngine e(kSr);
+        AudioMsg c = msg(MsgKind::SetClick, 1, 1);
+        c.obj = makeOwned(new ClickTrack{{0}, {accent}, {slot}});
+        e.applyDirect(c);
+        e.applyDirect(msg(MsgKind::Play, 2));
+        std::vector<float> l(2048), r(2048);
+        e.processBlock(l.data(), r.data(), 2048);
+        return l;
+    };
+    const auto bar = render(1, 0), division = render(0, kSlotAnd);
+    float peakBar = 0, peakDiv = 0, tail = 0;
+    for (int i = 0; i < 2048; ++i) { peakBar = std::max(peakBar, std::abs(bar[static_cast<std::size_t>(i)])); peakDiv = std::max(peakDiv, std::abs(division[static_cast<std::size_t>(i)])); }
+    for (int i = 1900; i < 2048; ++i) tail = std::max(tail, std::abs(bar[static_cast<std::size_t>(i)]));
+    REQUIRE(peakBar > 0.3f);
+    REQUIRE(peakBar > peakDiv * 1.5f);                     // velocity 127 against 60
+    REQUIRE(tail < 1e-3f);                                 // 30 ms long: it has ended by frame 1900
+    REQUIRE(std::abs(bar[0] - 0.6f) < 0.02f);              // the first sample is 0.6 x level whatever the note
+}

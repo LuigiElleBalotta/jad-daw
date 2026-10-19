@@ -124,7 +124,22 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
     appliedSeq_.store(m.seq, std::memory_order_release);
 }
 
-// Every beat starts a sound: the sample of its slot, or a short sine blip (higher on the first beat of a bar, quieter on
+namespace {
+
+// Logic's own click ("Klopfgeist", MADSP CKnock*, decompiled): not a sample but a resonant filter that an impulse excites on every tick.
+// The filter's frequency comes from the note of the accent level (Bar G5, Beat C5, Division C2 in Logic's defaults), its Q from the Tonality knob
+// as Q = clamp(-1.39 reso^2 + 1.4, 0.01, 1.4) with reso = 1 - (1 - tonality)^3. The level crossfades a fixed level and the velocity.
+constexpr float kKnockTonality = 0.5f;
+constexpr float kKnockLevelViaVel = 1.0f, kKnockBaseLevel = 0.8f;
+
+float knockQ(float tonality) {
+    const float reso = 1.0f - (1.0f - tonality) * (1.0f - tonality) * (1.0f - tonality);
+    return std::clamp(-1.39f * reso * reso + 1.4f, 0.01f, 1.4f);
+}
+
+}  // namespace
+
+// Every beat starts a sound: the sample of its slot, or the Klopfgeist click (higher on the first beat of a bar, quieter on
 // subdivisions) when the slot has none. Sounds overlap, up to a few at once, and are added to the master output.
 void AudioEngine::mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept { mixClickTrack(click_, outL, outR, from, n); }
 
@@ -142,14 +157,29 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
             if (!v) v = &voices_[0];  // all busy: the oldest sound is cut
             const bool sub = slot >= kSlotE && slot <= kSlotLi;
             if (kit_ && slot > 0 && slot < kClickSlots && !kit_->sample[static_cast<std::size_t>(slot)].empty()) {
+                v->knock = false;
                 v->sample = &kit_->sample[static_cast<std::size_t>(slot)];
                 v->length = static_cast<int>(v->sample->size());
                 v->gain = kit_->gain[static_cast<std::size_t>(slot)];
             } else {
                 v->sample = nullptr;
                 v->length = blipLength;
-                v->freq = track->accent[next] ? 1600.0f : (sub ? 1300.0f : 1000.0f);
-                v->gain = sub ? 0.15f : 0.35f;
+                const int note = track->accent[next] ? 79 : (sub ? 60 : 72);  // G5 for the bar, C5 for a beat, C4 for a division
+                const int velocity = track->accent[next] ? 127 : (sub ? 60 : 112);
+                const float freq = 440.0f * std::pow(2.0f, static_cast<float>(note - 69) / 12.0f);
+                const float level = (1.0f - kKnockLevelViaVel) * kKnockBaseLevel + kKnockLevelViaVel * static_cast<float>(velocity) / 127.0f;
+                const float w = kTwoPi * freq / static_cast<float>(sampleRate_), alpha = std::sin(w) / (2.0f * knockQ(kKnockTonality));
+                const float a0 = 1.0f + alpha;
+                v->knock = true;
+                v->b0 = alpha / a0;
+                v->a1 = -2.0f * std::cos(w) / a0;
+                v->a2 = (1.0f - alpha) / a0;
+                v->y1 = v->y2 = 0.0f;
+                v->freq = 0.0f;
+                v->gain = 0.6f * level / v->b0;  // the first output sample is 0.6 x level whatever the note and the Q: the impulse is scaled for it
+                v->pos = 0;
+                ++next;
+                continue;
             }
             v->pos = 0;
             ++next;
@@ -157,7 +187,14 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
         float sum = 0.0f;
         for (ClickVoice& c : voices_) {
             if (c.pos >= c.length) continue;
-            if (c.sample) {
+            if (c.knock) {
+                const float x = c.pos == 0 ? c.gain : 0.0f;  // the impulse
+                // band-pass resonator: y = b0 (x - x[-2]) - a1 y[-1] - a2 y[-2]; the impulse is the only input, so x[-2] is zero after two samples
+                const float y = c.b0 * (x - (c.pos == 2 ? c.gain : 0.0f)) - c.a1 * c.y1 - c.a2 * c.y2;
+                c.y2 = c.y1;
+                c.y1 = y;
+                sum += y * std::pow(1.0f - static_cast<float>(c.pos) / static_cast<float>(c.length), 2.0f);  // a short fade so that it ends at zero
+            } else if (c.sample) {
                 sum += c.gain * (*c.sample)[static_cast<std::size_t>(c.pos)];
             } else {
                 const float env = static_cast<float>(c.length - c.pos) / static_cast<float>(c.length);

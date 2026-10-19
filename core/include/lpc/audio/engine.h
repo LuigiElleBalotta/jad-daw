@@ -120,6 +120,8 @@ private:
         const std::vector<float>* sample = nullptr;
         int pos = 0, length = 0;
         float freq = 1000.0f, gain = 0.0f;
+        bool knock = false;  // the Klopfgeist click: a 2-pole resonator excited by an impulse (b0 and the feedback below)
+        float b0 = 0.0f, a1 = 0.0f, a2 = 0.0f, y1 = 0.0f, y2 = 0.0f;
     };
     static constexpr int kClickVoices = 6;
     ClickVoice voices_[kClickVoices];

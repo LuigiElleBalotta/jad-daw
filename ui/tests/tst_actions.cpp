@@ -19,7 +19,7 @@ private slots:
         QVERIFY2(problems.isEmpty(), qPrintable(problems.join("; ")));
         QVERIFY(defs.size() > 60);
         QSet<QString> ids, sequences;
-        const QSet<QString> tops = {"File", "Edit", "Track", "Navigate", "Record", "Mix", "View", "Window", "Help"};
+        const QSet<QString> tops = {"JAD Daw", "File", "Edit", "Track", "Navigate", "Record", "Mix", "View", "Window", "Help"};
         for (const auto& d : defs) {
             QVERIFY2(!d.label.isEmpty(), qPrintable(d.id));
             QVERIFY2(!ids.contains(d.id), qPrintable("duplicate id " + d.id));

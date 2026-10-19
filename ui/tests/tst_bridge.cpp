@@ -1078,8 +1078,10 @@ private slots:
         QCOMPARE(c.countInChoice(), 6);
         c.setCountInChoice(-3);
         QCOMPARE(c.countInChoice(), -3);  // 3/4: three beats
-        c.setCountInChoice(-4);
-        QCOMPARE(c.countInChoice(), -3);
+        c.setCountInChoice(-9);
+        QCOMPARE(c.countInChoice(), -9);  // 9/4: nine beats, more than a 4/4 bar
+        c.setCountInChoice(-10);
+        QCOMPARE(c.countInChoice(), -9);
     }
     void newTracksMakesSeveralInOneUndoStep() {
         TempDir dir;

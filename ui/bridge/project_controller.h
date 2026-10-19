@@ -130,7 +130,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(bool autoInputMonitoring READ autoInputMonitoring WRITE setAutoInputMonitoring NOTIFY recordingChanged)  // Record > Auto Input Monitoring
     Q_PROPERTY(bool countInEnabled READ countInEnabled WRITE setCountInEnabled NOTIFY recordingChanged)
-    Q_PROPERTY(int countInChoice READ countInChoice WRITE setCountInChoice NOTIFY recordingChanged)  // the count-in before a recording: 1..6 bars, or -1..-3 for 1/4..3/4 of a bar in beats
+    Q_PROPERTY(int countInChoice READ countInChoice WRITE setCountInChoice NOTIFY recordingChanged)  // the count-in before a recording: 1..6 bars, or -1..-9 for 1/4..9/4 in beats
     Q_PROPERTY(int sampleRateHz READ sampleRateHz NOTIFY projectChanged)  // the project's sample rate
     Q_PROPERTY(QString audioOutput READ audioOutput NOTIFY audioSettingsChanged)    // the chosen devices ("" = the system's default)
     Q_PROPERTY(QString audioInput READ audioInput NOTIFY audioSettingsChanged)

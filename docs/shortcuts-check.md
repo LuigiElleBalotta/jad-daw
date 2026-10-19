@@ -23,7 +23,7 @@ Rows marked **yes** were confirmed by at least one published source; every other
 | `file.saveAs` | File > Save As… | `Ctrl+Shift+S` | no | |
 | `file.print` | File > Print… | `Ctrl+P` | no | |
 | `file.importAudio` | File > Import Audio File… | `Ctrl+Shift+I` | no | |
-| `file.preferences` | File > Preferences… | `Ctrl+,` | no | |
+| `file.preferences` | JAD Daw > Settings > Preferences… | `Ctrl+,` | no | |
 | `file.quit` | File > Quit | `Ctrl+Q` | no | |
 
 ## Edit
@@ -152,7 +152,7 @@ Rows marked **yes** were confirmed by at least one published source; every other
 
 | Action id | Menu path | Our default | Verified | Logic's default (fill in) |
 |---|---|---|---|---|
-| `help.keyCommands` | Help > Key Commands… | `Alt+K` | **yes** | |
+| `help.keyCommands` | JAD Daw > Key Commands… | `Alt+K` | **yes** | |
 
 ## (no menu)
 

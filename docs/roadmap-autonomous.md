@@ -399,19 +399,22 @@ distribution status ever changes (made public, shared, published), this decision
 ## E. Behaviour gaps found against the real Logic Pro 11.2, not yet fixed in code (the owner, 2026-10-14: "vince Logic, non jad-daw")
 Found with a disposable test project and the AppleScript-menu-enumeration + Quartz-coordinate-click method in `docs/logic-reference/behavior-check-2026-10-14.md`
 (read that file for the full evidence before touching any of these). Each is a real behaviour/structure mismatch, not a shortcut.
-- [ ] E1. Automation mode slot: Logic's popup is **Read / Touch / Latch / Write** only, no "Off" entry — check whether jad-daw's Off state should be
+- [x] E1. Automation mode slot: Logic's popup is **Read / Touch / Latch / Write** only, no "Off" entry — check whether jad-daw's Off state should be
       removed/renamed, or whether Logic really does have an Off state reachable some other way before changing anything. Logic's popup also has
       "Record Automation with Audio Regions", "Trim" and "Relative" that jad-daw doesn't have.
+      DONE: kept the Off state: Apple's guide lists the key commands "Toggle Current Track Automation Off/Read" and "Set All Tracks to Automation Off", so Off is a real mode (the live popup read simply showed the other four). Still open as a sub-item: Trim (T-Touch / T-Latch, fader centred and acting as an offset), Relative and "Record Automation with Audio Regions".
 - [ ] E2. Track Stacks: Logic has **one** Track-menu command, "Create Track Stack…" (a dialog, presumably Folder vs. Summing inside it), not jad-daw's
       two separate actions `track.createTrackStack` and a standalone "Create Folder Stack". Merge them into one command + dialog, or confirm via the
       dialog's actual contents (not seen yet) before changing `actions.json`.
 - [ ] E3. Aux tracks: Logic creates an auxiliary channel strip from the **Mixer's Options menu** ("Create New Auxiliary Channel Strip", ⌃N — already in
       `mixer.md`), not from Track > New. Move jad-daw's `track.newAux` (if it exists under the Track menu today) to match, or confirm it's already in
       the Mixer and this is a non-issue.
-- [ ] E4. Menu *locations* (shortcuts are already right, only the menu path is wrong): Preferences is **Logic Pro > Settings** (no ellipsis, it's a
+- [x] E4. Menu *locations* (shortcuts are already right, only the menu path is wrong): Preferences is **Logic Pro > Settings** (no ellipsis, it's a
       submenu), not File > Preferences; Key Commands is directly in the **Logic Pro** app menu, not under Help. Fix `actions.json`'s `menu` field for
       `file.preferences` and `help.keyCommands` (and whatever UI chrome renders those menu paths).
-- [ ] E5. Record > Count-in goes to **1/4 through 9/4** (nine beat counts), jad-daw only offers up to 3/4 — extend the Count-in UI/engine to match.
+      DONE: Preferences is now JAD Daw > Settings > Preferences… and Key Commands sits in the JAD Daw app menu (new first menu in `actions.json`).
+- [x] E5. Record > Count-in goes to **1/4 through 9/4** (nine beat counts), jad-daw only offers up to 3/4 — extend the Count-in UI/engine to match.
+      DONE: Count-in menu has 1/4 to 9/4 (`countInChoice` -1..-9) beside 1..6 bars.
 - [ ] E6. Record > Overlapping Audio Recordings is **two separate groups** depending on whether Cycle is on or off (Cycle Off: Create Take Folder /
       Create New Track / Create Track Alternative; Cycle On: Create Take Folder / Create Tracks And Mute / Create Track Alternatives), not jad-daw's
       one flat Take-Folder/Tracks/Tracks-and-Mute/Merge list for both states. "Create Track Alternative(s)" from a cycle recording isn't in jad-daw at
@@ -445,8 +448,9 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       1 & 2 & / sixteenths / grouped" choice, no per-count custom WAV file) anywhere in it. jad-daw's README describes exactly that counting-pattern
       model as already implemented. Either the README is describing an older Logic version, a different app, or a feature that was never checked
       against 11.2 — this is a foundational mismatch in a "done" feature, not a wording nitpick.
-- [ ] E14. LCD doc correction: Smart Tempo's project tempo states are **Keep / Adapt / Automatic** (confirmed in Project Settings), not "Keep and Off"
+- [x] E14. LCD doc correction: Smart Tempo's project tempo states are **Keep / Adapt / Automatic** (confirmed in Project Settings), not "Keep and Off"
       as `lcd.md` currently says — "Automatic" is the real third state.
+      DONE: `lcd.md` now says Keep / Adapt / Automatic.
 - [ ] E15. Create New Track dialog's full structure confirmed (4 categories x 2-3 sub-options each, a Details panel that changes per category, Number
       of tracks to create) — see `behavior-check-2026-10-14.md` for the complete breakdown and reference screenshots.
 - [x] E8 (closed, 2026-10-16). All 11 Project Settings tabs now read at least once. Score (7 sub-tabs of notation engraving, confirms jad-daw's

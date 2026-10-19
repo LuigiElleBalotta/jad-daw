@@ -1061,7 +1061,7 @@ void ProjectController::setAutoInputMonitoring(bool on) {
 }
 
 void ProjectController::setCountInChoice(int choice) {
-    if (choice == 0 || choice < -3 || choice > 6 || choice == countInChoice_) return;
+    if (choice == 0 || choice < -9 || choice > 6 || choice == countInChoice_) return;
     countInChoice_ = choice;
     emit recordingChanged();
 }

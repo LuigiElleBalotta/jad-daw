@@ -6,7 +6,7 @@ Seen on 2026-10-09 (Beats & Project mode). See also `ui-observations-2026-10-09.
 
 1. **Position** (large, `102 1`): bar and beat, with the captions `BAR` and `BEAT` under it. (The mode decides what shows here: SMPTE time, beats, etc.)
 2. **Tempo** (`138`) with the captions `ADAPT` / `TEMPO` under it. `ADAPT` appears when the project tempo is following the detected tempo
-   (Smart Tempo "Adapt"); the other states are KEEP and OFF.
+   (Smart Tempo "Adapt"); the other states are KEEP and AUTOMATIC (Project Settings > Smart Tempo: Keep / Adapt / Automatic; there is no Off).
 3. **Time signature** (`4/4`) above the **key** (`Cmaj`), with a small popup chevron at the right edge of the LCD.
 
 ## Interactions (verified unless marked)
@@ -28,7 +28,7 @@ sizes.
 ## Verified negatives
 
 - Dragging the tempo number up by 12 px did **not** change `138` in this project (the project follows Smart Tempo "ADAPT"); the user reports drag changes the BPM in
-  Logic, so it probably needs Smart Tempo set to Keep/Off. To verify.
+  Logic, so it probably needs Smart Tempo set to Keep. To verify.
 - Changing the time signature from the popup raises a modal: **"Do you want to change the project time signature?"** with buttons **Change project
   signature** (default), **Insert new signature**, **Cancel**, and a "Don't ask again" checkbox (explanation: change the project signature or insert a new
   signature change at the current position).

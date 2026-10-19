@@ -562,6 +562,22 @@ actually available at that moment, matching the menu text's own "(using Clean in
 analog circuit simulation itself (what `CAnalogModelingMasteringChainFX` actually computes — whether it's CoreML
 inference like Smart Tempo, or classical nonlinear DSP) is a large, separate engine, not traced this pass.
 
+**Resolved (twentieth pass): it's neural-network inference, confirmed architecturally.** The class's own
+constructor signature settles the CoreML-vs-classical-DSP question directly — it takes **five**
+`std::vector<std::unique_ptr<IMil2BNNSModel>>` arguments. "BNNS" is Apple's **Basic Neural Network Subroutines**
+API (a low-level Accelerate-framework NN-inference backend); "Mil2BNNS" names an interface for a model compiled
+down from **MIL (Core ML's Model Intermediate Language)** to run through BNNS directly, bypassing the full CoreML
+runtime — the same general lineage as Smart Tempo's CNN, but a different, lighter-weight execution path, and **five
+separate models** (not one) are held at once. Decompiling the constructor (dense, mostly buffer/ownership
+bookkeeping, not attempted in full) shows it also builds a **per-path FFT-based up-sampler/down-sampler pair**
+(`CDownSampler`/`CUpSampler`, both `CFFTFilter`-based) for up to 6 internal paths — strongly suggesting the neural
+models run at one fixed internal rate and the engine resamples around them for any other project sample rate
+(consistent with the separately-found `SamplerateSupported` method). The actual `.mlmodelc`/BNNS model files
+themselves weren't matched to specific filenames in the bundle this pass (`MAMachineLearning.framework`'s
+`Resources/` has dozens of cryptically-named `.mlmodelc` files for various sample rates, none obviously labeled
+"analog"/"valve"/"punch" — correlating them to this feature specifically wasn't attempted). The actual network
+topology/weights are out of scope for static analysis at this depth regardless.
+
 **`CCompressorClassA`'s table-fill step, ruled out two candidates (seventeenth pass)**: neither `OnReset` nor the
 constructor (`CCompressorClassAC2ER9CProcDatal`) build the curve — the constructor only `bzero`s the whole
 1024-entry region (`this+0xb0`, confirmed: `bzero(this+0x16 [in 8-byte units] = this+0xb0, ...)`) to an all-zero
@@ -573,11 +589,12 @@ these three places, or — given the "models"/presets discovery this session —
 `MADSP` entirely**, e.g. baked into a preset/resource rather than computed by this binary at all (speculative,
 not confirmed). Not pursued further.
 
-**Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found),
-`CAnalogModelingMasteringChainFX`'s actual circuit simulation (CoreML-based or classical DSP — a sizeable engine
-of its own, genuinely new scope beyond the original Compressor/Limiter/EQ/Match-EQ sweep), and (ruled out as a
-quick win, see above) `CCompressorClassA`'s table-fill step. The per-band response-combination step is now
-resolved — see the nineteenth-pass section above.
+**Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found), and (ruled out as
+a quick win, see above) `CCompressorClassA`'s table-fill step. The per-band response-combination step and
+`CAnalogModelingMasteringChainFX`'s fundamental nature (BNNS neural inference, not classical DSP) are now
+resolved — see the nineteenth/twentieth-pass sections above. What's left of the Analog Model engine
+(exact network topology/weights, matching specific `.mlmodelc` files to Valve/Punch/Transparent) is genuinely
+out of scope for static analysis at this depth.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.
@@ -589,6 +606,10 @@ Source (fourteenth pass): `CAutoMaster::SpectralReferenceDataFactory` at `0x5ffa
 Source (eighteenth pass, correction): `CAutoMaster`'s constructor (`CAutoMasterC2ER9CProcDataii`) at `0x605290` in
 `MADSP.framework/MADSP`; on-disk files at `/Applications/Logic Pro.app/Contents/Frameworks/MADSP.framework/Versions
 /A/Resources/AM_Curve_{1,2,3,4}.pst`.
+
+Source (twentieth pass): `CAnalogModelingMasteringChainFX`'s constructor overloads at `0x2d45d0` (the
+`vector<unique_ptr<IMil2BNNSModel>>` one, 5 arguments) and `0x2d3cc0`, `MADSP.framework/MADSP`; `.mlmodelc` files
+surveyed at `/Applications/Logic Pro.app/Contents/Frameworks/MAMachineLearning.framework/Versions/A/Resources/`.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,

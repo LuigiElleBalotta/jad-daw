@@ -318,6 +318,15 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       product of active bands' magnitudes, not a sum; disabled bands are skipped, not multiplied by 1. Each band also caches its last computed
       per-point magnitude array and skips the trig/sqrt math entirely when nothing changed. This was the last fully-tractable open item from the
       Channel EQ curve-preview thread. Full writeup in `docs/logic-reference/mixer.md`.
+      **Twentieth pass:** resolved the last big open question - whether `CAnalogModelingMasteringChainFX` (behind the Clean/Valve/Punch/Transparent
+      menu) is CoreML inference or classical DSP. Its own constructor signature settles it: it takes 5 `vector<unique_ptr<IMil2BNNSModel>>` arguments
+      - BNNS (Apple's Basic Neural Network Subroutines) models compiled from Core ML's MIL, run directly through BNNS rather than the full CoreML
+      runtime. 5 separate models are held at once, each with its own FFT-based up/down-sampler pair (CDownSampler/CUpSampler), confirming the models
+      run at one fixed internal rate with the engine resampling around them for other project rates. The specific `.mlmodelc` files weren't matched to
+      Valve/Punch/Transparent by name (none in `MAMachineLearning.framework` are obviously labeled that way) - network topology/weights are out of
+      scope for static analysis regardless. **This closes the main open-item list for this session's Mastering-Assistant/stock-plugin sweep** -
+      remaining items (the 4 `AM_Curve_N` models' musical meaning, `CCompressorClassA`'s table-fill step) are minor and already ruled-out-as-quick-wins
+      or unlabeled. Full writeup in `docs/logic-reference/mixer.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

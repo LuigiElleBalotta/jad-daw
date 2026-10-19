@@ -39,15 +39,14 @@ a single 96 kHz file, suggesting `MK2Germ` is a newer/improved retrain of `MKGer
 - **Provenance**: trained in **PyTorch** (`torch==2.0.1`–`2.1.0`, `TorchScript` source dialect), converted with
   `coremltools` 7.0b1 through 7.1.2 — i.e. genuinely recent (2023-era) ML work, not a long-standing legacy asset.
 
-This is exactly the shape `CAnalogModelingMasteringChainFX`'s BNNS models should have (audio in, audio out,
-a conditioning input matching a device-type selector) — a real-time neural audio effect, most plausibly circuit
-modeling (amp/pedal/preamp emulation). **`MKGerm`/`MK2Germ`** ("Germanium") is the strongest naming hint: Germanium
-transistors are a specific, well-known vintage fuzz/distortion-circuit material, which fits a neural *analog
-circuit* model far better than any other interpretation. With 11 distinct codenames here (8 "big" + 3 "small") but
-`CAnalogModelingMasteringChainFX` only loading 6 at a time (corrected below), **most of these almost certainly
-serve more than one feature** — which ones back the Mastering Assistant's Analog Model menu specifically, and
-which (if any) back something else (e.g. the stock amp/pedal plugins), is now partly narrowed down (see below) but
-not fully pinned to individual Valve/Punch/Transparent slots.
+This shape (audio in, audio out, a conditioning input) originally looked exactly like what
+`CAnalogModelingMasteringChainFX`'s BNNS models should have, and **`MKGerm`/`MK2Germ`** ("Germanium" — a specific,
+well-known vintage fuzz/distortion-circuit material) still reads as a strong hint toward analog circuit modeling of
+some kind. **Correction (twenty-third pass): this guess was wrong.** Tracing `CAnalogModelingMasteringChainFX`'s
+actual model-loading code (below) proves it consumes none of Family A's 11 codenames at all — it uses all six
+Family B codenames instead. Whatever feature Family A's conditioned audio-to-audio models serve (the "Germanium"
+naming still suggests some kind of analog/circuit modeling, just not this particular engine) remains unidentified;
+tracing it would mean finding Family A's own caller in a different part of the codebase, not attempted.
 
 ## Tracing the loader: `MAMachineLearning.framework` and the exact model count (twenty-second pass)
 
@@ -93,28 +92,52 @@ than calling a shared helper — which is why their exact per-case sample-rate t
 decompiled this pass (would need manual disassembly of six separate inlined blocks whose jump-table target
 addresses Ghidra didn't resolve automatically; attempted partially, not completed).
 
-**Net result**: the "11 candidates, 5 (really 6) consumed" puzzle is now explained architecturally — `createModel`
-is a shared factory for *all* of Family A, `CAnalogModelingMasteringChainFX` requests exactly 6 of the 11 by enum
-value, and the sample-rate-to-file selection logic is confirmed (at least for one family) to be exact-float
-comparison with a sensible highest-quality fallback. Which 6 of the 11 codenames those enum values 10–15
-specifically are, and which two make up each Valve/Punch/Transparent native/fallback pair, remains unresolved.
+**Resolved (twenty-third pass): the exact enum→codename mapping, fully confirmed — and it overturns the "Family A"
+assumption above.** REA's headless Ghidra session couldn't disassemble the other 5 switch-case bodies (Ghidra's own
+jump-table recovery had failed, and no available tool could force a function into existence at an arbitrary,
+statically-unreached address). The GUI was tried next, per the user's suggestion, but turned out to be too
+unreliable for this specific job — Java/Swing dialog buttons don't respond to synthetic mouse clicks or keystrokes
+through the automation layer available here at all (confirmed repeatedly; only AppleScript's native `click`
+accessibility action worked, and only on buttons, not menus or text input reliably). The approach that actually
+worked: **Ghidra's own headless analyzer with a custom post-analysis script** (`analyzeHeadless ... -postScript`),
+which forces disassembly + function creation + decompilation at arbitrary addresses entirely programmatically, no
+UI involved. This is the right tool for "make Ghidra analyze code it didn't find on its own" and sidesteps the GUI
+automation problem completely.
 
-**Tried and blocked, not just skipped**: a follow-up pass attempted exactly this reconstruction and hit a real
-tooling wall, not just effort. Ghidra's own static analysis never disassembled the other 5 case bodies at all —
-`procedure_info`/`inspect_native_instruction` both confirm those jump-table-target addresses aren't recognized as
-code or even as decoded instructions ("undecodable", "not in procedure"), because Ghidra couldn't prove they're
-reachable once the switch's jump table resolution failed. REA's available annotation tool
-(`annotate_native_function`) can only rename/comment a function Ghidra *already* recognizes, not force a new one
-into existence at an arbitrary address, so there's no read-only path from here to disassembling those blocks.
-Finishing this would need either a Ghidra GUI session (to manually define code at those addresses and let the
-decompiler re-run) or a live, running instance of Logic Pro to observe which model actually loads per menu
-selection — the former is outside this toolset, the latter is exactly the kind of live-instance step the user
-asked to defer here in favor of binary tracing. **One plausible (unverified) hypothesis**, worth recording even
-though unconfirmed: if `RealtimeFXModel` enum = `AMMCDeviceType` + 10 (the simplest possible offset), the mapping
-would be enum10=Valve-native, 11=Valve-fallback, 12=Punch-native, 13=Punch-fallback, 14=Transparent-native,
-15=Transparent-fallback — consistent with `AMMCDeviceType`'s own native/fallback XOR pairs (0/1, 2/3, 4/5) found
-in the `SetAnalogModel` pass. This has not been checked against the actual switch bodies and should be treated as
-a guess, not a finding.
+The script force-disassembled and decompiled all 6 switch targets directly. Two of them (codenames short enough to
+inline-construct) decompiled cleanly in one pass; the other two turned out to call their own shared helper
+functions (the same pattern already seen for `MKGerm`/`MK2Germ`), which a second script pass decompiled by address.
+**Full, confirmed result:**
+
+| `RealtimeFXModel` enum | Codename | Output shape |
+|---|---|---|
+| 10 | `TSO` | audio (same shape as input) |
+| 11 | `T` | audio (same shape as input) |
+| 12 | `G_SO` | scalar |
+| 13 | `G` | scalar |
+| 14 | `S_SO` | scalar |
+| 15 | `S` | scalar |
+
+**This is not Family A at all — it's all six Family B codenames**, the "neural audio analyzer" family from the
+section below, not the 11 "neural audio effect" (`modelForStreaming_2048`, conditioned) codenames this section
+originally guessed at. That guess is now superseded: whatever Family A's 11 codenames serve, it isn't
+`CAnalogModelingMasteringChainFX`. The sample-rate-selection logic (now confirmed identical across every family
+checked — `TSO`, `T`, `G`/`G_SO`, `S`/`S_SO`, and `MKGerm`/`MK2Germ`) is exact-float comparison against
+44100.0/48000.0/88200.0/96000.0/176400.0, where 176400 Hz reuses the 88.2 kHz-trained model (not a dedicated
+retrain) and any other rate falls back to the 96 kHz model.
+
+The pairing is clean and telling: three enum pairs (10/11, 12/13, 14/15), each a `{_SO suffix, plain}` pair except
+`TSO`/`T` (no underscore, but still the same two-model pairing pattern) — one pair per `AMMCDeviceType` slot
+(Valve/Punch/Transparent), matching the native/fallback structure found in `SetAnalogModel`. Only the `T`/`TSO`
+pair outputs **audio** — `G`/`G_SO` and `S`/`S_SO` both output a **single scalar** per block. That means two of
+the three "circuit" slots in this engine aren't neural audio generators at all; they're neural **control-signal
+extractors** (most plausibly a per-block gain/envelope/dynamics value) feeding some other stage of the chain —
+only one of the three device types does direct neural audio-to-audio modeling. Which specific enum pair is
+Valve/Punch/Transparent (the `AMMCDeviceType`+10 offset hypothesis would give Valve={10,11}=`{TSO,T}`,
+Punch={12,13}=`{G_SO,G}`, Transparent={14,15}=`{S_SO,S}`, based on the constructor's own creation order) is
+plausible but still not independently verified — the codename↔enum mapping above is proven; the
+enum↔`AMMCDeviceType` offset is still an inference, not confirmed against the `SetAnalogModel` switch bodies
+directly.
 
 ### Family B — "neural audio analyzer", unconditioned (`modelForStreaming`, 1024-sample blocks)
 
@@ -156,13 +179,23 @@ Unlike every other model here, these ship as **one file each, no per-sample-rate
 
 Nothing here is a reusable algorithm the way the DSP decompiles elsewhere in `mixer.md`/`flex-algorithms.md` are —
 these are opaque trained-weight files, not formulas. The transferable facts are architectural: Apple's real-time
-neural audio effects in this app run as a **WaveNet-style gated dilated-conv stack operating on small blocks
-(1024–2048 samples) with an optional single conditioning scalar**, shipped as **separate per-sample-rate exports**
-rather than one resampled model — a sensible pattern to copy if jad-daw ever adds its own learned (not hand-coded)
-audio effect.
+neural audio processing in this app runs as a **gated dilated-conv stack operating on small blocks (1024–2048
+samples)**, shipped as **separate per-sample-rate exports** rather than one resampled model (reusing the nearest
+lower rate's model for an unlisted rate, falling back to the best/highest-rate model otherwise) — a sensible
+pattern to copy if jad-daw ever adds its own learned (not hand-coded) audio effect. The confirmed Analog Model
+engine specifically mixes **audio-generating** and **scalar-control-generating** neural models in the same chain
+(two of its three "circuit" slots only extract a per-block control value, not an audio signal) — a reminder that
+"neural audio effect" doesn't have to mean "the network outputs the final sound"; a hybrid of neural analysis +
+classical processing is a legitimate, apparently-shipped design.
 
 Source: `metadata.json` for every `.mlmodelc` in
 `/Applications/Logic Pro.app/Contents/Frameworks/MAMachineLearning.framework/Versions/A/Resources/`, read directly
 (no decompilation needed — this is Apple's own exported model schema, machine-readable, not binary analysis).
 Cross-referenced against `CAnalogModelingMasteringChainFX`'s constructor (`mixer.md`, twentieth pass) for the
 `IMil2BNNSModel`/BNNS connection.
+
+Source (twenty-third pass): `MAMachineLearning::ModelFactory::createModel` at `0x81c0` in `MAMachineLearning.x86_64`
+(the enum-indexed switch itself, body not statically reachable by Ghidra's own analysis); the 6 switch-case bodies
+force-disassembled/decompiled at `0x8304` (enum 10, `TSO`), `0x8362`→helper `0xa1c0` (enum 11, `T`), `0x8370` (enum
+12, `G_SO`), `0x83ce` (enum 13, `G`), `0x842c`→helper `0xa350` (enum 14, `S_SO`), `0x844a` (enum 15, `S`) — all via
+a headless `analyzeHeadless -postScript` run (`DumpSwitchCases.java`/`DumpHelpers.java`), not GUI interaction.

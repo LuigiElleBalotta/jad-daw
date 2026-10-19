@@ -344,6 +344,16 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       `MK2Germ_96`, the best model, not the nearest rate). Also found two previously-unknown bundled files (`MKBO_88_erdk8f5b7k_0467`, which has zero
       references anywhere in the binary - possibly dead code - and `MKGerm88_uy2kv6feen_0560`, the actual 176.4kHz fallback). Full writeup in
       `docs/logic-reference/machine-learning-models.md`.
+      **Twenty-third pass:** user authorized using macOS automation to open Logic and run a Ghidra GUI session to finish the enum-to-codename mapping.
+      GUI automation of Ghidra itself proved unreliable for this specific job (Java/Swing dialog buttons and menu items don't respond to synthetic
+      clicks or keystrokes through the available automation layer - only AppleScript's native accessibility `click` action worked, and only on some
+      elements). Switched to the right tool instead: `analyzeHeadless -postScript` with a small custom Ghidra script that force-disassembles and
+      decompiles arbitrary addresses programmatically, no UI involved. This resolved all 6 switch cases cleanly. Result: `CAnalogModelingMasteringChainFX`
+      does **not** use the 11-codename conditioned-audio family guessed in the twenty-first pass at all - it uses all **six** codenames from the other
+      ("Family B") model family instead: enum 10/11 = `TSO`/`T` (audio output), 12/13 = `G_SO`/`G` (scalar output), 14/15 = `S_SO`/`S` (scalar output).
+      Only one of the three native/fallback pairs produces audio directly; the other two only output a per-block scalar - two of the engine's three
+      "circuit" slots are neural control-signal extractors, not audio generators. Which pair is Valve/Punch/Transparent is still an unconfirmed
+      inference. Full writeup in `docs/logic-reference/machine-learning-models.md` and `docs/logic-reference/mixer.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

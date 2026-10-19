@@ -575,12 +575,21 @@ bookkeeping, not attempted in full) shows it also builds a **per-path FFT-based 
 models run at one fixed internal rate and the engine resamples around them for any other project sample rate
 (consistent with the separately-found `SamplerateSupported` method). **Follow-up (twenty-first pass)**: catalogued
 every other model in `MAMachineLearning.framework/Resources/` by reading its CoreML `metadata.json` — full writeup
-in the new `docs/logic-reference/machine-learning-models.md`. Found an 11-model family (`FEO`/`FS`/`FSQ`/`FTO`/
-`MTC`/`MTM`/`RTRHT`/`RTRST`/`MKBO`/`MKGerm`/`MK2Germ`) with exactly the shape `CAnalogModelingMasteringChainFX`
-should want — audio in, audio out, a single conditioning scalar, WaveNet-style gated-conv architecture — with
-`MKGerm`/`MK2Germ` ("Germanium") a strong naming hint toward vintage analog-circuit modeling. Since the engine only
-loads 5 models at once but 11 candidates exist, which specific ones back Valve/Punch/Transparent (vs. some other
-feature) wasn't pinned down — see that doc for the full catalog and reasoning.
+in the new `docs/logic-reference/machine-learning-models.md`. Initially guessed the engine used an 11-model
+conditioned-audio family (`FEO`/`FS`/`FSQ`/`FTO`/`MTC`/`MTM`/`RTRHT`/`RTRST`/`MKBO`/`MKGerm`/`MK2Germ`). **Corrected
+in the twenty-third pass**: that guess was wrong — see below.
+
+**Resolved (twenty-third pass): the exact 6 models, by name.** The user authorized tracing a second binary and,
+when GUI automation of Ghidra proved unreliable (Java/Swing dialogs don't respond to synthetic clicks/keystrokes
+here), a headless `analyzeHeadless -postScript` run force-disassembled and decompiled `ModelFactory::createModel`'s
+6 switch cases directly — no GUI needed. **All six consumed models turn out to be the *other* model family**
+(`machine-learning-models.md`'s "Family B", unconditioned scalar/audio models, not the conditioned one guessed
+above): enum 10=`TSO` (audio out), 11=`T` (audio out), 12=`G_SO` (scalar out), 13=`G` (scalar out), 14=`S_SO`
+(scalar out), 15=`S` (scalar out) — three clean native/fallback pairs. Only the `T`/`TSO` pair produces audio;
+the other two pairs only output a single per-block scalar, meaning two of the engine's three "circuit" slots are
+neural **control-signal extractors**, not audio generators — a real architectural nuance, not previously known.
+Full writeup and the "which pair is Valve/Punch/Transparent" open question in
+`docs/logic-reference/machine-learning-models.md`.
 
 **`CCompressorClassA`'s table-fill step, ruled out two candidates (seventeenth pass)**: neither `OnReset` nor the
 constructor (`CCompressorClassAC2ER9CProcDatal`) build the curve — the constructor only `bzero`s the whole
@@ -593,15 +602,14 @@ these three places, or — given the "models"/presets discovery this session —
 `MADSP` entirely**, e.g. baked into a preset/resource rather than computed by this binary at all (speculative,
 not confirmed). Not pursued further.
 
-**Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found), and (ruled out as
-a quick win, see above) `CCompressorClassA`'s table-fill step. The per-band response-combination step and
-`CAnalogModelingMasteringChainFX`'s fundamental nature (BNNS neural inference, not classical DSP) are now
-resolved — see the nineteenth/twentieth-pass sections above, and the full ML-model catalog in
-`docs/logic-reference/machine-learning-models.md` (twenty-second pass confirms **exactly 6** models are loaded,
-not 5, matching the 6 `AMMCDeviceType` native/fallback values). Which 6 of the 11 architecturally-plausible
-`modelForStreaming_2048` codenames those are — i.e. which two make up each Valve/Punch/Transparent pair — needs a
-full manual reconstruction of `ModelFactory::createModel`'s broken jump table (Ghidra couldn't recover it
-automatically); the actual network weights are genuinely out of scope for static analysis at this depth regardless.
+**Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found), (ruled out as
+a quick win, see above) `CCompressorClassA`'s table-fill step, and which specific `{TSO,T}`/`{G_SO,G}`/`{S_SO,S}`
+pair is Valve/Punch/Transparent (plausible from the `AMMCDeviceType`+10 offset and the constructor's creation
+order, not independently confirmed). The per-band response-combination step, `CAnalogModelingMasteringChainFX`'s
+fundamental nature (BNNS neural inference), and the exact 6 models it loads are now all resolved — see the
+nineteenth/twentieth/twenty-third-pass sections above and the full catalog in
+`docs/logic-reference/machine-learning-models.md`. The actual network weights remain genuinely out of scope for
+static analysis at this depth.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.

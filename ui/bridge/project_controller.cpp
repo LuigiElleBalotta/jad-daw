@@ -1211,6 +1211,7 @@ void ProjectController::startNextImport() {
     const PendingImport next = importQueue_.front();
     importQueue_.pop_front();
     const double start = std::isnan(next.startBeats) ? lastImportEnd_ : next.startBeats;
+    if (next.newAlternative) newTrackAlternative(next.trackId, false);  // submitted before the import's own commands: the take lands on it
     QPointer<ProjectController> self(this);
     runImport(next.file, next.trackId, start, [self, start, next](bool ok, double endBeats) {
         if (next.temporary) {
@@ -1468,9 +1469,16 @@ void ProjectController::play() {
 }
 
 void ProjectController::setOverlapAudio(const QString& mode) {
-    if ((mode != "takes" && mode != "tracks" && mode != "tracksMute") || mode == overlapAudio_) return;
+    if ((mode != "takes" && mode != "tracks" && mode != "tracksMute" && mode != "alternatives") || mode == overlapAudio_) return;
     overlapAudio_ = mode;
     QSettings().setValue("record/overlapAudio", mode);
+    emit recordingChanged();
+}
+
+void ProjectController::setOverlapAudioOff(const QString& mode) {
+    if ((mode != "takes" && mode != "track" && mode != "alternative") || mode == overlapAudioOff_) return;
+    overlapAudioOff_ = mode;
+    QSettings().setValue("record/overlapAudioOff", mode);
     emit recordingChanged();
 }
 
@@ -1740,7 +1748,11 @@ void ProjectController::loadPanelState(QSettings& s) {
     lowLatency_ = s.value("record/lowLatency", false).toBool();
     for (QString* mode : {&overlapAudio_, &overlapMidi_}) {
         const QString v = s.value(mode == &overlapAudio_ ? "record/overlapAudio" : "record/overlapMidi", "takes").toString();
-        if (v == "tracks" || v == "tracksMute" || (mode == &overlapMidi_ && v == "merge")) *mode = v;
+        if (v == "tracks" || v == "tracksMute" || (mode == &overlapAudio_ && v == "alternatives") || (mode == &overlapMidi_ && v == "merge")) *mode = v;
+    }
+    {
+        const QString v = s.value("record/overlapAudioOff", "takes").toString();
+        if (v == "track" || v == "alternative") overlapAudioOff_ = v;
     }
     recordButtonMode_ = s.value("record/buttonMode", "toggle").toString() == "repeat" ? QStringLiteral("repeat") : QStringLiteral("toggle");
     automationFollows_ = s.value("edit/automationFollows", false).toBool();

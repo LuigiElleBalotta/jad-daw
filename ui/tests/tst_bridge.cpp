@@ -1083,6 +1083,21 @@ private slots:
         c.setCountInChoice(-10);
         QCOMPARE(c.countInChoice(), -9);
     }
+    void overlappingAudioRecordingsHaveOneChoicePerCycleState() {
+        jad::ProjectController c(false);
+        QCOMPARE(c.overlapAudio(), QString("takes"));
+        QCOMPARE(c.overlapAudioOff(), QString("takes"));
+        c.setOverlapAudio("alternatives");
+        QCOMPARE(c.overlapAudio(), QString("alternatives"));
+        c.setOverlapAudio("track");              // a Cycle Off word: not valid with Cycle On
+        QCOMPARE(c.overlapAudio(), QString("alternatives"));
+        c.setOverlapAudioOff("alternative");
+        QCOMPARE(c.overlapAudioOff(), QString("alternative"));
+        c.setOverlapAudioOff("tracksMute");      // a Cycle On word: not valid with Cycle Off
+        QCOMPARE(c.overlapAudioOff(), QString("alternative"));
+        c.setOverlapAudioOff("track");
+        QCOMPARE(c.overlapAudioOff(), QString("track"));
+    }
     void newTracksMakesSeveralInOneUndoStep() {
         TempDir dir;
         jad::ProjectController c(false);

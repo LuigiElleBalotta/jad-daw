@@ -140,7 +140,8 @@ class ProjectController : public QObject {
     // Record > Overlapping Audio / MIDI Recordings > Cycle On: what a cycle recording makes of its passes. "takes": the passes are takes of one passage
     // on the armed track (the last plays); "tracks": each pass after the first goes to a new track made like the armed one; "tracksMute": the same and
     // the earlier tracks are muted. MIDI also has "merge": all the passes are one region.
-    Q_PROPERTY(QString overlapAudio READ overlapAudio WRITE setOverlapAudio NOTIFY recordingChanged)
+    Q_PROPERTY(QString overlapAudio READ overlapAudio WRITE setOverlapAudio NOTIFY recordingChanged)  // Cycle On: takes, tracksMute or alternatives
+    Q_PROPERTY(QString overlapAudioOff READ overlapAudioOff WRITE setOverlapAudioOff NOTIFY recordingChanged)  // Cycle Off, a take over regions: takes, track or alternative
     Q_PROPERTY(QString overlapMidi READ overlapMidi WRITE setOverlapMidi NOTIFY recordingChanged)
     Q_PROPERTY(bool lowLatencyMonitoring READ lowLatencyMonitoring WRITE setLowLatencyMonitoring NOTIFY recordingChanged)  // Record > Low Latency Monitoring Mode
     Q_PROPERTY(bool flexView READ flexView WRITE setFlexView NOTIFY flexViewChanged)  // Edit > Show Flex Pitch/Time: the markers and notes are drawn
@@ -336,8 +337,10 @@ public:
     bool punchEnabled() const { return punchEnabled_; }
     bool allowQuickPunch() const { return allowQuickPunch_; }
     QString overlapAudio() const { return overlapAudio_; }
+    QString overlapAudioOff() const { return overlapAudioOff_; }
     QString overlapMidi() const { return overlapMidi_; }
     void setOverlapAudio(const QString& mode);
+    void setOverlapAudioOff(const QString& mode);
     void setOverlapMidi(const QString& mode);
     bool lowLatencyMonitoring() const { return lowLatency_; }
     void setLowLatencyMonitoring(bool on);
@@ -947,6 +950,7 @@ private:
         bool muted = false;      // a take that does not play
         bool musical = false;    // the region follows the tempo (Use Musical Grid)
         bool recorded = false;   // a take: the file remembers when it was recorded (Move > To Recorded Position)
+        bool newAlternative = false;  // Create Track Alternative(s): the track first gets a new empty alternative that plays, and the take lands on it
     };
     void startNextImport();
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
@@ -1141,7 +1145,7 @@ private:
     bool allowQuickPunch_ = true;
     bool musicalGrid_ = false;
     bool lowLatency_ = false;
-    QString overlapAudio_ = QStringLiteral("takes"), overlapMidi_ = QStringLiteral("takes");
+    QString overlapAudio_ = QStringLiteral("takes"), overlapAudioOff_ = QStringLiteral("takes"), overlapMidi_ = QStringLiteral("takes");
     // The track that pass `pass` (0 = the first) of a cycle recording on `base` is put on: `base` itself, or a track made like it (commands are added to make it).
     QString cloneTrackCommand(const QString& base, const QString& name, int after, nlohmann::json& commands);
     QString trackForPass(const QString& base, int pass, QMap<QString, QStringList>& made, nlohmann::json& commands);

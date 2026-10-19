@@ -1253,13 +1253,15 @@ void ProjectController::finishRecording() {
     const std::int64_t punchOut = punchEnabled_ ? static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(punchEndBeats_ * lpc::kPPQ)), sampleRate_))) : std::numeric_limits<std::int64_t>::max();
     int made = 0;
     double seconds = 0;
-    const bool newTracks = overlapAudio_ != "takes";  // Create Tracks (and Mute): a pass is a track, not a take
+    const bool cycle = runs.size() > 1;
+    const bool newTracksOn = cycle && (overlapAudio_ == "tracks" || overlapAudio_ == "tracksMute");  // Create Tracks (and Mute): a pass is a track, not a take
+    const bool alternativesOn = cycle && overlapAudio_ == "alternatives";                              // Create Track Alternatives: a pass is an alternative of the track
     QMap<QString, QStringList> madeTracks;
     nlohmann::json trackCommands = nlohmann::json::array();
     const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh.mm.ss");
     for (const QString& trackId : std::as_const(recTracks_)) {
         const int input = recInputs_.value(trackId);
-        const QString takeGroup = runs.size() > 1 && !newTracks ? QUuid::createUuid().toString(QUuid::WithoutBraces) : QString();  // the passes of a cycle are takes of one passage
+        QString takeGroup = cycle && !newTracksOn && !alternativesOn ? QUuid::createUuid().toString(QUuid::WithoutBraces) : QString();  // the passes of a cycle are takes of one passage
         QString trackName;
         for (const TrackRow& t : allRows_) if (t.id == trackId) trackName = t.name;
         int take = 0;
@@ -1296,8 +1298,35 @@ void ProjectController::finishRecording() {
             }
             const double startBeats = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(start), sampleRate_)) / lpc::kPPQ;
             const bool lastRun = &run == &runs.back();
-            const QString target = newTracks ? trackForPass(trackId, take, madeTracks, trackCommands) : trackId;
-            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), target, startBeats, true, takeGroup, !takeGroup.isEmpty() && !lastRun, musicalGrid_, true});  // the last pass plays
+            // Cycle Off: one pass; when it lies over regions of the track the menu says what happens (Create Take Folder / New Track / Track Alternative)
+            bool newTracks = newTracksOn, newAlternative = alternativesOn && take > 0;  // the first pass of Create Track Alternatives plays on the track as it is
+            bool mutedTake = !takeGroup.isEmpty() && !lastRun;
+            int trackPass = take;
+            QString group = takeGroup;
+            if (!cycle) {
+                const double lengthBeats = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(start + (to - from)), sampleRate_)) / lpc::kPPQ - startBeats;
+                std::vector<const RegionRow*> under;
+                for (const RegionRow& r : regionRows_)
+                    if (r.trackId == trackId && r.startBeats < startBeats + lengthBeats - 1e-9 && r.startBeats + r.lengthBeats > startBeats + 1e-9) under.push_back(&r);
+                if (!under.empty()) {
+                    if (overlapAudioOff_ == "track") { newTracks = true; trackPass = 1; }
+                    else if (overlapAudioOff_ == "alternative") newAlternative = true;
+                    else {  // Create Take Folder: what lies under the take and the take are takes of one passage; the new one plays
+                        group = under.front()->takeGroup.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : under.front()->takeGroup;
+                        for (const RegionRow* r : under) {
+                            if (r->takeGroup == group && r->muted) continue;
+                            nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+                            if (region.is_discarded()) continue;
+                            region["takeGroup"] = group.toStdString();
+                            region["muted"] = true;
+                            trackCommands.push_back({{"type", "replace_region"}, {"region", region}});
+                        }
+                        mutedTake = false;
+                    }
+                }
+            }
+            const QString target = newTracks ? trackForPass(trackId, trackPass, madeTracks, trackCommands) : trackId;
+            importQueue_.push_back({QUrl::fromLocalFile(QString::fromStdU16String(tmp.u16string())), target, startBeats, true, group, mutedTake, musicalGrid_, true, newAlternative});  // the last pass plays
             seconds = std::max(seconds, static_cast<double>(data.size() / (stereo ? 2 : 1)) / sampleRate_);
             ++take;
             ++made;

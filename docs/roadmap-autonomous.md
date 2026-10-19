@@ -417,10 +417,11 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       DONE: Preferences is now JAD Daw > Settings > Preferences… and Key Commands sits in the JAD Daw app menu (new first menu in `actions.json`).
 - [x] E5. Record > Count-in goes to **1/4 through 9/4** (nine beat counts), jad-daw only offers up to 3/4 — extend the Count-in UI/engine to match.
       DONE: Count-in menu has 1/4 to 9/4 (`countInChoice` -1..-9) beside 1..6 bars.
-- [ ] E6. Record > Overlapping Audio Recordings is **two separate groups** depending on whether Cycle is on or off (Cycle Off: Create Take Folder /
+- [x] E6. Record > Overlapping Audio Recordings is **two separate groups** depending on whether Cycle is on or off (Cycle Off: Create Take Folder /
       Create New Track / Create Track Alternative; Cycle On: Create Take Folder / Create Tracks And Mute / Create Track Alternatives), not jad-daw's
       one flat Take-Folder/Tracks/Tracks-and-Mute/Merge list for both states. "Create Track Alternative(s)" from a cycle recording isn't in jad-daw at
       all today.
+      DONE: Cycle On has Take Folder / Create Tracks and Mute / Create Track Alternatives, Cycle Off has Take Folder / Create New Track / Create Track Alternative (`overlapAudio`, `overlapAudioOff`). Cycle Off acts only when the take lies over regions of the track: a take folder joins them (the new one plays), a new track copies the strip, an alternative gets the take on a new empty alternative. Cycle On alternatives: each pass after the first is a new alternative.
 - [ ] E8. Project Settings is **one window with 11 tabs** (General, Audio, Recording, Smart Tempo, MIDI, Score, Movie, Synchronization, Metronome,
       Tuning, Assets), not the single "name, rate, tempo, count-in, recording" panel the roadmap describes. The General tab alone has three groups
       (Project Type/Opening Project/Automation) that don't map to that description. Needs a per-tab pass before assuming today's single panel covers it.

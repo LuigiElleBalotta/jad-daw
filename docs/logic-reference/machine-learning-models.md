@@ -199,3 +199,7 @@ Source (twenty-third pass): `MAMachineLearning::ModelFactory::createModel` at `0
 force-disassembled/decompiled at `0x8304` (enum 10, `TSO`), `0x8362`→helper `0xa1c0` (enum 11, `T`), `0x8370` (enum
 12, `G_SO`), `0x83ce` (enum 13, `G`), `0x842c`→helper `0xa350` (enum 14, `S_SO`), `0x844a` (enum 15, `S`) — all via
 a headless `analyzeHeadless -postScript` run (`DumpSwitchCases.java`/`DumpHelpers.java`), not GUI interaction.
+
+The actual compiled model files for all 6 confirmed codenames (24 `.mlmodelc` bundles, 4 sample rates each) were
+copied to `../logic-pro-reference/analog-model-ml-models/` per the project's standing "always extract found
+models/presets" rule — see that folder's own `README.md` entry for details.

@@ -28,3 +28,14 @@ function(lpc_copy_onnx_dlls target)
         add_custom_command(TARGET ${target} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LPC_ORT_DLLS} $<TARGET_FILE_DIR:${target}>)
     endif()
 endfunction()
+
+# Neural models for an executable: copied from LPC_MODELS_SOURCE (default jad-daw-private/onnx, not in git) into <exe dir>/models after each build.
+# Without the folder the app runs with its classical algorithms.
+set(LPC_MODELS_SOURCE "${CMAKE_SOURCE_DIR}/jad-daw-private/onnx" CACHE PATH "Folder with the converted .onnx models")
+function(lpc_copy_models target)
+    if(LPC_WITH_ONNX AND IS_DIRECTORY "${LPC_MODELS_SOURCE}")
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -DSRC=${LPC_MODELS_SOURCE} -DDST=$<TARGET_FILE_DIR:${target}>/models -P ${CMAKE_SOURCE_DIR}/cmake/copy_models.cmake
+            COMMENT "neural models for ${target}")
+    endif()
+endfunction()

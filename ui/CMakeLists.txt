@@ -194,6 +194,8 @@ if(TARGET lpc-plugin-scanner)
     add_custom_command(TARGET jad-daw POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:lpc-plugin-scanner> $<TARGET_FILE_DIR:jad-daw>)
 endif()
+lpc_copy_onnx_dlls(jad-daw)
+lpc_copy_models(jad-daw)
 if(WIN32)
     enable_language(RC)
     target_sources(jad-daw PRIVATE jad-daw.rc)

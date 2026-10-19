@@ -202,4 +202,8 @@ a headless `analyzeHeadless -postScript` run (`DumpSwitchCases.java`/`DumpHelper
 
 The actual compiled model files for all 6 confirmed codenames (24 `.mlmodelc` bundles, 4 sample rates each) were
 copied to `../logic-pro-reference/analog-model-ml-models/` per the project's standing "always extract found
-models/presets" rule — see that folder's own `README.md` entry for details.
+models/presets" rule. The user asked for all of them (not knowing yet which feature(s) Family A/C serve shouldn't
+block having the actual files in hand for implementation work), so every `.mlmodelc` in
+`MAMachineLearning.framework/Resources/` (69 files, 56 MB) was also copied to `../logic-pro-reference/all-ml-models/`
+— see that folder's own `README.md` entry for the full breakdown, including confirmation that the one cataloged-but-
+unreferenced file (`MKBO_88_erdk8f5b7k_0467`) genuinely doesn't exist on disk anymore.

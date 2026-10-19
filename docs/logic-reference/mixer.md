@@ -519,12 +519,22 @@ actually available at that moment, matching the menu text's own "(using Clean in
 analog circuit simulation itself (what `CAnalogModelingMasteringChainFX` actually computes — whether it's CoreML
 inference like Smart Tempo, or classical nonlinear DSP) is a large, separate engine, not traced this pass.
 
-**Open**: what actually fills `CCompressorClassA`'s shared 1024-entry table in the first place (built once,
-presumably at construction/reset — not traced), the actual per-band response-combination step that consumes
-`FillResponseLUT`'s cos/sin basis (which biquad coefficients multiply which table entries — not traced), the
-11-byte filename table that would pin down exactly which `.pst` presets the Assistant's model picker reads, and
-`CAnalogModelingMasteringChainFX`'s actual circuit simulation (CoreML-based or classical DSP — a sizeable engine
-of its own, genuinely new scope beyond the original Compressor/Limiter/EQ/Match-EQ sweep, not pursued this pass).
+**`CCompressorClassA`'s table-fill step, ruled out two candidates (seventeenth pass)**: neither `OnReset` nor the
+constructor (`CCompressorClassAC2ER9CProcDatal`) build the curve — the constructor only `bzero`s the whole
+1024-entry region (`this+0xb0`, confirmed: `bzero(this+0x16 [in 8-byte units] = this+0xb0, ...)`) to an all-zero
+starting state, and `OnReset` only touches small envelope-state fields well below that offset. `Coefficients`'s
+ratio-preset case (`0xd`) does call back into the object's vtable afterward (`(*vtable+0x90)`, resolved by reading
+the real vtable bytes at `0xee3ab0+0x90`) — but that slot is **`CCompressorBase::CalcAutoGain`**, an auto-gain
+recalculation, not a table builder. So the actual fill logic either lives in a function not reached from any of
+these three places, or — given the "models"/presets discovery this session — is plausibly supplied **from outside
+`MADSP` entirely**, e.g. baked into a preset/resource rather than computed by this binary at all (speculative,
+not confirmed). Not pursued further.
+
+**Open**: the actual per-band response-combination step that consumes `FillResponseLUT`'s cos/sin basis (which
+biquad coefficients multiply which table entries — not traced), the 11-byte filename table that would pin down
+exactly which `.pst` presets the Assistant's model picker reads, `CAnalogModelingMasteringChainFX`'s actual circuit
+simulation (CoreML-based or classical DSP — a sizeable engine of its own, genuinely new scope beyond the original
+Compressor/Limiter/EQ/Match-EQ sweep), and (now ruled out as a quick win) `CCompressorClassA`'s table-fill step.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.

@@ -301,6 +301,11 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       `SMUC` chunk, refining (not confirming) the earlier "SMUC is always an empty placeholder" guess. Byte-position-to-parameter-ID correspondence
       for the generic presets is a plausible match (spot-checked values look sensible) but not proven the way the Match EQ format was. Full writeup
       in `docs/logic-reference/mixer.md`; raw + parsed data in `../logic-pro-reference/{match-eq-presets,stock-plugin-presets}/`.
+      **Seventeenth pass:** chased `CCompressorClassA`'s table-fill step - ruled out both the constructor (only `bzero`s the 1024-entry region to a
+      zeroed start state) and `OnReset` (only touches small envelope fields). `Coefficients`'s ratio-preset case does call back into the vtable
+      afterward, resolved by reading the real vtable bytes - it's `CCompressorBase::CalcAutoGain` (auto-gain recalculation), not a table builder. The
+      real fill logic isn't in any of the three places checked; may live outside `MADSP` entirely (speculative). Not pursued further - this was the
+      last readily-reachable lead on that particular open item.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

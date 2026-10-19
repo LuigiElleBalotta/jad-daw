@@ -294,6 +294,13 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       that's still built elsewhere (constructor or lazily), not found this pass. Remaining opens (`CCompressorClassA`'s actual table-fill step, the
       per-band response-combination math, the exact `.pst` filename table proving which presets `SpectralReferenceDataFactory` reads, and
       `CAnalogModelingMasteringChainFX`'s own engine) all still need either a live instance or a genuinely new, separate reverse-engineering pass.
+      **Sixteenth pass:** user said to always extract found presets going forward. The same generic preset container format (confirmed via the Match
+      EQ factory) backs every stock plugin's `.pst` files, not just Match EQ's - extracted and parsed all 324 factory presets for Compressor (159),
+      Channel EQ (149), Noise Gate (8), Adaptive Limiter (5), and Limiter (3), plus each plugin's `CSParameterOrder.plist` (the real UI parameter
+      ID-to-name list). Also pulled each plugin's own `#default.pst`: Match EQ's is empty, but Mastering Assistant's has a real non-zero curve in its
+      `SMUC` chunk, refining (not confirming) the earlier "SMUC is always an empty placeholder" guess. Byte-position-to-parameter-ID correspondence
+      for the generic presets is a plausible match (spot-checked values look sensible) but not proven the way the Match EQ format was. Full writeup
+      in `docs/logic-reference/mixer.md`; raw + parsed data in `../logic-pro-reference/{match-eq-presets,stock-plugin-presets}/`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

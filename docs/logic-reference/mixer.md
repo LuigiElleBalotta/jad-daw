@@ -471,7 +471,33 @@ actual target curve (e.g. Pop 01's L channel: −54 dB at 0 Hz-bin, rising to a 
 All 70 presets (50 stereo + 20 surround) were parsed with a one-off script into plain JSON (`freq_hz` + one
 `target_magnitude_db` array per channel) and saved alongside the original `.pst` files in `../logic-pro-reference/
 match-eq-presets/` (outside jad-daw's git repo, same convention as the rest of that folder) — real, directly reusable
-reference curves for jad-daw's own Match EQ, not just an architecture description.
+reference curves for jad-daw's own Match EQ, not just an architecture description. Each plugin's own `#default.pst`
+was pulled too: Match EQ's is genuinely all-zero (an empty default), but **Mastering Assistant's own `#default.pst`
+is not** — its single `SMUC` chunk holds a real curve (−110 to −27 dB), suggesting `SMUC` isn't purely an
+empty-until-captured slot as guessed above; possibly a generic fallback reference used before any content-type
+model is picked. Not confirmed further this pass.
+
+### Stock Compressor/Limiter/Noise Gate/Channel EQ: all factory presets extracted too (sixteenth pass)
+
+Following the same request for the Match EQ presets, the same generic container format (`GAMETSPP` header, a
+declared parameter count, then a flat float array — the same header shape `SpectralReferenceDataFactory` uses,
+just without the Match EQ-specific chunking) turned out to back **every** stock plugin's `.pst` preset, not just
+Match EQ's. All factory presets for Compressor (159, under category folders like `01 Drums`), Channel EQ (149),
+Noise Gate (8), Adaptive Limiter (5), and Limiter (3) — 324 total — were copied and parsed into JSON, alongside
+each plugin's own `CSParameterOrder.plist` (Apple's own UI-parameter-ID-to-name list — e.g. Compressor's
+`0 Compressor Threshold`, `1 Ratio`, `2 Attack`, `3 Release`, `4 Gain`, `5 Knee`, `9 Circuit Type`...). A spot check
+on `Compressor/01 Drums/Classic Drums.pst` reads as a plausible, sensible real-world setting (threshold ≈ −23 dB,
+ratio ≈ 5.2:1, attack ≈ 10 ms, release ≈ 48 ms), which is reassuring, but **the exact byte-position ↔ parameter-ID
+correspondence was not independently confirmed** — unlike the Match EQ spectral format (verified byte-for-byte
+against the decompiled factory function), this is pattern-matched from the plausible-looking values, not proven.
+Treat it as a strong lead for future work (e.g. decompiling `CCompressorBase::GetPropertyInfo` to get the real
+ID table), not an established fact yet. Channel EQ's presets consistently carry 2 extra floats beyond their
+declared count, unexplained (likely per-band metadata, since Channel EQ's parameter list is inherently variable
+with band count, unlike the other four plugins' presets which matched their declared count exactly).
+
+Source (sixteenth pass): on-disk preset libraries at `/Applications/Logic Pro.app/Contents/Resources/Plug-In
+Settings/{Compressor,Limiter,Noise Gate,Channel EQ,Adaptive Limiter}/`; extracted into
+`../logic-pro-reference/stock-plugin-presets/`.
 
 **Unrelated but notable find from the same search**: `CAutoMasterShell::BuildIntelModelMenu` (in the UI shell, not
 `CAutoMaster` itself) builds a *different* 4-item menu — **"Clean" / "Valve" / "Punch" / "Transparent"** — for what

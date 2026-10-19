@@ -181,6 +181,18 @@ TEST_CASE("limiter: the lookahead is the latency, the adaptive limiter holds its
     for (const float v : run(*lim, sine(200, 0.9, 24000))) REQUIRE(std::abs(v) <= ceiling + 1e-6f);
 }
 
+TEST_CASE("limiter: the meter reads the reduction (bit-pattern log, as Logic's)", "[effects][limiter]") {
+    ProcessorRef r = ref(kProcLimiter, {{"ceiling", -6}, {"gain", 12}, {"lookahead", 1}, {"release", 500}});
+    auto lim = makeBuiltinEffect(r, kSr);
+    run(*lim, sine(200, 0.9, 24000));
+    // the signal asks for 20 log10(0.9 * 3.98 / 0.501) = 17 dB at its peaks; the meter shows what the gain is at the end of the block
+    REQUIRE(lim->reductionDb() > 10.0f);
+    REQUIRE(lim->reductionDb() < 18.5f);
+    auto idle = makeBuiltinEffect(ref(kProcLimiter), kSr);
+    run(*idle, sine(200, 0.05, 4800));
+    REQUIRE(idle->reductionDb() == Catch::Approx(0.0f).margin(0.05f));
+}
+
 TEST_CASE("gate: a quiet signal is cut by the reduction, a loud one passes", "[effects][gate]") {
     ProcessorRef r = ref(kProcGate, {{"threshold", -30}, {"range", -60}, {"attack", 0.5}, {"hold", 0}, {"release", 20}});
     auto g = makeBuiltinEffect(r, kSr);

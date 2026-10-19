@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
 #include <cmath>
@@ -8,6 +9,7 @@
 #include "lpc/processor_ids.h"
 
 using namespace lpc;
+using Catch::Approx;
 
 namespace {
 constexpr int kRate = 48000;
@@ -131,4 +133,24 @@ TEST_CASE("mastering processor: Loudness Compensation applies the trim the analy
     float peak = 0;
     for (int i = kRate / 2; i < kRate; ++i) peak = std::max(peak, std::abs(l[static_cast<std::size_t>(i)]));
     CHECK(std::abs(peak - 0.05f) < 0.01f);          // 0.1 at -6 dB, not at +12 dB
+}
+
+TEST_CASE("mastering processor: the Loudness macro follows Apple's staged curves", "[mastering]") {
+    // a quiet sine below every threshold: only the compressor's input gain acts, 13.1 dB per unit below zero, 12.0 above
+    auto level = [&](double macroPercent) {
+        ProcessorRef ref;
+        ref.processorId = kProcMastering;
+        ref.params = {{"gain", 0.0}, {"autoEq", 0.0}, {"loudness", macroPercent}};
+        auto p = audio::makeBuiltinEffect(ref, kRate);
+        std::vector<float> l(kRate), r(kRate);
+        for (int i = 0; i < kRate; ++i) l[static_cast<std::size_t>(i)] = r[static_cast<std::size_t>(i)] = static_cast<float>(std::pow(10.0, -50.0 / 20.0) * std::sin(2 * kPi * 440.0 * i / kRate));
+        p->process(l.data(), r.data(), kRate);
+        double e = 0;
+        for (int i = kRate / 2; i < kRate; ++i) e += static_cast<double>(l[static_cast<std::size_t>(i)]) * l[static_cast<std::size_t>(i)];
+        return 10.0 * std::log10(e / (kRate / 2));
+    };
+    const double zero = level(0.0);
+    CHECK(level(-100.0) - zero == Approx(-13.1).margin(0.4));
+    CHECK(level(50.0) - zero == Approx(6.0).margin(0.4));
+    CHECK(level(100.0) - zero == Approx(12.0 + 1.3).margin(0.6));   // 12 dB into the compressor and the limiter's 3.25 x 0.4 dB
 }

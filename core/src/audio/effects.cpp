@@ -4,6 +4,8 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include "lpc/audio/eq_filters.h"
@@ -25,6 +27,19 @@ double param(const ProcessorRef& ref, const char* name) {
     const auto it = ref.params.find(name);
     const double v = it == ref.params.end() ? p->def : it->second;
     return std::clamp(v, p->min, p->max);
+}
+
+// The gain-reduction meters of Logic's compressors and limiters (MADSP) read dB from the float's bits: m in [1,2) and the exponent e give
+// log2(x) ~ e + m - 0.33985 (m - 1.5)^2 - 0.9150375, times 20 / log2(10) = 6.0206003. Good to about 0.02 dB, no log call per sample.
+float fastDb(float x) {
+    if (!(x > 1e-20f)) return -400.0f;  // the meter floor
+    std::uint32_t bits;
+    std::memcpy(&bits, &x, sizeof bits);
+    const float e = static_cast<float>(static_cast<int>((bits >> 23) & 0xff) - 127);
+    bits = (bits & 0x007fffffu) | 0x3f800000u;
+    float m;
+    std::memcpy(&m, &bits, sizeof m);
+    return (e + m - 0.33985f * (m - 1.5f) * (m - 1.5f) - 0.9150375f) * 6.0206003f;
 }
 
 double dbToLin(double db) { return std::pow(10.0, db / 20.0); }
@@ -303,6 +318,7 @@ public:
             r[i] = std::clamp(outR, -ceiling_, ceiling_);
         }
     }
+    float reductionDb() const noexcept override { return std::max(0.0f, -fastDb(gain_state_)); }
     nlohmann::json describe() const override { return {{"id", kProcLimiter}}; }
 
 private:
@@ -534,7 +550,7 @@ class MasteringProcessor final : public IProcessor {
 public:
     MasteringProcessor(const ProcessorRef& ref, double sr)
         : bypass_(param(ref, "bypass") >= 0.5), excite_(param(ref, "excite") >= 0.5), character_(static_cast<int>(std::lround(param(ref, "character")))),
-          limiter_(limiterRef(), sr, true), compressor_(compressorRef(static_cast<int>(std::lround(param(ref, "character"))), -14.0 - param(ref, "gain")), sr) {
+          limiter_(limiterRef(param(ref, "loudness") / 100.0), sr, true), compressor_(compressorRef(static_cast<int>(std::lround(param(ref, "character"))), -14.0 - param(ref, "gain")), sr) {
         const double amount = param(ref, "autoEq") / 100.0;
         for (int i = 0; i < kBands; ++i) {
             const double g = param(ref, ("eq" + std::to_string(i + 1)).c_str()) * amount;
@@ -545,7 +561,12 @@ public:
         // the character colours the balance a little
         if (character_ == 1) { bands_[0] = lowShelf(sr, 80.0, param(ref, "eq1") * amount + 1.5); drive_ = 1.6f; }
         if (character_ == 2) extra_ = peaking(sr, 2500.0, 1.5, 0.8);
-        totalGain_ = param(ref, "gain") + 0.06 * param(ref, "loudness");
+        // the Loudness macro (MADSP, decompiled): the compressor's input gain, the saturation blend and the limiter's gain and release each follow
+        // their own piecewise-linear curve of the macro position, so most of them stay off until the macro is well above zero
+        const double macro = std::clamp(param(ref, "loudness") / 100.0, -1.0, 1.0);
+        compIn_ = static_cast<float>(dbToLin(macro <= 0.0 ? macro * 13.1 : macro * 12.0));
+        wet_ = macro < 0.4 ? 0.0 : (macro - 0.4) / 0.6;
+        totalGain_ = param(ref, "gain");
         gain_ = static_cast<float>(dbToLin(param(ref, "compensate") >= 0.5 ? param(ref, "compTrim") : totalGain_));  // compensation: the level the analysis measured
         // a delay as long as the limiter's, so that bypassing does not shift the sound
         delay_.assign(static_cast<std::size_t>(std::max(1, limiter_.latencySamples())), 0.0f);
@@ -583,10 +604,17 @@ public:
             l[i] = static_cast<float>(xl);
             r[i] = static_cast<float>(xr);
         }
+        if (compIn_ != 1.0f)
+            for (int i = 0; i < frames; ++i) { l[i] *= compIn_; r[i] *= compIn_; }
         compressor_.process(l, r, frames);  // the dynamics are shaped at the level the mix has, then the loudness is made up and the limiter holds the peaks
         for (int i = 0; i < frames; ++i) {  // the gain, and a soft clip that takes the tallest few dB off the peaks before the limiter has to hold the rest
-            l[i] = static_cast<float>(kClip * std::tanh(static_cast<double>(l[i]) * gain_ / kClip));
-            r[i] = static_cast<float>(kClip * std::tanh(static_cast<double>(r[i]) * gain_ / kClip));
+            double yl = static_cast<double>(l[i]) * gain_, yr = static_cast<double>(r[i]) * gain_;
+            if (wet_ > 0.0) {  // the wave shaper, blended in from the macro position 0.4 on
+                yl += wet_ * (0.5 * std::tanh(2.0 * yl) - yl);
+                yr += wet_ * (0.5 * std::tanh(2.0 * yr) - yr);
+            }
+            l[i] = static_cast<float>(kClip * std::tanh(yl / kClip));
+            r[i] = static_cast<float>(kClip * std::tanh(yr / kClip));
         }
         limiter_.process(l, r, frames);
     }
@@ -597,10 +625,14 @@ private:
     static constexpr double kClip = 0.9;  // the soft clip's ceiling, about -0.9 dBFS
     static constexpr int kBands = 8;
     static constexpr std::array<double, kBands> kCentres{40, 100, 250, 630, 1600, 4000, 8000, 14000};
-    static ProcessorRef limiterRef() {
+    // the limiter's input gain and release from the macro position (neutral at 0: Apple's 2.8 dB is part of the loudness the analysis already measures)
+    static ProcessorRef limiterRef(double macro) {
+        macro = std::clamp(macro, -1.0, 1.0);
+        const double gain = macro < 0.6 ? 0.0 : 3.25 * (macro - 0.6);
+        const double release = macro < 0.4 ? 2.0 : 2.0 + 44.0 * (macro - 0.4) / 0.6;
         ProcessorRef r;
         r.processorId = kProcLimiter;
-        r.params = {{"gain", 0.0}, {"ceiling", -1.0}, {"release", 30.0}, {"lookahead", 1.0}, {"softKnee", 0.0}, {"truePeak", 1.0}};
+        r.params = {{"gain", gain}, {"ceiling", -1.0}, {"release", release}, {"lookahead", 1.0}, {"softKnee", 0.0}, {"truePeak", 1.0}};
         return r;
     }
     // `levelLufs`: the loudness of the mix before the insert (the analysis stored the gain that brings it to -14), so the threshold sits a few dB above it
@@ -629,7 +661,8 @@ private:
     std::array<std::array<double, 4>, kBands> z_{};
     BiquadCoeffs extra_;
     std::array<double, 4> zx_{};
-    float drive_ = 1.0f, gain_ = 1.0f;
+    float drive_ = 1.0f, gain_ = 1.0f, compIn_ = 1.0f;
+    double wet_ = 0.0;
     double totalGain_ = 0.0, highpass_ = 0.2, lowL_ = 0.0, lowR_ = 0.0;
     std::vector<float> delay_, delayR_;
     std::size_t pos_ = 0;

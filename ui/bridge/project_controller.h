@@ -516,6 +516,11 @@ public:
     // options: format "wav16" | "wav24" | "wav32" (float) | "aiff16" | "aiff24"; range "project" | "cycle"; normalize (bool, to -0.3 dBFS);
     // tail (seconds of tail after the last region, 0..30); dither (bool, for 16-bit)
     Q_INVOKABLE void bounceProjectAs(const QUrl& file, const QVariantMap& options);
+    // options: format (wav16|wav24|wav32|aiff16|aiff24|flac16|flac24), range (project|cycle|custom with startBeats/endBeats), sampleRate (0: the project's),
+    // normalize (bool, or "off"/"overall"), tail (s), secondPass (cycle area: the tail of the end is folded onto the start, as a loop that plays twice),
+    // addToProject (the bounce is imported on a new audio track)
+    Q_INVOKABLE double barToBeats(int bar) const;   // the start of a bar (1-based) in quarter-note beats, following the signature changes
+    Q_INVOKABLE int beatsToBar(double beats) const; // the bar (1-based) that holds the beat
     // Audio files dropped (or chosen) at a position: onto an audio track they go on that track, back to back; anywhere else each file
     // makes a new audio track named after the file. WAV, MP3, FLAC and AIFF; other rates are converted to the project's.
     Q_INVOKABLE void importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats);

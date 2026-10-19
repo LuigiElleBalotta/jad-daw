@@ -37,6 +37,7 @@
 #include "lpc/plugin_catalogue.h"
 #include "lpc/flac.h"
 #include "lpc/midi_file.h"
+#include "lpc/audio_decode.h"
 #include "lpc/audio_ops.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
@@ -815,8 +816,12 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     if (!host_) return;
     const QString format = options.value("format", "wav24").toString();
     const QString range = options.value("range", "project").toString();
-    const bool normalizeOn = options.value("normalize", false).toBool();
+    const QVariant normalizeOption = options.value("normalize", false);
+    const bool normalizeOn = normalizeOption.typeId() == QMetaType::QString ? (!normalizeOption.toString().isEmpty() && normalizeOption.toString() != "off") : normalizeOption.toBool();
     const double tail = std::clamp(options.value("tail", 0.5).toDouble(), 0.0, 30.0);
+    const int targetRate = std::clamp(options.value("sampleRate", 0).toInt(), 0, 192000);
+    const bool secondPass = options.value("secondPass", false).toBool() && range != "project";
+    const bool addToProject = options.value("addToProject", false).toBool();
     const bool aiff = format.startsWith("aiff");
     const bool flac = format.startsWith("flac");
     const int bits = format.endsWith("16") ? 16 : (format.endsWith("32") ? 32 : 24);
@@ -831,16 +836,21 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     }
     lpc::RenderOptions render;
     render.tailSeconds = tail;
-    if (range == "cycle") {
-        if (loopEndBeats_ <= loopStartBeats_) {
-            setError("Set the cycle area first (drag in the top strip of the ruler)");
+    std::int64_t rangeFrames = 0;  // the length of the chosen range, for the second cycle pass
+    if (range == "cycle" || range == "custom") {
+        const double from = range == "cycle" ? loopStartBeats_ : options.value("startBeats", 0.0).toDouble();
+        const double to = range == "cycle" ? loopEndBeats_ : options.value("endBeats", 0.0).toDouble();
+        if (!(to > from)) {
+            setError(range == "cycle" ? "Set the cycle area first (drag in the top strip of the ruler)" : "The end of the bounce must be after its start");
             return;
         }
         const auto toFrames = [this](double beats) {
             return static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(beats * lpc::kPPQ)), sampleRate_)));
         };
-        render.startFrame = toFrames(loopStartBeats_);
-        render.frames = toFrames(loopEndBeats_) - render.startFrame;
+        render.startFrame = toFrames(from);
+        render.frames = toFrames(to) - render.startFrame;
+        rangeFrames = render.frames;
+        if (secondPass) render.frames = rangeFrames * 2;  // the second round is the tail of the first, which comes back at the start of the loop
     }
     if (bouncing_->exchange(true)) {
         setError("A bounce is already running");
@@ -854,7 +864,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
     const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
-    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, flac, bits, normalizeOn, dither] {
+    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, flac, bits, normalizeOn, dither, targetRate, secondPass, rangeFrames, addToProject] {
         QString message;
         try {
             lpc::MediaStore media(root, /*streaming=*/false);
@@ -864,18 +874,52 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
             data.sampleRate = r.sampleRate;
             data.channels = 2;
             data.samples = r.interleaved;
+            if (secondPass) {  // fold the second round onto the first and keep the range
+                const std::size_t keep = static_cast<std::size_t>(rangeFrames) * 2;
+                for (std::size_t i = 0; i < keep && i + keep < data.samples.size(); ++i) data.samples[i] += data.samples[i + keep];
+                data.samples.resize(std::min(data.samples.size(), keep));
+            }
+            if (targetRate > 0 && targetRate != r.sampleRate) data = lpc::convertForProject(data, targetRate);
+            const int fileRate = data.sampleRate > 0 ? data.sampleRate : r.sampleRate;
             if (normalizeOn) lpc::normalize(data, -0.3);
             if (dither) lpc::ditherTpdf(data, bits);
-            if (aiff) lpc::writeAiff(out, r.sampleRate, 2, data.samples, bits);
-            else if (flac) lpc::writeFlac(out, r.sampleRate, 2, data.samples, bits);
-            else lpc::writeWav(out, r.sampleRate, 2, data.samples, bits == 16 ? lpc::WavFormat::Pcm16 : (bits == 32 ? lpc::WavFormat::Float32 : lpc::WavFormat::Pcm24));
+            if (aiff) lpc::writeAiff(out, fileRate, 2, data.samples, bits);
+            else if (flac) lpc::writeFlac(out, fileRate, 2, data.samples, bits);
+            else lpc::writeWav(out, fileRate, 2, data.samples, bits == 16 ? lpc::WavFormat::Pcm16 : (bits == 32 ? lpc::WavFormat::Float32 : lpc::WavFormat::Pcm24));
             message = QString("Bounced %1 s to %2").arg(static_cast<double>(r.frames) / r.sampleRate, 0, 'f', 1).arg(QString::fromStdWString(out.filename().wstring()));
         } catch (const std::exception& e) {
             message = QString("Bounce failed: ") + QString::fromUtf8(e.what());
         }
         flag->store(false);  // the files are written: playback may use the plug-ins again
-        if (self) QMetaObject::invokeMethod(self, [self, message] { if (self) emit self->notice(message); }, Qt::QueuedConnection);
+        if (self) QMetaObject::invokeMethod(self, [self, message, addToProject, out] {
+            if (!self) return;
+            emit self->notice(message);
+            if (addToProject && message.startsWith("Bounced")) self->importAudioFilesAt({QUrl::fromLocalFile(QString::fromStdWString(out.wstring()))}, QString(), 0.0);
+        }, Qt::QueuedConnection);
     });
+}
+
+// the bars follow the signature changes: a bar holds numerator * 4 / denominator quarter notes from the event that sets the signature
+double ProjectController::barToBeats(int bar) const {
+    const auto& sigs = tempoMap_.signatures();
+    double beats = 0.0;
+    int at = 1;  // the bar number where the current signature starts
+    for (std::size_t i = 0; i < sigs.size(); ++i) {
+        const double perBar = sigs[i].numerator * 4.0 / sigs[i].denominator;
+        const double eventBeats = static_cast<double>(sigs[i].tick) / lpc::kPPQ;
+        if (i + 1 == sigs.size() || bar < at + static_cast<int>(std::llround((static_cast<double>(sigs[i + 1].tick) / lpc::kPPQ - eventBeats) / perBar))) {
+            beats = eventBeats + (std::max(bar, at) - at) * perBar;
+            return std::max(0.0, beats);
+        }
+        at += static_cast<int>(std::llround((static_cast<double>(sigs[i + 1].tick) / lpc::kPPQ - eventBeats) / perBar));
+    }
+    return std::max(0, bar - 1) * barBeats();
+}
+
+int ProjectController::beatsToBar(double beats) const {
+    int bar = 1;
+    while (barToBeats(bar + 1) <= beats + 1e-9 && bar < 100000) ++bar;
+    return bar;
 }
 
 double ProjectController::projectEndBeats() const {

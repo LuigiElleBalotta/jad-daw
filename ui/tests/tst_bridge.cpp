@@ -1098,6 +1098,14 @@ private slots:
         c.setOverlapAudioOff("track");
         QCOMPARE(c.overlapAudioOff(), QString("track"));
     }
+    void barsAndBeatsFollowTheSignatureChanges() {
+        jad::ProjectController c(false);
+        QCOMPARE(c.barToBeats(1), 0.0);
+        QCOMPARE(c.barToBeats(3), 8.0);          // 4/4
+        QCOMPARE(c.beatsToBar(0.0), 1);
+        QCOMPARE(c.beatsToBar(7.9), 2);
+        QCOMPARE(c.beatsToBar(8.0), 3);
+    }
     void newTracksMakesSeveralInOneUndoStep() {
         TempDir dir;
         jad::ProjectController c(false);

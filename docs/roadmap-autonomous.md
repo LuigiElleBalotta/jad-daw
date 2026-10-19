@@ -429,11 +429,13 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       Tempophone (FX)**. jad-daw's README has the same 8 algorithms but as one flat list in a different order (Automatic last instead of first) and
       without the "Flex Time -" grouping or the "(FX)" marking Apple itself puts on Speed and Tempophone. Update the Flex popup's grouping/order/labels
       in `smart-controls-and-editors.md` and the UI to match; the underlying DSP quality question is separate (see `flex-algorithms.md`).
-- [ ] E10. Bounce dialog is far richer than `README`/roadmap describe: Destination is a **multi-select checklist** (Uncompressed/MP3/M4A: AAC/Burn to
+- [x] E10. Bounce dialog is far richer than `README`/roadmap describe: Destination is a **multi-select checklist** (Uncompressed/MP3/M4A: AAC/Burn to
       CD-DVD, can bounce to several at once), File Type is **AIFF/WAVE/CAF only — no FLAC** (jad-daw's own FLAC export is an addition beyond Logic, keep
       it), a **Sample Rate** dropdown (bounce at a different rate than the project), explicit **Start/End bar fields** instead of a binary whole-project/
       cycle choice, a **Mode: Offline/(Realtime?)** dropdown, **Bounce 2nd Cycle Pass**, **Add to Project**, **Add to Music**, and **Normalize as a
       dropdown** not a single flag. See `behavior-check-2026-10-14.md` for the full breakdown before touching the Bounce dialog code.
+      DONE: `BounceDialog` now has Destination (Uncompressed on; MP3, M4A and Burn listed but off), File Type WAVE/AIFF (+FLAC), bit depth, Sample Rate (project, 44.1 to 192 kHz, cubic conversion of the finished mix), Mode (Offline), Start/End in bars (`barToBeats`, `beatsToBar` follow signature changes), Normalize Off/Overall, Tail, Bounce 2nd Cycle Pass (the tail folded onto the start), Add to Project (imported on a new track). CAF is not written.
+- [ ] E10b. Compressed bounce destinations: MP3 and M4A (AAC) through an encoder (Windows Media Foundation sink writer on Windows), Burn to CD/DVD stays out; CAF file type.
 - [ ] E11. `View > Colors` is a real **16×3 = 48-swatch palette** (16 hues × 3 lightness variants) for `Track > Assign Track Color…`; jad-daw has no
       colour-picker component for that command yet (searched `ui/qml`, found none) — this is new work, not a correction. Exact hex values need a
       cleaner re-extraction (screenshot pixel-sampling wasn't reliable); the 16×3 structure itself is confirmed.

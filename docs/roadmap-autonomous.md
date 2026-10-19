@@ -342,7 +342,8 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       recover automatically, so the exact enum-to-codename mapping for all 6 cases wasn't pinned down, but the `MKGerm`/`MK2Germ` case's own helper
       function was fully decompiled - exact sample-rate thresholds (44100/48000/88200/96000/176400 Hz) and fallback behavior (unrecognized rates use
       `MK2Germ_96`, the best model, not the nearest rate). Also found two previously-unknown bundled files (`MKBO_88_erdk8f5b7k_0467`, which has zero
-      references anywhere in the binary - possibly dead code - and `MKGerm88_uy2kv6feen_0560`, the actual 176.4kHz fallback). Full writeup in
+      references anywhere in the binary found by string/xref search - later corrected in the twenty-fourth pass: it's a tooling blind spot, not dead
+      code - and `MKGerm88_uy2kv6feen_0560`, the actual 176.4kHz fallback). Full writeup in
       `docs/logic-reference/machine-learning-models.md`.
       **Twenty-third pass:** user authorized using macOS automation to open Logic and run a Ghidra GUI session to finish the enum-to-codename mapping.
       GUI automation of Ghidra itself proved unreliable for this specific job (Java/Swing dialog buttons and menu items don't respond to synthetic
@@ -354,6 +355,21 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       Only one of the three native/fallback pairs produces audio directly; the other two only output a per-block scalar - two of the engine's three
       "circuit" slots are neural control-signal extractors, not audio generators. Which pair is Valve/Punch/Transparent is still an unconfirmed
       inference. Full writeup in `docs/logic-reference/machine-learning-models.md` and `docs/logic-reference/mixer.md`.
+      **Twenty-fourth pass:** user asked who actually consumes the 43 not-yet-attributed model codenames from the twenty-first pass. Searched for every
+      caller of `ModelFactory::createModel` across `MADSP.x86_64` and found three more consumers beyond `CAnalogModelingMasteringChainFX`. **`CMLSaturation`**
+      (Logic's stock neural Saturation/distortion plugin), enum 0-9, resolved via the same headless-scripting technique (`DumpSwitchCases3.java` then
+      `DumpHelpers2.java` for its 7 helper functions): `0`=`RTRST`, `1`=`RTRHT`, `2`=`MTC`, `3`=`MTM`, `4`=`FEO`, `5`=`FTO`, `6`=`FS`, `7`=`FSQ`, `8`=`MKBO`,
+      `9`=`MKGerm`/`MK2Germ` - this exactly and completely accounts for all 11 "Family A" codenames, overturning the earlier Analog Model guess for good.
+      Decompiling `CMLSaturation`'s own `MKBO` case also resolved the `MKBO_88_erdk8f5b7k_0467` "dead code" question from the twenty-second pass: it IS
+      referenced, just via an inline SSE-immediate string construction that string/xref search tools don't track as a reference - the code path is
+      reachable, the file is just missing from the shipped bundle. **`CPickupModelingFX`/`CPickupModelingShell`** (a standalone plugin, same pattern as
+      `CAutoMasterShell`), enum 16-23, 8 models, resolved via `DumpSwitchCases2.java`: `01_02N`/`02M`/`03B`/`01N`/`02N_M`/`03M`/`04M_B`/`05B` - guitar
+      pickup-position codes - but none of these 8 files exist anywhere in the current app bundle (confirmed via `find`), so this looks like unreleased
+      functionality compiled in ahead of its model assets. **`CAnalogModelingProfiling`**, enum 24-49, 27 models (likely an amp/pedal "profiling"
+      capture-your-own-device system) - confirmed to exist and its call count/enum range pinned down, but its codenames weren't decoded this pass, left
+      open. Also confirmed **Family C**'s consumer: `WrappedNeuralPitchTrackerRT` (found via `MADSP`'s import list, not `createModel` - a dedicated
+      wrapper class bypassing the shared factory entirely), confirming the CREPE-style pitch-bin guess for `PT`/`RTPT`/`RTPTM`. Together this accounts
+      for all 43 of the twenty-first pass's not-yet-attributed codenames. Full writeup in `docs/logic-reference/machine-learning-models.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

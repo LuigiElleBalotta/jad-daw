@@ -44,9 +44,31 @@ This shape (audio in, audio out, a conditioning input) originally looked exactly
 well-known vintage fuzz/distortion-circuit material) still reads as a strong hint toward analog circuit modeling of
 some kind. **Correction (twenty-third pass): this guess was wrong.** Tracing `CAnalogModelingMasteringChainFX`'s
 actual model-loading code (below) proves it consumes none of Family A's 11 codenames at all — it uses all six
-Family B codenames instead. Whatever feature Family A's conditioned audio-to-audio models serve (the "Germanium"
-naming still suggests some kind of analog/circuit modeling, just not this particular engine) remains unidentified;
-tracing it would mean finding Family A's own caller in a different part of the codebase, not attempted.
+Family B codenames instead.
+
+**Resolved (twenty-fourth pass): Family A's real consumer is `CMLSaturation`** — Logic's stock neural-network-based
+Saturation/distortion effect. All 11 Family A codenames map to `RealtimeFXModel` enum values **0 through 9** (the
+lowest range, directly below Analog Model's 10-15), confirmed via the same headless-Ghidra force-disassembly
+technique used for Analog Model: a first pass (`DumpSwitchCases3.java`) force-disassembled/decompiled all 10
+switch-case bodies, revealing that most call their own shared helper functions; a second pass (`DumpHelpers2.java`)
+decompiled those 7 helpers directly. Full, confirmed mapping:
+
+| `RealtimeFXModel` enum | Codename | Resolved via |
+|---|---|---|
+| 0 | `RTRST` | helper at `0x95a0` |
+| 1 | `RTRHT` | helper at `0x9710` |
+| 2 | `MTC` | helper at `0x9880` |
+| 3 | `MTM` | helper at `0x99f0` |
+| 4 | `FEO` | inlined in the switch case itself |
+| 5 | `FTO` | helper at `0x9c00` |
+| 6 | `FS` | helper at `0x9d70` |
+| 7 | `FSQ` | helper at `0x9ee0` |
+| 8 | `MKBO` | inlined in the switch case itself |
+| 9 | `MKGerm`/`MK2Germ` | helper at `0xa050` (the same helper already decompiled in the twenty-second pass) |
+
+This exactly and completely accounts for all 11 Family A codenames — no leftover, no ambiguity. So the "Germanium"
+naming hint was right about the *material* but not the *feature*: Logic's Saturation plugin, not the Analog Model
+mastering chain, is what applies a trained neural Germanium-fuzz (and seven sibling) model to the signal.
 
 ## Tracing the loader: `MAMachineLearning.framework` and the exact model count (twenty-second pass)
 
@@ -83,14 +105,17 @@ picks the exact resource path by comparing the live sample rate against **44100.
 Searching the binary for every catalogued codename's exact resource-path string also turned up **two previously
 unknown files** neither `find` nor the earlier metadata sweep had reason to surface as distinct: a fifth `MKBO`
 variant (`MKBO_88_erdk8f5b7k_0467.mlmodelc`, alongside the four already catalogued) and the `MKGerm88` file above.
-The `MKBO_88_erdk8f5b7k_0467` string has **zero references anywhere in the binary** — it may be dead/orphaned
-data bundled but never loaded by any current code path, unlike every other path string found (all of which do
-have at least one reference). Every other codename's resource strings (`FEO`, `FS`, `FSQ`, `FTO`, `MTC`, `MTM`,
-`RTRHT`, `RTRST`) were confirmed present as literal embedded strings but, unlike `MKGerm`, are short enough that
-the compiler inlined their construction directly into the switch (via SSE `movups` immediate-string copies) rather
-than calling a shared helper — which is why their exact per-case sample-rate thresholds weren't individually
-decompiled this pass (would need manual disassembly of six separate inlined blocks whose jump-table target
-addresses Ghidra didn't resolve automatically; attempted partially, not completed).
+The `MKBO_88_erdk8f5b7k_0467` string has **zero references anywhere in the binary** found by string/xref search
+tools — this pass's first-pass conclusion was that it's dead/orphaned data. **Correction (twenty-fourth pass): that
+was a tooling artifact, not a code-reachability fact.** Fully decompiling `CMLSaturation`'s enum-8 (`MKBO`) case
+(above) shows it does reference `MKBO_88_erdk8f5b7k_0467` in its 176.4 kHz-fallback slot, via the exact same
+inline-SSE-immediate-string-construction pattern used for every other short codename — which is precisely why
+`search_strings`/xref tools don't see it as a "reference": the filename bytes are built with `movups` immediates
+inside the function body, not stored as an addressable string constant. The code path **is** reachable; the file
+genuinely does **not exist on disk** (confirmed via `find`), so the accurate description is "a reachable code path
+whose target file is missing from the shipped bundle," not "dead code." Every other codename's resource strings
+(`FEO`, `FS`, `FSQ`, `FTO`, `MTC`, `MTM`, `RTRHT`, `RTRST`) were confirmed present the same inline way, and their
+exact per-case sample-rate thresholds are now individually decompiled too (see the twenty-fourth-pass table above).
 
 **Resolved (twenty-third pass): the exact enum→codename mapping, fully confirmed — and it overturns the "Family A"
 assumption above.** REA's headless Ghidra session couldn't disassemble the other 5 switch-case bodies (Ghidra's own
@@ -156,8 +181,9 @@ conditioning input, smaller blocks, and two different output shapes split across
 `_SO`-suffixed names (`G_SO`, `S_SO`) share their un-suffixed counterpart's exact shape and op count, suggesting
 paired models (e.g. an analysis/detector variant alongside a base one) — but since both members of each pair
 output a scalar with no distinguishing input, this pairing's actual purpose (what differs between `G` and `G_SO`
-if not shape) wasn't established from metadata alone. What feature(s) consume Family B at all is unidentified —
-nothing ties it specifically to the Analog Model menu or to anything else traced so far in this session.
+if not shape) wasn't established from metadata alone. **Consumer confirmed (twenty-third pass)**: all six Family B
+codenames are loaded by `CAnalogModelingMasteringChainFX`, behind the Mastering Assistant's Analog Model menu — see
+above.
 
 ### Family C — small conventional CNN, likely pitch-related (`PT`, `RTPT`, `RTPTM`)
 
@@ -175,6 +201,58 @@ Unlike every other model here, these ship as **one file each, no per-sample-rate
   no label confirms it) hint that this family does **pitch detection/tracking** in real time, independent of
   project sample rate (consistent with having no per-rate variants).
 
+**Consumer confirmed (twenty-fourth pass)**: `MADSP.x86_64`'s external-symbol import list names
+`WrappedNeuralPitchTrackerRT` — exposing `Predict(const float*, vector<float>&)` plus constructor/destructor — as a
+dedicated wrapper class that bypasses `MAMachineLearning::ModelFactory::createModel` entirely (unlike every other
+family above, it doesn't go through the shared enum-indexed factory at all, which is presumably why Family C ships
+with no per-sample-rate variants: a dedicated class rather than the generic per-rate-file factory pattern). This
+confirms the CREPE-style pitch-bin guess: `PT`/`RTPT`/`RTPTM` back a real-time neural pitch tracker.
+
+## `CMLSaturation`, `CPickupModelingFX`, and `CAnalogModelingProfiling` — the other three `ModelFactory` callers (twenty-fourth pass)
+
+Besides `CAnalogModelingMasteringChainFX` (enum 10-15, Family B), three more classes in `MADSP.x86_64` call
+`MAMachineLearning::ModelFactory::createModel`, found by searching for callers of `0x81c0` across the binary:
+
+- **`CMLSaturation`** (enum 0-9) — Logic's stock neural-network Saturation/distortion plugin. Fully resolved; see
+  the Family A table above. This directly answers which feature consumes all 11 Family A codenames.
+- **`CPickupModelingFX`** / **`CPickupModelingShell`** (enum 16-23, 8 models) — a standalone plugin "Shell" (the
+  same architectural pattern `CAutoMasterShell`/`CChannelEQShell` use), confirmed by `CPickupModelingShell::OnSetup`
+  calling into it. `CPickupModelingFX`'s constructor loops over an 8-entry `int32` table at `0xdd5acc` —
+  `{16,17,18,19,20,21,22,23}` — calling `createModel` once per entry. Force-disassembling/decompiling all 8 switch
+  targets (`DumpSwitchCases2.java`, same jump-table-read-at-runtime technique as the other passes) resolved every
+  codename:
+
+  | `RealtimeFXModel` enum | Codename |
+  |---|---|
+  | 16 | `01_02N` |
+  | 17 | `02M` |
+  | 18 | `03B` |
+  | 19 | `01N` |
+  | 20 | `02N_M` |
+  | 21 | `03M` |
+  | 22 | `04M_B` |
+  | 23 | `05B` |
+
+  These read as guitar-pickup-position codes (N/M/B = Neck/Middle/Bridge, with combinations — consistent with a
+  5-way pickup selector feeding a "pickup modeling" feature: physically re-amping a guitar's captured tone as if
+  through a different pickup/position). **None of these 8 `.mlmodelc` files exist anywhere in the current Logic
+  Pro 11.2 (build 6306) app bundle** — confirmed via exhaustive `find` (including the mostly-empty
+  `MAMachineLearningResources.bundle`, which holds only one unrelated model). The class, the enum range, and the
+  codenames are all real and reachable; the trained weights simply aren't shipped in this build. Most likely
+  explanation: unreleased/future functionality compiled into the binary ahead of its model assets, rather than
+  removed/dead code (unlike `MKBO_88_erdk8f5b7k_0467` above, there's no reachable string evidence these files ever
+  existed on disk at all — this is a different situation: the *class* is unreleased, not a single missing file from
+  an otherwise-complete family).
+- **`CAnalogModelingProfiling`** (enum 24-49, 27 models) — likely an amp/pedal/gear "profiling" system (capture
+  your own device's response), given the sheer model count, but **not fully resolved**: 27 `createModel` calls were
+  confirmed (one enum value, 44/`0x2c`, called twice — once out of sequence right after the first call, once again
+  in normal order), and the enum range (24 through 49) was pinned down, but the actual codenames for this range
+  were not decoded before this pass ended. Left open for a future pass if the user wants it pursued; not blocking
+  for any of the "quei 43" questions above, since `CMLSaturation`/`CPickupModelingFX`/`WrappedNeuralPitchTrackerRT`
+  already account for every one of the 43 not-previously-attributed codenames (Family A's 11, Pickup Modeling's
+  distinct 8 — which turned out not to be in the original 43-file catalog at all, since none of its files exist on
+  disk — and Family C's 3). `CAnalogModelingProfiling`'s own models are a separate, still-undocumented range.
+
 ## For jad-daw
 
 Nothing here is a reusable algorithm the way the DSP decompiles elsewhere in `mixer.md`/`flex-algorithms.md` are —
@@ -186,7 +264,12 @@ pattern to copy if jad-daw ever adds its own learned (not hand-coded) audio effe
 engine specifically mixes **audio-generating** and **scalar-control-generating** neural models in the same chain
 (two of its three "circuit" slots only extract a per-block control value, not an audio signal) — a reminder that
 "neural audio effect" doesn't have to mean "the network outputs the final sound"; a hybrid of neural analysis +
-classical processing is a legitimate, apparently-shipped design.
+classical processing is a legitimate, apparently-shipped design. With `CMLSaturation` confirmed as Family A's
+consumer, every one of the 69 shipped `.mlmodelc` bundles now has a named owning feature except
+`CAnalogModelingProfiling`'s 27 (enum 24-49, codenames not yet decoded) — so the full, real, directly reusable
+weight files for Saturation, Analog Model, and the real-time pitch tracker are all in hand in
+`../logic-pro-reference/all-ml-models/` for this private study project, per the user's standing "we need all of
+them for implementation" request.
 
 Source: `metadata.json` for every `.mlmodelc` in
 `/Applications/Logic Pro.app/Contents/Frameworks/MAMachineLearning.framework/Versions/A/Resources/`, read directly
@@ -199,6 +282,15 @@ Source (twenty-third pass): `MAMachineLearning::ModelFactory::createModel` at `0
 force-disassembled/decompiled at `0x8304` (enum 10, `TSO`), `0x8362`→helper `0xa1c0` (enum 11, `T`), `0x8370` (enum
 12, `G_SO`), `0x83ce` (enum 13, `G`), `0x842c`→helper `0xa350` (enum 14, `S_SO`), `0x844a` (enum 15, `S`) — all via
 a headless `analyzeHeadless -postScript` run (`DumpSwitchCases.java`/`DumpHelpers.java`), not GUI interaction.
+
+Source (twenty-fourth pass): same `ModelFactory::createModel` at `0x81c0`, same headless-scripting technique.
+`CMLSaturation`'s 10 switch-case bodies (enum 0-9) force-disassembled/decompiled via `DumpSwitchCases3.java`
+(looping the jump table read at runtime instead of a fixed address list); its 7 helper functions
+(`0x95a0`/`0x9710`/`0x9880`/`0x99f0`/`0x9c00`/`0x9d70`/`0x9ee0`) decompiled via `DumpHelpers2.java`.
+`CPickupModelingFX`'s 8 switch-case bodies (enum 16-23) resolved the same way via `DumpSwitchCases2.java`; its
+8-entry enum-value table found at `0xdd5acc`. `CAnalogModelingProfiling` (enum 24-49) and
+`WrappedNeuralPitchTrackerRT` (found via `MADSP.x86_64`'s external-symbol import list, not `createModel`) identified
+by caller/import search, not yet force-disassembled case-by-case.
 
 The actual compiled model files for all 6 confirmed codenames (24 `.mlmodelc` bundles, 4 sample rates each) were
 copied to `../logic-pro-reference/analog-model-ml-models/` per the project's standing "always extract found

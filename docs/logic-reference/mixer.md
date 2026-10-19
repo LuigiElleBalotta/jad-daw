@@ -589,7 +589,9 @@ above): enum 10=`TSO` (audio out), 11=`T` (audio out), 12=`G_SO` (scalar out), 1
 the other two pairs only output a single per-block scalar, meaning two of the engine's three "circuit" slots are
 neural **control-signal extractors**, not audio generators — a real architectural nuance, not previously known.
 Full writeup and the "which pair is Valve/Punch/Transparent" open question in
-`docs/logic-reference/machine-learning-models.md`.
+`docs/logic-reference/machine-learning-models.md`. (**Twenty-fourth pass**: the 11-model conditioned-audio family
+guessed above and ruled out for this engine does have a real owner after all, just not this one —
+`CMLSaturation`, Logic's stock neural Saturation plugin; see that same doc.)
 
 **`CCompressorClassA`'s table-fill step, ruled out two candidates (seventeenth pass)**: neither `OnReset` nor the
 constructor (`CCompressorClassAC2ER9CProcDatal`) build the curve — the constructor only `bzero`s the whole

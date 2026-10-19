@@ -386,11 +386,27 @@ for i in 0..N-1:
 
 A plain **20 Hz–20 kHz logarithmic frequency axis**, N points evenly spaced in log-frequency (and so evenly spaced
 in on-screen x position too, via the parallel linear `relX` table) — the standard EQ-display layout, now an exact,
-reusable formula rather than an assumption. The actual response values come from
-**`CBiquadChainDualRateFX::FillResponseLUT`** — a real biquad transfer-function evaluation at each of the N
-frequency points (not a sine-table shortcut; `MapChanEQSineTable` is a separate, unrelated method not examined).
-"DualRate" in the class name suggests it's built to stay correct across a sample-rate change, recalculating rather
-than reusing stale coefficients.
+reusable formula rather than an assumption. `MapChanEQSineTable` is a separate, unrelated method, not the curve path.
+
+**`CBiquadChain::FillResponseLUT` and `CBiquadChainDualRateFX::FillResponseLUT` decompiled (thirteenth pass)** —
+and it's *not* a full complex biquad transfer-function evaluation at each point after all: it's a cheaper, more
+elegant precomputation step. For each of the N frequency points, given `ω = 2π × freq[i] / sampleRate`, it computes
+and stores **four values per point** — `cos(ω)`, `sin(ω)`, `cos(2ω)`, `sin(2ω)` — laid out as four parallel arrays
+in the output buffer (returns `N×4` as the total double count). This is the standard trick for evaluating a biquad's
+frequency response cheaply: `H(e^(-jω)) = (b0 + b1·e^(-jω) + b2·e^(-2jω)) / (1 + a1·e^(-jω) + a2·e^(-2jω))` only needs
+`e^(-jω)` and `e^(-2jω)` (i.e. exactly this cos/sin pair at ω and 2ω) — once this table is built, *every biquad
+stage in the chain* reuses it to evaluate its own magnitude/phase response at the same N frequencies with plain
+multiply-adds, no further trig calls. The frequency-domain trig basis is computed once per redraw, not once per
+band — the actual per-band response combination (reading these tables plus each biquad's `b0/b1/b2/a1/a2`) happens
+elsewhere, not traced this pass. The 2-wide SIMD unrolled loop (`___sincos_stret`, processing points in pairs) is
+purely a throughput optimization of this same precomputation, not a different algorithm.
+
+`CBiquadChainDualRateFX::FillResponseLUT` confirms the "DualRate" naming precisely: it calls this exact trig-basis
+routine **twice**, once for a chain pointer at `this+0x148` (always present) and, only if a second chain pointer at
+`this+0x150` is non-null, again for a second chain — each using its *own* current sample rate — and concatenates
+the two results. So "dual rate" means the curve preview can represent two biquad chains running at genuinely
+different internal sample rates (e.g. a main-rate stage plus an oversampled stage) in one combined response, not
+that it merely re-derives the curve after a sample-rate change.
 
 ### Match EQ's model factory (twelfth pass)
 
@@ -410,11 +426,12 @@ picker) stored as precomputed data, selected by plain index — but not the mode
 data, which weren't read out of the binary this pass.
 
 **Open**: `CCompressorClassA`'s ratio-table function pointers (what actually fills/differs in its 1024-entry table
-per preset — `GainRedCurve` just reads the table, doesn't build it), `CBiquadChainDualRateFX::FillResponseLUT`'s
-own biquad math (33 basic blocks of SIMD complex arithmetic, not decompiled this pass), and the actual
-reference-model table contents.
+per preset — `GainRedCurve` just reads the table, doesn't build it), the actual per-band response-combination step
+that consumes `FillResponseLUT`'s cos/sin basis (which biquad coefficients multiply which table entries — not
+traced), and the actual reference-model table contents.
 
-Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `MADSP.framework/MADSP`.
+Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
+`0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,

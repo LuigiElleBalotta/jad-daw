@@ -268,8 +268,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       strategy: the same 1024-entry linear-interpolation table mechanism as LP/Platinum, but indexed by `input × 1023 × threshold-offset[ratioIndex]`
       (the 4-entry ratio-preset constant from `Coefficients`) rather than a continuous formula. So ClassA's "4 ratio buttons" UI behavior is implemented
       by re-scaling one shared table, not by routing to 4 different curve functions. **All six stock Compressor circuits are now fully characterized.**
-      Open (low priority, future pass): `CCompressorClassA`'s ratio-table function pointers (what fills the table per preset — `GainRedCurve` only reads
-      it), `CBiquadChainDualRateFX::FillResponseLUT`'s own biquad math (33-block SIMD complex arithmetic), and the actual reference-model table contents.
+      Also decompiled `CBiquadChain`/`CBiquadChainDualRateFX::FillResponseLUT`: not a full per-point biquad evaluation, a cheaper shared precomputation
+      of `cos(ω)/sin(ω)/cos(2ω)/sin(2ω)` at each of the N display frequencies (ω = 2π·f/sampleRate) that every band in the chain then reuses to compute
+      its own response cheaply; the DualRate variant calls this twice (for two chain pointers at different sample rates) and concatenates the results,
+      confirming what "DualRate" means architecturally. Full writeup in `docs/logic-reference/mixer.md`. Open (low priority, future pass):
+      `CCompressorClassA`'s ratio-table function pointers (what fills the table per preset), the per-band response-combination step that consumes the
+      cos/sin basis, and the actual reference-model table contents.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

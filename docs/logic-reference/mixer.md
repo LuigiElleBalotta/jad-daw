@@ -346,18 +346,22 @@ error codes, not exceptions, at this layer). Two notable architecture facts:
 `CCompressorClassA::Coefficients`: mostly ordinary gain (`10^(±0.05x)`) and envelope-coefficient cases (same `-2300`
 family, with cases 6/7 combining two time-derived coefficients multiplicatively — a program-dependent release
 scaled by another parameter, a real analog-modeling detail). One case stands out: **case `0xd` reads a ratio value
-from a small (4-entry) constant table *and* a matching function-pointer from a second table at the same index**,
-then converts the selected ratio `r` into a slope pair `r/(r−1)` and its complement. This strongly suggests
-`CCompressorClassA` offers a small set of **discrete ratio presets, each potentially routed to its own processing
-function**, not a continuously variable ratio knob — consistent with real FET/Class-A hardware compressors (e.g. a
-1176-style "4 ratio buttons") rather than the continuously-variable ratio of a VCA design. The 4 constant-table
-values themselves (read directly, ninth pass): **`{0.0, 3.0, 7.0, 0.0}`** — giving slopes `0/(0−1)=0`, `3/2=1.5`,
-`7/6≈1.167`, `0` for indices 0–3. These don't read as classic labelled ratios (2:1/4:1/8:1/20:1); whether they map
-onto the UI's ratio steps directly or feed some other internal scaling wasn't resolved — the function-pointer table
-at the same index (what actually differs per preset) wasn't read.
+from a small (4-entry) float constant table *and* a second small-integer value from a second 4-entry table at the
+same index**, then converts the selected ratio `r` into a slope pair `r/(r−1)` and its complement. This confirms
+`CCompressorClassA` offers a small set of **discrete ratio presets** — consistent with real FET/Class-A hardware
+compressors (e.g. a 1176-style "4 ratio buttons") rather than the continuously-variable ratio of a VCA design. The
+4 ratio values (read directly, ninth pass): **`{0.0, 3.0, 7.0, 0.0}`** — giving slopes `0/(0−1)=0`, `3/2=1.5`,
+`7/6≈1.167`, `0` for indices 0–3. **Correction (thirteenth pass)**: the second table was earlier assumed to hold
+function pointers (one processing routine per preset); reading its raw bytes shows it's actually a parallel
+**small-integer table, `{0, 3, 7, 1}`** (64-bit values, far too small to be code addresses in this binary) — nearly
+identical to the ratio table but with index 3 reading `1` instead of `0`. Neither `Coefficients` nor `GainRedCurve`
+dereferences the stored value as code, so it's some other per-preset integer (mode ID, display value, or similar),
+not a dispatch table — `GainRedCurve` (see above) reads straight through one shared 1024-entry table for every
+preset, re-scaled by the ratio's threshold-offset constant, so there's no per-preset routing to begin with.
 
-Source (eighth pass): `CLimiter::Coefficients` at `0xd0bc0`, `CCompressorClassA::Coefficients` at `0x9bd90`, both in
-`MADSP.framework/MADSP`.
+Source (eighth pass, corrected thirteenth pass): `CLimiter::Coefficients` at `0xd0bc0`, `CCompressorClassA::Coefficients`
+at `0x9bd90`, both in `MADSP.framework/MADSP`; second constant table confirmed at `0xd53920` (`{0,3,7,1}` as `int64`),
+first ratio table at `0xd4b2d0` (`{0.0,3.0,7.0,0.0}` as `float`).
 
 ### Noise Gate — clean, fully named parameter set
 
@@ -425,10 +429,10 @@ feeds the selected one straight into `CMatchEQFX::SetSpecData`. This confirms th
 picker) stored as precomputed data, selected by plain index — but not the model count, labels, or actual spectral
 data, which weren't read out of the binary this pass.
 
-**Open**: `CCompressorClassA`'s ratio-table function pointers (what actually fills/differs in its 1024-entry table
-per preset — `GainRedCurve` just reads the table, doesn't build it), the actual per-band response-combination step
-that consumes `FillResponseLUT`'s cos/sin basis (which biquad coefficients multiply which table entries — not
-traced), and the actual reference-model table contents.
+**Open**: what actually fills `CCompressorClassA`'s shared 1024-entry table in the first place (built once,
+presumably at construction/reset — not traced), the actual per-band response-combination step that consumes
+`FillResponseLUT`'s cos/sin basis (which biquad coefficients multiply which table entries — not traced), and the
+actual reference-model table contents.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.

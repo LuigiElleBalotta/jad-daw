@@ -74,6 +74,11 @@ std::vector<EffectSpec> build() {
             m.push_back(p(("b" + std::to_string(i)).c_str(), ("Band " + std::to_string(i + 1) + " Correction").c_str(), "dB", -24, 24, 0));
         v.push_back({kProcMatchEq, "Match EQ", "EQ", std::move(m)});
     }
+    // Saturation with Logic's own neural audio models (CMLSaturation: ten families, `drive` is the `cond` input of the network). It needs onnxruntime and the converted
+    // models; without them the insert passes the sound through.
+    v.push_back({kProcMlSaturation, "Neural Saturation", "Distortion",
+                 {p("type", "Model (0-9: RTRST RTRHT MTC MTM FEO FTO FS FSQ MKBO MKGerm)", "", 0, 9, 4), p("drive", "Drive", "%", 0, 100, 50), p("output", "Output", "dB", -24, 12, 0),
+                  p("mix", "Mix", "%", 0, 100, 100)}});
     // Mastering Assistant: the parameters eq1..eq8 and gain are what the analysis found (the Reanalyze button writes them)
     {
         std::vector<EffectParam> m{p("loudness", "Loudness", "%", -100, 100, 0), p("autoEq", "Auto EQ", "%", 0, 100, 100), p("excite", "Excite", "", 0, 1, 0),

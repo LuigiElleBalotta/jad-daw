@@ -16,6 +16,7 @@ inline constexpr const char* kProcLimiter = "builtin.limiter";
 inline constexpr const char* kProcGate = "builtin.gate";
 inline constexpr const char* kProcAdaptiveLimiter = "builtin.adaptivelimiter";
 inline constexpr const char* kProcMatchEq = "builtin.matcheq";
+inline constexpr const char* kProcMlSaturation = "builtin.mlsaturation";
 inline constexpr const char* kProcDelay = "builtin.delay";
 inline constexpr const char* kProcReverb = "builtin.reverb";
 inline constexpr const char* kProcMastering = "builtin.mastering";

@@ -9,7 +9,10 @@
 #include "lpc/ml/beat_tracker.h"
 #include "lpc/ml/onnx.h"
 #include "lpc/flex_pitch.h"
+#include "lpc/audio/effects.h"
+#include "lpc/ml/neural_stream.h"
 #include "lpc/ml/onset_cnn.h"
+#include "lpc/processor_ids.h"
 #include "lpc/ml/pitch_cnn.h"
 #include "lpc/tempo_analysis.h"
 
@@ -160,4 +163,61 @@ TEST_CASE("ml: the beat tracker network reports the pulse of a click train and S
     REQUIRE(t.bpm > 0.0);
     CHECK(t.bpm == Approx(120.0).margin(3.0));
     CHECK(t.beats.size() >= 40);
+}
+
+namespace {
+// THD-like ratio: the energy outside the fundamental over the energy of the fundamental, from the last 8192 samples of a mono block
+double harmonicRatio(const std::vector<float>& y, double hz, double sr) {
+    const std::size_t n = 8192, from = y.size() - n;
+    double fundC = 0, fundS = 0, total = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const double ph = 2.0 * 3.14159265358979323846 * hz * static_cast<double>(i) / sr, v = y[from + i];
+        fundC += v * std::cos(ph);
+        fundS += v * std::sin(ph);
+        total += v * v;
+    }
+    const double fund = 2.0 * (fundC * fundC + fundS * fundS) / (static_cast<double>(n) * n);  // power of the fundamental (a * a / 2 form)
+    const double all = total / static_cast<double>(n);
+    return std::sqrt(std::max(0.0, all - fund) / std::max(fund, 1e-12));
+}
+}  // namespace
+
+TEST_CASE("ml: Neural Saturation (Logic's model through onnxruntime) adds harmonics with the drive and reports its latency", "[ml][saturation]") {
+    ml::setModelDirectory(LPC_ONNX_MODELS_DIR);
+    if (!ml::available() || ml::findFamilyModel("RTRST", 44100.0, 256).empty()) SKIP("the converted saturation models are not available");
+    auto render = [](double drive, double mix) {
+        ProcessorRef ref{kProcMlSaturation, {{"type", 0}, {"drive", drive}, {"mix", mix}}, "", "", false};
+        auto fx = audio::makeBuiltinEffect(ref, 44100.0);
+        REQUIRE(fx != nullptr);
+        CHECK(fx->latencySamples() == 512);
+        std::vector<float> all;
+        for (int b = 0; b < 40; ++b) {
+            std::vector<float> l(512), r(512);
+            for (int i = 0; i < 512; ++i) l[static_cast<std::size_t>(i)] = r[static_cast<std::size_t>(i)] = static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * 440.0 * (b * 512 + i) / 44100.0));
+            fx->process(l.data(), r.data(), 512);
+            all.insert(all.end(), l.begin(), l.end());
+        }
+        return all;
+    };
+    const double low = harmonicRatio(render(0.0, 100.0), 440.0, 44100.0), high = harmonicRatio(render(100.0, 100.0), 440.0, 44100.0);
+    INFO("harmonic ratio at drive 0: " << low << ", at drive 100: " << high);
+    CHECK(low < 0.05);
+    CHECK(high > 0.15);
+    CHECK(high > low * 4.0);
+    // mix 0 is the dry sound, as late as the wet one
+    const auto dry = render(100.0, 0.0);
+    CHECK(std::abs(dry[512 + 100] - static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * 440.0 * 100 / 44100.0))) < 1e-4f);
+}
+
+TEST_CASE("ml: Neural Saturation without its models passes the sound through", "[ml][saturation]") {
+    ml::setModelDirectory("this/folder/does/not/exist");
+    ProcessorRef ref{kProcMlSaturation, {{"drive", 100}}, "", "", false};
+    auto fx = audio::makeBuiltinEffect(ref, 48000.0);
+    REQUIRE(fx != nullptr);
+    CHECK(fx->latencySamples() == 0);
+    std::vector<float> l(256, 0.3f), r(256, -0.2f);
+    fx->process(l.data(), r.data(), 256);
+    CHECK(l[100] == 0.3f);
+    CHECK(r[100] == -0.2f);
+    ml::setModelDirectory(LPC_ONNX_MODELS_DIR);
 }

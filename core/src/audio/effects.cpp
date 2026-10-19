@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <filesystem>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -11,6 +12,7 @@
 #include "lpc/audio/eq_filters.h"
 #include "lpc/effect_specs.h"
 #include "lpc/match_eq.h"
+#include "lpc/ml/neural_stream.h"
 #include "lpc/processor_ids.h"
 
 namespace lpc::audio {
@@ -543,6 +545,62 @@ private:
     float feedback_ = 0.84f, damp_ = 0.2f, wet1_ = 0, wet2_ = 0, dry_ = 1;
 };
 
+// ---------------------------------------------------------------- Neural Saturation
+
+// The ten model families of CMLSaturation, in Logic's enum order (docs/logic-reference/machine-learning-models.md)
+constexpr const char* kSaturationFamilies[10] = {"RTRST", "RTRHT", "MTC", "MTM", "FEO", "FTO", "FS", "FSQ", "MKBO", "MKGerm"};
+constexpr int kSaturationBlock = 256;  // a model block: the latency is two of them
+
+class MlSaturationProcessor final : public IProcessor {
+public:
+    MlSaturationProcessor(const ProcessorRef& ref, double sr)
+        : drive_(static_cast<float>(param(ref, "drive") / 100.0)), out_(static_cast<float>(dbToLin(param(ref, "output")))), mix_(static_cast<float>(param(ref, "mix") / 100.0)) {
+        const int type = std::clamp(static_cast<int>(std::lround(param(ref, "type"))), 0, 9);
+        const std::filesystem::path file = ml::findFamilyModel(kSaturationFamilies[type], sr, kSaturationBlock);
+        if (!file.empty()) {
+            left_ = ml::NeuralStream::create(file, kSaturationBlock);
+            right_ = ml::NeuralStream::create(file, kSaturationBlock);
+        }
+        if (!left_ || !right_) {
+            left_.reset();
+            right_.reset();
+            return;
+        }
+        delay_ = left_->latency();
+        dryL_.assign(static_cast<std::size_t>(delay_), 0.0f);
+        dryR_.assign(static_cast<std::size_t>(delay_), 0.0f);
+        cond_.assign(8192, drive_);
+        wetL_.assign(8192, 0.0f);
+        wetR_.assign(8192, 0.0f);
+    }
+    int latencySamples() const override { return delay_; }
+    void process(float* l, float* r, int frames) noexcept override {
+        if (!left_) return;  // no model: the sound passes
+        for (int at = 0; at < frames; at += 8192) {
+            const int n = std::min(8192, frames - at);
+            left_->process(l + at, cond_.data(), wetL_.data(), n);
+            right_->process(r + at, cond_.data(), wetR_.data(), n);
+            for (int i = 0; i < n; ++i) {
+                const std::size_t d = pos_ % dryL_.size();
+                const float dl = dryL_[d], dr = dryR_[d];  // the dry sound as late as the processed one
+                dryL_[d] = l[at + i];
+                dryR_[d] = r[at + i];
+                ++pos_;
+                l[at + i] = (dl * (1.0f - mix_) + wetL_[static_cast<std::size_t>(i)] * mix_) * out_;
+                r[at + i] = (dr * (1.0f - mix_) + wetR_[static_cast<std::size_t>(i)] * mix_) * out_;
+            }
+        }
+    }
+    nlohmann::json describe() const override { return {{"id", kProcMlSaturation}, {"model", left_ != nullptr}}; }
+
+private:
+    float drive_, out_, mix_;
+    std::unique_ptr<ml::NeuralStream> left_, right_;
+    int delay_ = 0;
+    std::vector<float> dryL_, dryR_, cond_, wetL_, wetR_;
+    std::size_t pos_ = 0;
+};
+
 // ---------------------------------------------------------------- Mastering Assistant
 
 // The correction EQ (eight bands from the analysis, scaled by Auto EQ), a character, the loudness gain and a limiter at -1 dB.
@@ -674,6 +732,7 @@ std::unique_ptr<IProcessor> makeBuiltinEffect(const ProcessorRef& ref, double sa
     const std::string& id = ref.processorId;
     if (id == kProcEq) return std::make_unique<EqProcessor>(ref, sampleRate);
     if (id == kProcMatchEq) return std::make_unique<MatchEqProcessor>(ref, sampleRate);
+    if (id == kProcMlSaturation) return std::make_unique<MlSaturationProcessor>(ref, sampleRate);
     if (id == kProcCompressor) return std::make_unique<CompressorProcessor>(ref, sampleRate);
     if (id == kProcLimiter) return std::make_unique<LimiterProcessor>(ref, sampleRate);
     if (id == kProcAdaptiveLimiter) return std::make_unique<AdaptiveLimiterProcessor>(ref, sampleRate);

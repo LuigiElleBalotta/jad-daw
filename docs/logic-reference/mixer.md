@@ -463,11 +463,22 @@ with "Clean" as the universal fallback. Strongly suggests "Valve"/"Punch"/"Trans
 models that need the Neural Engine, not just DSP-cost gating — a separate feature from Match EQ, not pursued
 further this pass, but exact, reusable UI copy if jad-daw ever wants a hardware-gated "quality model" selector.
 
+`CAutoMaster::SetAnalogModel(index, nativeAvailable)` (decompiled) confirms the engine behind this menu is a
+dedicated object — **`CAnalogModelingMasteringChainFX`** (its own class, not a repurposed biquad/EQ stage), reached
+via `SetModel(AMMCDeviceType)`. Index `0` ("Clean") makes **no call into the engine at all** — it's a true bypass
+of this whole stage, not "model 0" of the analog engine. Indices 1–3 (Valve/Punch/Transparent) each XOR the
+`nativeAvailable` bool into a different small device-type pair (`1↔0`, `3↔2`, `5↔4`) — i.e. every model has two
+concrete device-type values, a "native" one and a "fallback" one, selected by whether Apple Silicon ML support is
+actually available at that moment, matching the menu text's own "(using Clean instead)" substitution exactly. The
+analog circuit simulation itself (what `CAnalogModelingMasteringChainFX` actually computes — whether it's CoreML
+inference like Smart Tempo, or classical nonlinear DSP) is a large, separate engine, not traced this pass.
+
 **Open**: what actually fills `CCompressorClassA`'s shared 1024-entry table in the first place (built once,
 presumably at construction/reset — not traced), the actual per-band response-combination step that consumes
 `FillResponseLUT`'s cos/sin basis (which biquad coefficients multiply which table entries — not traced), the
 11-byte filename table that would pin down exactly which `.pst` presets the Assistant's model picker reads, and
-the `CAutoMaster` "Analog Model" (Clean/Valve/Punch/Transparent) feature itself — found but not traced.
+`CAnalogModelingMasteringChainFX`'s actual circuit simulation (CoreML-based or classical DSP — a sizeable engine
+of its own, genuinely new scope beyond the original Compressor/Limiter/EQ/Match-EQ sweep, not pursued this pass).
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.

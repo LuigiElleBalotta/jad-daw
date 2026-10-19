@@ -279,11 +279,13 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       uses. Searching the actual app bundle found the real library: `Plug-In Settings/Match EQ/Stereo Match EQ/` ships 50 genre-named target-curve
       presets (Alternative/Blues/Breakbeat/Dance/Disco/Funk/House/Jazz/Orchestral/Pop/RnB/Rock, 2-5 variants each) and `Surround Match EQ/` a separate
       19-preset library — almost certainly what the Mastering Assistant's "model" picker actually selects from, not a small hardcoded set as guessed in
-      the twelfth pass. Also found (unrelated): `CAutoMasterShell::BuildIntelModelMenu` builds a 4-option "Clean/Valve/Punch/Transparent" analog-model
-      menu, three options gated behind Apple Silicon (exact UI copy decompiled) — a separate, untraced feature. Full writeup in
-      `docs/logic-reference/mixer.md`. Open (low priority, future pass): what builds `CCompressorClassA`'s shared 1024-entry table in the first place,
-      the per-band response-combination step that consumes the cos/sin basis, the exact filename table proving which `.pst` files the Assistant reads,
-      and the Analog Model (Clean/Valve/Punch/Transparent) feature itself.
+      the twelfth pass. Also found: `CAutoMasterShell::BuildIntelModelMenu` builds a 4-option "Clean/Valve/Punch/Transparent" analog-model menu, three
+      options gated behind Apple Silicon (exact UI copy decompiled); `CAutoMaster::SetAnalogModel` confirms the engine is its own class,
+      `CAnalogModelingMasteringChainFX`, with "Clean" a true bypass (no engine call at all) and each other model having a native/fallback device-type
+      pair selected by Apple-Silicon-ML availability. The circuit simulation itself is a sizeable separate engine, out of scope for this pass. Full
+      writeup in `docs/logic-reference/mixer.md`. **This closes the tractable open items from the stock-plugin sweep** - remaining opens
+      (`CCompressorClassA`'s table-fill step, the per-band response-combination math, the exact `.pst` filename table, and
+      `CAnalogModelingMasteringChainFX`'s own engine) all need either a live instance or a genuinely new, separate reverse-engineering pass.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

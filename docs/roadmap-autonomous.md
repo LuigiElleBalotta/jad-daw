@@ -274,8 +274,16 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       confirming what "DualRate" means architecturally. Also **corrected** an eighth-pass guess: `CCompressorClassA::Coefficients`'s second 4-entry
       table (next to the `{0.0,3.0,7.0,0.0}` ratio table) was assumed to hold per-preset function pointers; reading its raw bytes shows it's actually
       a parallel small-integer table `{0,3,7,1}` — far too small to be code addresses, and never dereferenced as code — not a dispatch table at all.
-      Full writeup in `docs/logic-reference/mixer.md`. Open (low priority, future pass): what builds `CCompressorClassA`'s shared 1024-entry table in
-      the first place, the per-band response-combination step that consumes the cos/sin basis, and the actual reference-model table contents.
+      Full writeup in `docs/logic-reference/mixer.md`. **Fourteenth pass:** `CAutoMaster::SpectralReferenceDataFactory` decompiled — it's not a static
+      in-binary table, it loads each model as a regular `.pst` preset file from the app bundle via the same generic mechanism every Logic plugin preset
+      uses. Searching the actual app bundle found the real library: `Plug-In Settings/Match EQ/Stereo Match EQ/` ships 50 genre-named target-curve
+      presets (Alternative/Blues/Breakbeat/Dance/Disco/Funk/House/Jazz/Orchestral/Pop/RnB/Rock, 2-5 variants each) and `Surround Match EQ/` a separate
+      19-preset library — almost certainly what the Mastering Assistant's "model" picker actually selects from, not a small hardcoded set as guessed in
+      the twelfth pass. Also found (unrelated): `CAutoMasterShell::BuildIntelModelMenu` builds a 4-option "Clean/Valve/Punch/Transparent" analog-model
+      menu, three options gated behind Apple Silicon (exact UI copy decompiled) — a separate, untraced feature. Full writeup in
+      `docs/logic-reference/mixer.md`. Open (low priority, future pass): what builds `CCompressorClassA`'s shared 1024-entry table in the first place,
+      the per-band response-combination step that consumes the cos/sin basis, the exact filename table proving which `.pst` files the Assistant reads,
+      and the Analog Model (Clean/Valve/Punch/Transparent) feature itself.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

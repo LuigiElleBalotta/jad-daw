@@ -429,13 +429,52 @@ feeds the selected one straight into `CMatchEQFX::SetSpecData`. This confirms th
 picker) stored as precomputed data, selected by plain index — but not the model count, labels, or actual spectral
 data, which weren't read out of the binary this pass.
 
+### The reference-spectrum models are (almost certainly) Match EQ's own genre presets (fourteenth pass)
+
+`CAutoMaster::SpectralReferenceDataFactory(modelIndex)` — the function that actually *builds* each model's data
+(distinct from `SelectSpectralReferenceDataForModel`, which only *selects* among already-loaded ones) — decompiled.
+It is **not** a static in-binary table at all: it computes a filename from an 11-byte-per-entry name table embedded
+in the object (`this + modelIndex×0xb + 0x18`), resolves it to a bundle file via the same generic
+`SetFileRefToDataFileInBundleR8CFileRefPKcS2_S2_` helper used for ordinary plugin presets, with extension **`.pst`**
+— i.e. Logic's completely standard preset-file mechanism — reads the file, and (when a header tag `0xf6` matches)
+parses out a float spectrum array starting right after the file's own header. So each "model" is a regular `.pst`
+preset file loaded by name/index, not hardcoded data compiled into `MADSP`.
+
+Searching Logic Pro's own app bundle confirms where such files actually live: **`Plug-In Settings/Match EQ/Stereo
+Match EQ/`** ships exactly this shape of library — **50 genre-named target-curve presets**, 2–5 numbered variants
+each: `Alternative`, `Blues`, `Breakbeat`, `Dance`, `Disco`, `Funk`, `House`, `Jazz`, `Orchestral`, `Pop`, `RnB`,
+`Rock` (e.g. `Pop 01.pst`…`Pop 05.pst`). A separate, differently-named set lives in `.../Match EQ/Surround Match
+EQ/` (19 presets: `Big Band`, `Electro`, `Metal`, `Smooth Jazz 01/02`, `Swing`, etc.) — a distinct library for
+surround content, not a subset of the stereo one. `Plug-In Settings/Mastering Assistant/` itself only has a single
+generic `#default.pst` (the Assistant's own macro-fader settings, unrelated to this). Given `.pst`-in-bundle is the
+exact mechanism `SpectralReferenceDataFactory` uses, it's near-certain the Mastering Assistant's "model" picker
+reuses this same genre-preset library rather than maintaining a separate, smaller duplicate set — though the
+11-byte name table at `this+0x18` that would prove the exact filenames used wasn't read (needs a live instance or
+constructor trace, not attempted this pass). Either way, the real content-type model set has genuine substance —
+dozens of genre-specific curves, not a handful of generic buckets.
+
+**Unrelated but notable find from the same search**: `CAutoMasterShell::BuildIntelModelMenu` (in the UI shell, not
+`CAutoMaster` itself) builds a *different* 4-item menu — **"Clean" / "Valve" / "Punch" / "Transparent"** — for what
+looks like an analog-circuit-modeling stage (matches the `SetAnalogModel`/`ProcessAnalogModel`/`UpdateModel`
+methods seen in the `CAutoMaster` method list). Three of the four options are gated behind Apple Silicon: the exact
+UI strings are `"<Name> (Requires Apple silicon)"` normally, or `"<Name> (Not supported while Logic Pro is running
+Rosetta)"` when the app itself is detected running under Rosetta (via `ECHardwareUtilities processIsTranslated`),
+with "Clean" as the universal fallback. Strongly suggests "Valve"/"Punch"/"Transparent" are ML-driven circuit
+models that need the Neural Engine, not just DSP-cost gating — a separate feature from Match EQ, not pursued
+further this pass, but exact, reusable UI copy if jad-daw ever wants a hardware-gated "quality model" selector.
+
 **Open**: what actually fills `CCompressorClassA`'s shared 1024-entry table in the first place (built once,
 presumably at construction/reset — not traced), the actual per-band response-combination step that consumes
-`FillResponseLUT`'s cos/sin basis (which biquad coefficients multiply which table entries — not traced), and the
-actual reference-model table contents.
+`FillResponseLUT`'s cos/sin basis (which biquad coefficients multiply which table entries — not traced), the
+11-byte filename table that would pin down exactly which `.pst` presets the Assistant's model picker reads, and
+the `CAutoMaster` "Analog Model" (Clean/Valve/Punch/Transparent) feature itself — found but not traced.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.
+
+Source (fourteenth pass): `CAutoMaster::SpectralReferenceDataFactory` at `0x5ffa10` in `MADSP.framework/MADSP`;
+`CAutoMasterShell::BuildIntelModelMenu` at `0xb81200`, same binary; on-disk preset libraries at
+`/Applications/Logic Pro.app/Contents/Resources/Plug-In Settings/Match EQ/{Stereo,Surround} Match EQ/*.pst`.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,

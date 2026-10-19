@@ -370,6 +370,15 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       open. Also confirmed **Family C**'s consumer: `WrappedNeuralPitchTrackerRT` (found via `MADSP`'s import list, not `createModel` - a dedicated
       wrapper class bypassing the shared factory entirely), confirming the CREPE-style pitch-bin guess for `PT`/`RTPT`/`RTPTM`. Together this accounts
       for all 43 of the twenty-first pass's not-yet-attributed codenames. Full writeup in `docs/logic-reference/machine-learning-models.md`.
+      **Twenty-fifth pass:** decoded `CAnalogModelingProfiling`'s remaining 26 codenames (enum 24-49), the one open item left from the twenty-fourth
+      pass, with a generalized version of the same headless-scripting technique (`DumpSwitchCases4.java`, looping the runtime jump-table read over the
+      wider range). Ghidra's own string analysis found all 26 names directly this time (no inline-SSE trick to work around) - and they're real,
+      human-readable gear names: 18 classic/boutique guitar pedals (Klon Clone, RAT, TS808, Muff, Fuzz Face HF, Fuzz Factory, Boss DS-1, Zendrive, Xotic
+      AC/RC, Wampler Taunus, Duke Of Tone, Dover Drive, Belle Epoch, Argonaut, Multi Fuzz, Octavix, Tchula, Wong Compressor) and 8 real amps each captured
+      through an SM57 mic (3 Diezel VH4 channels, 2 Fender combos, 2 Two Rock amps, 1 Vox AC4) - unmistakably a "tone capture"/profiling feature, the
+      same category as Neural DSP's Quad Cortex or Positive Grid's ToneMatch. Confirmed via `find` (same as Pickup Modeling) that none of these 26 files
+      exist in this build - compiled-in but unreleased. This closes out every `RealtimeFXModel` enum value 0-49; nothing about Logic's neural-model
+      loading remains unidentified. Full writeup in `docs/logic-reference/machine-learning-models.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

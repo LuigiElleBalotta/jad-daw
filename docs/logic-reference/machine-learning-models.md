@@ -243,15 +243,46 @@ Besides `CAnalogModelingMasteringChainFX` (enum 10-15, Family B), three more cla
   removed/dead code (unlike `MKBO_88_erdk8f5b7k_0467` above, there's no reachable string evidence these files ever
   existed on disk at all — this is a different situation: the *class* is unreleased, not a single missing file from
   an otherwise-complete family).
-- **`CAnalogModelingProfiling`** (enum 24-49, 27 models) — likely an amp/pedal/gear "profiling" system (capture
-  your own device's response), given the sheer model count, but **not fully resolved**: 27 `createModel` calls were
-  confirmed (one enum value, 44/`0x2c`, called twice — once out of sequence right after the first call, once again
-  in normal order), and the enum range (24 through 49) was pinned down, but the actual codenames for this range
-  were not decoded before this pass ended. Left open for a future pass if the user wants it pursued; not blocking
-  for any of the "quei 43" questions above, since `CMLSaturation`/`CPickupModelingFX`/`WrappedNeuralPitchTrackerRT`
-  already account for every one of the 43 not-previously-attributed codenames (Family A's 11, Pickup Modeling's
-  distinct 8 — which turned out not to be in the original 43-file catalog at all, since none of its files exist on
-  disk — and Family C's 3). `CAnalogModelingProfiling`'s own models are a separate, still-undocumented range.
+- **`CAnalogModelingProfiling`** (enum 24-49, 26 distinct models behind 27 `createModel` calls — one enum value,
+  44/`0x2c`, is called twice: once out of sequence right after the first call, once again in normal order) — **fully
+  resolved (twenty-fifth pass)**. Same technique as before: a generalized version of the jump-table-reading script
+  (`DumpSwitchCases4.java`) force-disassembled/decompiled all 26 switch-case bodies at once. Unlike every family
+  above, Ghidra's own string/xref analysis found these names directly (no inline-SSE-immediate trick to work
+  around) — the names are real, human-readable gear names, not cryptic codenames:
+
+  | enum | Name | enum | Name |
+  |---|---|---|---|
+  | 24 | `Fuzz_Face_HF` | 37 | `Muff` |
+  | 25 | `Argonaut` | 38 | `Multi_Fuzz` |
+  | 26 | `Belle_Epoch` | 39 | `Octavix` |
+  | 27 | `Boss_DS1` | 40 | `RAT` |
+  | 28 | `Diezel_VH4_CH2_SM57` | 41 | `Tchula` |
+  | 29 | `Diezel_VH4_CH3_SM57` | 42 | `TS808` |
+  | 30 | `Diezel_VH4_CH4_SM57` | 43 | `Two_Rock_TC_SM57` |
+  | 31 | `Dover_Drive` | 44 | `Two_Rock_Crystal_SM57` |
+  | 32 | `Duke_Of_Tone` | 45 | `Vox_AC4_SM57` |
+  | 33 | `Fender_Princeton_SM57` | 46 | `Wampler_Taunus` |
+  | 34 | `Fender_Vibro_Champ_SM57` | 47 | `Wong_Compressor` |
+  | 35 | `Fuzz_Factory` | 48 | `Xotic_ACRC` |
+  | 36 | `Klon_Clone` | 49 | `Zendrive` |
+
+  This is unambiguously a **"tone capture" / amp-and-pedal profiling feature** (the same category as Neural DSP's
+  Quad Cortex captures or Positive Grid's ToneMatch): 18 of the 26 names are real, well-known boutique/classic
+  guitar **pedals** (Klon Centaur clone, ProCo RAT, Ibanez TS808 Tube Screamer, Big Muff ("`Muff`"), Fuzz Face,
+  Fuzz Factory, Boss DS-1, Zendrive, Xotic AC/RC, Wampler Taunus, etc.), and the other 8 are real **amps**, each
+  captured through an **SM57** microphone (the industry-standard guitar-cab mic) — including three separate
+  channels of a Diezel VH4 (`CH2`/`CH3`/`CH4`) and two different Fender combos (Princeton, Vibro Champ) plus two
+  Two Rock boutique amps and a Vox AC4. **None of these 26 `.mlmodelc` files exist anywhere in the current Logic
+  Pro 11.2 (build 6306) app bundle** (confirmed via `find`, same as `CPickupModelingFX`) — so this, too, is
+  compiled-in but unreleased functionality, not a currently-usable feature. Whether it ships per-sample-rate
+  variants like every other family (these are single enum slots, no `_44`/`_48`/etc. suffix pattern visible in the
+  decompiled names, unlike Family A/B) isn't established — there may simply be one file per profile rather than
+  four.
+
+With this pass, **every `RealtimeFXModel` enum value from 0 to 49 now has a confirmed owning feature and name** —
+`CMLSaturation` (0-9), `CAnalogModelingMasteringChainFX` (10-15), `CPickupModelingFX` (16-23), and
+`CAnalogModelingProfiling` (24-49) — plus the separate, `ModelFactory`-independent `WrappedNeuralPitchTrackerRT`.
+Nothing about Logic's neural-model loading in `MADSP`/`MAMachineLearning` remains unidentified.
 
 ## For jad-daw
 
@@ -264,10 +295,10 @@ pattern to copy if jad-daw ever adds its own learned (not hand-coded) audio effe
 engine specifically mixes **audio-generating** and **scalar-control-generating** neural models in the same chain
 (two of its three "circuit" slots only extract a per-block control value, not an audio signal) — a reminder that
 "neural audio effect" doesn't have to mean "the network outputs the final sound"; a hybrid of neural analysis +
-classical processing is a legitimate, apparently-shipped design. With `CMLSaturation` confirmed as Family A's
-consumer, every one of the 69 shipped `.mlmodelc` bundles now has a named owning feature except
-`CAnalogModelingProfiling`'s 27 (enum 24-49, codenames not yet decoded) — so the full, real, directly reusable
-weight files for Saturation, Analog Model, and the real-time pitch tracker are all in hand in
+classical processing is a legitimate, apparently-shipped design. With `CMLSaturation`/`CPickupModelingFX`/
+`CAnalogModelingProfiling`/`WrappedNeuralPitchTrackerRT` all confirmed, every one of the 69 shipped `.mlmodelc`
+bundles now has a named owning feature — so the full, real, directly reusable weight files for Saturation, Analog
+Model, and the real-time pitch tracker are all in hand in
 `../logic-pro-reference/all-ml-models/` for this private study project, per the user's standing "we need all of
 them for implementation" request.
 
@@ -288,9 +319,16 @@ Source (twenty-fourth pass): same `ModelFactory::createModel` at `0x81c0`, same 
 (looping the jump table read at runtime instead of a fixed address list); its 7 helper functions
 (`0x95a0`/`0x9710`/`0x9880`/`0x99f0`/`0x9c00`/`0x9d70`/`0x9ee0`) decompiled via `DumpHelpers2.java`.
 `CPickupModelingFX`'s 8 switch-case bodies (enum 16-23) resolved the same way via `DumpSwitchCases2.java`; its
-8-entry enum-value table found at `0xdd5acc`. `CAnalogModelingProfiling` (enum 24-49) and
-`WrappedNeuralPitchTrackerRT` (found via `MADSP.x86_64`'s external-symbol import list, not `createModel`) identified
-by caller/import search, not yet force-disassembled case-by-case.
+8-entry enum-value table found at `0xdd5acc`. `WrappedNeuralPitchTrackerRT` (found via `MADSP.x86_64`'s
+external-symbol import list, not `createModel`) identified by import search, not force-disassembled case-by-case
+(it bypasses the enum/jump-table mechanism entirely).
+
+Source (twenty-fifth pass): `CAnalogModelingProfiling`'s 26 switch-case bodies (enum 24-49) force-disassembled/
+decompiled via `DumpSwitchCases4.java` (the same runtime-jump-table-read technique, generalized to a 24-49 loop) —
+all 26 names recovered directly from Ghidra's own string analysis (Apple's compiler didn't inline these via the
+SSE-immediate trick used elsewhere, so no helper-function second pass was needed this time). File-existence check
+via `find` across the whole `MAMachineLearning.framework` and the separate `MAMachineLearningResources.bundle`
+confirmed none of the 26 profiled-gear files ship in build 6306, same situation as `CPickupModelingFX`.
 
 The actual compiled model files for all 6 confirmed codenames (24 `.mlmodelc` bundles, 4 sample rates each) were
 copied to `../logic-pro-reference/analog-model-ml-models/` per the project's standing "always extract found

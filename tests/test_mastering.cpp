@@ -5,7 +5,9 @@
 #include <random>
 #include "lpc/audio/effects.h"
 #include "lpc/loudness.h"
+#include "lpc/demo_project.h"
 #include "lpc/mastering.h"
+#include "lpc/mastering_fit.h"
 #include "lpc/processor_ids.h"
 
 using namespace lpc;
@@ -153,4 +155,19 @@ TEST_CASE("mastering processor: the Loudness macro follows Apple's staged curves
     CHECK(level(-100.0) - zero == Approx(-13.1).margin(0.4));
     CHECK(level(50.0) - zero == Approx(6.0).margin(0.4));
     CHECK(level(100.0) - zero == Approx(12.0 + 1.3).margin(0.6));   // 12 dB into the compressor and the limiter's 3.25 x 0.4 dB
+}
+
+TEST_CASE("mastering fit: the demo mix lands on -14 LUFS within the limiter controller's tolerance", "[mastering][fit]") {
+    Project p = makeDemoProject({});
+    Track* master = nullptr;
+    for (Track& t : p.tracks)
+        if (t.kind == TrackKind::Master) master = &t;
+    REQUIRE(master != nullptr);
+    master->strip.inserts.push_back(ProcessorRef{kProcMastering, {}, "", "", false});
+    RenderOptions o;
+    o.tailSeconds = 0.3;
+    const MasteringFit fit = fitMastering(p, {}, master->id, 0, o);
+    REQUIRE(!fit.silent);
+    CHECK(fit.params.count("gain") == 1);
+    CHECK(std::abs(fit.output.integrated - kMasteringTargetLufs) <= 0.6);
 }

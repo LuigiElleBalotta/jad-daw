@@ -17,6 +17,9 @@ Track* trackIn(Project& p, const Uuid& id) {
     return nullptr;
 }
 
+constexpr int kMasteringFitAdjustments = 4;      // after the first measurement
+constexpr double kMasteringFitTolerance = 0.2;   // dB / LU
+
 double round2(double v) { return std::round(v * 100.0) / 100.0; }
 
 }  // namespace
@@ -73,20 +76,21 @@ MasteringFit fitMastering(const Project& withInsert, const std::filesystem::path
     const double lost = a.before.integrated - atUnity.integrated;
     fit.compTrim = round2(std::clamp(lost, -12.0, 12.0));
     base["compTrim"] = fit.compTrim;
-    // the gain that reaches the target: the first estimate adds what is lost, then it is corrected from what is measured (a limiter that is working
-    // hard gives back less than it is asked for, so it stops when more gain does not make it louder)
+    // the gain that reaches the target. Logic's AutoAdjustLimiter is a small integral controller: measure, add the error to the gain in dB, render again;
+    // it stops when |error| <= 0.2 or after 5 measurements (1 first + 4 adjustments). The first estimate adds what is lost; a limiter that is working
+    // hard gives back less than it is asked for, so here it also stops when more gain does not make it louder
     double gain = std::clamp(a.gainDb + lost, -24.0, 36.0);
     base["gain"] = round2(gain);
     fit.output = measureWithInsert(withInsert, projectDir, trackId, insertIndex, base, render);
-    for (int pass = 0; pass < 3; ++pass) {
+    for (int pass = 0; pass < kMasteringFitAdjustments; ++pass) {
         const double err = kMasteringTargetLufs - fit.output.integrated;
-        if (std::abs(err) < 0.4) break;
+        if (std::abs(err) <= kMasteringFitTolerance) break;
         const double candidate = std::clamp(gain + err, -24.0, 36.0);
         if (candidate == gain) break;
         std::map<std::string, double> trial = base;
         trial["gain"] = round2(candidate);
         const LoudnessStats got = measureWithInsert(withInsert, projectDir, trackId, insertIndex, trial, render);
-        if (std::abs(kMasteringTargetLufs - got.integrated) >= std::abs(err) - 0.2) break;
+        if (std::abs(kMasteringTargetLufs - got.integrated) >= std::abs(err)) break;
         gain = candidate;
         base = trial;
         fit.output = got;

@@ -412,6 +412,44 @@ the two results. So "dual rate" means the curve preview can represent two biquad
 different internal sample rates (e.g. a main-rate stage plus an oversampled stage) in one combined response, not
 that it merely re-derives the curve after a sample-rate change.
 
+### The per-band response combination, found and decompiled (nineteenth pass)
+
+`CBiquadChain::FrequencyResponse` exists as two overloads that together are exactly the piece `FillResponseLUT`
+left open. The simpler one (5 args) is pure **orchestration**: it walks every enabled band in the chain (checking
+each band's own "is this stage active" flag) and, for each one, calls the 7-arg overload — ping-ponging an
+input/output buffer pair so each band's output magnitude becomes the next band's input. **The chain's displayed
+response is the product of each active band's own magnitude response** (plain multiplication in linear-amplitude
+space, not a dB sum, though the two are mathematically equivalent for a cascade) — disabled bands are skipped
+entirely, not multiplied by a flat 1.0.
+
+The 7-arg overload is the actual **per-band magnitude evaluation**, and it's exactly the consumer of
+`FillResponseLUT`'s `cos(ω)/sin(ω)/cos(2ω)/sin(2ω)` table this pass was looking for. Each band keeps 6 precomputed
+`double`s (set up once, whenever `Coefficients()` runs on that band — not recomputed per response query): calling
+them `c0..c5`, the function first folds them with each other into three running values (`c0`, `c0·c1+c4`,
+`c0·c2+c5`, plus `c3+c0`) — i.e. it pre-combines the raw biquad `a1/a2/b0/b1/b2`-derived coefficients once per
+band, not once per frequency point. Then, **per frequency point `i`** (pulling `cosω[i]`, `sinω[i]`, `cos2ω[i]`,
+`sin2ω[i]` straight from `FillResponseLUT`'s table): it builds the real/imaginary parts of both the numerator and
+denominator of `H(e^-jω)` as linear combinations of those four trig values and the band's folded coefficients, then
+computes `|H|² = (Re_num² + Im_num²) / (Re_den² + Im_den²)`, takes `sqrt`, and **multiplies the running input
+magnitude by this band's `|H|`** — confirming the product-of-magnitudes chain combination described above at the
+single-band level too. The whole thing is 2-point SIMD-unrolled (`divpd`/`sqrtpd` pairs).
+
+One more detail: each band keeps **a small result cache** — a per-point magnitude buffer plus a "last `N` computed"
+counter. If the same point count is requested again and a size/coefficient-staleness check passes, the function
+skips the entire trig/sqrt computation and just multiplies the input by the cached per-point gains (a plain
+SIMD elementwise multiply) — the expensive math only reruns when the curve-preview resolution or the band's own
+coefficients actually change, not on every redraw. This explains why `AllocateResponseCache`/`GetResponseLUTSize`
+exist as their own methods, found alongside `FrequencyResponse` this pass but not decompiled.
+
+**For jad-daw**: if its own EQ curve preview recomputes per-band response from scratch every frame, this is the
+reusable optimization worth copying — build the `cos/sin(ω)`/`cos/sin(2ω)` basis once per redraw (shared across all
+bands), fold each band's own 5 biquad coefficients down to a handful of per-band constants once when they change
+(not per point), and cache the resulting per-point magnitude array so an unchanged band costs one multiply per
+point instead of a `sqrt`+`div`.
+
+Source (nineteenth pass): `CBiquadChain::FrequencyResponse` at `0x1aef20` (orchestration) and `0x1ae7e0` (per-band
+evaluation), `MADSP.framework/MADSP`.
+
 ### Match EQ's model factory (twelfth pass)
 
 `CAutoMaster::MatchEQFactory` builds the Mastering Assistant's own dedicated `CMatchEQFX` instance (separate from the
@@ -535,11 +573,11 @@ these three places, or — given the "models"/presets discovery this session —
 `MADSP` entirely**, e.g. baked into a preset/resource rather than computed by this binary at all (speculative,
 not confirmed). Not pursued further.
 
-**Open**: the actual per-band response-combination step that consumes `FillResponseLUT`'s cos/sin basis (which
-biquad coefficients multiply which table entries — not traced), what the 4 `AM_Curve_N` models actually represent
-musically (no label/UI string found), `CAnalogModelingMasteringChainFX`'s actual circuit simulation (CoreML-based
-or classical DSP — a sizeable engine of its own, genuinely new scope beyond the original
-Compressor/Limiter/EQ/Match-EQ sweep), and (now ruled out as a quick win) `CCompressorClassA`'s table-fill step.
+**Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found),
+`CAnalogModelingMasteringChainFX`'s actual circuit simulation (CoreML-based or classical DSP — a sizeable engine
+of its own, genuinely new scope beyond the original Compressor/Limiter/EQ/Match-EQ sweep), and (ruled out as a
+quick win, see above) `CCompressorClassA`'s table-fill step. The per-band response-combination step is now
+resolved — see the nineteenth-pass section above.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
 `0x1b2740`, `CBiquadChainDualRateFX::FillResponseLUT` at `0x90b730`, all in `MADSP.framework/MADSP`.

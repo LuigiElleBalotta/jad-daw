@@ -312,6 +312,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       guessed earlier). Found the actual files in `MADSP.framework/Versions/A/Resources/AM_Curve_{1,2,3,4}.pst`; all 4 have real, non-zero target
       curves, extracted into `../logic-pro-reference/match-eq-presets/mastering-assistant-models/`. No genre/style label was found for any of them.
       Full correction in `docs/logic-reference/mixer.md`.
+      **Nineteenth pass:** found and decompiled the per-band response-combination step that was left open after `FillResponseLUT` - `CBiquadChain::
+      FrequencyResponse` (two overloads: one orchestrates multiplying each active band's magnitude response into a running chain total, the other
+      computes one band's own `|H(e^-jω)|` from `FillResponseLUT`'s cos/sin table plus 6 coefficients pre-folded once per band). Chain response =
+      product of active bands' magnitudes, not a sum; disabled bands are skipped, not multiplied by 1. Each band also caches its last computed
+      per-point magnitude array and skips the trig/sqrt math entirely when nothing changed. This was the last fully-tractable open item from the
+      Channel EQ curve-preview thread. Full writeup in `docs/logic-reference/mixer.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

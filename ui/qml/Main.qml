@@ -157,6 +157,7 @@ ApplicationWindow {
     }
     MidiTransformDialog { id: midiTransform; project: controller }
     CopyMidiEventsDialog { id: copyMidiEvents; project: controller }
+    CreateTrackStackDialog { id: createTrackStackDialog; project: controller }
     TrackIconDialog { id: trackIconDialog; project: controller }
     AutomationSettingsDialog { id: automationSettings; project: controller }
     AlternativesDialog { id: alternativesDialog; project: controller }
@@ -354,7 +355,7 @@ ApplicationWindow {
         "track.solo": () => controller.toggleSoloSelected(),
         "track.newAudio": () => controller.addTrack("audio"),
         "track.newInstrument": () => controller.addTrack("instrument"),
-        "track.newBus": () => controller.addTrack("bus"),
+        "mix.newAux": () => controller.addTrack("bus"),
         "track.delete": () => controller.deleteSelectedTracks(),
         "track.showInTracks": (on) => { if (controller.selectedTrackIds.length > 0) controller.setShowInTracks(controller.selectedTrackIds[0], on) },
         "track.rename": () => { if (controller.selectedTrackIds.length > 0) trackList.beginRename(controller.selectedTrackIds[0]) },
@@ -464,8 +465,7 @@ ApplicationWindow {
         "file.closeProject": () => root.guard(() => controller.closeProject()),
         "file.revert": () => confirm.ask(qsTr("Revert to Saved"), qsTr("Every change since the last save is lost."), qsTr("Revert"), () => controller.revertToSaved()),
         "file.projectSettings": () => projectSettings.open(),
-        "track.createTrackStack": () => controller.createStack("summing"),
-        "track.createFolderStack": () => controller.createStack("folder"),
+        "track.createTrackStack": () => createTrackStackDialog.open(),
         "track.flattenStack": () => { for (const id of controller.selectedTrackIds) controller.flattenStack(id) },
         "track.convertFolderStackToSummingStack": () => { for (const id of controller.selectedTrackIds) controller.convertFolderStackToSummingStack(id) },
         "mix.iOLabels": () => ioLabelsDialog.open(),

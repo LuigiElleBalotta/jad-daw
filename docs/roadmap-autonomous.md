@@ -403,12 +403,14 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       removed/renamed, or whether Logic really does have an Off state reachable some other way before changing anything. Logic's popup also has
       "Record Automation with Audio Regions", "Trim" and "Relative" that jad-daw doesn't have.
       DONE: kept the Off state: Apple's guide lists the key commands "Toggle Current Track Automation Off/Read" and "Set All Tracks to Automation Off", so Off is a real mode (the live popup read simply showed the other four). Still open as a sub-item: Trim (T-Touch / T-Latch, fader centred and acting as an offset), Relative and "Record Automation with Audio Regions".
-- [ ] E2. Track Stacks: Logic has **one** Track-menu command, "Create Track Stack…" (a dialog, presumably Folder vs. Summing inside it), not jad-daw's
+- [x] E2. Track Stacks: Logic has **one** Track-menu command, "Create Track Stack…" (a dialog, presumably Folder vs. Summing inside it), not jad-daw's
       two separate actions `track.createTrackStack` and a standalone "Create Folder Stack". Merge them into one command + dialog, or confirm via the
       dialog's actual contents (not seen yet) before changing `actions.json`.
-- [ ] E3. Aux tracks: Logic creates an auxiliary channel strip from the **Mixer's Options menu** ("Create New Auxiliary Channel Strip", ⌃N — already in
+      DONE: one Track > Create Track Stack… that opens `CreateTrackStackDialog` (Summing / Folder); the separate Create Folder Stack action is gone.
+- [x] E3. Aux tracks: Logic creates an auxiliary channel strip from the **Mixer's Options menu** ("Create New Auxiliary Channel Strip", ⌃N — already in
       `mixer.md`), not from Track > New. Move jad-daw's `track.newAux` (if it exists under the Track menu today) to match, or confirm it's already in
       the Mixer and this is a non-issue.
+      DONE: `track.newBus` became `mix.newAux`, "Create New Auxiliary Channel Strip" in the Mix menu (no shortcut: Ctrl+N is New from Template here).
 - [x] E4. Menu *locations* (shortcuts are already right, only the menu path is wrong): Preferences is **Logic Pro > Settings** (no ellipsis, it's a
       submenu), not File > Preferences; Key Commands is directly in the **Logic Pro** app menu, not under Help. Fix `actions.json`'s `menu` field for
       `file.preferences` and `help.keyCommands` (and whatever UI chrome renders those menu paths).

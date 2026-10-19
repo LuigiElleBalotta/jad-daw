@@ -89,6 +89,7 @@ qt_add_qml_module(jad_ui_lib
         qml/RegionInspectorFloatWindow.qml
         qml/StepInputKeyboardWindow.qml
         qml/CopyMidiEventsDialog.qml
+        qml/CreateTrackStackDialog.qml
         qml/StepSequencer.qml
         qml/ScoreView.qml
         qml/TextPromptDialog.qml

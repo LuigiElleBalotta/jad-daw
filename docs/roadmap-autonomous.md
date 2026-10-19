@@ -306,6 +306,12 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       afterward, resolved by reading the real vtable bytes - it's `CCompressorBase::CalcAutoGain` (auto-gain recalculation), not a table builder. The
       real fill logic isn't in any of the three places checked; may live outside `MADSP` entirely (speculative). Not pursued further - this was the
       last readily-reachable lead on that particular open item.
+      **Eighteenth pass:** decompiled `CAutoMaster`'s constructor to find the Mastering Assistant's real reference-model filename table - and it
+      corrects the fourteenth pass's guess. The constructor literally writes 4 strings - `"AM_Curve_1"` through `"AM_Curve_4"` - into the exact
+      11-byte-stride region `SpectralReferenceDataFactory` indexes, proving there are exactly 4 models (not the 50/20-item Match EQ genre library
+      guessed earlier). Found the actual files in `MADSP.framework/Versions/A/Resources/AM_Curve_{1,2,3,4}.pst`; all 4 have real, non-zero target
+      curves, extracted into `../logic-pro-reference/match-eq-presets/mastering-assistant-models/`. No genre/style label was found for any of them.
+      Full correction in `docs/logic-reference/mixer.md`.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

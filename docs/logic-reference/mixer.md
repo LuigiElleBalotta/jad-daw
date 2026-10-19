@@ -429,7 +429,7 @@ feeds the selected one straight into `CMatchEQFX::SetSpecData`. This confirms th
 picker) stored as precomputed data, selected by plain index — but not the model count, labels, or actual spectral
 data, which weren't read out of the binary this pass.
 
-### The reference-spectrum models are (almost certainly) Match EQ's own genre presets (fourteenth pass)
+### The reference-spectrum models: NOT the Match EQ genre library — 4 dedicated `AM_Curve_N` files (fourteenth pass, corrected eighteenth pass)
 
 `CAutoMaster::SpectralReferenceDataFactory(modelIndex)` — the function that actually *builds* each model's data
 (distinct from `SelectSpectralReferenceDataForModel`, which only *selects* among already-loaded ones) — decompiled.
@@ -440,18 +440,23 @@ in the object (`this + modelIndex×0xb + 0x18`), resolves it to a bundle file vi
 parses out a float spectrum array starting right after the file's own header. So each "model" is a regular `.pst`
 preset file loaded by name/index, not hardcoded data compiled into `MADSP`.
 
-Searching Logic Pro's own app bundle confirms where such files actually live: **`Plug-In Settings/Match EQ/Stereo
-Match EQ/`** ships exactly this shape of library — **50 genre-named target-curve presets**, 2–5 numbered variants
-each: `Alternative`, `Blues`, `Breakbeat`, `Dance`, `Disco`, `Funk`, `House`, `Jazz`, `Orchestral`, `Pop`, `RnB`,
-`Rock` (e.g. `Pop 01.pst`…`Pop 05.pst`). A separate, differently-named set lives in `.../Match EQ/Surround Match
-EQ/` (**20** presets: `Big Band`, `Electro`, `Metal`, `Smooth Jazz 01/02`, `Swing`, etc.) — a distinct library for
-surround content, not a subset of the stereo one. `Plug-In Settings/Mastering Assistant/` itself only has a single
-generic `#default.pst` (the Assistant's own macro-fader settings, unrelated to this). Given `.pst`-in-bundle is the
-exact mechanism `SpectralReferenceDataFactory` uses, it's near-certain the Mastering Assistant's "model" picker
-reuses this same genre-preset library rather than maintaining a separate, smaller duplicate set — though the
-11-byte name table at `this+0x18` that would prove the exact filenames used wasn't read (needs a live instance or
-constructor trace, not attempted this pass). Either way, the real content-type model set has genuine substance —
-dozens of genre-specific curves, not a handful of generic buckets.
+**Correction (eighteenth pass)**: the fourteenth pass guessed this reuses Match EQ's 50-genre preset library, since
+no obvious dedicated file set was found at the time — that guess was wrong, and is fully superseded by what
+follows. Decompiling `CAutoMaster`'s own constructor shows exactly what fills that 11-byte-per-entry name table at
+`this+0x18`: four literal strings, written directly by the constructor — **`"AM_Curve_1"`, `"AM_Curve_2"`,
+`"AM_Curve_3"`, `"AM_Curve_4"`** (10 characters + null = 11 bytes each, spanning `this+0x18` to `this+0x44` exactly,
+matching `SpectralReferenceDataFactory`'s `modelIndex×0xb` stride for `modelIndex` 0–3 precisely). So there are
+**exactly 4 models**, not dozens, and they're named generically, not by genre. Searching the app bundle for these
+literal names found them immediately: `MADSP.framework/Versions/A/Resources/AM_Curve_{1,2,3,4}.pst` (also mirrored
+in `MADSPPlugInPublic.framework/.../Resources/` for `2`–`4`). All four parse with the same chunked `.pst` format as
+the Match EQ presets (`SMMT`/`SMUC`/`SMOM`, confirmed below) and **all four have real, non-zero `SMMT` target
+curves** — genuine reference spectra, e.g. `AM_Curve_1`: 306 points, −82 to −27 dB; `AM_Curve_2`/`3`/`4`: 340 points
+(a different point count than their own `SMUC`/`SMOM` chunks, which stay at 306 — the first time a file's three
+chunks weren't all the same length), roughly −117 to −26 dB. Extracted and saved (raw `.pst` + parsed JSON) to
+`../logic-pro-reference/match-eq-presets/mastering-assistant-models/`. What musical/loudness concept each of the 4
+numbered slots represents (genre-agnostic "intensity" levels? a generic/EDM/acoustic/orchestral-style split? plain
+placeholders?) wasn't identified — no UI string or label was found for them this pass, only the internal filenames
+and their raw curve data.
 
 **The `.pst` binary format itself is now fully decoded and the data extracted** (same pass, triggered by checking
 whether the actual preset data was worth pulling out — it is). Every file: a fixed 96-byte header tagged
@@ -531,9 +536,9 @@ these three places, or — given the "models"/presets discovery this session —
 not confirmed). Not pursued further.
 
 **Open**: the actual per-band response-combination step that consumes `FillResponseLUT`'s cos/sin basis (which
-biquad coefficients multiply which table entries — not traced), the 11-byte filename table that would pin down
-exactly which `.pst` presets the Assistant's model picker reads, `CAnalogModelingMasteringChainFX`'s actual circuit
-simulation (CoreML-based or classical DSP — a sizeable engine of its own, genuinely new scope beyond the original
+biquad coefficients multiply which table entries — not traced), what the 4 `AM_Curve_N` models actually represent
+musically (no label/UI string found), `CAnalogModelingMasteringChainFX`'s actual circuit simulation (CoreML-based
+or classical DSP — a sizeable engine of its own, genuinely new scope beyond the original
 Compressor/Limiter/EQ/Match-EQ sweep), and (now ruled out as a quick win) `CCompressorClassA`'s table-fill step.
 
 Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiquadChain::FillResponseLUT` at
@@ -542,6 +547,10 @@ Source (thirteenth pass): `CCompressorClassA::GainRedCurve` at `0x9c100`, `CBiqu
 Source (fourteenth pass): `CAutoMaster::SpectralReferenceDataFactory` at `0x5ffa10` in `MADSP.framework/MADSP`;
 `CAutoMasterShell::BuildIntelModelMenu` at `0xb81200`, same binary; on-disk preset libraries at
 `/Applications/Logic Pro.app/Contents/Resources/Plug-In Settings/Match EQ/{Stereo,Surround} Match EQ/*.pst`.
+
+Source (eighteenth pass, correction): `CAutoMaster`'s constructor (`CAutoMasterC2ER9CProcDataii`) at `0x605290` in
+`MADSP.framework/MADSP`; on-disk files at `/Applications/Logic Pro.app/Contents/Frameworks/MADSP.framework/Versions
+/A/Resources/AM_Curve_{1,2,3,4}.pst`.
 
 Source: static analysis of `MADSP.framework/MADSP` (x86_64 slice) via REA + Ghidra 12.1.4. `CCompressorBase` family
 at `0x70ae0`-`0xa0f90`, `CNoisegateFX` at `0x133f00`-`0x135fe0`, `CChannelEQShell` at `0x231580`-`0x232cd0`,

@@ -6,6 +6,8 @@
 #include <numeric>
 
 #include "lpc/fft.h"
+#include "lpc/ml/beat_tracker.h"
+#include "lpc/ml/onset_cnn.h"
 
 namespace lpc {
 
@@ -76,6 +78,26 @@ std::vector<double> onsetStrength(const Mono& m) {
     return out;
 }
 
+// the same normalisation for a curve that comes from elsewhere: zero mean over a second, unit scale
+std::vector<double> normalisedOnsets(const std::vector<double>& env, double fps) {
+    const std::size_t frames = env.size();
+    const std::size_t half = static_cast<std::size_t>(0.5 * fps);
+    std::vector<double> out(frames, 0.0);
+    double sq = 0.0;
+    for (std::size_t t = 0; t < frames; ++t) {
+        const std::size_t lo = t > half ? t - half : 0, hi = std::min(frames, t + half + 1);
+        double mean = 0.0;
+        for (std::size_t i = lo; i < hi; ++i) mean += env[i];
+        mean /= static_cast<double>(hi - lo);
+        out[t] = std::max(0.0, env[t] - mean);
+        sq += out[t] * out[t];
+    }
+    const double sd = std::sqrt(sq / static_cast<double>(std::max<std::size_t>(1, frames)));
+    if (sd > 1e-9)
+        for (double& v : out) v /= sd;
+    return out;
+}
+
 // The beat period (in onset frames) of the stretch [from, to) of the onset curve: the autocorrelation, weighted towards 120 bpm, with a
 // parabola through its peak. 0 when nothing stands out.
 double estimatePeriod(const std::vector<double>& onset, std::size_t from, std::size_t to, double fps, double minBpm, double maxBpm, double* confidenceOut) {
@@ -116,13 +138,36 @@ double estimatePeriod(const std::vector<double>& onset, std::size_t from, std::s
 
 }  // namespace
 
-TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm, int beatsPerBar) {
+TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm, int beatsPerBar, bool neural) {
     TempoAnalysis result;
     if (audio.frames() < audio.sampleRate || audio.channels < 1 || audio.sampleRate <= 0) return result;
     const Mono mono = toMono(audio);
-    const std::vector<double> onset = onsetStrength(mono);
+    std::vector<double> onset;
+    double fps = mono.rate / kHop;  // onset frames per second
+    double hopAudio = static_cast<double>(kHop) * mono.decimation;      // audio frames per onset frame
+    double centreAudio = kFrame / 2.0 * mono.decimation;                // where in that hop the frame is centred
+    std::vector<double> downbeatCurve;  // the network's downbeat activation on the same frames (empty without the beat tracker)
+    int meterHint = 0;                  // 3 or 4 when the network's meter head clearly prefers one
+    if (neural) {
+        const ml::BeatActivation tracker = ml::detectBeatsCnn(audio);
+        if (tracker.beats.size() >= 64) {  // Logic's beat tracker network: its beat activation is the onset curve, its downbeat one picks the bars
+            onset = normalisedOnsets(tracker.beats, tracker.fps);
+            downbeatCurve = tracker.downbeats;
+            fps = tracker.fps;
+            hopAudio = static_cast<double>(tracker.hopSamples) * audio.sampleRate / tracker.rate;
+            centreAudio = 0.0;
+            if (tracker.meter.size() >= 5 && std::max(tracker.meter[3], tracker.meter[4]) > 0.4) meterHint = tracker.meter[3] > tracker.meter[4] ? 3 : 4;
+        }
+        const ml::OnsetActivation act = onset.empty() ? ml::detectOnsetsCnn(audio) : ml::OnsetActivation{};
+        if (act.values.size() >= 64) {
+            onset = normalisedOnsets(act.values, act.fps);
+            fps = act.fps;
+            hopAudio = static_cast<double>(act.hopSamples) * audio.sampleRate / 44100.0;
+            centreAudio = 0.0;
+        }
+    }
+    if (onset.empty()) onset = onsetStrength(mono);
     if (onset.size() < 64) return result;
-    const double fps = mono.rate / kHop;  // onset frames per second
     const std::size_t n = onset.size();
 
     // tempo: the autocorrelation of the onset curve, weighted towards 120 bpm; first over the whole recording, then over windows of ten seconds
@@ -197,7 +242,6 @@ TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm, i
     if (frames.size() < 3) return result;
 
     // sample positions: the middle of the analysis frame, then the sharpest rise in energy within 30 ms of it
-    const double scale = static_cast<double>(mono.decimation);
     std::vector<std::int64_t> beats;
     const std::int64_t total = audio.frames();
     const std::int64_t block = std::max<std::int64_t>(8, audio.sampleRate / 500);  // 2 ms
@@ -212,7 +256,7 @@ TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm, i
         return e;
     };
     for (std::size_t f : frames) {
-        const std::int64_t centre = static_cast<std::int64_t>((static_cast<double>(f) * kHop + kFrame / 2.0) * scale);
+        const std::int64_t centre = static_cast<std::int64_t>(static_cast<double>(f) * hopAudio + centreAudio);
         const std::int64_t lo = std::max<std::int64_t>(block, centre - reach), hi = std::min<std::int64_t>(total - 1, centre + reach);
         double top = 0.0;
         std::int64_t at = centre;
@@ -228,11 +272,12 @@ TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm, i
 
     // the bar: for a bar of 3 or of 4 beats, the phase whose beats carry the most onset strength opens the bars, and the better the
     // accents repeat at that length the more likely it is the meter (four unless three is clearly better)
+    const std::vector<double>& accentCurve = downbeatCurve.size() == onset.size() ? downbeatCurve : onset;
     auto accent = [&](int bpb, int& phaseOut) {
         std::vector<double> avg(static_cast<std::size_t>(bpb), 0.0);
         std::vector<int> count(static_cast<std::size_t>(bpb), 0);
         for (std::size_t i = 0; i < frames.size(); ++i) {
-            avg[i % static_cast<std::size_t>(bpb)] += onset[frames[i]];
+            avg[i % static_cast<std::size_t>(bpb)] += accentCurve[frames[i]];
             ++count[i % static_cast<std::size_t>(bpb)];
         }
         double all = 0.0, top = -1.0;
@@ -246,6 +291,7 @@ TempoAnalysis analyseTempo(const WavData& audio, double minBpm, double maxBpm, i
     };
     int phase3 = 0, phase4 = 0;
     const double d3 = accent(3, phase3), d4 = accent(4, phase4);
+    if (beatsPerBar == 0 && meterHint != 0) beatsPerBar = meterHint;  // the network's meter head decides when it is clear
     if (beatsPerBar == 3 || (beatsPerBar == 0 && d3 > 1.3 * d4 + 0.05)) {
         result.beatsPerBar = 3;
         result.firstDownbeat = phase3;

@@ -18,6 +18,8 @@ struct TempoAnalysis {
 };
 
 // `beatsPerBar`: 0 finds out whether the bars have three or four beats; 3 or 4 sets it.
-TempoAnalysis analyseTempo(const WavData& audio, double minBpm = 60.0, double maxBpm = 200.0, int beatsPerBar = 0);
+// `neural`: the onset curve comes from Logic's OnsetDetectionCNN (lpc::ml, converted to ONNX) when the model can be loaded, as Logic's own Smart Tempo does;
+// otherwise, or when false, from the spectral flux.
+TempoAnalysis analyseTempo(const WavData& audio, double minBpm = 60.0, double maxBpm = 200.0, int beatsPerBar = 0, bool neural = false);
 
 }  // namespace lpc

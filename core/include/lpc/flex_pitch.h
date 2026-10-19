@@ -13,6 +13,9 @@ struct PitchOptions {
     double minHz = 40.0;    // lowest pitch that can be found (the pitch track and the note states reach down to it)
     double maxHz = 1600.0;  // highest pitch that can be found
     double meanThreshold = 0.15;  // mean of the Beta(2, b) prior over the YIN thresholds
+    // The pitch candidates of every frame come from Logic's neural pitch tracker (lpc::ml, RTPTM converted to ONNX) when it can be loaded, instead
+    // of YIN; the note model that decodes them is the same. Falls back to YIN when the model is not there.
+    bool neural = false;
 };
 
 // One note found in the audio. Positions are frames of the analysed audio.

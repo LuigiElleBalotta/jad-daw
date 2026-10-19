@@ -36,6 +36,15 @@
 namespace jad {
 
 namespace {
+// Flex Pitch listens with Logic's neural pitch tracker when the model is there (it falls back to YIN)
+lpc::PitchOptions neuralPitch() {
+    lpc::PitchOptions o;
+    o.neural = true;
+    return o;
+}
+}  // namespace
+
+namespace {
 
 std::filesystem::path mediaPath(const std::filesystem::path& dir, const QString& relative) {
     const QByteArray rel = relative.toUtf8();
@@ -294,7 +303,7 @@ void ProjectController::flexAnalyse(const QString& regionId) {
         try {
             const lpc::WavData wav = readWindow(file, data.sourceOffset, data.sourceLength);
             if (doTransients) transients = lpc::findTransients(wav, sensitivity);
-            if (doPitch) pitch = std::make_shared<lpc::PitchAnalysis>(lpc::analysePitch(wav));
+            if (doPitch) pitch = std::make_shared<lpc::PitchAnalysis>(lpc::analysePitch(wav, neuralPitch()));
         } catch (const std::exception&) {
             ok = false;
         }
@@ -486,7 +495,7 @@ void ProjectController::flexApply(std::vector<FlexEdit> edits, const nlohmann::j
                     bool pitchEdited = false;
                     for (const lpc::FlexNoteData& n : j.data.notes) pitchEdited = pitchEdited || !neutral(n);
                     if (pitchEdited) {
-                        lpc::PitchAnalysis a = j.pitch ? *j.pitch : lpc::analysePitch(src);
+                        lpc::PitchAnalysis a = j.pitch ? *j.pitch : lpc::analysePitch(src, neuralPitch());
                         a.notes = lpc::flexNotes(j.data);
                         work = lpc::renderFlexPitch(src, a, lpc::flexEdits(j.data));
                     }
@@ -934,7 +943,7 @@ void ProjectController::smartAnalyse(const QString& regionId) {
     (void)QtConcurrent::run([self, key, regionId, file, data, generation] {
         std::shared_ptr<lpc::TempoAnalysis> result;
         try {
-            result = std::make_shared<lpc::TempoAnalysis>(lpc::analyseTempo(readWindow(file, data.sourceOffset, data.sourceLength)));
+            result = std::make_shared<lpc::TempoAnalysis>(lpc::analyseTempo(readWindow(file, data.sourceOffset, data.sourceLength), 60.0, 200.0, 0, /*neural=*/true));
         } catch (const std::exception&) {
         }
         if (!self) return;

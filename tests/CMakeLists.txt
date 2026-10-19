@@ -1,6 +1,8 @@
 file(GLOB_RECURSE LPC_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 add_executable(lpc_tests ${LPC_TEST_SOURCES})
 target_link_libraries(lpc_tests PRIVATE lpc_core Catch2::Catch2WithMain)
+lpc_copy_onnx_dlls(lpc_tests)
+target_compile_definitions(lpc_tests PRIVATE LPC_ONNX_MODELS_DIR="${CMAKE_SOURCE_DIR}/jad-daw-private/onnx")
 target_compile_definitions(lpc_tests PRIVATE LPC_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(lpc_tests PRIVATE LPC_PATCHES_JSON="${CMAKE_SOURCE_DIR}/core/data/patches.json")
 target_compile_definitions(lpc_tests PRIVATE LPC_EFFECT_PRESETS_JSON="${CMAKE_SOURCE_DIR}/core/data/effect_presets.json")

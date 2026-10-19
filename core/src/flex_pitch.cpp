@@ -1,4 +1,5 @@
 #include "lpc/flex_pitch.h"
+#include "lpc/ml/pitch_cnn.h"
 
 #include <algorithm>
 #include <cmath>
@@ -335,8 +336,19 @@ PitchAnalysis analysePitch(const WavData& d, const PitchOptions& options) {
     const int hop = std::max(1, static_cast<int>(std::lround(0.010 * rate)));
     const std::size_t frameCount = x.size() / static_cast<std::size_t>(hop) + 1;
     std::vector<std::vector<Candidate>> cands(frameCount);
-    for (std::size_t f = 0; f < frameCount; ++f)
-        cands[f] = yin.candidates(x, prefix, static_cast<std::int64_t>(f) * hop - yin.w / 2);
+    bool done = false;
+    if (options.neural) {
+        const auto peaks = ml::neuralPitchPeaks(x, rate, hop, frameCount);
+        if (peaks.size() == frameCount) {
+            for (std::size_t f = 0; f < frameCount; ++f)
+                for (const ml::PitchPeak& p : peaks[f])
+                    if (p.midi >= hzToMidi(options.minHz) && p.midi <= hzToMidi(options.maxHz)) cands[f].push_back({p.midi, p.prob});
+            done = true;
+        }
+    }
+    if (!done)
+        for (std::size_t f = 0; f < frameCount; ++f)
+            cands[f] = yin.candidates(x, prefix, static_cast<std::int64_t>(f) * hop - yin.w / 2);
 
     const NoteModel model(std::floor(hzToMidi(options.minHz)), std::ceil(hzToMidi(options.maxHz)), static_cast<double>(hop) / rate);
     const std::vector<int> path = model.decode(cands);

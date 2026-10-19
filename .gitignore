@@ -16,3 +16,4 @@ build-plugin/
 .scratch-audio/
 __pycache__/
 jad-daw-private
+third_party/onnxruntime/

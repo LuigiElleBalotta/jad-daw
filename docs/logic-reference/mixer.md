@@ -444,7 +444,7 @@ Searching Logic Pro's own app bundle confirms where such files actually live: **
 Match EQ/`** ships exactly this shape of library — **50 genre-named target-curve presets**, 2–5 numbered variants
 each: `Alternative`, `Blues`, `Breakbeat`, `Dance`, `Disco`, `Funk`, `House`, `Jazz`, `Orchestral`, `Pop`, `RnB`,
 `Rock` (e.g. `Pop 01.pst`…`Pop 05.pst`). A separate, differently-named set lives in `.../Match EQ/Surround Match
-EQ/` (19 presets: `Big Band`, `Electro`, `Metal`, `Smooth Jazz 01/02`, `Swing`, etc.) — a distinct library for
+EQ/` (**20** presets: `Big Band`, `Electro`, `Metal`, `Smooth Jazz 01/02`, `Swing`, etc.) — a distinct library for
 surround content, not a subset of the stereo one. `Plug-In Settings/Mastering Assistant/` itself only has a single
 generic `#default.pst` (the Assistant's own macro-fader settings, unrelated to this). Given `.pst`-in-bundle is the
 exact mechanism `SpectralReferenceDataFactory` uses, it's near-certain the Mastering Assistant's "model" picker
@@ -452,6 +452,26 @@ reuses this same genre-preset library rather than maintaining a separate, smalle
 11-byte name table at `this+0x18` that would prove the exact filenames used wasn't read (needs a live instance or
 constructor trace, not attempted this pass). Either way, the real content-type model set has genuine substance —
 dozens of genre-specific curves, not a handful of generic buckets.
+
+**The `.pst` binary format itself is now fully decoded and the data extracted** (same pass, triggered by checking
+whether the actual preset data was worth pulling out — it is). Every file: a fixed 96-byte header tagged
+`GAMETSPP` (bytes 0–3 = total file size, byte 8 = `18`, used by the factory's own offset arithmetic, bytes 0xc–0x13
+literally spell `GAMETSPP`, byte 0x14 = the `0xf6` tag the decompiled factory checks for), followed by **three
+length-prefixed chunks** tagged `SMMT` / `SMUC` / `SMOM` (each chunk's length field spans tag+length+payload exactly
+— verified against the next chunk's start byte-for-byte). Each chunk's payload is `[channel count: int32][N: int32]`
+followed by `1 + channelCount` arrays of `N` floats each: **one shared log-frequency axis** (`0.0`, then `20 Hz` up
+to `22,050 Hz` — a 44.1 kHz-Nyquist axis, `N=306` points for every preset, stereo and surround alike) **plus one
+magnitude-in-dB array per channel** (2 channels for Stereo Match EQ, 6 for Surround — exactly L/R vs. a 5.1 layout).
+Only the **`SMMT`** ("target") chunk carries real data in every factory preset checked; `SMUC` and `SMOM` are
+all-zero in all of them — almost certainly "current/measured" and a third capture slot that only get filled in at
+runtime after a live analysis, not meaningful in a shipped preset. So `SMMT`'s magnitude array *is* the genre's
+actual target curve (e.g. Pop 01's L channel: −54 dB at 0 Hz-bin, rising to a −24 dB peak, settling into a
+−90-to-−96 dB noise floor above ~15 kHz — a real, usable mastering target shape, not placeholder data).
+
+All 70 presets (50 stereo + 20 surround) were parsed with a one-off script into plain JSON (`freq_hz` + one
+`target_magnitude_db` array per channel) and saved alongside the original `.pst` files in `../logic-pro-reference/
+match-eq-presets/` (outside jad-daw's git repo, same convention as the rest of that folder) — real, directly reusable
+reference curves for jad-daw's own Match EQ, not just an architecture description.
 
 **Unrelated but notable find from the same search**: `CAutoMasterShell::BuildIntelModelMenu` (in the UI shell, not
 `CAutoMaster` itself) builds a *different* 4-item menu — **"Clean" / "Valve" / "Punch" / "Transparent"** — for what

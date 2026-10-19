@@ -283,9 +283,17 @@ machine; each target switch re-analyzes from scratch (ephemeral Ghidra project, 
       options gated behind Apple Silicon (exact UI copy decompiled); `CAutoMaster::SetAnalogModel` confirms the engine is its own class,
       `CAnalogModelingMasteringChainFX`, with "Clean" a true bypass (no engine call at all) and each other model having a native/fallback device-type
       pair selected by Apple-Silicon-ML availability. The circuit simulation itself is a sizeable separate engine, out of scope for this pass. Full
-      writeup in `docs/logic-reference/mixer.md`. **This closes the tractable open items from the stock-plugin sweep** - remaining opens
-      (`CCompressorClassA`'s table-fill step, the per-band response-combination math, the exact `.pst` filename table, and
-      `CAnalogModelingMasteringChainFX`'s own engine) all need either a live instance or a genuinely new, separate reverse-engineering pass.
+      writeup in `docs/logic-reference/mixer.md`. **Fifteenth pass:** the user asked whether the actual Match EQ preset data had been pulled out, not
+      just its existence confirmed - it hadn't, so it was. Fully decoded the `.pst` binary format by cross-checking the decompiled factory function
+      against the real files byte-for-byte: fixed 96-byte `GAMETSPP` header, then three length-prefixed chunks (`SMMT`/`SMUC`/`SMOM`), each holding a
+      shared log-frequency axis (0, then 20 Hz-22,050 Hz, N=306, every preset) plus one magnitude-in-dB array per channel (2 for stereo, 6 for
+      surround). Only `SMMT` ("target") is non-zero in factory presets. Parsed all 70 presets (50 stereo + 20 surround - corrected the stereo-pass
+      count, it's 20 not 19) into plain JSON and saved them, plus the original `.pst` files, in `../logic-pro-reference/match-eq-presets/` (outside
+      git, same convention as the rest of that folder) - real, reusable target-curve data for jad-daw's own Match EQ, not just an architecture note.
+      Also checked `CCompressorClassA::OnReset` for the table-fill step: it only resets small envelope-state fields, not the 1024-entry table itself -
+      that's still built elsewhere (constructor or lazily), not found this pass. Remaining opens (`CCompressorClassA`'s actual table-fill step, the
+      per-band response-combination math, the exact `.pst` filename table proving which presets `SpectralReferenceDataFactory` reads, and
+      `CAnalogModelingMasteringChainFX`'s own engine) all still need either a live instance or a genuinely new, separate reverse-engineering pass.
 - [x] D9. Flex Time DSP internals: the actual engine is `MADSP.framework`'s **`CElasticAudio`**/`CEAPhaseVocoder` family — Apple's own internal name for
       Flex Time is "Elastic Audio". It's a textbook phase vocoder (FFT size, window type, **lamination mode** — Laroche & Dolson's own term for their
       identity-phase-locking scheme, already cited in `flex-algorithms.md`), driven by the same Flex-marker/warp-marker model as the UI, plus a separate

@@ -97,8 +97,24 @@ addresses Ghidra didn't resolve automatically; attempted partially, not complete
 is a shared factory for *all* of Family A, `CAnalogModelingMasteringChainFX` requests exactly 6 of the 11 by enum
 value, and the sample-rate-to-file selection logic is confirmed (at least for one family) to be exact-float
 comparison with a sensible highest-quality fallback. Which 6 of the 11 codenames those enum values 10–15
-specifically are, and which two make up each Valve/Punch/Transparent native/fallback pair, remains unresolved —
-the jump table would need manual reconstruction to finish this exactly.
+specifically are, and which two make up each Valve/Punch/Transparent native/fallback pair, remains unresolved.
+
+**Tried and blocked, not just skipped**: a follow-up pass attempted exactly this reconstruction and hit a real
+tooling wall, not just effort. Ghidra's own static analysis never disassembled the other 5 case bodies at all —
+`procedure_info`/`inspect_native_instruction` both confirm those jump-table-target addresses aren't recognized as
+code or even as decoded instructions ("undecodable", "not in procedure"), because Ghidra couldn't prove they're
+reachable once the switch's jump table resolution failed. REA's available annotation tool
+(`annotate_native_function`) can only rename/comment a function Ghidra *already* recognizes, not force a new one
+into existence at an arbitrary address, so there's no read-only path from here to disassembling those blocks.
+Finishing this would need either a Ghidra GUI session (to manually define code at those addresses and let the
+decompiler re-run) or a live, running instance of Logic Pro to observe which model actually loads per menu
+selection — the former is outside this toolset, the latter is exactly the kind of live-instance step the user
+asked to defer here in favor of binary tracing. **One plausible (unverified) hypothesis**, worth recording even
+though unconfirmed: if `RealtimeFXModel` enum = `AMMCDeviceType` + 10 (the simplest possible offset), the mapping
+would be enum10=Valve-native, 11=Valve-fallback, 12=Punch-native, 13=Punch-fallback, 14=Transparent-native,
+15=Transparent-fallback — consistent with `AMMCDeviceType`'s own native/fallback XOR pairs (0/1, 2/3, 4/5) found
+in the `SetAnalogModel` pass. This has not been checked against the actual switch bodies and should be treated as
+a guess, not a finding.
 
 ### Family B — "neural audio analyzer", unconditioned (`modelForStreaming`, 1024-sample blocks)
 

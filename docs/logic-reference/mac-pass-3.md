@@ -17,7 +17,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **mostly done** | 6a (track color grid), 6b (I/O Labels structure), 6c (Create New Track, all categories), 6d (Global Tracks' 8 track types + default 5-lane set), 6f (Bounce "Project or Section" dialog, full field table), 6g (automation-mode popup: Read/Touch/Latch/Write, no Off mode, plus Trim/Relative) all captured live. Only **6e** (overlapping-recordings behavior — Create Take Folder, Cycle On/Off) remains not done, since it needs an actual recording pass rather than read-only/cancel-only navigation. Exact color hex values for 6a still need an `Assets.car` search (not re-attempted this pass). |
-| 7. Smart Tempo/Flex quality comparison | **not started** | Needs a throwaway test project with real Apple Loops, built and played in the live app. |
+| 7. Smart Tempo/Flex quality comparison | **blocked** | Loop Browser opened live (20158 Apple Loops indexed, full filter/column structure captured). Could not get a loop onto a track: simulated drag-and-drop from the Loop Browser list to the Tracks area does not register as a real macOS drag with Logic Pro (tried direct drag, multi-step drag, right-click, and a toolbar "add" control — none created a track), so the actual tempo-detection/Flex-quality test itself could not run. This looks like a tooling limitation (native NSDraggingSession-based drag vs. a synthesized mouse-down/move/up sequence), not a coordinate or timing issue — worth trying a different automation approach (e.g. an Automator/AppleScript "Finder drag" proxy, or importing a loop file via File > Import instead of the Loop Browser) in a future pass. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **not started** | Match EQ's pipeline architecture is already documented in `mixer.md`; the exact per-band Q/slope/curve constants for Channel EQ, Limiter/Adaptive Limiter/Noise Gate tables, and pan/fader taper formulas are not yet decompiled. |
 
 This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
@@ -740,3 +740,38 @@ Live UI capture via `mcp__macos-mcp__*` against the same disposable `Untitled 13
 Assign Track Color… and Mix > I/O Labels… opened via the application menu bar; I/O Labels scrolled with the
 `Scroll` tool to confirm its row count extends past Bus 232; Track > New Tracks… walked through all 4
 categories × their sub-options via `Click`, closed with Cancel (no track created).
+
+---
+
+## Block 7 — Smart Tempo/Flex quality comparison (blocked)
+
+`View > Show Loop Browser` (⌥O) opened Logic's real Apple Loops library live — 20158 items indexed, with
+`Instrument`/`Genre`/`Descriptors`/favorites filter tabs, `Scale`/`Signature`/text-search fields, and a results
+table (`Name`, `Beats`, favorite-heart, `Tempo`, `Key` columns; a green note icon marks a plain audio loop, a
+blue "loop-with-waveform" icon marks an Apple-Loop-with-tempo-metadata type — both seen in the list). Selecting
+a row (`12 Bar Blues Bass`, 16 beats, 80 BPM, key E) previews/plays it.
+
+**Could not get a loop onto a track.** Every attempt at a simulated drag from the Loop Browser list onto the
+Tracks area (a single-shot `Move` drag, a two-step `Move`-then-`Move-with-drag` sequence to different drop
+targets, a right-click for a context menu, and the Loop Browser's own bottom-left tool button) left the browser
+in its original state — no track was created, no region appeared. This reads as a genuine limitation of
+simulating macOS's native drag-and-drop (an `NSDraggingSession`) via synthesized mouse events, not a bad
+coordinate: Logic's own non-drag interactions (menu clicks, text fields, regular buttons) worked fine in the
+same window. The actual Smart Tempo/Flex-quality test this block asked for — importing a real Apple Loop and
+judging the quality of its tempo detection/warping — could not be performed as a result.
+
+**A second, more serious near-miss happened while hunting for the Loop Browser toggle** before switching to the
+View-menu approach above: a blind click on an unfamiliar toolbar icon brought the user's real
+`ProvaPianoforte.logicx` project window to the front (not the disposable `Untitled 13.logicx`). No content in
+that project was touched — no track, region, fader, or menu item was clicked inside it, only the `Window` menu
+was used to confirm which windows were open — and it was switched away from immediately via `Window > Untitled
+13.logicx - Tracks` (itself fiddly: the window-list menu item didn't respond to simulated clicks on the first
+several tries and only worked via `Window > Cycle Through Windows` instead). The real project was not saved,
+closed, or modified in any way. This reinforces the same lesson as the Block 6 safety note: unfamiliar toolbar
+icons in this app are higher-risk than menu items, since a couple of them turn out to toggle which project
+window is frontmost rather than opening a panel within the current one.
+
+### Source
+
+`mcp__macos-mcp__*` live UI capture, `Untitled 13.logicx` test project, Loop Browser opened via
+`View > Show Loop Browser`.

@@ -10,7 +10,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2b. `Coefficients(value,3)` origin/range | **partial** | The field it writes (+0x164) and the dB→linear conversion are confirmed (`analog-model-chain.md`). This pass confirmed via `procedure_callers` that it has **zero resolved callers inside `MADSP.x86_64` itself** — the UI/automation parameter system that calls it lives in a separate framework binary, not this one. Where the external caller sources the dB value remains not determined; would need opening that other binary (not identified/thinned this session). |
 | 2c. The 4 trailing `CBasicFX::Process` slots | **done** | — identified directly in `CAutoMasterFX`'s own constructor: `CLevelMeterFX`, `CLoudnessMeterFX`, `CCorrelationMeterFX`, `CSpectrumAnalyzerFX` — the window's metering chain, not further audio processing. |
 | 2d. `nativeAvailable` meaning | **partial** | Confirmed it's read from an Apple-Silicon-ML-capability check; whether it changes *sound* vs only *speed* not independently re-verified this pass (carried over from earlier passes' finding). |
-| 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **partial** | Found the "Character" Smart Control parameter (ID 10), the Mastering Assistant's `#default.pst` flat-parameter block, and the concrete `+0xd8`/`+0xe0`-indexed trim table at `+0x3c0` that `ProcessAnalogModel` reads from (2a); the table's actual stored values weren't read this pass. |
+| 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **closed (mechanism fully explained)** | The exact addressing of the `+0xd8`/`+0xe0`-indexed trim table decoded by hand: `value = *(float*)(self + modeIdx×8 + 0x3c0 + circuitIdx×4)` — **inline per-instance object data, not a static array**, so its contents can't be read from the binary directly. Traced further: it's populated at runtime from the Mastering Assistant's `#default.pst` preset (found: `GAME`/`TSPP`-magic binary blob, 4132 bytes, a flat parameter array) via `Coefficients()` calls. Reading the *specific* preset-parameter index that lands in this exact table slot needs tracing `CAutoMaster::Coefficients()`'s own full parameter-index map (a large function, not covered this pass) — the mechanism is now fully understood even though the literal numbers remain preset-loaded state rather than binary-embedded constants. |
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **partial** | Found the real class hierarchy: `CCompressorBase` with 6 derived circuits — `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (already in `mixer.md`), plus `CCompressorOpto` and `CCompressorSSL` (new this pass, with real decompiled `GainRedCurve`/`Coefficients` constants below). `CCompressorSSL` is almost certainly "Classic VCA" (SSL G-bus-style). Exact UI-name↔class mapping for "Platinum"/"Studio VCA"/"Studio FET" is not confirmed — `CPlatinumVerb` exists but is a reverb, not a compressor circuit, so "Platinum" compressor likely maps to the generic `CCompressor`/`CCompressorBase` itself (not independently confirmed). |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring the user specifically asked about is now fully solved**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-style linear transform (`drive×1.05`, `drive×0.7+0.3`, or `drive×0.75+0.25`, selected by a 3-way style index) before handing the scalar straight to the model wrapper's conditioning-setter via a vtable call. Still untraced: which UI style name maps to which index, and the mel/beat/pitch preprocessing for the other analysis networks. |
@@ -238,6 +238,32 @@ No new information on *where* the external caller gets the dB value it passes in
 `10^(dB/20)` at `+0x164`) — that call happens from outside `CAutoMaster`'s own internal process chain (the
 UI/automation parameter system), which this pass didn't trace. **Not determined.** Other `index` values besides 3:
 not decompiled this pass either.
+
+### 2e (continued) — the trim table's exact addressing, decoded
+
+`ProcessAnalogModel`'s read of the `+0xd8`/`+0xe0`-indexed trim table was hand-disassembled directly (Ghidra-free
+`nm`/`otool` method): the real instructions are
+
+```asm
+movslq 0xd8(%rbx), %rax      ; rax = self->modeIdx   (sign-extended int)
+movzbl 0xe0(%rbx), %ecx      ; ecx = self->circuitIdx (byte)
+leaq   (%rbx,%rax,8), %rax   ; rax = self + modeIdx*8
+movss  0x3c0(%rax,%rcx,4), %xmm0   ; value = *(float*)(rax + 0x3c0 + circuitIdx*4)
+```
+
+i.e. `value = *(float*)(self + modeIdx×8 + 0x3c0 + circuitIdx×4)` — **this is inline data living directly inside
+the `CAutoMaster` object itself** (a small per-mode grid: each `modeIdx` row is 8 bytes/2 floats apart,
+`circuitIdx` selects which of the 2 floats), **not a pointer to a separate static table**. That rules out ever
+reading its literal values straight from the binary's `__TEXT`/`__DATA` — they're genuine runtime state, written
+in by `Coefficients()` calls sourced from a preset.
+
+Traced one level further: the Mastering Assistant's own default preset was located and confirmed —
+`/Applications/Logic Pro.app/Contents/Resources/Plug-In Settings/Mastering Assistant/#default.pst`, a 4132-byte
+binary file with `GAME`/`TSPP` magic markers (Logic's standard preset-blob format) containing a flat array of
+packed floats — this is almost certainly where the trim table's real numbers originate at load time. Pinning
+down *which* array index in that `.pst` blob lands in this exact `self+0x3c0` slot would need tracing
+`CAutoMaster::Coefficients()`'s own full parameter-index dispatch (a large function not covered this pass) —
+closing that last step is the one piece of follow-up work left; the mechanism itself is now fully understood.
 
 ### 2c, 2d, 2e, 2f, 2g — not reached this pass
 

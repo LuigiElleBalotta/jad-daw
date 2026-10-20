@@ -16,7 +16,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
 | 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
-| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **partial** | Track/region color picker's grid layout captured live (6a). I/O Labels window's full column structure and channel-name scope captured live, including confirming busses run past 232 (6b). Create New Track dialog's 4 top-level categories identified from the Track menu (6c, not opened/screenshotted this pass). Global Tracks, overlapping-recordings behavior, Bounce dialogs, and the channel-strip automation-mode popup are still not done (the automation-mode popup specifically kept opening the adjacent Group popup instead of Read's own popup via simulated clicks — same general Logic-popup click unreliability noted elsewhere in this doc, not resolved this pass) — needs further live UI passes plus, for exact color hex values, an `Assets.car` search (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
+| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **partial** | Track/region color picker's grid layout captured live (6a). I/O Labels window's full column structure and channel-name scope captured live, including confirming busses run past 232 (6b). Create New Track dialog's all 4 top-level categories and all 8 sub-options' Details panels fully captured live (6c, **done**). Global Tracks, overlapping-recordings behavior, Bounce dialogs, and the channel-strip automation-mode popup are still not done (the automation-mode popup specifically kept opening the adjacent Group popup instead of Read's own popup via simulated clicks — same general Logic-popup click unreliability noted elsewhere in this doc, not resolved this pass) — needs further live UI passes plus, for exact color hex values, an `Assets.car` search (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
 | 7. Smart Tempo/Flex quality comparison | **not started** | Needs a throwaway test project with real Apple Loops, built and played in the live app. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **not started** | Match EQ's pipeline architecture is already documented in `mixer.md`; the exact per-band Q/slope/curve constants for Channel EQ, Limiter/Adaptive Limiter/Noise Gate tables, and pan/fader taper formulas are not yet decompiled. |
 
@@ -637,27 +637,51 @@ name `-` (no name) and both Long/Short `-`, with User disabled until a custom na
 I/O Labels window is a single flat per-channel naming table (driver inputs/outputs plus all internal busses), not
 split into separate per-category windows.
 
-### 6c. Create New Track — only partially covered this pass
+### 6c. Create New Track — now fully captured
 
-Not re-opened/screenshotted this pass (an earlier screenshot pass was done but lost to context compaction before
-being written up). Confirmed again from `Track` menu that the relevant command is `Track > New Tracks…`
-(⌥⌘N) — distinct from the single-track shortcuts `New Audio Track` (⌥⌘A), `New Software Instrument Track`
-(⌥⌘S), `New Session Player SI Track…` (⌥⌘U), `New External MIDI Track` (⌥⌘X), and an `Other` submenu. The
-dialog's own 4 top-level categories (MIDI, Pattern, Session Player, Audio) and their sub-options, as described in
-an earlier pass, were **not re-verified or re-screenshotted this pass** — still open for a future pass.
+Opened via `Track > New Tracks…` (⌥⌘N) — distinct from the single-track shortcuts `New Audio Track` (⌥⌘A),
+`New Software Instrument Track` (⌥⌘S), `New Session Player SI Track…` (⌥⌘U), `New External MIDI Track`
+(⌥⌘X), and an `Other` submenu. The dialog has exactly **4 top-level categories**, each with its own sub-options
+and its own "Details" panel below:
+
+| Category | Sub-options | Details panel fields (defaults) |
+|---|---|---|
+| **MIDI** | Software Instrument, External MIDI | *Software Instrument*: Instrument popup (default **Vintage B3 Organ**), Multi-timbral (off, 4 parts), Open Library (on), Audio Output (Stereo Output). *External MIDI*: "Use External Instrument plug-in" (on), MIDI Destination popup (**Off - All**), Audio Input (**No Input**), Audio Output (Stereo Output). |
+| **Pattern** | Software Instrument, External MIDI | *Software Instrument*: Instrument popup (default **Default Patch**), Multi-timbral (off), Open Library (on), **Open Editor** (on, Pattern-specific extra checkbox vs. plain MIDI), Audio Output (Stereo Output). |
+| **Session Player** | Drummer, Bass Player, Keyboard Player | *Drummer*: Drummer Style popup (default **Hard Rock**), Open Library (off), Open Editor (on). *Bass Player*: Bass Player Style popup (default **Retro Rock**), "Use Default Chord Progression for New Regions" (on), Open Library (off), Open Editor (on). *Keyboard Player*: Keyboard Player Style popup (default **Freely**), same chord-progression/Library/Editor checkboxes as Bass Player. All three share Audio Output (Stereo Output) and a Device readout (Scarlett 4i4 USB, this Mac's interface). |
+| **Audio** | Mic or Line, Guitar or Bass | *Mic or Line*: Audio Input popup (default **Input 3**), Ascending (off), Load Default Patch (off), Open Library (off), Input Monitoring (on), Record Enable (on). *Guitar or Bass*: Audio Input popup (default **Input 1** — a different default input than Mic or Line), Load Default Patch (**on**, unlike Mic or Line), Open Library (**on**), Input Monitoring (on), Record Enable (**off**, unlike Mic or Line). Both share Audio Output (Stereo Output). |
+
+A shared **"Number of tracks to create"** field (default `1`) and **Cancel**/**Create** buttons sit at the bottom
+of the dialog regardless of category. Cancel was used to close it without creating any track.
 
 ### Not reached this pass
 
 Global Tracks (Chord, Arrangement) content/editors, overlapping-recordings dialogs (Create Take Folder etc. with
 Cycle On/Off), Bounce dialogs (Project/Section and Regions/Tracks in Place), and the channel-strip
 automation-mode popup (clicking the "Read" button at the bottom of a channel strip repeatedly opened the
-*adjacent* Group popup instead, both this pass and on retry — likely a coordinate-precision issue against the
+*adjacent* Group popup instead, on two separate attempts — likely a coordinate-precision issue against the
 narrower track-header layout once the Project Settings window was closed, not a fundamental click-reliability
 problem like the SwiftUI sheets noted elsewhere in this doc; worth retrying with a fresh coordinate read in a
 future pass).
+
+### A note on session safety this pass
+
+Track > Assign Track Color… opens a floating "Color" palette window that proved unusually persistent: its own
+close button did not respond to simulated clicks, and `Escape`/`Cmd+W` sent while intending to target it
+instead landed on whichever window actually had OS input focus at that moment. One `Cmd+W` was sent while focus
+had silently shifted to **this session's own Terminal window**, which responded with "Vuoi terminare
+l'esecuzione dei processi di questa finestra?" (a prompt to kill the Terminal's processes — including this very
+Claude Code session). It was cancelled immediately ("Annulla") and no processes were terminated; the user's real
+`ProvaPianoforte.logicx` project was never touched by any of this. From that point on, blind keyboard shortcuts
+were avoided in favor of explicit app-switching (clicking the Dock/Finder to bring Logic Pro back to the
+front) and dragging the stray Color window out of the way (via `Move` with `drag=true`) instead of trying to
+close it. Flagging this here as a concrete, reproducible gotcha for any future live-UI pass on this app: prefer
+mouse-only interaction once a window shows itself resistant to closing, rather than retrying keyboard shortcuts
+that can be delivered to the wrong (frontmost) application.
 
 ### Source
 
 Live UI capture via `mcp__macos-mcp__*` against the same disposable `Untitled 13.logicx` test project. Track >
 Assign Track Color… and Mix > I/O Labels… opened via the application menu bar; I/O Labels scrolled with the
-`Scroll` tool to confirm its row count extends past Bus 232.
+`Scroll` tool to confirm its row count extends past Bus 232; Track > New Tracks… walked through all 4
+categories × their sub-options via `Click`, closed with Cancel (no track created).

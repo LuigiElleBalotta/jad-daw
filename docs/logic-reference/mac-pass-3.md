@@ -8,12 +8,12 @@ resolved, the "what's missing" line says what a future pass would need.
 | 1. ONNX vs CoreML numeric verification | **done** (for everything that can run through the public API) | The 6 Analog Model + 10 Saturation-family networks (317 of 321 bundle/block-size combinations) can't be numerically compared at all — Core ML's public `prediction(from:)` API itself refuses to run them (see below), independent of ONNX correctness. A real conversion bug was found and confirmed in `OnsetDetectionCNN` (0.226 max-abs-err, flagged as suspect in `ml-conversion.md` already) — needs a fix in `espresso2onnx.py`'s weight-layout/flatten-order handling, not a Mac-side task. |
 | 2a. `ProcessAllDynamicCBs` stage order | **done** | Exact exit condition of the Analyze-mode MB-compressor calibration loop not traced (lives inside a vtable call Ghidra couldn't resolve). |
 | 2b. `Coefficients(value,3)` origin/range | **partial** | The field it writes (+0x164) and the dB→linear conversion are confirmed (`analog-model-chain.md`); where the external caller sources the dB value, and any other `index` besides 3, are not determined — needs tracing the UI/automation parameter system, which calls in from outside `CAutoMaster`'s own process chain. |
-| 2c. The 4 trailing `CBasicFX::Process` slots | **not started** | Needs `CAutoMasterFX`'s constructor decompiled to identify the 4 object types at `+0xb08/0xb10/0xb18/0xb20`. |
+| 2c. The 4 trailing `CBasicFX::Process` slots | **done** | — identified directly in `CAutoMasterFX`'s own constructor: `CLevelMeterFX`, `CLoudnessMeterFX`, `CCorrelationMeterFX`, `CSpectrumAnalyzerFX` — the window's metering chain, not further audio processing. |
 | 2d. `nativeAvailable` meaning | **partial** | Confirmed it's read from an Apple-Silicon-ML-capability check; whether it changes *sound* vs only *speed* not independently re-verified this pass (carried over from earlier passes' finding). |
-| 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **partial** | Found the "Character" Smart Control parameter (ID 10), the Mastering Assistant's `#default.pst` flat-parameter block, and — new this pass — the concrete `+0xd8`/`+0xe0`-indexed trim table at `+0x3c0` that `ProcessAnalogModel` reads from (see 2a); the table's actual stored values weren't read this pass. |
-| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **not started** | Needs dedicated decompilation of `AutoAdjustSpread`, `ProcessSpread`, `AutoAdjustMBCompressor`, and the 31-band Auto EQ path. The Loudness-Macro-driven gain formulas feeding into these stages (compressor input gain, waveshaper wet, limiter input gain) are now confirmed exactly and pinned to their call sites (2a) — the stages' own internal DSP (crossover frequencies, circuit internals) is still untraced. |
+| 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **partial** | Found the "Character" Smart Control parameter (ID 10), the Mastering Assistant's `#default.pst` flat-parameter block, and the concrete `+0xd8`/`+0xe0`-indexed trim table at `+0x3c0` that `ProcessAnalogModel` reads from (2a); the table's actual stored values weren't read this pass. |
+| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **not started** | Builds on existing `mixer.md` findings (ClassA, DBX, FET, LP curves already partly decompiled there); the other circuits (Platinum, Studio VCA/FET, Opto, Classic VCA) not yet touched. |
-| 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (see Block 1) — a solid anchor — but the actual *preprocessing code* (mel filterbank construction, hop size, log compression, beat-decoding logic, pitch-bin-to-Hz mapping, drive-to-cond mapping) was not traced this pass. |
+| 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
 | 4. Klopfgeist/metronome | **not started** | Needs both decompilation (`CKnockVoice`'s frequency table) and live Project Settings > Metronome UI inspection. |
 | 5. Project Settings (remaining tabs) | **not started** | Needs live UI inspection across ~10 tabs. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **not started** | Needs live UI inspection/screenshots and, for colors, an `Assets.car` search specifically for track/UI color swatches (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
@@ -257,3 +257,94 @@ time `open_binary` is called fresh, since `close_binary`'s cleanup can't fully c
 incident; REA's own analysis cache was not reused across the reopen). Callees cross-checked via
 `procedure_callers`/`procedure_callees` to independently confirm `ProcessAnalogModel`'s only two call sites are
 inside this function and `ProcessMainMasteringChain`.
+
+### 2c. The 4 trailing metering stages — confirmed from `CAutoMasterFX`'s constructor
+
+The constructor builds, in order, and stores at exactly the four offsets `analog-model-chain.md` flagged as
+unidentified:
+
+| Offset | Class | Constructed |
+|---|---|---|
+| `+0xb08` | `CLevelMeterFX` | always |
+| `+0xb10` | `CLoudnessMeterFX` | always |
+| `+0xb18` | `CCorrelationMeterFX` | always |
+| `+0xb20` | `CSpectrumAnalyzerFX` | only if the channel-count parameter is > 0 |
+
+So the four trailing `CBasicFX::Process` calls in `CAutoMasterFX::OnProcess` are **not further audio processing** —
+they're the window's own metering chain (peak/RMS level, integrated/short-term loudness, stereo correlation,
+spectrum display), run once per block purely to keep the UI meters current. `CSpectrumAnalyzerFX`'s own
+constructor builds a Hann-style raised-cosine analysis window (`0.5 - 0.5·cos(2π·i/N)` pattern, read directly from
+the decompiled loop) and a dB-reference scale via `10^x` / `pow` — standard spectrum-analyzer windowing, not
+mastering DSP.
+
+### 2f. Stereo spread, multiband compressor, and "Auto EQ" — partial results
+
+**`CAutoMaster::ProcessSpread(floorLimit, ceilLimit, self, &spreadParam, sampleCount)` — fully decoded, genuine
+Mid/Side processing**, confirmed via `AmplifyBy`'s own body (called with channel args `1,2`, which triggers an
+explicit encode-to-M/S → scale the side → decode-back-to-L/R sequence, not a simple per-channel multiply):
+
+- `spreadParam == -1.0` is a **distinct sentinel, not just an extreme of the continuous range**: full mono
+  downmix — every channel is summed, divided by the channel count, and the resulting mono signal is copied back
+  into every channel.
+- `spreadParam >= 0` (widen): side-channel gain `= min(spreadParam × 8, ceilLimit)` (linear, via `AmplifyBy`, which
+  internally converts through `10^(dB/20)` — so the ×8 multiplier is applied to a dB figure, not a raw linear
+  gain); the parameter is clamped back down to `ceilLimit / 8` if it would exceed the ceiling. The mid channel
+  gets a `spreadParam × -2.5` dB compensating trim.
+- `spreadParam < 0` (narrow): side-channel gain `= spreadParam × 24` dB, floor-clamped against `floorLimit`
+  (via the `× -6` relation seen in the clamp check); an extra `spreadParam × -6` dB pre-compensation is applied to
+  one channel buffer before the `AmplifyBy` call, and the mid channel gets `spreadParam × 4` dB.
+
+`AutoAdjustSpread` (Analyze-mode counterpart, presumably auto-picking `floorLimit`/`ceilLimit`) was not
+decompiled this pass.
+
+**`AutoAdjustMBCompressor`**: per-iteration mechanics are clear — copy buffers aside, run the multiband
+compressor once, then loop testing gain in **+2 dB steps** (`0, 2, 4, 6, ...`), applying each via
+`10^(dB/20)`+`vDSP_vsmul`, re-measuring through a shared loudness-analysis object (vtable `+0x28` then `+0x30`),
+and accumulating `min(measured, 0.99 - measured)` into an error field. **The exact convergence/exit check could
+not be recovered** — Ghidra's control-flow analysis produces an unresolvable `while(true)` for this function (the
+same failure mode seen in `ProcessAllDynamicCBs`'s own inline calibration loop), meaning the real exit edge is
+hidden inside a call Ghidra can't trace into. Not determined: the actual tolerance/iteration-count values (the
+user's own earlier finding for the sibling `AutoAdjustLimiter` — "0.2 tolerance, 4 adjustments after the first
+measurement" — is plausibly the same pattern here, but wasn't independently confirmed for the MB compressor).
+
+**"Auto EQ" / dynamic EQ — a real surprise**: `CAutoMaster::AutoAdjustDynEQ` decompiles to a **literal empty
+function body** (`{ return; }`) — Logic's "Dynamic EQ" machinery in this class appears to be unused/vestigial in
+build 6306, not a working feature (consistent with other half-built things found in earlier passes, e.g.
+`CPickupModelingFX`'s missing model files). `ProcessDynEQ` itself is live (it processes a `CGen` object at
+`+0x600` via `ProcessGenInplace`) but nothing calls `AutoAdjustDynEQ` to actually tune it, going by what's visible
+here — **this also corrects `analog-model-chain.md`'s guess that the `+0x600` object was "most likely
+saturation/waveshaper"; it's the Dynamic EQ object instead.** The actual spectral-correction "Auto EQ" (31
+third-octave bands, smoothing, ±dB limits, "amount") is a **separate** mechanism: `ProcessSpectralBalance` drives
+its own, third biquad-chain object (`+0x580`, distinct from the `+0x588` chain used before/after the neural stage
+and the `+0x568`/`+0x570` pair from `mixer.md`'s Match EQ work) — narrowed to the right object, but the actual
+31-band coefficient-calculation code (where the correction curve itself gets computed from the measured spectrum)
+wasn't traced this pass.
+
+**The four Loudness-Macro gain formulas, now confirmed byte-exact** (previously documented from indirect evidence;
+this pass read them straight from their own named functions and literal constant bytes):
+
+| Function | Formula | Constants (confirmed from raw bytes) |
+|---|---|---|
+| `CompressorInputGainFromLoudnessMacroPos` | `p ≤ 0: p × 13.1`, `p > 0: p × 12.0` | `0x4151999a`=13.1, `0x41400000`=12.0 |
+| `LimiterInputGainFromLoudnessMacroPos` | `p < 0.6: 2.8`, `p ≥ 0.6: 2.8 + (p−0.6)×1.3/0.4` | `0x40333333`=2.8 |
+| `LimiterReleaseFromLoudnessMacroPos` | `p < 0.4: 2.0 ms`, `p ≥ 0.4: 2.0 + (p−0.4)/0.6 × 44.0 ms` | `0x40000000`=2.0 |
+| `WaveShaperDryWetFactorFromLoudnessMacroPos` | `p < 0.4: wet=0`, `p ≥ 0.4: wet=(p−0.4)/0.6`, `dry=1−wet` | — |
+
+### 3. Saturation's "drive" parameter — a second, classical path found
+
+`CAutoMaster::SetSaturationAmnt(float amount)` stores `amount` directly on the Saturation object, **and**, when a
+flag at a fixed offset is zero, separately computes `amount × 127.0` and calls `CPassiveEQFX::SetOutputDrive()` —
+i.e. there appear to be **two independent saturation mechanisms**: the neural one (`CMLSaturation`, extensively
+documented in `machine-learning-models.md`) and a classical one built on `CPassiveEQFX` with a 0–127-scaled drive
+parameter, used when the flag selects the non-neural path. This is a new, concrete fact — but the neural path's
+own `amount`→`cond`-tensor wiring (what the user actually asked about) wasn't traced this pass, and neither was
+what that flag represents (plausibly the same `+0xd8`/`+0xe0` mode selection from 2a, not confirmed).
+
+### Source (2c/2f/3 additions)
+
+`CAutoMasterFX`'s real constructor (`__ZN13CAutoMasterFXC2Eflli`) at `0x740d90`; `ProcessSpread` at `0x5fba90`;
+`AmplifyBy` at `0x5fdbd0`; `AutoAdjustMBCompressor` at `0x5fc840`; `AutoAdjustDynEQ` at `0x6097f0`; `ProcessDynEQ`
+at `0x60a5d0`; `ProcessSpectralBalance` at `0x60a4f0`; the four Loudness-Macro formula functions at `0x607400`,
+`0x607420`, `0x607460`, `0x6074a0` (constants cross-checked with `read_bytes` at their literal data addresses,
+e.g. `0xd449c0`); `SetSaturationAmnt` at `0x606840`. Full `CAutoMaster` method list (130+ names) enumerated via
+`search_procedures`, used to locate all of the above by name rather than guessing addresses.

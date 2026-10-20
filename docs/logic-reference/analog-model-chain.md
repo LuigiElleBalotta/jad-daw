@@ -22,9 +22,11 @@ stage or two) — **not determined**.
 2. **Stereo spread** (`AutoAdjustSpread` in Analyze mode, `ProcessSpread` otherwise)
 3. **Biquad EQ again** (`ProcessBiquadChain`, filter slot "0") — a second, distinct filter chain from step 1
 4. **Match EQ** (`CMatchEQFX`, mutex-guarded, processed in internal chunks)
-5. **A separate generic `CGen` effect** (`ProcessGenInplace`, object at `this+0x600`) — most likely the
-   saturation/waveshaper stage from the Loudness Macro mapping (`mixer.md`), **not** Analog Model — see below for
-   why these are different slots
+5. **A separate generic `CGen` effect** (`ProcessGenInplace`, object at `this+0x600`) — **correction
+   (`mac-pass-3.md`): this is the Dynamic EQ** (`CAutoMaster::ProcessDynEQ` calls the exact same object), not
+   saturation/waveshaper as first guessed. `AutoAdjustDynEQ`, its Analyze-mode counterpart, decompiles to an empty
+   stub — this feature looks unused/vestigial in build 6306. **Not** Analog Model either way — see below for why
+   these are different slots
 6. **Loudness-matching trim gain**: compares measured loudness (`AnalyzeLoudness`) against a target, converts the
    dB difference to a linear multiplier via `10^(dB/20)`, applies it with `vDSP_vsmul`
 7. **`ProcessAllDynamicCBs(gain, sampleCount)`** — the "dynamics" stage

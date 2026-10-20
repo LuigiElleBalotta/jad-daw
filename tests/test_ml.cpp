@@ -221,3 +221,43 @@ TEST_CASE("ml: Neural Saturation without its models passes the sound through", "
     CHECK(r[100] == -0.2f);
     ml::setModelDirectory(LPC_ONNX_MODELS_DIR);
 }
+
+TEST_CASE("ml: the Mastering Analog Model (Valve, Punch, Transparent) runs Logic's networks, Clean does not", "[ml][mastering][analog]") {
+    ml::setModelDirectory(LPC_ONNX_MODELS_DIR);
+    if (!ml::available() || ml::findAnalogModel("TSO", 48000.0).empty()) SKIP("the converted Analog Model networks are not available");
+    CHECK(ml::findAnalogModel("G", 48000.0).filename().string().rfind("G_48_", 0) == 0);        // not G_SO
+    CHECK(ml::findAnalogModel("G_SO", 176400.0).filename().string().rfind("G_SO_96_", 0) == 0);  // a rate class that exists
+    auto latency = [](int character) {
+        ProcessorRef ref{kProcMastering, {{"character", character}}, "", "", false};
+        auto fx = audio::makeBuiltinEffect(ref, 48000.0);
+        REQUIRE(fx != nullptr);
+        return fx->latencySamples();
+    };
+    const int clean = latency(0);
+    for (int character = 1; character <= 3; ++character) CHECK(latency(character) == clean + 2048);   // two blocks of 1024 for the answer of the network
+    // the sound goes through: after the latency a sine comes out, finite and not silent
+    for (int character = 1; character <= 3; ++character) {
+        ProcessorRef ref{kProcMastering, {{"character", character}}, "", "", false};
+        auto fx = audio::makeBuiltinEffect(ref, 48000.0);
+        const int total = fx->latencySamples();
+        double energy = 0;
+        bool finite = true;
+        for (int b = 0; b < 40; ++b) {
+            std::vector<float> l(512), r(512);
+            for (int i = 0; i < 512; ++i) l[static_cast<std::size_t>(i)] = r[static_cast<std::size_t>(i)] = static_cast<float>(0.2 * std::sin(2.0 * 3.14159265358979323846 * 440.0 * (b * 512 + i) / 48000.0));
+            fx->process(l.data(), r.data(), 512);
+            if (b * 512 > total + 4096)
+                for (const float v : l) { finite = finite && std::isfinite(v); energy += static_cast<double>(v) * v; }
+        }
+        INFO("character " << character << " latency " << total);
+        CHECK(finite);
+        CHECK(energy > 1.0);
+    }
+}
+
+TEST_CASE("ml: the Mastering Analog Model without its files keeps the approximation and the old latency", "[ml][mastering][analog]") {
+    ml::setModelDirectory("this/folder/does/not/exist");
+    ProcessorRef clean{kProcMastering, {{"character", 0}}, "", "", false}, valve{kProcMastering, {{"character", 1}}, "", "", false};
+    CHECK(audio::makeBuiltinEffect(valve, 48000.0)->latencySamples() == audio::makeBuiltinEffect(clean, 48000.0)->latencySamples());
+    ml::setModelDirectory(LPC_ONNX_MODELS_DIR);
+}

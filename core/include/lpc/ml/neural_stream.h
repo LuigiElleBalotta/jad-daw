@@ -17,6 +17,7 @@ public:
     static std::unique_ptr<NeuralStream> create(const std::filesystem::path& file, int block);
     virtual int block() const = 0;
     virtual int latency() const = 0;
+    // `cond` may be null for a model without the conditioning input (the Analog Model's networks)
     virtual void process(const float* in, const float* cond, float* out, int n) noexcept = 0;
     virtual long underruns() const = 0;
 };
@@ -24,5 +25,9 @@ public:
 // The file of a model family at a sample rate and block size in the model folder: "<family>_<rate>_<hash>.model_<block>_transformed.onnx". The rate is the
 // nearest of 44, 48, 88 and 96 kHz that exists for the family (MADSP falls back to the best model for rates it does not know). Empty path when none.
 std::filesystem::path findFamilyModel(const std::string& family, double sampleRate, int block);
+
+// The file of one of the Analog Model networks ("TSO", "T", "G_SO", "G", "S_SO", "S"; 1024-sample blocks, no `cond`): "<name>_<rate>_<hash>.modelstreaming_transformed.onnx".
+// The rate is chosen as in findFamilyModel (176.4 kHz uses the 88.2 kHz network, as MADSP does).
+std::filesystem::path findAnalogModel(const std::string& name, double sampleRate);
 
 }  // namespace lpc::ml

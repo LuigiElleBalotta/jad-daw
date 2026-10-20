@@ -43,3 +43,11 @@ conversions (and the two unverified Espresso facts) numerically; until it has be
 `tools/trace_icons.py` (vtracer, needs Python 3.11: the 3.14 wheel crashes) traces PNG/TIFF to SVG. 91 icons from
 `jad-daw-private/car-renditions` and `legacy-mixer-graphics` are in `assets/icons/logic-derived/` (raw traces, to be simplified/recoloured before
 use in the UI).
+
+## Analog Model networks (T, TSO, G, G_SO, S, S_SO), measured through onnxruntime
+
+All six converted networks output audio (`var_849`, `[1,1,1,1024]`), not a scalar: the "scalar" reading of the Core ML metadata does not hold for the ONNX
+graphs (the `_in_state`/`_out_state` pairs match by name). Gain for a 1 kHz sine against its level (dB, output re input): linear up to about -30 dBFS (TSO -2.1,
+T -3.5, G_SO -1.1, G -4.3, S_SO -4.0, S -4.3), then compressing: at 0 dBFS in the output is 15 to 18 dB under the input. So they behave as a level-dependent
+compressor/colour with a knee near -27 dBFS, and the chain must feed them a level and make it up afterwards (`MasteringProcessor` feeds -12 dB and makes up 12 dB
+plus the linear gain; Apple's real scaling is an open question for the Mac pass).

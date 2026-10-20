@@ -43,6 +43,8 @@ private:
 
 #ifdef LPC_WITH_ONNX
 
+constexpr std::size_t kNoCond = static_cast<std::size_t>(-1);
+
 class StreamImpl final : public NeuralStream {
 public:
     StreamImpl(std::unique_ptr<Model> model, int block, std::size_t audioIndex, std::size_t condIndex, std::vector<std::pair<std::size_t, std::size_t>> stateMap,
@@ -77,7 +79,7 @@ public:
     void process(const float* in, const float* cond, float* out, int n) noexcept override {
         const std::size_t count = static_cast<std::size_t>(n);
         in_.push(in, count);
-        cond_.push(cond, count);
+        if (condIndex_ != kNoCond) cond_.push(cond, count);
         // the answer for these n samples is the audio from two blocks ago: normally it is there already
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
         while (out_.available() < count && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
@@ -91,14 +93,16 @@ private:
     void run() {
         std::vector<float> a(static_cast<std::size_t>(block_)), c(static_cast<std::size_t>(block_));
         while (!stop_.load()) {
-            if (in_.available() < static_cast<std::size_t>(block_) || cond_.available() < static_cast<std::size_t>(block_) || out_.space() < static_cast<std::size_t>(block_)) {
+            if (in_.available() < static_cast<std::size_t>(block_) || (condIndex_ != kNoCond && cond_.available() < static_cast<std::size_t>(block_)) || out_.space() < static_cast<std::size_t>(block_)) {
                 std::this_thread::sleep_for(std::chrono::microseconds(100));
                 continue;
             }
             in_.pop(a.data(), a.size());
-            cond_.pop(c.data(), c.size());
             feed_[audioIndex_].data = a;
-            feed_[condIndex_].data = c;
+            if (condIndex_ != kNoCond) {
+                cond_.pop(c.data(), c.size());
+                feed_[condIndex_].data = c;
+            }
             std::vector<Tensor> res;
             try {
                 res = model_->run(feed_);
@@ -153,7 +157,8 @@ std::unique_ptr<NeuralStream> NeuralStream::create(const std::filesystem::path& 
     }
     for (std::size_t j = 0; j < out.size(); ++j)
         if (out[j].find("_out_state") == std::string::npos) audioOut = j;
-    if (audioIndex == in.size() || condIndex == in.size() || audioOut == out.size()) return nullptr;
+    if (condIndex == in.size()) condIndex = kNoCond;  // the Analog Model's networks have only the audio and their states
+    if (audioIndex == in.size() || audioOut == out.size()) return nullptr;
     const std::vector<std::int64_t> shape = model->inputShape(audioIndex);
     if (shape.empty() || shape.back() != block) return nullptr;
     return std::make_unique<StreamImpl>(std::move(model), block, audioIndex, condIndex, std::move(states), audioOut);
@@ -164,24 +169,36 @@ std::unique_ptr<NeuralStream> NeuralStream::create(const std::filesystem::path& 
 #endif
 }
 
-std::filesystem::path findFamilyModel(const std::string& family, double sampleRate, int block) {
+namespace {
+
+// the file in the model folder named `<prefix><rate>_...<tail>`: the nearest rate class first (MADSP: below 46 kHz the 44 model, below 70 the 48, below 92 the 88,
+// else the 96), then the others
+std::filesystem::path findByRate(const std::string& prefix, const std::string& tail, double sampleRate) {
     std::error_code ec;
     const std::filesystem::path dir = modelDirectory();
     if (!std::filesystem::is_directory(dir, ec)) return {};
-    // the rate classes in order of preference: the nearest first (MADSP: below 46 kHz the 44 model, below 70 the 48, below 92 the 88, else the 96)
     const int wanted = sampleRate < 46000.0 ? 44 : sampleRate < 70000.0 ? 48 : sampleRate < 92000.0 ? 88 : 96;
     std::vector<int> order{wanted};
     for (const int r : {96, 88, 48, 44})
         if (r != wanted) order.push_back(r);
-    const std::string tail = ".model_" + std::to_string(block) + "_transformed.onnx";
     for (const int rate : order) {
-        const std::string prefix = family + "_" + std::to_string(rate) + "_";
+        const std::string head = prefix + std::to_string(rate) + "_";
         for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
             const std::string name = e.path().filename().string();
-            if (name.size() > tail.size() && name.compare(0, prefix.size(), prefix) == 0 && name.compare(name.size() - tail.size(), tail.size(), tail) == 0) return e.path();
+            if (name.size() > tail.size() && name.compare(0, head.size(), head) == 0 && name.compare(name.size() - tail.size(), tail.size(), tail) == 0) return e.path();
         }
     }
     return {};
+}
+
+}  // namespace
+
+std::filesystem::path findFamilyModel(const std::string& family, double sampleRate, int block) {
+    return findByRate(family + "_", ".model_" + std::to_string(block) + "_transformed.onnx", sampleRate);
+}
+
+std::filesystem::path findAnalogModel(const std::string& name, double sampleRate) {
+    return findByRate(name + "_", ".modelstreaming_transformed.onnx", sampleRate);
 }
 
 }  // namespace lpc::ml

@@ -626,12 +626,36 @@ public:
         wet_ = macro < 0.4 ? 0.0 : (macro - 0.4) / 0.6;
         totalGain_ = param(ref, "gain");
         gain_ = static_cast<float>(dbToLin(param(ref, "compensate") >= 0.5 ? param(ref, "compTrim") : totalGain_));  // compensation: the level the analysis measured
+        // the Analog Model (Valve, Punch, Transparent = TSO, G_SO, S_SO; Clean has none): Logic's trained network, in the dynamics stage. Without the model files
+        // the approximation above stays.
+        if (character_ >= 1 && character_ <= 3) {
+            static constexpr const char* kNames[3] = {"TSO", "G_SO", "S_SO"};
+            static constexpr double kLinearGainDb[3] = {-2.1, -1.1, -4.0};  // the network's gain for a quiet signal (measured with sine tones)
+            const std::filesystem::path file = ml::findAnalogModel(kNames[character_ - 1], sr);
+            if (!file.empty()) {
+                analogL_ = ml::NeuralStream::create(file, kAnalogBlock);
+                analogR_ = ml::NeuralStream::create(file, kAnalogBlock);
+            }
+            if (analogL_ && analogR_) {
+                // the networks are linear below about -30 dBFS and compress above: they are fed 12 dB lower, so that a mastered mix lands in the part that colours
+                // without squashing, and the lost level is made up after them (the quiet-signal gain is made up too)
+                analogPre_ = static_cast<float>(dbToLin(-12.0));
+                analogPost_ = static_cast<float>(dbToLin(12.0 - kLinearGainDb[character_ - 1]));
+                analogDelay_ = analogL_->latency();
+                analogBuf_.assign(8192, 0.0f);
+                analogOut_.assign(8192, 0.0f);
+                drive_ = 1.0f;  // the network is the character: the tube-like soft saturation of the approximation is not added
+            } else {
+                analogL_.reset();
+                analogR_.reset();
+            }
+        }
         // a delay as long as the limiter's, so that bypassing does not shift the sound
-        delay_.assign(static_cast<std::size_t>(std::max(1, limiter_.latencySamples())), 0.0f);
+        delay_.assign(static_cast<std::size_t>(std::max(1, limiter_.latencySamples() + analogDelay_)), 0.0f);
         delayR_ = delay_;
         highpass_ = 1.0 - std::exp(-2.0 * kPi * 2500.0 / sr);
     }
-    int latencySamples() const override { return limiter_.latencySamples(); }
+    int latencySamples() const override { return limiter_.latencySamples() + analogDelay_; }
     void process(float* l, float* r, int frames) noexcept override {
         if (bypass_) {
             for (int i = 0; i < frames; ++i) {
@@ -665,6 +689,17 @@ public:
         if (compIn_ != 1.0f)
             for (int i = 0; i < frames; ++i) { l[i] *= compIn_; r[i] *= compIn_; }
         compressor_.process(l, r, frames);  // the dynamics are shaped at the level the mix has, then the loudness is made up and the limiter holds the peaks
+        if (analogL_) {  // the Analog Model network, one stream per channel (the answer comes two blocks late: latencySamples)
+            for (int at = 0; at < frames; at += 8192) {
+                const int n = std::min(8192, frames - at);
+                for (float* side : {l, r}) {
+                    ml::NeuralStream& stream = side == l ? *analogL_ : *analogR_;
+                    for (int i = 0; i < n; ++i) analogBuf_[static_cast<std::size_t>(i)] = side[at + i] * analogPre_;
+                    stream.process(analogBuf_.data(), nullptr, analogOut_.data(), n);
+                    for (int i = 0; i < n; ++i) side[at + i] = analogOut_[static_cast<std::size_t>(i)] * analogPost_;
+                }
+            }
+        }
         for (int i = 0; i < frames; ++i) {  // the gain, and a soft clip that takes the tallest few dB off the peaks before the limiter has to hold the rest
             double yl = static_cast<double>(l[i]) * gain_, yr = static_cast<double>(r[i]) * gain_;
             if (wet_ > 0.0) {  // the wave shaper, blended in from the macro position 0.4 on
@@ -680,6 +715,11 @@ public:
     nlohmann::json describe() const override { return {{"id", kProcMastering}, {"bypass", bypass_}, {"gainDb", totalGain_}}; }
 
 private:
+    static constexpr int kAnalogBlock = 1024;  // the networks' block (the TSO, G and S files are `modelstreaming`, 1024 samples)
+    std::unique_ptr<ml::NeuralStream> analogL_, analogR_;
+    float analogPre_ = 1.0f, analogPost_ = 1.0f;
+    int analogDelay_ = 0;
+    std::vector<float> analogBuf_, analogOut_;
     static constexpr double kClip = 0.9;  // the soft clip's ceiling, about -0.9 dBFS
     static constexpr int kBands = 8;
     static constexpr std::array<double, kBands> kCentres{40, 100, 250, 630, 1600, 4000, 8000, 14000};

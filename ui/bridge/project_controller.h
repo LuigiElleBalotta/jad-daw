@@ -393,6 +393,7 @@ public:
     Q_INVOKABLE double clickSlotGain(int slot) const;
     Q_INVOKABLE static QString clickSlotName(int slot);
     void loadClickSettings(QSettings& s);
+    void applyKlopfgeistSettings();  // the Klopfgeist rows, Tone and Volume from the project settings ("click.<level>.note|velocity|on", "click.tone", "click.volume")
     void saveClickSettings(QSettings& s) const;
     Q_INVOKABLE void setMetronome(bool on);
     // The live link for an AI assistant (Help > AI Assistant Link): a loopback socket with a token; see live_link.h and project_controller_live.cpp.

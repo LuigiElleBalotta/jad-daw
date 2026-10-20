@@ -372,24 +372,30 @@ TEST_CASE("engine: live MIDI plays the target instrument with the transport stop
 }
 
 TEST_CASE("engine: the built-in click is the Klopfgeist, a resonator that rings and dies, louder on the bar than on a division", "[engine][click]") {
-    auto render = [](std::uint8_t accent, std::uint8_t slot) {
+    auto render = [](std::uint8_t accent, std::uint8_t slot, std::uint8_t level, bool divisionOn = true, float volume = 0.8f) {
         AudioEngine e(kSr);
-        AudioMsg c = msg(MsgKind::SetClick, 1, 1);
-        c.obj = makeOwned(new ClickTrack{{0}, {accent}, {slot}});
+        auto* kit = new ClickKit;
+        kit->levels[kLevelDivision].on = divisionOn;
+        kit->volume = volume;
+        e.applyDirect([&] { AudioMsg k = msg(MsgKind::SetClickKit, 1); k.obj = makeOwned(kit); return k; }());
+        AudioMsg c = msg(MsgKind::SetClick, 2, 1);
+        c.obj = makeOwned(new ClickTrack{{0}, {accent}, {slot}, {level}});
         e.applyDirect(c);
-        e.applyDirect(msg(MsgKind::Play, 2));
+        e.applyDirect(msg(MsgKind::Play, 3));
         std::vector<float> l(2048), r(2048);
         e.processBlock(l.data(), r.data(), 2048);
         return l;
     };
-    const auto bar = render(1, 0), division = render(0, kSlotAnd);
-    float peakBar = 0, peakDiv = 0, tail = 0;
-    for (int i = 0; i < 2048; ++i) { peakBar = std::max(peakBar, std::abs(bar[static_cast<std::size_t>(i)])); peakDiv = std::max(peakDiv, std::abs(division[static_cast<std::size_t>(i)])); }
+    auto peak = [](const std::vector<float>& x) { float p = 0; for (const float v : x) p = std::max(p, std::abs(v)); return p; };
+    const auto bar = render(1, 0, kLevelBar), division = render(0, kSlotAnd, kLevelDivision);
+    float tail = 0;
     for (int i = 1900; i < 2048; ++i) tail = std::max(tail, std::abs(bar[static_cast<std::size_t>(i)]));
-    REQUIRE(peakBar > 0.3f);
-    REQUIRE(peakBar > peakDiv * 1.5f);                     // velocity 127 against 60
+    REQUIRE(peak(bar) > 0.3f);
+    REQUIRE(peak(bar) > peak(division) * 1.5f);            // velocity 127 against 60
     REQUIRE(tail < 1e-3f);                                 // 30 ms long: it has ended by frame 1900
     REQUIRE(std::abs(bar[0] - 0.6f) < 0.02f);              // the first sample is 0.6 x level whatever the note
+    REQUIRE(peak(render(0, kSlotAnd, kLevelDivision, false)) == 0.0f);   // the Division row is off in Logic's defaults: that level is silent
+    REQUIRE(peak(render(1, 0, kLevelBar, true, 0.4f)) == Catch::Approx(peak(bar) * 0.5f).margin(0.02f));   // Volume scales the click
 }
 
 TEST_CASE("engine: a pre-roll plays the project first and captures only from its end, in the middle of a block too", "[engine][record]") {

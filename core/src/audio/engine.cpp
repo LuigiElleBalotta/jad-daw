@@ -130,7 +130,6 @@ namespace {
 // Logic's own click ("Klopfgeist", MADSP CKnock*, decompiled): not a sample but a resonant filter that an impulse excites on every tick.
 // The filter's frequency comes from the note of the accent level (Bar G5, Beat C5, Division C2 in Logic's defaults), its Q from the Tonality knob
 // as Q = clamp(-1.39 reso^2 + 1.4, 0.01, 1.4) with reso = 1 - (1 - tonality)^3. The level crossfades a fixed level and the velocity.
-constexpr float kKnockTonality = 0.5f;
 constexpr float kKnockLevelViaVel = 1.0f, kKnockBaseLevel = 0.8f;
 
 float knockQ(float tonality) {
@@ -149,6 +148,8 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
     std::size_t next = static_cast<std::size_t>(std::lower_bound(frames.begin(), frames.end(), from) - frames.begin());
     constexpr float kTwoPi = 6.2831853f;
     const int blipLength = static_cast<int>(sampleRate_ * 0.03);
+    static const ClickKit defaults;  // the Klopfgeist as Logic starts it, until the project sends its own
+    const ClickKit& rows = kit_ ? *kit_ : defaults;
     for (int i = 0; i < n; ++i) {
         while (next < frames.size() && frames[next] == from + i) {  // a beat starts here
             const int slot = next < track->slot.size() ? track->slot[next] : 0;
@@ -156,20 +157,25 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
             for (ClickVoice& c : voices_)
                 if (c.pos >= c.length) { v = &c; break; }
             if (!v) v = &voices_[0];  // all busy: the oldest sound is cut
-            const bool sub = slot >= kSlotE && slot <= kSlotLi;
+            const int rowIndex = next < track->level.size() ? std::min<int>(track->level[next], kClickLevels - 1) : (track->accent[next] ? kLevelBar : kLevelBeat);
+            const KnockLevel& row = rows.levels[static_cast<std::size_t>(rowIndex)];
             if (kit_ && slot > 0 && slot < kClickSlots && !kit_->sample[static_cast<std::size_t>(slot)].empty()) {
                 v->knock = false;
                 v->sample = &kit_->sample[static_cast<std::size_t>(slot)];
                 v->length = static_cast<int>(v->sample->size());
                 v->gain = kit_->gain[static_cast<std::size_t>(slot)];
             } else {
+                if (!row.on) {  // this level is switched off in Metronome Settings
+                    ++next;
+                    continue;
+                }
                 v->sample = nullptr;
                 v->length = blipLength;
-                const int note = track->accent[next] ? 79 : (sub ? 60 : 72);  // G5 for the bar, C5 for a beat, C4 for a division
-                const int velocity = track->accent[next] ? 127 : (sub ? 60 : 112);
+                const int note = std::clamp(row.note, 0, 127);
+                const int velocity = std::clamp(row.velocity, 0, 127);
                 const float freq = 440.0f * std::pow(2.0f, static_cast<float>(note - 69) / 12.0f);
                 const float level = (1.0f - kKnockLevelViaVel) * kKnockBaseLevel + kKnockLevelViaVel * static_cast<float>(velocity) / 127.0f;
-                const float w = kTwoPi * freq / static_cast<float>(sampleRate_), alpha = std::sin(w) / (2.0f * knockQ(kKnockTonality));
+                const float w = kTwoPi * freq / static_cast<float>(sampleRate_), alpha = std::sin(w) / (2.0f * knockQ(rows.tonality));
                 const float a0 = 1.0f + alpha;
                 v->knock = true;
                 v->b0 = alpha / a0;
@@ -177,7 +183,7 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
                 v->a2 = (1.0f - alpha) / a0;
                 v->y1 = v->y2 = 0.0f;
                 v->freq = 0.0f;
-                v->gain = 0.6f * level / v->b0;  // the first output sample is 0.6 x level whatever the note and the Q: the impulse is scaled for it
+                v->gain = 0.6f * level * (rows.volume / 0.8f) / v->b0;  // the first output sample is 0.6 x level whatever the note and the Q: the impulse is scaled for it
                 v->pos = 0;
                 ++next;
                 continue;

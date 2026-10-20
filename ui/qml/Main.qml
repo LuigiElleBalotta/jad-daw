@@ -110,7 +110,6 @@ ApplicationWindow {
         onAccepted: controller.exportMidiFile(selectedFile)
     }
 
-    MetronomeSettings { id: metronomeDialog; project: controller }
     NewTracksDialog { id: newTracksDialog; project: controller }
     ConfirmDialog { id: confirm }
     KeyCommandsWindow { id: keyCommands; registry: actionRegistry; visible: false }
@@ -207,7 +206,7 @@ ApplicationWindow {
     ProjectAudioWindow { id: projectAudioWindow; project: controller }
     NotePadWindow { id: notePadWindow; project: controller }
     MarkerListWindow { id: markerList; project: controller }
-    ProjectSettingsDialog { id: projectSettings; project: controller; onMetronomeRequested: metronomeDialog.open(); onPreferencesRequested: preferencesDialog.open() }
+    ProjectSettingsDialog { id: projectSettings; project: controller; onPreferencesRequested: preferencesDialog.open() }
     IoLabelsDialog { id: ioLabelsDialog; project: controller }
     BounceDialog { id: bounceOptions; project: controller }
     DrumReplaceDialog { id: drumDialog; project: controller }
@@ -517,7 +516,7 @@ ApplicationWindow {
         "record.countIn7Of4": () => { controller.countInChoice = -7; controller.countInEnabled = true },
         "record.countIn8Of4": () => { controller.countInChoice = -8; controller.countInEnabled = true },
         "record.countIn9Of4": () => { controller.countInChoice = -9; controller.countInEnabled = true },
-        "record.metronomeSettings": () => metronomeDialog.open(),
+        "record.metronomeSettings": () => projectSettings.showTab(8),
         "mix.showAutomation": () => { controller.automationVisible = !controller.automationVisible },
         "window.openMainWindow": () => { root.raise(); root.requestActivate() },
         "window.openSmartControls": () => root.showLowerPane("smart"),

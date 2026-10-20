@@ -9,7 +9,6 @@ import Jad
 Dialog {
     id: root
     required property ProjectController project
-    signal metronomeRequested()
     signal preferencesRequested()
     property int tab: 0
     readonly property var tabs: [qsTr("General"), qsTr("Audio"), qsTr("Recording"), qsTr("Smart Tempo"), qsTr("MIDI"), qsTr("Score"), qsTr("Movie"),
@@ -232,11 +231,13 @@ Dialog {
             }
 
             // Metronome
-            ColumnLayout {
-                spacing: Theme.spacing[2]
-                Note { text: qsTr("The metronome click is Logic's Klopfgeist: a tone made for every tick, with its own note and velocity for bars, groups, beats and divisions.") }
-                IconButton { implicitHeight: 24; label: qsTr("Metronome Settings…"); onClicked: { root.close(); root.metronomeRequested() } }
-                Item { Layout.fillHeight: true }
+            Flickable {
+                clip: true
+                contentWidth: width
+                contentHeight: metronomePane.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {}
+                MetronomeSettings { id: metronomePane; width: parent.width - 12; project: root.project }
             }
 
             // Tuning

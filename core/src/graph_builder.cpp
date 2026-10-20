@@ -461,7 +461,8 @@ audio::ClickTrack buildClickTrack(const Project& p, const audio::ClickSettings& 
     const auto& sigs = p.tempoMap.signatures();
     const std::string& mode = settings.mode;
     Ticks tick = 0;
-    auto add = [&](Ticks at, int slot, bool accent) {
+    auto add = [&](Ticks at, int slot, bool accent, int level) {
+        click.level.push_back(static_cast<std::uint8_t>(level));
         click.frames.push_back(static_cast<std::int64_t>(std::llround(p.tempoMap.ticksToSamples(at, p.sampleRate))));
         click.accent.push_back(accent ? 1 : 0);
         click.slot.push_back(static_cast<std::uint8_t>(slot));
@@ -482,7 +483,7 @@ audio::ClickTrack buildClickTrack(const Project& p, const audio::ClickSettings& 
             for (const int size : groups) {
                 for (int k = 0; k < size; ++k, ++beat) {
                     const int slot = k == 0 ? std::min(number, 32) : (size == 2 ? audio::kSlotAnd : (k == 1 ? audio::kSlotLa : audio::kSlotLi));
-                    add(tick + beat * beatTicks, slot, beat == 0);
+                    add(tick + beat * beatTicks, slot, beat == 0, beat == 0 ? audio::kLevelBar : (k == 0 ? audio::kLevelGroup : audio::kLevelBeat));
                 }
                 ++number;
             }
@@ -492,7 +493,7 @@ audio::ClickTrack buildClickTrack(const Project& p, const audio::ClickSettings& 
                 for (int part = 0; part < parts; ++part) {
                     int slot = std::min(beat + 1, 32);
                     if (part > 0) slot = parts == 2 ? audio::kSlotAnd : (part == 1 ? audio::kSlotE : (part == 2 ? audio::kSlotAnd : audio::kSlotA));
-                    add(tick + beat * beatTicks + part * (beatTicks / parts), slot, beat == 0 && part == 0);
+                    add(tick + beat * beatTicks + part * (beatTicks / parts), slot, beat == 0 && part == 0, part > 0 ? audio::kLevelDivision : (beat == 0 ? audio::kLevelBar : audio::kLevelBeat));
                 }
         }
         tick += beatTicks * numerator;

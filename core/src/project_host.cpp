@@ -233,6 +233,9 @@ void ProjectHost::postClick() {
 void ProjectHost::postKit() {
     if (degraded_) return;
     auto* kit = new audio::ClickKit;
+    kit->levels = clickSettings_.levels;
+    kit->tonality = std::clamp(clickSettings_.tonality, 0.0f, 1.0f);
+    kit->volume = std::clamp(clickSettings_.volume, 0.0f, 1.0f);
     for (int slot = 1; slot < audio::kClickSlots; ++slot) {
         const std::string& file = clickSettings_.files[static_cast<std::size_t>(slot)];
         kit->gain[static_cast<std::size_t>(slot)] = clickSettings_.gain[static_cast<std::size_t>(slot)];

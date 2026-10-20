@@ -4316,3 +4316,27 @@ void ProjectController::setProjectSetting(const QString& key, const QString& val
 }
 
 }  // namespace jad
+
+namespace jad {
+
+void ProjectController::applyKlopfgeistSettings() {
+    static const char* const names[lpc::audio::kClickLevels] = {"bar", "group", "beat", "division"};
+    std::array<lpc::audio::KnockLevel, lpc::audio::kClickLevels> levels = lpc::audio::defaultKnockLevels();
+    for (int i = 0; i < lpc::audio::kClickLevels; ++i) {
+        const QString base = QStringLiteral("click.") + QLatin1String(names[i]);
+        lpc::audio::KnockLevel& row = levels[static_cast<std::size_t>(i)];
+        row.note = std::clamp(projectSettings_.value(base + ".note", row.note).toInt(), 0, 127);
+        row.velocity = std::clamp(projectSettings_.value(base + ".velocity", row.velocity).toInt(), 1, 127);
+        const QVariant on = projectSettings_.value(base + ".on");
+        if (on.isValid()) row.on = on.toString() == QLatin1String("1");
+    }
+    const float tonality = std::clamp(projectSettings_.value("click.tone", 0.5).toFloat(), 0.0f, 1.0f);
+    const float volume = std::clamp(projectSettings_.value("click.volume", 0.8).toFloat(), 0.0f, 1.0f);
+    if (levels == clickSettings_.levels && tonality == clickSettings_.tonality && volume == clickSettings_.volume) return;
+    clickSettings_.levels = levels;
+    clickSettings_.tonality = tonality;
+    clickSettings_.volume = volume;
+    if (host_) host_->setClickSettings(clickSettings_);
+}
+
+}  // namespace jad

@@ -9,18 +9,17 @@ TestCase {
     when: windowShown
 
     Component { id: ctlC; ProjectController { audioEnabled: false } }
-    Component { id: dlgC; MetronomeSettings { } }
+    Component { id: paneC; MetronomeSettings { width: 600 } }
 
-    function test_the_dialog_shows_the_mode_and_changes_it() {
+    function test_the_page_shows_the_mode_and_changes_it() {
         const c = createTemporaryObject(ctlC, this)
-        const d = createTemporaryObject(dlgC, this, { project: c, parent: this })
-        verify(d)
-        d.open()
-        tryVerify(function () { return d.opened })
+        const p = createTemporaryObject(paneC, this, { project: c })
+        verify(p)
         compare(c.clickMode, "beats")
         c.clickMode = "grouped"
         compare(c.clickMode, "grouped")
-        compare(d.slots.length, 17)
-        d.close()
+        compare(p.levels.length, 4)
+        compare(p.noteName(91), "G5")   // Logic's naming: 60 is C3
+        compare(p.noteName(60), "C3")
     }
 }

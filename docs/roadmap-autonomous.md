@@ -447,13 +447,14 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       Recording (Count-in **vs. Pre-roll radio choice**, jad-daw only has Count-in), Smart Tempo (rich: Flex & Follow defaults per
       new-recording/imported-file, Export Tempo Resolution, Free Tempo Recording behaviour), MIDI (Send-After-Loading / MIDI Thru, low priority),
       Tuning (microtonal tables, Hermode Tuning, low priority), Metronome (see E13). Score/Movie/Synchronization/Assets still unread.
-- [ ] E13. **Metronome Settings is fundamentally different from what the README describes — needs the owner's attention before further metronome
+- [x] E13. **Metronome Settings is fundamentally different from what the README describes — needs the owner's attention before further metronome
       work.** Confirmed `Record > Metronome Settings…` opens the *same* Project Settings > Metronome tab (not a separate dialog). Real structure: Audio
       Click ("**Klopfgeist**", Logic's click-synth's actual name) and MIDI Click sections, each with one Note+Velocity (or Channel+Note+Velocity) row
       per accent level — **Bar, Group, Beat, Division** — plus Tone/Volume/Output. **There is no counting-pattern UI** (no "beats 1 2 3 4 / eighths
       1 & 2 & / sixteenths / grouped" choice, no per-count custom WAV file) anywhere in it. jad-daw's README describes exactly that counting-pattern
       model as already implemented. Either the README is describing an older Logic version, a different app, or a feature that was never checked
       against 11.2 — this is a foundational mismatch in a "done" feature, not a wording nitpick.
+      DONE: Metronome Settings is now the Metronome tab of Project Settings (Record > Metronome Settings… opens it) with Logic's structure: Options, Audio Click (Klopfgeist) rows Bar/Group/Beat/Division with note, velocity and on/off (Logic's defaults G5/127, D#5/119, C5/112, C2/60 off; notes named with C3 = 60), Tone, Volume, Output, and the MIDI Click rows. Values live in the project settings (`click.<level>.note|velocity|on`, `click.tone`, `click.volume`) and reach the engine (`ClickKit.levels`, `ClickTrack.level`). The spoken-count WAV slots are gone from the UI (the bridge and engine still accept sample files). Still saved only: the Options flags and the MIDI Click (no MIDI port output yet).
 - [x] E14. LCD doc correction: Smart Tempo's project tempo states are **Keep / Adapt / Automatic** (confirmed in Project Settings), not "Keep and Off"
       as `lcd.md` currently says — "Automatic" is the real third state.
       DONE: `lcd.md` now says Keep / Adapt / Automatic.

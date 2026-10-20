@@ -1062,11 +1062,17 @@ formulas byte-for-byte) — confirming both circuits sit behind one common param
   more "VCA-like" response, consistent with SSL's VCA (not opto-cell) gain element.
 - The same secondary hard-limit sub-path as Opto (identical structure, same offsets).
 
-### Not reached (minor, cosmetic)
+### Sidechain-filter table — read, meaning not fully certain
 
-The sidechain-filter 4-entry constant table at `DAT_00d4b2d0`/`DAT_00d53920` (shared by Opto and SSL/"Vintage
-VCA") wasn't read directly — would give the 4 HPF type names/frequencies for the sidechain filter selector.
-Everything else originally open in this block (the full enum↔class↔name mapping) is now resolved — see above.
+The 4-entry tables at `DAT_00d4b2d0` (floats) and `DAT_00d53920` (read earlier as a "pointer" table by Ghidra's
+own type inference) turn out to hold small integers, not addresses or frequencies: `{0.0, 3.0, 7.0, 0.0}` and
+`{0, 3, 7, 1}` respectively — indices 0 and 3 share the same float value (`0.0`), so there are really only 2
+distinct non-zero entries (`3`, `7`). Fed through the formula from `Coefficients(value, 0xd)`
+(`coeff = x/(x−1)`, stored alongside `1−coeff`), these read more like small filter-order/pole-count selectors
+(e.g. a 2-pole vs. higher-order HPF) than literal Hz frequencies — too small to be frequencies, and the
+duplicate `0.0` at both ends fits an "Off / low-order / high-order / Off-again" pattern better than 4 distinct
+named choices. **Not fully certain**: the real UI labels for this sidechain-filter selector weren't checked
+against these 4 values (would need opening the Compressor plugin's own sidechain-filter popup live).
 
 ### Source
 

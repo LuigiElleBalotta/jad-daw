@@ -14,11 +14,11 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **partial** | Found the real class hierarchy: `CCompressorBase` with 6 derived circuits — `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (already in `mixer.md`), plus `CCompressorOpto` and `CCompressorSSL` (new this pass, with real decompiled `GainRedCurve`/`Coefficients` constants below). `CCompressorSSL` is almost certainly "Classic VCA" (SSL G-bus-style). Exact UI-name↔class mapping for "Platinum"/"Studio VCA"/"Studio FET" is not confirmed — `CPlatinumVerb` exists but is a reverb, not a compressor circuit, so "Platinum" compressor likely maps to the generic `CCompressor`/`CCompressorBase` itself (not independently confirmed). |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
-| 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
+| 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice` found and confirmed structurally (`SetCutoff`/`SetQ`/`CalcCoeffs` — the click is a synthesized resonant-filter voice, not a sample); the exact `CalcCoeffs()` formula itself wasn't pulled before the REA session moved on to Block 8. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. Only the exact color hex values for 6a (would need an `Assets.car` search) and the full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) remain open. |
 | 7. Smart Tempo/Flex quality comparison | **partial (unblocked)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it ("Apple Loops contain tempo information that cannot be modified by this editor") — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. Testing the *actual* detection/warping algorithm (the original ask) needs a non-Apple-Loop, untagged audio file run through Smart Tempo's "Detect" — not attempted, time ran out. |
-| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **partial** | `CLimiter`'s real gain-smoothing algorithm and its full `Coefficients` parameter table (gain/lookahead/true-peak/release/ceiling, all with real ranges and constants) decompiled — see below. `CNoisegateFX::Coefficients`'s real threshold/reduction/attack/hold/release ranges and formulas decompiled too. Channel EQ's per-band Q/slope constants, Pan law formula, and Fader taper/meter ballistics were **not found in `MADSP.x86_64`** — `CPan`/`CFader`-named classes don't exist in this binary, meaning that code most likely lives in a different framework (the mixer-engine binary, not the plugin-DSP one) not available on this disposable Mac session; Match EQ itself wasn't re-touched (already covered in `mixer.md`). |
+| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **partial** | `CLimiter`'s real gain-smoothing algorithm and full `Coefficients` parameter table decompiled; `CNoisegateFX::Coefficients`'s real ranges/formulas decompiled; **Channel EQ's real default 8-band table (frequencies, gains, Q/slope) captured live from the plugin UI itself** — no decompilation needed. Pan/Fader: `MAMixer.framework` was thinned and opened, found to contain extensive Pan-knob code, but it's **all GUI/drawing**, not DSP — the real pan-law/fader-gain math lives in a third, not-yet-identified framework. Match EQ wasn't re-touched (already in `mixer.md`). |
 
 This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
 the highest-priority, most tractable items in the time available. Everything below "not started" needs its own
@@ -387,9 +387,15 @@ user's real `ProvaPianoforte.logicx`, which stayed open untouched in the backgro
 Tone and Volume sliders both at their default center position. MIDI Click's `Port:` popup shows `Off` (no MIDI
 destination routed by default). Audio Click's `Output:` popup shows `1-2`.
 
-**Not determined this pass**: `CKnockVoice`'s own synthesis internals (how `Tone` maps to the actual oscillator/
-envelope, whether the audio click is a synthesized click or a sampled one) — this would need decompiling
-`CKnockVoice` itself, not just reading the Project Settings UI defaults above.
+**`CKnockVoice` found and structurally confirmed** (real class in `MADSP.x86_64`): `SetLevel(float)`,
+`SetCutoff(float)`, `SetQ(float)`, `CalcCoeffs()`, `Start()`/`SoftStart()`, `Process()`, `GetSignal()` — this
+proves the Klopfgeist click **is a synthesized, filtered signal, not a sampled one**: each voice is built around
+a resonant filter with its own tunable cutoff frequency and Q, recalculated via `CalcCoeffs()`, exactly matching
+the UI's single `Tone` slider (which almost certainly drives `SetCutoff` directly) and consistent with
+`Polyphonic clicks` needing multiple independent `CKnockVoice` instances active at once. **Not determined**: the
+exact formula inside `CalcCoeffs()` (the literal cutoff/Q-to-filter-coefficient math) — the REA session was
+reused for Block 8's Pan/Fader search before this could be pulled, and reopening `MADSP.x86_64` costs another
+~11-minute Ghidra re-analysis; left for a future pass.
 
 ### Source
 
@@ -952,16 +958,51 @@ dynamics processors this project — `CAutoMaster`'s Loudness-Macro compressor (
 `CCompressorSSL`, `CLimiter`, and `CNoisegateFX` — strong evidence it's a shared, standardized internal utility
 constant in MADSP's envelope-follower code, not something tuned per-circuit.
 
-### Channel EQ, Pan, Fader — not found in `MADSP.x86_64`
+### Channel EQ — real default band table, captured live from the plugin UI
 
-Searched for `^__ZN\d+CPan` (no matches) and `^__ZN\d+C(ChannelEQ|...)` patterns — no `CPan`/`CFader` classes
-exist in this binary. `MADSP.x86_64` appears to be specifically the **plugin DSP framework** (Compressor,
-Limiter, Noise Gate, reverbs, EQs-as-plugins, the Mastering Assistant chain already covered); channel-strip-level
-primitives like Pan and Fader almost certainly live in a different framework binary (the mixer/channel-strip
-engine) that wasn't thinned/opened this session. **Not determined**: would need to locate and open that other
-framework to continue this part of Block 8. Match EQ itself was not revisited (already documented in
-`mixer.md`); Channel EQ's exact per-band Q/slope constants were not located either (search for an EQ-specific
-class by name wasn't attempted this pass, time ran out).
+Static search for `CPan`/`CFader`/EQ-specific classes in `MADSP.x86_64` found nothing (see below) — but opening
+the actual **Channel EQ** plugin UI on the disposable test project's track gave the real default values directly,
+no decompilation needed. **8 bands**, left to right:
+
+| Band | Type | Frequency | Gain | Q / Slope |
+|---|---|---|---|---|
+| 1 | Low Cut | 20.0 Hz | — | 12 dB/Oct, Q 0.71 |
+| 2 | Low Shelf | 75.0 Hz | 0.0 dB | Q 1.00 |
+| 3 | Parametric (low-mid) | 100 Hz | 0.0 dB | Q 0.60 |
+| 4 | Parametric (mid) | 250 Hz | 0.0 dB | Q 0.30 |
+| 5 | Parametric (high-mid) | 1040 Hz | 0.0 dB | Q 0.41 |
+| 6 | Parametric (presence) | 2500 Hz | 0.0 dB | Q 0.20 |
+| 7 | High Shelf | 7500 Hz | 0.0 dB | Q 1.00 |
+| 8 | High Cut | 20000 Hz | — | 24 dB/Oct, Q 0.71 |
+
+Plus an overall output **Gain**: 0.0 dB. Both cut filters default to the same **Q 0.71** (the standard
+Butterworth-flat value, `1/√2`), while the default low-cut slope is 12 dB/Oct and the default high-cut slope is
+24 dB/Oct — not symmetric. The 4 middle parametric/shelf bands have distinct, deliberately-chosen default Q
+values (1.00, 0.60, 0.30, 0.41, 0.20) rather than a single uniform default, suggesting Apple tuned each band's
+starting "musicality" individually rather than using one generic Q for all. Other visible controls: `Analyzer`
+(POST position), `Q-Couple`, `HQ` (high-quality/oversampled mode), `Processing: Stereo`.
+
+### Pan, Fader — not found in `MADSP.x86_64`
+
+Searched for `^__ZN\d+CPan` (no matches) and `^__ZN\d+C(ChannelEQ|...)` patterns — no `CPan`/`CFader`/
+`CChannelEQ`-named classes exist in `MADSP.x86_64` (Channel EQ's own DSP class wasn't located by name either,
+hence the live-UI capture above instead of decompiled constants). `MADSP.x86_64` appears to be specifically the
+**plugin DSP framework** (Compressor, Limiter, Noise Gate, reverbs, EQs-as-plugins, the Mastering Assistant chain
+already covered); channel-strip-level primitives like Pan and Fader live elsewhere.
+
+**`MAMixer.framework` was thinned and opened this pass** (`/tmp/rea-bins/MAMixer.x86_64`) as the obvious
+candidate — it does contain extensive Pan-related code (`MACartesianPannerNode`, `MAStereoPannerCapNode`,
+`MAPlanarPannerNode`, a Swift `MixerPanViewModel` with a `panValue: Float` property, etc.) — but every single one
+of these is **GUI/drawing code** (`drawRect:inContext:`, `mouseDown:`, hit-testing, color/highlight state,
+accessibility) for the pan-knob widget itself, in Objective-C and Swift. Searching specifically for
+value-setting/gain-computation functions (`panValue`/`setPan`/`panLaw`/`calcPan` patterns) turned up only the
+same GUI layer — **no actual gain-computation DSP function was found in `MAMixer.framework`**. The real pan-law
+math (and almost certainly the fader-gain/meter-ballistics math too) lives in a third framework not yet
+identified — plausibly inlined into the main Logic Pro executable itself, or a framework whose name doesn't
+obviously suggest "mixer" (several dozen frameworks exist; not all were checked by name this pass — see
+`find "/Applications/Logic Pro.app/Contents/Frameworks" -maxdepth 1 -iname "*.framework"` for the full list).
+**Not determined**: would need a broader framework-by-framework search in a future pass. Match EQ itself was not
+revisited (already documented in `mixer.md`).
 
 ### Source
 

@@ -6,12 +6,12 @@ resolved, the "what's missing" line says what a future pass would need.
 | Block | Status | What's missing (if any) |
 |---|---|---|
 | 1. ONNX vs CoreML numeric verification | **done** (for everything that can run through the public API) | The 6 Analog Model + 10 Saturation-family networks (317 of 321 bundle/block-size combinations) can't be numerically compared at all — Core ML's public `prediction(from:)` API itself refuses to run them (see below), independent of ONNX correctness. A real conversion bug was found and confirmed in `OnsetDetectionCNN` (0.226 max-abs-err, flagged as suspect in `ml-conversion.md` already) — needs a fix in `espresso2onnx.py`'s weight-layout/flatten-order handling, not a Mac-side task. |
-| 2a. `ProcessAllDynamicCBs` stage order | **done** | Exact exit condition of the Analyze-mode MB-compressor calibration loop not traced (lives inside a vtable call Ghidra couldn't resolve). |
+| 2a. `ProcessAllDynamicCBs` stage order | **done** | The MB-compressor calibration loop's exit mechanism is now identified (see 2f): an externally-set stop flag polled in the loop, not a local counter — the remaining gap is tracing *what sets that flag* (the loudness-analysis object's own concrete type), a genuine runtime-dispatch boundary, not an analysis gap. |
 | 2b. `Coefficients(value,3)` origin/range | **partial** | The field it writes (+0x164) and the dB→linear conversion are confirmed (`analog-model-chain.md`). This pass confirmed via `procedure_callers` that it has **zero resolved callers inside `MADSP.x86_64` itself** — the UI/automation parameter system that calls it lives in a separate framework binary, not this one. Where the external caller sources the dB value remains not determined; would need opening that other binary (not identified/thinned this session). |
 | 2c. The 4 trailing `CBasicFX::Process` slots | **done** | — identified directly in `CAutoMasterFX`'s own constructor: `CLevelMeterFX`, `CLoudnessMeterFX`, `CCorrelationMeterFX`, `CSpectrumAnalyzerFX` — the window's metering chain, not further audio processing. |
 | 2d. `nativeAvailable` meaning | **closed** | Decisively settled by direct ONNX comparison (not REA): `T` vs `TSO` and `G` vs `G_SO` each have **byte-identical graph structure** (187 nodes, 8 op types, 194 initializers, 115504 weight bytes — exact match) but **different weight-tensor SHA-256 hashes** — i.e. two independently-trained models sharing one architecture, not one model deployed two ways for speed. `nativeAvailable` therefore selects a genuinely different-sounding model (different learned weights), settling the sound-vs-speed question in favor of **sound** (it may also affect speed, but it is not *only* a speed optimization). |
 | 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **closed (mechanism fully explained)** | The exact addressing of the `+0xd8`/`+0xe0`-indexed trim table decoded by hand: `value = *(float*)(self + modeIdx×8 + 0x3c0 + circuitIdx×4)` — **inline per-instance object data, not a static array**, so its contents can't be read from the binary directly. Traced further: it's populated at runtime from the Mastering Assistant's `#default.pst` preset (found: `GAME`/`TSPP`-magic binary blob, 4132 bytes, a flat parameter array) via `Coefficients()` calls. Reading the *specific* preset-parameter index that lands in this exact table slot needs tracing `CAutoMaster::Coefficients()`'s own full parameter-index map (a large function, not covered this pass) — the mechanism is now fully understood even though the literal numbers remain preset-loaded state rather than binary-embedded constants. |
-| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
+| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **mostly done** | Stereo spread (`ProcessSpread`) fully decoded. `AutoAdjustMBCompressor` fully hand-disassembled: the "opaque" calls Ghidra flagged turned out to be plain `memcpy`/`exp10f`/`vDSP_vsmul`; the real indirect calls are two genuine C++ virtual dispatches on a shared loudness-analysis object. The accumulation formula is now byte-exact (`0 < measured < 0.99` gates `errorAccum += min(measured, 0.99−measured)`), and the real exit mechanism is identified: an externally-set stop flag (`self+0xa18`) polled inside the loop, not a numeric counter — explaining why no static tool can fully resolve it without tracing the measurement object's own runtime type. `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub**. The 31-band Auto EQ's coefficient-calculation code remains untraced. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **closed** | **The complete, exact enum↔class↔UI-name mapping is now confirmed straight from `CCompressorShell::OnSetup`'s menu registration and `CCompressor`'s own constructor switch** — see below. **Correction to this doc's own earlier guess**: `CCompressorSSL` is *not* "Classic VCA" — it's **"Vintage VCA"**; "Classic VCA" is actually **`CCompressorDBX`**. Every one of the 7 real UI circuit names now has a confirmed class and, for all 7, at least partial decoded curve math (either in `mixer.md` from an earlier pass, or this session for Opto/SSL). Two internal circuit values exist that are *not* exposed in this menu at all: a 3rd `CCompressorClassA` variant and a wholly separate `CDownwardCompressor` class. |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring the user specifically asked about is now fully solved**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-style linear transform (`drive×1.05`, `drive×0.7+0.3`, or `drive×0.75+0.25`, selected by a 3-way style index) before handing the scalar straight to the model wrapper's conditioning-setter via a vtable call. Still untraced: which UI style name maps to which index, and the mel/beat/pitch preprocessing for the other analysis networks. |
 | 4. Klopfgeist/metronome | **mostly done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. Only the per-instance lookup table's own numeric contents (a runtime pointer, not a static array) remain unresolved. |
@@ -327,15 +327,44 @@ explicit encode-to-M/S → scale the side → decode-back-to-L/R sequence, not a
 `AutoAdjustSpread` (Analyze-mode counterpart, presumably auto-picking `floorLimit`/`ceilLimit`) was not
 decompiled this pass.
 
-**`AutoAdjustMBCompressor`**: per-iteration mechanics are clear — copy buffers aside, run the multiband
-compressor once, then loop testing gain in **+2 dB steps** (`0, 2, 4, 6, ...`), applying each via
-`10^(dB/20)`+`vDSP_vsmul`, re-measuring through a shared loudness-analysis object (vtable `+0x28` then `+0x30`),
-and accumulating `min(measured, 0.99 - measured)` into an error field. **The exact convergence/exit check could
-not be recovered** — Ghidra's control-flow analysis produces an unresolvable `while(true)` for this function (the
-same failure mode seen in `ProcessAllDynamicCBs`'s own inline calibration loop), meaning the real exit edge is
-hidden inside a call Ghidra can't trace into. Not determined: the actual tolerance/iteration-count values (the
-user's own earlier finding for the sibling `AutoAdjustLimiter` — "0.2 tolerance, 4 adjustments after the first
-measurement" — is plausibly the same pattern here, but wasn't independently confirmed for the MB compressor).
+**`AutoAdjustMBCompressor` — fully hand-disassembled this pass, closing the exit-condition question.** The three
+"opaque" calls Ghidra flagged turned out to be plain, named library functions once checked against the indirect
+symbol table (`otool -I -v`) instead of Ghidra's own resolution: `0xd41628` = `memcpy` (the "copy buffers aside"
+step, not a vtable call), `0xd413f4` = `exp10f`, `0xd41ad2` = `vDSP_vsmul` (Accelerate framework). The genuinely
+indirect calls are two **real vtable dispatches** on an object at `self+0x5f0` (the shared loudness-analysis
+object): `callq *0x28(%rax)` (a "measure" call) and `callq *0x30(%rax)` (an "apply/process" call, inside a
+per-band loop) — these two *are* true C++ virtual calls, unresolvable without knowing the concrete runtime type
+of that object, which is the one part of this that stays genuinely opaque (not a Ghidra limitation specifically
+— no static analysis tool can resolve a virtual call without either RTTI or a runtime observation).
+
+**The accumulation formula is now byte-exact, not approximate** (all three constants read directly from the
+binary):
+
+```
+measured = self->+0x8c0                      // the loudness-analysis object's own measured value
+if (0.0 < measured) {
+    delta = 0.99 − measured
+    if (0.0 < delta) {
+        self->+0x8bc += min(measured, delta)   // the error accumulator
+    }
+}
+```
+
+confirming the previously-approximate "accumulating `min(measured, 0.99−measured)`" description exactly, with
+`0.99` now a verified literal constant (not inferred).
+
+**The real exit mechanism, found**: inside the per-band apply-loop (the `callq *0x30(%rax)` one), each iteration
+checks a **boolean flag at `self+0xa18`** — `cmpb $0x0, 0xa18(%r14); jne <break>` — and exits the entire loop
+immediately if that flag is set. This is an **externally-driven stop flag**, not a counted/numeric convergence
+check inside this function itself: something else (plausibly the loudness-analysis object's own `+0x28`
+"measure" call, or a caller further up the stack) sets `self+0xa18` once it decides calibration is done, and
+`AutoAdjustMBCompressor`'s own loop just polls it. This explains why Ghidra (and any purely static reading of
+*this* function alone) can't produce a classic bounded-loop exit condition — **the real stopping decision is
+made by a different, runtime-dispatched object**, not by a dB-step counter or tolerance check living in this
+function's own code. Not determined: what exactly sets `self+0xa18` (would need tracing the loudness-analysis
+object's concrete class, not attempted this pass) and whether the "+2 dB step" framing from an earlier pass
+refers to a different call site than the one traced here (the gain-stepping itself wasn't re-confirmed this
+pass; only the accumulator and exit-flag mechanics were).
 
 **"Auto EQ" / dynamic EQ — a real surprise**: `CAutoMaster::AutoAdjustDynEQ` decompiles to a **literal empty
 function body** (`{ return; }`) — Logic's "Dynamic EQ" machinery in this class appears to be unused/vestigial in

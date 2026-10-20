@@ -13,7 +13,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **partial** | Found the "Character" Smart Control parameter (ID 10), the Mastering Assistant's `#default.pst` flat-parameter block, and the concrete `+0xd8`/`+0xe0`-indexed trim table at `+0x3c0` that `ProcessAnalogModel` reads from (2a); the table's actual stored values weren't read this pass. |
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **partial** | Found the real class hierarchy: `CCompressorBase` with 6 derived circuits — `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (already in `mixer.md`), plus `CCompressorOpto` and `CCompressorSSL` (new this pass, with real decompiled `GainRedCurve`/`Coefficients` constants below). `CCompressorSSL` is almost certainly "Classic VCA" (SSL G-bus-style). Exact UI-name↔class mapping for "Platinum"/"Studio VCA"/"Studio FET" is not confirmed — `CPlatinumVerb` exists but is a reverb, not a compressor circuit, so "Platinum" compressor likely maps to the generic `CCompressor`/`CCompressorBase` itself (not independently confirmed). |
-| 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
+| 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring the user specifically asked about is now fully solved**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-style linear transform (`drive×1.05`, `drive×0.7+0.3`, or `drive×0.75+0.25`, selected by a 3-way style index) before handing the scalar straight to the model wrapper's conditioning-setter via a vtable call. Still untraced: which UI style name maps to which index, and the mel/beat/pitch preprocessing for the other analysis networks. |
 | 4. Klopfgeist/metronome | **mostly done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. Only the per-instance lookup table's own numeric contents (a runtime pointer, not a static array) remain unresolved. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. Only the exact color hex values for 6a (would need an `Assets.car` search) and the full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) remain open. |
@@ -336,9 +336,42 @@ this pass read them straight from their own named functions and literal constant
 flag at a fixed offset is zero, separately computes `amount × 127.0` and calls `CPassiveEQFX::SetOutputDrive()` —
 i.e. there appear to be **two independent saturation mechanisms**: the neural one (`CMLSaturation`, extensively
 documented in `machine-learning-models.md`) and a classical one built on `CPassiveEQFX` with a 0–127-scaled drive
-parameter, used when the flag selects the non-neural path. This is a new, concrete fact — but the neural path's
-own `amount`→`cond`-tensor wiring (what the user actually asked about) wasn't traced this pass, and neither was
-what that flag represents (plausibly the same `+0xd8`/`+0xe0` mode selection from 2a, not confirmed).
+parameter, used when the flag selects the non-neural path. What that flag represents (plausibly the same
+`+0xd8`/`+0xe0` mode selection from 2a) is still not confirmed.
+
+### 3 (continued) — the neural drive→`cond` wiring, fully solved
+
+Found and decoded this pass (via the same Ghidra-free `nm`/`otool`/Python method used for Block 8's Pan law and
+Block 4's `CKnockVoice`): `CMLSaturation::SetDriveSqueeze(float)` (`0x9f6aa0`) and the structurally-identical
+`CMLSaturation::UpdateConditioning(float)` (`0x9fa750`) and `CMLSaturation::UpdateModel()` (`0x9f6b10`, same
+branch pattern at its start).
+
+**The real formula**, confirmed directly from the disassembly: the raw `drive` input goes through a **per-style
+linear transform** selected by a style/circuit index at `this+0x68` (3 branches: style `0`/default, `2`, `4` —
+the same small integer-index pattern seen elsewhere in this binary for circuit/device selection), then the
+*scaled* result is passed as a single-element array into the model wrapper's own conditioning-setter, reached
+through a vtable call (`this+0x60` → object pointer → vtable slot `+0x38`) — this vtable call **is** the actual
+drive→`cond` tensor hookup the user asked about: a single scalar conditioning value derived from `drive`, handed
+straight to the neural model's own parameter-setting interface.
+
+| Style index | Formula | Constants (confirmed from raw bytes) |
+|---|---|---|
+| `0` (default) | `cond = drive × 1.05` | `0x3f866666` = 1.05 |
+| `2` | `cond = drive × 0.7 + 0.3` | `0x3f333333` = 0.7, `0x3e99999a` = 0.3 |
+| `4` | `cond = drive × 0.75 + 0.25` | `0x3f400000` = 0.75, `0x3e800000` = 0.25 |
+
+Styles `2` and `4` both compress the conditioning range so it never drops below `0.3`/`0.25` even at `drive=0`
+— the neural model still receives meaningful conditioning input at the lowest drive setting for these two
+styles — while style `0` is a near-unity scale (`×1.05`, no floor) that lets conditioning approach `0` as drive
+does. `SetDriveSqueeze` additionally stores the raw (unscaled) `drive` value at `this+0x90` before doing this
+same computation; `UpdateConditioning` and the start of `UpdateModel()` both re-read that same stored value and
+re-run the identical per-style scaling — confirming this is the one shared formula, re-applied whenever either
+the drive value or the active style/model changes, not three independent code paths that happen to look similar.
+
+**Not determined**: which of the 3 style indices (`0`/`2`/`4`) corresponds to which user-facing Saturation style
+name in the UI, and all the mel/beat/pitch preprocessing code for the other analysis networks (Onset/Downbeat/
+Pitch) — the neural `cond`-wiring specifically asked about is now fully resolved, but the broader preprocessing
+pipeline for the other model families was not revisited this pass.
 
 ### Source (2c/2f/3 additions)
 
@@ -415,6 +448,24 @@ changes (not just storing the value for the next `CalcCoeffs()` call) — both f
 recompute rather than a simple getter/setter split. This is consistent with a 2-pole state-variable/TPT-style
 resonant filter, where frequency and damping coefficients are coupled and both need recomputing on either
 parameter change.
+
+**Confirmed, byte-for-byte, by Ghidra's own decompiled pseudocode for `CalcCoeffs()`** (which finished mid-pass,
+independently matching the hand-disassembly above exactly):
+
+```
+idx_f   = clamp(cutoff × 127.0, 0.0, 127.0)              // this+0x44, index as float
+idx     = (int)idx_f
+qTerm   = clamp(Q² × -1.39 + 1.4, max=1.4)                // this+0x48
+qTerm   = clamp(qTerm, min=0.01)                           // final damping coefficient → stored at this+0x3c
+resGain = (this+0x4c × qTerm² + (2.0 − qTerm)) × this+0x50 // resonance-gain ceiling
+cutCoef = lerp(table[idx], table[idx+1], idx_f − idx)      // table at this+0x18, linear interpolation
+coeff   = min(cutCoef, resGain)                            // stored at this+0x38
+```
+
+This is exactly a **resonance-limited interpolated-cutoff coefficient**: the raw cutoff-derived filter
+coefficient is clamped against a Q-dependent ceiling (`resGain`) so the filter can never become unstable at high
+resonance — textbook safe 2-pole TPT/SVF design, now confirmed as literal shipped code rather than inferred from
+offsets alone.
 
 The scale/clamp constants (resolved the same way as Block 8's Pan tables — RIP-relative address computed by
 hand, raw `float` bytes read from the file): the cutoff/Q inputs are scaled by **127.0** (confirming they're

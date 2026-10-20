@@ -12,7 +12,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2d. `nativeAvailable` meaning | **partial** | Confirmed it's read from an Apple-Silicon-ML-capability check; whether it changes *sound* vs only *speed* not independently re-verified this pass (carried over from earlier passes' finding). |
 | 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **closed (mechanism fully explained)** | The exact addressing of the `+0xd8`/`+0xe0`-indexed trim table decoded by hand: `value = *(float*)(self + modeIdx×8 + 0x3c0 + circuitIdx×4)` — **inline per-instance object data, not a static array**, so its contents can't be read from the binary directly. Traced further: it's populated at runtime from the Mastering Assistant's `#default.pst` preset (found: `GAME`/`TSPP`-magic binary blob, 4132 bytes, a flat parameter array) via `Coefficients()` calls. Reading the *specific* preset-parameter index that lands in this exact table slot needs tracing `CAutoMaster::Coefficients()`'s own full parameter-index map (a large function, not covered this pass) — the mechanism is now fully understood even though the literal numbers remain preset-loaded state rather than binary-embedded constants. |
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
-| 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **partial** | Found the real class hierarchy: `CCompressorBase` with 6 derived circuits — `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (already in `mixer.md`), plus `CCompressorOpto` and `CCompressorSSL` (new this pass, with real decompiled `GainRedCurve`/`Coefficients` constants below). `CCompressorSSL` is almost certainly "Classic VCA" (SSL G-bus-style). Exact UI-name↔class mapping for "Platinum"/"Studio VCA"/"Studio FET" is not confirmed — `CPlatinumVerb` exists but is a reverb, not a compressor circuit, so "Platinum" compressor likely maps to the generic `CCompressor`/`CCompressorBase` itself (not independently confirmed). |
+| 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **closed** | **The complete, exact enum↔class↔UI-name mapping is now confirmed straight from `CCompressorShell::OnSetup`'s menu registration and `CCompressor`'s own constructor switch** — see below. **Correction to this doc's own earlier guess**: `CCompressorSSL` is *not* "Classic VCA" — it's **"Vintage VCA"**; "Classic VCA" is actually **`CCompressorDBX`**. Every one of the 7 real UI circuit names now has a confirmed class and, for all 7, at least partial decoded curve math (either in `mixer.md` from an earlier pass, or this session for Opto/SSL). Two internal circuit values exist that are *not* exposed in this menu at all: a 3rd `CCompressorClassA` variant and a wholly separate `CDownwardCompressor` class. |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring the user specifically asked about is now fully solved**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-style linear transform (`drive×1.05`, `drive×0.7+0.3`, or `drive×0.75+0.25`, selected by a 3-way style index) before handing the scalar straight to the model wrapper's conditioning-setter via a vtable call. Still untraced: which UI style name maps to which index, and the mel/beat/pitch preprocessing for the other analysis networks. |
 | 4. Klopfgeist/metronome | **mostly done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. Only the per-instance lookup table's own numeric contents (a runtime pointer, not a static array) remain unresolved. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
@@ -937,20 +937,46 @@ time ran out before preparing an untagged test file.
 
 ---
 
-## Block 2g — compressor circuit tables (partial)
+## Block 2g — compressor circuit tables (closed)
 
-### The real class hierarchy
+### The complete, exact enum↔class↔UI-name mapping
 
-`search_procedures` for `^__ZN\d+CCompressor` reveals the actual structure: a shared `CCompressorBase` (envelope
-smoothing, auto-gain, limiter sub-stage, clip mode) with 6 concrete circuit subclasses, each implementing its own
-`GainRedCurve`/`Coefficients`: `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (all
-already partly covered in `mixer.md` from an earlier pass), plus two **not previously documented**:
-`CCompressorOpto` and `CCompressorSSL`. A separate, unrelated `CCompressor` class (no `Base`/circuit suffix) is
-the multi-channel **link/sidechain-routing engine** used by the Compressor plugin's channel-linking feature, not
-a circuit model — its own `Coefficients` is a 28-case parameter dispatcher (link table, EQ pre/post routing,
-distortion calc, etc.), not curve math. `CPlatinumVerb` also exists in this binary but is a **reverb**, not a
-compressor circuit, so the UI name "Platinum" for a compressor circuit most likely routes to the generic
-`CCompressor`/`CCompressorBase` path itself rather than a same-named class — **not independently confirmed**.
+`search_procedures` for `^__ZN\d+CCompressor` reveals the structure: a shared `CCompressorBase` (envelope
+smoothing, auto-gain, limiter sub-stage, clip mode) with concrete circuit subclasses, each implementing its own
+`GainRedCurve`/`Coefficients`. A separate, unrelated `CCompressor` class (no `Base`/circuit suffix) is the
+multi-channel **link/sidechain-routing engine** used by the Compressor plugin's channel-linking feature, not a
+circuit model — its own `Coefficients` is a 28-case parameter dispatcher (link table, EQ pre/post routing,
+distortion calc, etc.), not curve math.
+
+**The real UI list and its backing classes are now fully confirmed**, decompiled straight from two functions:
+`CCompressorShell::OnSetup` (the Circuit Type popup's own menu registration, `CCTRLMenu::InitWithArgs(…,7,…)` —
+confirming exactly 7 visible choices) and `CCompressor`'s own constructor (a `switch` that instantiates the
+right circuit subclass per enum value):
+
+| Enum value | UI name (exact, from `SetSelectionName`) | Backing class | Curve math status |
+|---|---|---|---|
+| 0 | **Platinum Digital** | `CCompressorLP` | `mixer.md` (earlier pass) |
+| 1 | **Studio VCA** | `CCompressorClassA` (variant arg `1`) | `mixer.md` (earlier pass) |
+| 2 | **Studio FET** | `CCompressorClassA` (variant arg `0`) | `mixer.md` (earlier pass) |
+| 4 | **Vintage VCA** | `CCompressorSSL` | **this session** — dual envelope time constants, SSL G-Bus-style (see below) |
+| 5 | **Vintage FET** | `CCompressorFET` | `mixer.md` (earlier pass) |
+| 6 | **Vintage Opto** | `CCompressorOpto` | **this session** — T4-cell/LA-2A-style (see below) |
+| 8 | **Classic VCA** | `CCompressorDBX` | `mixer.md` (earlier pass) |
+
+**Important correction to this doc's own earlier guess**: an earlier draft of this section assumed
+`CCompressorSSL` was "Classic VCA" (reasoning from its SSL-G-Bus-style dual-time-constant envelope). That is
+**wrong** — the decompiled constructor switch proves `CCompressorSSL` is actually **"Vintage VCA"**, and
+**"Classic VCA" is `CCompressorDBX`** instead. The enum *values* themselves are non-contiguous (`0,1,2,4,5,6,8`
+— `3` and `7` are skipped in this menu) because `CCompressorClassA` is also constructible with a third variant
+argument (`2`, enum value `3`) and a wholly separate class, **`CDownwardCompressor`** (enum value `7`), exist in
+the same constructor switch but are **not exposed in this particular menu at all** — real, shipped, but hidden
+from this UI (possibly used by a different plugin/preset-compatibility path, not traced further). `CPlatinumVerb`
+also exists in this binary but is a **reverb**, confirmed unrelated to "Platinum Digital" (which is `CCompressorLP`).
+
+A genuinely interesting, non-obvious architectural fact confirmed here: **"Studio VCA" and "Studio FET" are the
+same C++ class** (`CCompressorClassA`), differentiated only by a constructor-time style argument — not two
+independently-implemented circuits, despite having completely different names and (per `mixer.md`) different
+curve behavior in the UI.
 
 ### `CCompressorOpto` — real T4-cell/LA-2A-style emulation, now decoded
 
@@ -986,7 +1012,7 @@ own offset reads):
 | 0x18 | Limit-mode ratio | `10^(−dB/20)` |
 | 0x19 | Limit-mode enable | boolean, `p > 0` |
 
-### `CCompressorSSL` — almost certainly "Classic VCA" (SSL bus-style), now decoded
+### `CCompressorSSL` — confirmed "Vintage VCA" (SSL bus-style), now decoded
 
 Shares the **identical** `Coefficients` parameter-index map with `CCompressorOpto` (same case numbers, same
 formulas byte-for-byte) — confirming both circuits sit behind one common parameter-dispatch interface. Its
@@ -1003,18 +1029,21 @@ formulas byte-for-byte) — confirming both circuits sit behind one common param
   more "VCA-like" response, consistent with SSL's VCA (not opto-cell) gain element.
 - The same secondary hard-limit sub-path as Opto (identical structure, same offsets).
 
-### Not reached this pass
+### Not reached (minor, cosmetic)
 
-Exact UI-name↔class confirmation for "Platinum"/"Studio VCA"/"Studio FET" (plausible but unconfirmed: Platinum =
-plain `CCompressor`/digital path, Studio VCA = `CCompressorDBX`, Studio FET = `CCompressorFET` — both already in
-`mixer.md`). The sidechain-filter 4-entry constant table at `DAT_00d4b2d0`/`DAT_00d53920` wasn't read directly
-(would give the 4 HPF type names/frequencies).
+The sidechain-filter 4-entry constant table at `DAT_00d4b2d0`/`DAT_00d53920` (shared by Opto and SSL/"Vintage
+VCA") wasn't read directly — would give the 4 HPF type names/frequencies for the sidechain filter selector.
+Everything else originally open in this block (the full enum↔class↔name mapping) is now resolved — see above.
 
 ### Source
 
 `search_procedures` regex `^__ZN\d+CCompressor` against `MADSP.x86_64` (REA + Ghidra 12.1.4, same thinned
 x86_64 slice used throughout this doc). `CCompressorOpto::GainRedCurve` (`0x9e740`), `::Coefficients`
 (`0x9e310`), `CCompressorSSL::GainRedCurve` (`0x9d030`), `::Coefficients` (`0x9cc00`) all decompiled directly.
+The exact enum↔class↔name mapping came from decompiling `CCompressorShell::OnSetup` (`0x95b60`, specifically its
+`CCTRLMenu::SetSelectionName` calls registering the 7-item Circuit Type popup) and `CCompressor`'s own
+constructor (`CCompressorC2(float,long,long,CBasicFXHost*,long,bool)`, `0x72890` — the `switch(lVar3)` block that
+`operator new`s and constructs the matching circuit subclass per enum value).
 
 ---
 

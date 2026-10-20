@@ -16,7 +16,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
 | 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
-| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **partial** | Track/region color picker's grid layout captured live (6a). I/O Labels window's full column structure and channel-name scope captured live, including confirming busses run past 232 (6b). Create New Track dialog's all 4 top-level categories and all 8 sub-options' Details panels fully captured live (6c, **done**). Global Tracks, overlapping-recordings behavior, Bounce dialogs, and the channel-strip automation-mode popup are still not done (the automation-mode popup specifically kept opening the adjacent Group popup instead of Read's own popup via simulated clicks — same general Logic-popup click unreliability noted elsewhere in this doc, not resolved this pass) — needs further live UI passes plus, for exact color hex values, an `Assets.car` search (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
+| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **mostly done** | 6a (track color grid), 6b (I/O Labels structure), 6c (Create New Track, all categories), 6d (Global Tracks' 8 track types + default 5-lane set), 6f (Bounce "Project or Section" dialog, full field table), 6g (automation-mode popup: Read/Touch/Latch/Write, no Off mode, plus Trim/Relative) all captured live. Only **6e** (overlapping-recordings behavior — Create Take Folder, Cycle On/Off) remains not done, since it needs an actual recording pass rather than read-only/cancel-only navigation. Exact color hex values for 6a still need an `Assets.car` search (not re-attempted this pass). |
 | 7. Smart Tempo/Flex quality comparison | **not started** | Needs a throwaway test project with real Apple Loops, built and played in the live app. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **not started** | Match EQ's pipeline architecture is already documented in `mixer.md`; the exact per-band Q/slope/curve constants for Channel EQ, Limiter/Adaptive Limiter/Noise Gate tables, and pan/fader taper formulas are not yet decompiled. |
 
@@ -654,15 +654,70 @@ and its own "Details" panel below:
 A shared **"Number of tracks to create"** field (default `1`) and **Cancel**/**Create** buttons sit at the bottom
 of the dialog regardless of category. Cancel was used to close it without creating any track.
 
+### 6d. Global Tracks — structure confirmed
+
+`Track > Global Tracks` submenu lists **8 track types**: Arrangement, Marker, Movie, Signature, Chord, Tempo,
+Beat Mapping, plus a "Show Single Global Track" option (a combined/compact view) and "Configure Global Tracks…"
+(⌥G, a settings dialog not opened this pass). `Show Global Tracks` (G) reveals a **default subset of 5**
+stacked lanes — Arrangement, Marker, Tempo, Signature, Chord — each with its own `+` add button; **Movie** and
+**Beat Mapping** are not part of the default set and need their own individual `Show Movie Track`/`Show Beat
+Mapping Track` toggles. Observed on the fresh disposable project: Tempo lane shows a graph ruler (100/120/140
+BPM gridlines, current value 120 as a horizontal line); Signature lane shows `4/4` and key `C` at bar 1;
+Arrangement, Marker and Chord lanes are all empty by default. Actually creating a chord symbol or marker (to see
+their editors) was not attempted this pass, to avoid non-reversible edits beyond simple navigation; the lane
+structure and the full track-type list are the concrete findings here.
+
+### 6f. Bounce dialogs — Project or Section captured
+
+`File > Bounce` has 4 items: `Regions in Place…` (⌃B, greyed out — needs a selected region), `Track in Place…`
+(⌃⌘B), `And Replace All Tracks…` (no selected shortcut shown), `Project or Section…` (⌘B). Clicking
+`Project or Section…` from the menu did not visibly trigger (same click-delivery issue seen elsewhere in this
+doc for certain Logic menu items/sheets); using the `⌘B` keyboard shortcut directly worked and opened the real
+dialog, titled **"Bounce 'Output 1-2'"** (named after the Stereo Out channel strip):
+
+| Field | Default |
+|---|---|
+| Destination (multi-select list) | `Uncompressed` highlighted/selected, **MP3` checked**, `M4A: AAC` unchecked, `Burn to CD / DVD` unchecked — so MP3 export is on by default alongside the main file |
+| File Type | WAVE |
+| Bit Depth | 16-bit |
+| Sample Rate | 48 kHz (greyed — locked to project sample rate) |
+| Format | Interleaved |
+| Dithering | None |
+| Start / End | `1 1 1 1` / `129 1 1 1` (spans the whole visible timeline of this empty test project) |
+| Mode | Offline |
+| Bounce 2nd Cycle Pass | off, disabled (needs Cycle mode on) |
+| Include Audio Tail | **on** |
+| Include Tempo Information | off |
+| Normalize | Off |
+| Surround Bounce / Add to Project / Add to Music | all off |
+
+Bottom status line: "Requires 49,6 MB of free disk space (Time 4:16)" — a live estimate. Closed via `Escape`
+(Cancel's own click also failed to register via simulated click, consistent with the same dialog-click-delivery
+issue; Escape worked immediately) — no file was actually bounced.
+
+### 6e — not reached this pass
+
+Overlapping-recordings behavior (Create Take Folder, Cycle On/Off) was not tested this pass — it needs an actual
+recording pass in the test project, which is more invasive than the read-only/cancel-only navigation done for
+the rest of Block 6.
+
+### 6g. Channel-strip automation-mode popup — resolved
+
+The popup directly below the "Group" button (its real hit area starts a few pixels lower than it visually
+appears — this is why earlier clicks kept re-opening the Group popup instead) contains, top to bottom: **Read**
+(checked by default), **Touch**, **Latch**, **Write** — a 4-item mutually exclusive mode group, confirming
+**there is no "Off" automation mode** in this build (consistent with Logic's documented behavior: "Read" is the
+closest thing to off, it just means automation plays back but nothing is written). Below a separator: a single
+checked toggle **"Record Automation with Audio Regions"**. Below a second separator: **Trim** and **Relative** —
+these read as a second, independent pair (not visually grouped with Read/Touch/Latch/Write, consistent with the
+idea that Trim/Relative are modifiers layered on top of Touch/Latch/Write rather than modes of their own, matching
+the Logic documentation's description of "Touch/Latch/Write with Trim/Relative behavior"). Closed by re-clicking
+the already-selected "Read" item, so no setting changed.
+
 ### Not reached this pass
 
 Global Tracks (Chord, Arrangement) content/editors, overlapping-recordings dialogs (Create Take Folder etc. with
-Cycle On/Off), Bounce dialogs (Project/Section and Regions/Tracks in Place), and the channel-strip
-automation-mode popup (clicking the "Read" button at the bottom of a channel strip repeatedly opened the
-*adjacent* Group popup instead, on two separate attempts — likely a coordinate-precision issue against the
-narrower track-header layout once the Project Settings window was closed, not a fundamental click-reliability
-problem like the SwiftUI sheets noted elsewhere in this doc; worth retrying with a fresh coordinate read in a
-future pass).
+Cycle On/Off), and Bounce dialogs (Project/Section and Regions/Tracks in Place).
 
 ### A note on session safety this pass
 

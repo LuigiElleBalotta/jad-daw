@@ -17,7 +17,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **mostly done** | 6a (track color grid), 6b (I/O Labels structure), 6c (Create New Track, all categories), 6d (Global Tracks' 8 track types + default 5-lane set), 6f (Bounce "Project or Section" dialog, full field table), 6g (automation-mode popup: Read/Touch/Latch/Write, no Off mode, plus Trim/Relative) all captured live. Only **6e** (overlapping-recordings behavior — Create Take Folder, Cycle On/Off) remains not done, since it needs an actual recording pass rather than read-only/cancel-only navigation. Exact color hex values for 6a still need an `Assets.car` search (not re-attempted this pass). |
-| 7. Smart Tempo/Flex quality comparison | **blocked** | Loop Browser opened live (20158 Apple Loops indexed, full filter/column structure captured). Could not get a loop onto a track: simulated drag-and-drop from the Loop Browser list to the Tracks area does not register as a real macOS drag with Logic Pro (tried direct drag, multi-step drag, right-click, and a toolbar "add" control — none created a track), so the actual tempo-detection/Flex-quality test itself could not run. This looks like a tooling limitation (native NSDraggingSession-based drag vs. a synthesized mouse-down/move/up sequence), not a coordinate or timing issue — worth trying a different automation approach (e.g. an Automator/AppleScript "Finder drag" proxy, or importing a loop file via File > Import instead of the Loop Browser) in a future pass. |
+| 7. Smart Tempo/Flex quality comparison | **partial (unblocked)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it ("Apple Loops contain tempo information that cannot be modified by this editor") — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. Testing the *actual* detection/warping algorithm (the original ask) needs a non-Apple-Loop, untagged audio file run through Smart Tempo's "Detect" — not attempted, time ran out. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **partial** | `CLimiter`'s real gain-smoothing algorithm and its full `Coefficients` parameter table (gain/lookahead/true-peak/release/ceiling, all with real ranges and constants) decompiled — see below. `CNoisegateFX::Coefficients`'s real threshold/reduction/attack/hold/release ranges and formulas decompiled too. Channel EQ's per-band Q/slope constants, Pan law formula, and Fader taper/meter ballistics were **not found in `MADSP.x86_64`** — `CPan`/`CFader`-named classes don't exist in this binary, meaning that code most likely lives in a different framework (the mixer-engine binary, not the plugin-DSP one) not available on this disposable Mac session; Match EQ itself wasn't re-touched (already covered in `mixer.md`). |
 
 This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
@@ -771,10 +771,34 @@ closed, or modified in any way. This reinforces the same lesson as the Block 6 s
 icons in this app are higher-risk than menu items, since a couple of them turn out to toggle which project
 window is frontmost rather than opening a panel within the current one.
 
+### Unblocked: `File > Import > Audio File…` works where Loop Browser drag-and-drop doesn't
+
+A later continuation of this pass found a working path: `File > Import > Audio File…` opens a real native "Open
+File" dialog (not a drag source), and selecting an actual Apple Loop file from disk
+(`/Library/Audio/Apple Loops/Apple/01 Hip Hop/Ambition Beat.caf`, a 12-second, 16-beat, 80 BPM loop) and clicking
+Open (the click itself didn't register — same dialog-click-delivery issue documented elsewhere in this doc; the
+`Return` key, with Logic Pro confirmed focused, worked immediately) placed the region directly onto the existing
+`Audio 1` track at bar 1.
+
+**The key finding**: importing the Apple Loop **instantly and exactly** changed the project tempo from 120 to
+80 BPM — not an estimate, not a gradual conform, an immediate jump to the file's own declared tempo. Opening
+`Window > Open Smart Tempo Editor` on this region surfaced a direct, explicit confirmation of why: the editor
+refused to open its usual beat-marker view and instead showed the literal message **"Apple Loops contain tempo
+information that cannot be modified by this editor."** This is a concrete, previously-undocumented fact: **Apple
+Loops do not go through Smart Tempo's audio-analysis/transient-detection engine at all** — their tempo comes
+straight from embedded file metadata (the `.caf`'s own tags), which Logic reads and trusts directly. The
+"quality of tempo detection" this block asked to evaluate is consequently not a meaningful question for Apple
+Loops specifically — there is no detection step to judge, only metadata lookup. Actually exercising Smart
+Tempo's real detection/warping algorithm would need a **non-Apple-Loop** audio file (an plain recording with no
+embedded tempo tag) run through "Detect"/the Smart Tempo multitrack set — not attempted in this pass, since the
+project's own `Untitled 13.logicx` only had the Apple-Loop-sourced tempo change to work with by this point, and
+time ran out before preparing an untagged test file.
+
 ### Source
 
 `mcp__macos-mcp__*` live UI capture, `Untitled 13.logicx` test project, Loop Browser opened via
-`View > Show Loop Browser`.
+`View > Show Loop Browser`; the successful import via `File > Import > Audio File…` against a real file on disk,
+`Window > Open Smart Tempo Editor` for the "cannot be modified" message.
 
 ---
 

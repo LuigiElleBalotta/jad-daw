@@ -6,12 +6,12 @@ resolved, the "what's missing" line says what a future pass would need.
 | Block | Status | What's missing (if any) |
 |---|---|---|
 | 1. ONNX vs CoreML numeric verification | **done** (for everything that can run through the public API) | The 6 Analog Model + 10 Saturation-family networks (317 of 321 bundle/block-size combinations) can't be numerically compared at all — Core ML's public `prediction(from:)` API itself refuses to run them (see below), independent of ONNX correctness. A real conversion bug was found and confirmed in `OnsetDetectionCNN` (0.226 max-abs-err, flagged as suspect in `ml-conversion.md` already) — needs a fix in `espresso2onnx.py`'s weight-layout/flatten-order handling, not a Mac-side task. |
-| 2a. `ProcessAllDynamicCBs` stage order | **done** | — |
-| 2b. `Coefficients(value,3)` origin/range | **done** | Other `index` values beyond 3: not determined (would need the rest of the function decompiled). |
+| 2a. `ProcessAllDynamicCBs` stage order | **done** | Exact exit condition of the Analyze-mode MB-compressor calibration loop not traced (lives inside a vtable call Ghidra couldn't resolve). |
+| 2b. `Coefficients(value,3)` origin/range | **partial** | The field it writes (+0x164) and the dB→linear conversion are confirmed (`analog-model-chain.md`); where the external caller sources the dB value, and any other `index` besides 3, are not determined — needs tracing the UI/automation parameter system, which calls in from outside `CAutoMaster`'s own process chain. |
 | 2c. The 4 trailing `CBasicFX::Process` slots | **not started** | Needs `CAutoMasterFX`'s constructor decompiled to identify the 4 object types at `+0xb08/0xb10/0xb18/0xb20`. |
 | 2d. `nativeAvailable` meaning | **partial** | Confirmed it's read from an Apple-Silicon-ML-capability check; whether it changes *sound* vs only *speed* not independently re-verified this pass (carried over from earlier passes' finding). |
-| 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **partial** | Found the "Character" Smart Control parameter (ID 10) and the Mastering Assistant's `#default.pst` flat-parameter block; could not reliably align the flat array's byte offset to parameter ID without guessing (this project's own earlier docs already flag this general correspondence as unverified). |
-| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **not started** | Needs dedicated decompilation of `AutoAdjustSpread`, `ProcessSpread`, `AutoAdjustMBCompressor`, and the 31-band Auto EQ path. |
+| 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **partial** | Found the "Character" Smart Control parameter (ID 10), the Mastering Assistant's `#default.pst` flat-parameter block, and — new this pass — the concrete `+0xd8`/`+0xe0`-indexed trim table at `+0x3c0` that `ProcessAnalogModel` reads from (see 2a); the table's actual stored values weren't read this pass. |
+| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **not started** | Needs dedicated decompilation of `AutoAdjustSpread`, `ProcessSpread`, `AutoAdjustMBCompressor`, and the 31-band Auto EQ path. The Loudness-Macro-driven gain formulas feeding into these stages (compressor input gain, waveshaper wet, limiter input gain) are now confirmed exactly and pinned to their call sites (2a) — the stages' own internal DSP (crossover frequencies, circuit internals) is still untraced. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **not started** | Builds on existing `mixer.md` findings (ClassA, DBX, FET, LP curves already partly decompiled there); the other circuits (Platinum, Studio VCA/FET, Opto, Classic VCA) not yet touched. |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (see Block 1) — a solid anchor — but the actual *preprocessing code* (mel filterbank construction, hop size, log compression, beat-decoding logic, pitch-bin-to-Hz mapping, drive-to-cond mapping) was not traced this pass. |
 | 4. Klopfgeist/metronome | **not started** | Needs both decompilation (`CKnockVoice`'s frequency table) and live Project Settings > Metronome UI inspection. |
@@ -20,8 +20,8 @@ resolved, the "what's missing" line says what a future pass would need.
 | 7. Smart Tempo/Flex quality comparison | **not started** | Needs a throwaway test project with real Apple Loops, built and played in the live app. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **not started** | Match EQ's pipeline architecture is already documented in `mixer.md`; the exact per-band Q/slope/curve constants for Channel EQ, Limiter/Adaptive Limiter/Noise Gate tables, and pan/fader taper formulas are not yet decompiled. |
 
-This pass covered Block 1 (partially, given the missing files) and Block 2a/2b (fully), 2d/2e (partially) as the
-highest-priority, most tractable items in the time available. Everything below "not started" needs its own
+This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
+the highest-priority, most tractable items in the time available. Everything below "not started" needs its own
 dedicated pass — most of blocks 4-7 specifically need live interaction with the running app (screenshots, UI
 inspection, test-project playback), not just static analysis, which is a different and slower kind of work than
 what's in this file so far.
@@ -164,3 +164,96 @@ bundle/block-size combinations, `model.mil`-renamed where needed) of
 (`modelstreaming_transformed.mil` for Analog Model, `model_2048_transformed.mil` for `RTRST`). Python env for
 `onnx`/`onnxruntime`/`numpy`: a throwaway venv (`python3 -m venv`, system Python disallows global pip installs on
 this machine).
+
+---
+
+## Block 2 — Analog Model and the Mastering chain (continued)
+
+### 2a. `CAutoMaster::ProcessAllDynamicCBs` — the real stage order, fully decompiled
+
+`ProcessAllDynamicCBs(float macroPos, CAutoMaster* self, size_t sampleCount)` is called once per block from
+`ProcessMainMasteringChain` (already documented in `analog-model-chain.md`) with `macroPos` = the Loudness Macro
+slider position (0..1) and runs, in this exact order:
+
+1. **(mode 4 only, if a flag is set)** run the shared EQ biquad chain *before* everything else — see point 6, this
+   is the "pre" side of a pre/post toggle.
+2. **Multiband compressor** (if enabled): in Analyze mode, calls `AutoAdjustMBCompressor()` then an inline
+   iterative calibration loop (tries gain in +2 dB steps, applies it, re-measures via a loudness-analyzer object,
+   reprocesses — the exact convergence/exit condition lives inside that loop and wasn't fully traced, since
+   Ghidra's control-flow recovery couldn't resolve its exit edge). In normal/Record mode: replays a **previously
+   recorded** per-block gain (see the "automation replay" mechanism below), then runs the compressor.
+3. **Unconditional compressor-input gain from the Loudness Macro position** — confirmed as the exact formula
+   already documented in `mixer.md` (`CompressorInputGainFromLoudnessMacroPos`: asymmetric slope either side of
+   center), now pinned to precisely this point in the call order, applied as `10^(dB/20)` via `vDSP_vsmul`,
+   **every block, not just during analysis**.
+4. **Saturation vs Analog Model — mutually exclusive, picked by one field.** This is the pass's single biggest new
+   finding:
+   ```
+   if (mode == 4) {
+       if (self->mode_select == 0) {          // offset +0xd8
+           ProcessBasicDspModel();
+           if (saturationEnabled && self->circuit_index)   // flags at +0x249 and +0xe0
+               ProcessSaturation();
+       } else {
+           ProcessAnalogModel();
+       }
+       if (!self->eq_is_pre)                  // flag at +0x591
+           ProcessBiquadChain(sharedFilter, 0); // same filter as step 1, now AFTER
+   } else {
+       ProcessBasicDspModel();
+   }
+   ```
+   `+0xd8` (an `int`) and `+0xe0` (a `byte`) are **the same two fields `CAutoMaster::ProcessAnalogModel` itself
+   uses as a 2-D index into a per-mode trim-gain table at `+0x3c0`** (`gain = table[+0xd8 * 8 + 0xe0 * 4]`,
+   confirmed in the twenty-fourth-pass/`analog-model-chain.md` decompile of that function) — so `+0xd8` isn't a
+   plain on/off switch, it's a mode index that both (a) picks Saturation vs Analog Model and (b) indexes a trim
+   table shared with whichever circuit is active. This is a strong, concrete lead for §2e below, even though the
+   table's actual contents weren't read this pass.
+5. **Same shared EQ biquad filter can run either before (step 1) or after (end of step 4) the neural stage** —
+   controlled by the `+0x591` flag. Not previously known; a genuine pre/post-EQ routing toggle around
+   Saturation/Analog Model.
+6. **Peak normalize** (if enabled): Analyze mode measures and records; Record mode replays the recorded dB.
+7. **Waveshaper**: `wet = macroPos < 0.4 ? 0 : (macroPos - 0.4) / 0.6` — the exact, already-documented
+   `WaveShaperDryWetFactorFromLoudnessMacroPos` formula, now pinned to this exact call site (`ProcessGenInplace`
+   on the `CGen` object at `self+0x608`).
+8. **Limiter**: input gain `= macroPos < 0.6 ? 2.8 : 2.8 + (macroPos - 0.6) * 1.3 / 0.4` — exactly the documented
+   `LimiterInputGainFromLoudnessMacroPos` formula (the `1.3/0.4` fraction *is* the already-known 3.25 dB/unit
+   slope, now seen as literal decompiled constants rather than a derived figure). Analyze mode calls
+   `AutoAdjustLimiter(...)` and records the result; Record mode replays it (clamped to ±100 dB, falls back to
+   silence below −100), then runs two separate `ProcessGenInplace` calls — one on a trim object (`self+0x5d8`),
+   one on the actual limiter (`self+0x5e0`).
+
+**The "automation replay" mechanism, confirmed structurally**: a shared float array at `self+0x358`, walked by a
+running index at `self+0x34c` (reset to 0 once per call to `ProcessMainMasteringChain`). In Analyze mode, each
+stage above that has an "Auto-" counterpart (compressor, peak normalize, limiter) **writes** its freshly-computed
+gain into the next slot; in Record/normal mode, the same stages **read back** the exact value recorded during the
+last analysis pass, in the same call order, instead of recomputing it live. This is the concrete mechanism behind
+Logic's "Analyze once, then just replay" Mastering Assistant design — not previously documented at this level of
+detail.
+
+### 2b. `Coefficients(value, 3)` — confirmed again, origin still open
+
+No new information on *where* the external caller gets the dB value it passes into
+`CAnalogModelingMasteringChainFX::Coefficients(dB, 3)` (which, per `analog-model-chain.md`, stores
+`10^(dB/20)` at `+0x164`) — that call happens from outside `CAutoMaster`'s own internal process chain (the
+UI/automation parameter system), which this pass didn't trace. **Not determined.** Other `index` values besides 3:
+not decompiled this pass either.
+
+### 2c, 2d, 2e, 2f, 2g — not reached this pass
+
+Time ran out before decompiling `CAutoMasterFX`'s constructor (2c), independently re-verifying `nativeAvailable`'s
+sound-vs-speed effect (2d), reading the `+0x3c0` trim table's actual contents against the Smart Control "Character"
+parameter (2e — though §2a above gives a concrete next step: that table is exactly 2 × 4 or similar small grid
+indexed by `[+0xd8][+0xe0]`, worth reading directly in a follow-up), `AutoAdjustSpread`/`ProcessSpread`/
+`AutoAdjustMBCompressor`/the 31-band Auto EQ (2f), or the other five compressor circuit tables (2g, Platinum/Class
+A/Studio VCA/Studio FET/Opto/Classic VCA — `mixer.md` already has ClassA/DBX/FET/LP).
+
+### Source
+
+`CAutoMaster::ProcessAllDynamicCBs` at `0x5fc140` in `MADSP.x86_64` (REA + Ghidra 12.1.4, same MCP session as the
+`analog-model-chain.md` pass — the ephemeral Ghidra session has to fully re-run its ~11-minute auto-analysis each
+time `open_binary` is called fresh, since `close_binary`'s cleanup can't fully confirm itself on this sandbox
+— `sysctl_errno_22` reading the spawned process's ownership token — so the binary was reopened mid-pass without
+incident; REA's own analysis cache was not reused across the reopen). Callees cross-checked via
+`procedure_callers`/`procedure_callees` to independently confirm `ProcessAnalogModel`'s only two call sites are
+inside this function and `ProcessMainMasteringChain`.

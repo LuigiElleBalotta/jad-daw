@@ -153,21 +153,28 @@ retrain) and any other rate falls back to the 96 kHz model.
 
 The pairing is clean and telling: three enum pairs (10/11, 12/13, 14/15), each a `{_SO suffix, plain}` pair except
 `TSO`/`T` (no underscore, but still the same two-model pairing pattern) — one pair per `AMMCDeviceType` slot
-(Valve/Punch/Transparent), matching the native/fallback structure found in `SetAnalogModel`. Only the `T`/`TSO`
-pair outputs **audio** — `G`/`G_SO` and `S`/`S_SO` both output a **single scalar** per block. That means two of
-the three "circuit" slots in this engine aren't neural audio generators at all; they're neural **control-signal
-extractors** (most plausibly a per-block gain/envelope/dynamics value) feeding some other stage of the chain —
-only one of the three device types does direct neural audio-to-audio modeling. Which specific enum pair is
-Valve/Punch/Transparent (the `AMMCDeviceType`+10 offset hypothesis would give Valve={10,11}=`{TSO,T}`,
-Punch={12,13}=`{G_SO,G}`, Transparent={14,15}=`{S_SO,S}`, based on the constructor's own creation order) is
-plausible but still not independently verified — the codename↔enum mapping above is proven; the
-enum↔`AMMCDeviceType` offset is still an inference, not confirmed against the `SetAnalogModel` switch bodies
-directly.
+(Valve/Punch/Transparent), matching the native/fallback structure found in `SetAnalogModel`.
+
+**Correction (`analog-model-chain.md`'s pass, and reconfirmed in `mac-pass-3.md`'s ONNX/CoreML verification): all
+six models — `T`, `TSO`, `G`, `G_SO`, `S`, `S_SO` — output full `[1,1,1,1024]` audio, not a scalar.** The earlier
+"`G`/`G_SO`/`S`/`S_SO` output a single scalar" read here came from `metadata.json`'s declared shape (`[]`), which
+turns out to be a stale/placeholder annotation, not the real computed shape — confirmed three independent ways:
+the raw `.mil` program's own `return` statement types `var_849` as `[1,1,1,1024]` for every one of the six models
+(a real `conv` op, not a reduction); the user's own ONNX conversion of all six produces audio for all six; and
+running `PT` (a different model with the same `metadata.json`-declares-`[]` pattern) through Core ML with real
+input returned a genuine `[96, 360]` array at runtime, not a scalar — strong evidence `[]` is Core ML's
+"shape not statically resolved" placeholder, not a true scalar declaration. So there are no "control-signal
+extractor" slots in this engine after all — every circuit (Valve/Punch/Transparent, native or fallback) is a real
+audio-to-audio neural effect; what differs between the three is still open (see `analog-model-chain.md` §2/§3 for
+what's confirmed about how each pair's result is actually combined into the chain). The `AMMCDeviceType`↔enum
+mapping that was still an inference here (Valve={10,11}, Punch={12,13}, Transparent={14,15}) is now **fully
+confirmed**, not just plausible — `analog-model-chain.md` traced it directly in `CAutoMaster::Process`'s own
+decompiled switch body, not just the creation-order heuristic.
 
 ### Family B — "neural audio analyzer", unconditioned (`modelForStreaming`, 1024-sample blocks)
 
-**`G`, `G_SO`, `S`, `S_SO`** (scalar output) and **`T`, `TSO`** (audio-shaped output) — 6 codenames × 4 rates =
-24 files.
+**`G`, `G_SO`, `S`, `S_SO`, `T`, `TSO`** — 6 codenames × 4 rates = 24 files, all audio-shaped output (`[1,1,1,1024]`
+in, same out) — see the correction above; none of the six is a scalar.
 
 - **Input**: `audio` `[1,1,1,1024]` only — **no conditioning input**, unlike Family A.
 - **Output**: either a single scalar `[]` (`G`, `G_SO`, `S`, `S_SO`) or the same `[1,1,1,1024]` audio shape back
@@ -177,19 +184,22 @@ directly.
 - **Provenance**: also PyTorch → coremltools, slightly older tool versions (7.0b1/7.0b2) than most of Family A.
 
 Family B is architecturally related to Family A (same gated-conv block) but structurally distinct: no
-conditioning input, smaller blocks, and two different output shapes split across names (scalar vs. audio). The
-`_SO`-suffixed names (`G_SO`, `S_SO`) share their un-suffixed counterpart's exact shape and op count, suggesting
-paired models (e.g. an analysis/detector variant alongside a base one) — but since both members of each pair
-output a scalar with no distinguishing input, this pairing's actual purpose (what differs between `G` and `G_SO`
-if not shape) wasn't established from metadata alone. **Consumer confirmed (twenty-third pass)**: all six Family B
-codenames are loaded by `CAnalogModelingMasteringChainFX`, behind the Mastering Assistant's Analog Model menu — see
-above.
+conditioning input, smaller blocks. All six output the same `[1,1,1,1024]` audio shape (see the correction above —
+`metadata.json` declares `G`/`G_SO`/`S`/`S_SO` as `[]`, but that's a stale placeholder, not a real scalar). The
+`_SO`-suffixed names (`G_SO`, `S_SO`) share their un-suffixed counterpart's exact op count, suggesting paired
+models (e.g. an analysis/detector variant alongside a base one) — this pairing's actual purpose (what differs
+between `G` and `G_SO`) wasn't established from metadata alone. **Consumer confirmed (twenty-third pass)**: all six
+Family B codenames are loaded by `CAnalogModelingMasteringChainFX`, behind the Mastering Assistant's Analog Model
+menu — see above.
 
 ### Family C — small conventional CNN, likely pitch-related (`PT`, `RTPT`, `RTPTM`)
 
 Unlike every other model here, these ship as **one file each, no per-sample-rate variants**.
 
-- **`PT`**: input `[1,1,16224,1]` (a ~368 ms window at 44.1 kHz) → output a single scalar `[]`. 6 conv + 5 batchnorm
+- **`PT`**: input `[1,1,16224,1]` (a ~368 ms window at 44.1 kHz) → `metadata.json` declares output `[]`, but a real
+  Core ML run (Mac reverse-engineering pass, `mac-pass-3.md`) returns an actual `[96, 360]` array — the same
+  placeholder-shape pattern as Family B above, not a true scalar. 96 is plausibly a frame count across the ~368 ms
+  window and 360 the same CREPE-style pitch-bin count as `RTPT` below (not confirmed). 6 conv + 5 batchnorm
   + 5 relu + 3 maxpool + 1 sigmoid — a conventional CNN classifier, not the gated-conv family above.
 - **`RTPTM`**: identical architecture to `PT`, but on a much shorter `[1,1,1,1024]` window (~23 ms) — a
   lower-latency/real-time variant of the same scalar classifier ("RT" = real-time, "M" possibly "mono" or

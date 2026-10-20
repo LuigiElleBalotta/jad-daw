@@ -583,15 +583,19 @@ in the twenty-third pass**: that guess was wrong — see below.
 when GUI automation of Ghidra proved unreliable (Java/Swing dialogs don't respond to synthetic clicks/keystrokes
 here), a headless `analyzeHeadless -postScript` run force-disassembled and decompiled `ModelFactory::createModel`'s
 6 switch cases directly — no GUI needed. **All six consumed models turn out to be the *other* model family**
-(`machine-learning-models.md`'s "Family B", unconditioned scalar/audio models, not the conditioned one guessed
-above): enum 10=`TSO` (audio out), 11=`T` (audio out), 12=`G_SO` (scalar out), 13=`G` (scalar out), 14=`S_SO`
-(scalar out), 15=`S` (scalar out) — three clean native/fallback pairs. Only the `T`/`TSO` pair produces audio;
-the other two pairs only output a single per-block scalar, meaning two of the engine's three "circuit" slots are
-neural **control-signal extractors**, not audio generators — a real architectural nuance, not previously known.
-Full writeup and the "which pair is Valve/Punch/Transparent" open question in
-`docs/logic-reference/machine-learning-models.md`. (**Twenty-fourth pass**: the 11-model conditioned-audio family
-guessed above and ruled out for this engine does have a real owner after all, just not this one —
-`CMLSaturation`, Logic's stock neural Saturation plugin; see that same doc.)
+(`machine-learning-models.md`'s "Family B", unconditioned models, not the conditioned one guessed above): enum
+10=`TSO`, 11=`T`, 12=`G_SO`, 13=`G`, 14=`S_SO`, 15=`S` — three clean native/fallback pairs. **Correction (Mac
+reverse-engineering pass, `analog-model-chain.md`/`mac-pass-3.md`): all six output full `[1,1,1,1024]` audio, not
+a scalar** — the "`G`/`G_SO`/`S`/`S_SO` output a scalar" read here came from a stale/placeholder shape annotation
+in `metadata.json` (confirmed wrong three independent ways: the raw `.mil` program's own return-value type, the
+real ONNX conversion of all six, and a live Core ML run of a same-symptom model returning a real multi-element
+array where the static metadata claimed `[]`). There are no "control-signal extractor" slots after all — and the
+"which pair is Valve/Punch/Transparent" question below is now **fully confirmed, not open**: Valve={10,11}=
+`{TSO,T}`, Punch={12,13}=`{G_SO,G}`, Transparent={14,15}=`{S_SO,S}`, traced directly in `CAutoMaster::Process`'s
+own decompiled switch, not inferred from creation order. Full writeup in `docs/logic-reference/analog-model-
+chain.md`. (**Twenty-fourth pass**: the 11-model conditioned-audio family guessed above and ruled out for this
+engine does have a real owner after all, just not this one — `CMLSaturation`, Logic's stock neural Saturation
+plugin; see `docs/logic-reference/machine-learning-models.md`.)
 
 **`CCompressorClassA`'s table-fill step, ruled out two candidates (seventeenth pass)**: neither `OnReset` nor the
 constructor (`CCompressorClassAC2ER9CProcDatal`) build the curve — the constructor only `bzero`s the whole
@@ -604,10 +608,11 @@ these three places, or — given the "models"/presets discovery this session —
 `MADSP` entirely**, e.g. baked into a preset/resource rather than computed by this binary at all (speculative,
 not confirmed). Not pursued further.
 
-**Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found), (ruled out as
-a quick win, see above) `CCompressorClassA`'s table-fill step, and which specific `{TSO,T}`/`{G_SO,G}`/`{S_SO,S}`
-pair is Valve/Punch/Transparent (plausible from the `AMMCDeviceType`+10 offset and the constructor's creation
-order, not independently confirmed). The per-band response-combination step, `CAnalogModelingMasteringChainFX`'s
+**Open**: what the 4 `AM_Curve_N` models actually represent musically (no label/UI string found), and (ruled out as
+a quick win, see above) `CCompressorClassA`'s table-fill step. **Resolved** (was open here): which specific
+`{TSO,T}`/`{G_SO,G}`/`{S_SO,S}` pair is Valve/Punch/Transparent — confirmed, not just plausible, in
+`docs/logic-reference/analog-model-chain.md` (Valve={TSO,T}, Punch={G_SO,G}, Transparent={S_SO,S}, traced directly
+in `CAutoMaster::Process`'s own switch body). The per-band response-combination step, `CAnalogModelingMasteringChainFX`'s
 fundamental nature (BNNS neural inference), and the exact 6 models it loads are now all resolved — see the
 nineteenth/twentieth/twenty-third-pass sections above and the full catalog in
 `docs/logic-reference/machine-learning-models.md`. The actual network weights remain genuinely out of scope for

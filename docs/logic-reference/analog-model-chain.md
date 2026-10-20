@@ -60,9 +60,9 @@ accumulated into a per-channel queue, and the model is only invoked once 1024 sa
 3. **Submit the block**: `memcpy` the 1024 samples into the model's input buffer, then two vtable calls (slots
    `+0x10`, `+0x18` — set input/output pointers) and one at `+0x90` (run/predict).
 4. **Wait again**, same pattern, then **retrieve the result** via vtable slot `+0x68` and `memcpy` it back into the
-   channel's own sample buffer — the same code path is used whether the model's CoreML output is audio-shaped
-   (`T`/`TSO`) or a single scalar (`G`/`G_SO`, `S`/`S_SO`); see §3 for what's and isn't confirmed about the scalar
-   case.
+   channel's own sample buffer — **correction (second pass): all six models output full `[1,1,1,1024]` audio (see
+   §3), not a mix of audio and scalar, so this is a uniform audio-in/audio-out copy for every one of them, no
+   special case needed.**
 5. **Apply a per-block linear gain**: `vDSP_vsmul` multiplies the channel's buffer by a value stored at `+0x164`.
 6. **Call `CBasicFX::Process`** (the generic parent-class step that moves the final buffer out to the host).
 7. **Run the crossfade/silence state machine** (see §4).
@@ -72,27 +72,26 @@ samples** (≈0.85 s at 48 kHz — read directly as a literal constant, `41000 %
 per-channel output buffers are zeroed. This looks like a DC/stuck-state safety net, separate from the crossfade
 mechanism below.
 
-## 3. What the scalar outputs (`G`/`G_SO`/`S`/`S_SO`) actually do
+## 3. Correction (second pass): there are no scalar outputs — `+0x164` is a separate gain parameter
 
-**Confirmed**: `CAnalogModelingMasteringChainFX::Coefficients(value, index)` — the class's generic,
-externally-driven automatable-parameter setter (same pattern as `CCompressorClassA::Coefficients` /
-`CLimiter::Coefficients` documented in `mixer.md`) — has at least one concrete case: `index == 3` converts `value`
-(a dB figure) to linear via `10^(dB/20)` and stores it at `+0x164`, the exact field `OnProcess` multiplies into the
-audio every block via `vDSP_vsmul` (§2 step 5).
+The original pass, going only off `metadata.json`, read `G`/`G_SO`/`S`/`S_SO`'s declared output shape as a scalar
+(`[]`) and spent this section trying to work out how a single float could drive a per-block gain. **That premise
+was wrong.** `mac-pass-3.md`'s follow-up verification confirms, three independent ways, that all six models —
+including `G`/`G_SO`/`S`/`S_SO` — output full `[1,1,1,1024]` audio: the raw `.mil` program's own `return` statement
+types the output as `[1,1,1,1024]` for every one of the six (a real `conv` op, not a reduction); the project's own
+ONNX conversion of all six produces audio for all six; and a live Core ML run of a same-symptom model (`PT`)
+returned a genuine `[96,360]` array where its own `metadata.json` also claimed `[]` — `[]` turns out to be Core
+ML's "shape not statically resolved" placeholder, not a true scalar declaration, for every model that shows it.
 
-**Not confirmed**: whether a scalar model's own inference result is what ends up at `+0x164` each block, or
-whether `+0x164` is a separately automation-driven trim parameter unrelated to the live model output. The
-`OnProcess` pseudocode decompiled this pass shows the scalar retrieved via vtable `+0x68` being `memcpy`'d into the
-*audio* sample buffer (consistent for the audio-output models, but would only overwrite one sample's worth of a
-1024-sample buffer for a true scalar output) — the data-flow edge connecting a scalar model's result to the gain
-field actually applied would have to happen inside the opaque `Mil2BNNSModel` wrapper's own `+0x68` implementation,
-which wasn't reached by static analysis this pass. So: **the mechanism is plausible and architecturally consistent
-(gain field exists, is applied per block, `Coefficients` proves it's dB→linear) but the literal wiring from "scalar
-model output" to "+0x164" was not independently verified — flagged as not determined rather than guessed.**
+So §2 step 4's `memcpy` is a plain, uniform audio-to-audio copy for all six models — no scalar case, nothing
+special to explain there.
 
-No smoothing/interpolation was seen on the `+0x164` multiply itself (unlike the crossfade ramps in §4, which are
-explicitly stepped); if the scalar does drive it directly, updates would be stepped at the 1024-sample block rate,
-not per-sample.
+`+0x164` and its `Coefficients(value, 3)` setter (confirmed: `10^(dB/20)` stored there, applied via `vDSP_vsmul`
+every block) are real and still exist, but are now understood as **a separate, ordinary automatable gain
+parameter on the FX itself**, unrelated to any model output — not a conduit for a (nonexistent) scalar model
+result. Where the host sets this value from, and what it represents musically, remains open — see
+`mac-pass-3.md` §2b for the current state of that question (not determined: the external caller lives outside
+`CAutoMaster`'s own process chain, in the UI/automation parameter system).
 
 ## 4. Model-switching crossfade (confirmed, exact constants)
 
@@ -153,9 +152,10 @@ mastering mode" index (0=Clean, 1=Valve, 2=Punch, 3=Transparent) combines with a
 - index 2 (**Punch**): device = `2 + (nativeAvailable ? 0 : 1)` → **`{G_SO, G}`**
 - index 3 (**Transparent**): device = `4 + (nativeAvailable ? 0 : 1)` → **`{S_SO, S}`**
 
-This resolves the open question from `mixer.md`'s twenty-third pass with certainty: **Valve is the only one of the
-three that's a true audio-to-audio neural model** (`T`/`TSO`); **Punch and Transparent are both scalar/control
-models** (`G`/`G_SO` and `S`/`S_SO` respectively) whose exact application mechanism is the open point in §3.
+This resolves the open question from `mixer.md`'s twenty-third pass with certainty: Valve, Punch, and Transparent
+each use their own pair of models. **Correction (second pass, §3): all three pairs are audio-to-audio neural
+models** (`G`/`G_SO`/`S`/`S_SO` were wrongly read as scalar from stale metadata) — so "Punch" and "Transparent"
+aren't control-signal extractors either, they're genuinely distinct audio circuits, same as Valve.
 
 ## 6. `G` vs `G_SO`, `S` vs `S_SO` — what decides which one loads
 
@@ -216,17 +216,19 @@ one generic automatable numeric parameter (`index == 3`, the dB-sourced gain fro
 choice — but its real meaning (an overall trim? something else?), its UI name, its range, and any other `index`
 values **were not decompiled this pass — not determined.**
 
-## 9. Empirical verification — attempted, partial result
+## 9. Empirical verification — resolved in the second pass (`mac-pass-3.md`)
 
-Per the request, tried to run the actual shipped `G`/`G_SO`/`S`/`S_SO` models (48 kHz) with a Swift CoreML harness
-feeding 1 kHz sine blocks at −30/−20/−10/−3 dBFS and white noise, reading the scalar output per block. **This
-failed**: `MLModel(contentsOf:)` cannot load any of these `.mlmodelc` bundles at all (see §7) — not a bug in the
-test harness, confirmed by trying both the extracted copy and the original in-framework file directly. Reproducing
-the real inference would require reimplementing (or finding) Apple's private `Mil2BNNSModel`/BNNS loading path,
-which is out of scope for this pass. The attempt wasn't wasted, though: inspecting the raw `.mil` IR directly (to
-understand *why* loading failed) is what surfaced the stateful-model architecture fact in §7 — a genuine, if
-indirect, empirical finding from the real shipped artifact, just not the block-by-block scalar table originally
-asked for.
+Per the request, first tried to run the shipped `G`/`G_SO`/`S`/`S_SO` models (48 kHz) with a Swift CoreML harness
+feeding 1 kHz sine/noise blocks, reading what this pass still believed was a scalar output per block. That failed
+at the loading step (`MLModel(contentsOf:)` can't read the `.mlmodelc` as shipped — see §7), and the premise
+(scalar output) turned out to be wrong anyway (§3). **The second pass fixed the loading step** (copy +
+`model.mil` rename) and ran real deterministic-input inference where possible: Core ML's *public prediction API*
+still refuses to run any of these six models even once loadable (a second, distinct "invalid Tensor port" error,
+independent of the scalar question) — so no block-by-block I/O table from Core ML exists for `G`/`T`/`S` etc.
+specifically. What the second pass *could* run directly (`DownbeatTrackerCondMPS`, `PT`, `RTPT`) matched the
+project's own ONNX conversions to within ~1e-6–1e-4 max-abs-err, and separately caught one real conversion bug
+(`OnsetDetectionCNN`, 0.226 max-abs-err) — strong validation of the overall ONNX pipeline even though it can't
+directly touch the Analog Model networks. Full numbers in `docs/logic-reference/mac-pass-3.md`, Block 1.
 
 ## Source
 

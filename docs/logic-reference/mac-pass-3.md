@@ -16,7 +16,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
 | 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
-| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **mostly done** | 6a (track color grid), 6b (I/O Labels structure), 6c (Create New Track, all categories), 6d (Global Tracks' 8 track types + default 5-lane set), 6f (Bounce "Project or Section" dialog, full field table), 6g (automation-mode popup: Read/Touch/Latch/Write, no Off mode, plus Trim/Relative) all captured live. Only **6e** (overlapping-recordings behavior — Create Take Folder, Cycle On/Off) remains not done, since it needs an actual recording pass rather than read-only/cancel-only navigation. Exact color hex values for 6a still need an `Assets.car` search (not re-attempted this pass). |
+| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. Only the exact color hex values for 6a (would need an `Assets.car` search) and the full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) remain open. |
 | 7. Smart Tempo/Flex quality comparison | **partial (unblocked)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it ("Apple Loops contain tempo information that cannot be modified by this editor") — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. Testing the *actual* detection/warping algorithm (the original ask) needs a non-Apple-Loop, untagged audio file run through Smart Tempo's "Detect" — not attempted, time ran out. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **partial** | `CLimiter`'s real gain-smoothing algorithm and its full `Coefficients` parameter table (gain/lookahead/true-peak/release/ceiling, all with real ranges and constants) decompiled — see below. `CNoisegateFX::Coefficients`'s real threshold/reduction/attack/hold/release ranges and formulas decompiled too. Channel EQ's per-band Q/slope constants, Pan law formula, and Fader taper/meter ballistics were **not found in `MADSP.x86_64`** — `CPan`/`CFader`-named classes don't exist in this binary, meaning that code most likely lives in a different framework (the mixer-engine binary, not the plugin-DSP one) not available on this disposable Mac session; Match EQ itself wasn't re-touched (already covered in `mixer.md`). |
 
@@ -695,11 +695,30 @@ Bottom status line: "Requires 49,6 MB of free disk space (Time 4:16)" — a live
 (Cancel's own click also failed to register via simulated click, consistent with the same dialog-click-delivery
 issue; Escape worked immediately) — no file was actually bounced.
 
-### 6e — not reached this pass
+### 6e. Overlapping Track Recordings — found via `Logic Pro > Settings > Recording…` (resolved, defaults only)
 
-Overlapping-recordings behavior (Create Take Folder, Cycle On/Off) was not tested this pass — it needs an actual
-recording pass in the test project, which is more invasive than the read-only/cancel-only navigation done for
-the rest of Block 6.
+Not a project setting — a global app preference. `Logic Pro > Settings > Recording…` has 3 sections:
+**Audio Recording** (File Type: `AIFF`, Bit Depth: `24-bit`), **MIDI Recording** (Auto Record Enable:
+`The Focused Track`), and the explicitly-requested **Overlapping Track Recordings** table — 3 rows (`Cycle Off`,
+`Cycle On`, `Replace`) × 2 columns (`MIDI`, `Audio`):
+
+| Scenario | MIDI default | Audio default |
+|---|---|---|
+| Cycle Off | `Merge` | `Create Take Folder` |
+| Cycle On | `Merge` | `Create Take Folder` |
+| Replace | `Region Erase` (single control, not split by MIDI/Audio) | — |
+
+This directly confirms Logic's real default behavior without needing an actual recording pass: **recording over
+an existing MIDI region merges by default** (regardless of Cycle mode), while **recording over an existing audio
+region creates a Take Folder by default** (also regardless of Cycle mode) — the Cycle On/Off switch does not
+change the default outcome, only the available alternatives behind each popup. The popups' own full option
+lists (presumably also `Create New Track`, `Overwrite`/`Don't Create Take Folder`, etc.) could not be opened —
+same click-registration issue documented elsewhere for Logic's native popups; only the default values could be
+read directly off the closed controls. A `Recording Project Settings…` button links back to the already-captured
+Project Settings > Recording tab (Block 5).
+
+This resolves the "needs an actual recording pass" blocker from the previous version of this doc: the
+**default** behavior is now confirmed from the preference pane itself, without needing to record anything live.
 
 ### 6g. Channel-strip automation-mode popup — resolved
 

@@ -18,7 +18,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. Only the exact color hex values for 6a (would need an `Assets.car` search) and the full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) remain open. |
 | 7. Smart Tempo/Flex quality comparison | **partial (unblocked)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it ("Apple Loops contain tempo information that cannot be modified by this editor") — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. Testing the *actual* detection/warping algorithm (the original ask) needs a non-Apple-Loop, untagged audio file run through Smart Tempo's "Detect" — not attempted, time ran out. |
-| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **partial** | `CLimiter`'s real gain-smoothing algorithm and full `Coefficients` parameter table decompiled; `CNoisegateFX::Coefficients`'s real ranges/formulas decompiled; **Channel EQ's real default 8-band table (frequencies, gains, Q/slope) captured live from the plugin UI itself** — no decompilation needed. Pan/Fader: `MAMixer.framework` was thinned and opened, found to contain extensive Pan-knob code, but it's **all GUI/drawing**, not DSP — the real pan-law/fader-gain math lives in a third, not-yet-identified framework. Match EQ wasn't re-touched (already in `mixer.md`). |
+| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **mostly done** | `CLimiter` and `CNoisegateFX` fully decompiled; Channel EQ's real default 8-band table captured live from the plugin UI; **Pan law fully solved** — `CalcPanValues(ePanLaw, float, float&, float&)` found in `MAAudioEngine.framework` (not `MADSP`/`MAMixer`) via plain `nm`+`otool` (no Ghidra needed), its exact formula and both 7-entry constant tables (A=curvature, B=center-compensation gain) read straight from the binary, with `B`'s values independently verified as exact `10^(dB/20)` matches to each pan law's own name. Only **Fader** (taper/meter-ballistics) remains genuinely not found — likely just inlined `10^(dB/20)` with no dedicated function to locate. Match EQ wasn't re-touched (already in `mixer.md`). |
 
 This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
 the highest-priority, most tractable items in the time available. Everything below "not started" needs its own
@@ -982,30 +982,78 @@ values (1.00, 0.60, 0.30, 0.41, 0.20) rather than a single uniform default, sugg
 starting "musicality" individually rather than using one generic Q for all. Other visible controls: `Analyzer`
 (POST position), `Q-Couple`, `HQ` (high-quality/oversampled mode), `Processing: Stereo`.
 
-### Pan, Fader — not found in `MADSP.x86_64`
+### Pan — found and fully decoded: `CalcPanValues(ePanLaw, float, float&, float&)` in `MAAudioEngine.framework`
 
-Searched for `^__ZN\d+CPan` (no matches) and `^__ZN\d+C(ChannelEQ|...)` patterns — no `CPan`/`CFader`/
-`CChannelEQ`-named classes exist in `MADSP.x86_64` (Channel EQ's own DSP class wasn't located by name either,
-hence the live-UI capture above instead of decompiled constants). `MADSP.x86_64` appears to be specifically the
-**plugin DSP framework** (Compressor, Limiter, Noise Gate, reverbs, EQs-as-plugins, the Mastering Assistant chain
-already covered); channel-strip-level primitives like Pan and Fader live elsewhere.
+Searched for `^__ZN\d+CPan` (no matches) and `^__ZN\d+C(ChannelEQ|...)` patterns in `MADSP.x86_64` — nothing;
+`MAMixer.framework` was also thinned and opened, and does contain extensive Pan-related code
+(`MACartesianPannerNode`, `MAStereoPannerCapNode`, `MAPlanarPannerNode`, a Swift `MixerPanViewModel` with a
+`panValue: Float` property) but every one of these is **GUI/drawing code** (`drawRect:inContext:`, `mouseDown:`,
+hit-testing), not DSP.
 
-**`MAMixer.framework` was thinned and opened this pass** (`/tmp/rea-bins/MAMixer.x86_64`) as the obvious
-candidate — it does contain extensive Pan-related code (`MACartesianPannerNode`, `MAStereoPannerCapNode`,
-`MAPlanarPannerNode`, a Swift `MixerPanViewModel` with a `panValue: Float` property, etc.) — but every single one
-of these is **GUI/drawing code** (`drawRect:inContext:`, `mouseDown:`, hit-testing, color/highlight state,
-accessibility) for the pan-knob widget itself, in Objective-C and Swift. Searching specifically for
-value-setting/gain-computation functions (`panValue`/`setPan`/`panLaw`/`calcPan` patterns) turned up only the
-same GUI layer — **no actual gain-computation DSP function was found in `MAMixer.framework`**. The real pan-law
-math (and almost certainly the fader-gain/meter-ballistics math too) lives in a third framework not yet
-identified — plausibly inlined into the main Logic Pro executable itself, or a framework whose name doesn't
-obviously suggest "mixer" (several dozen frameworks exist; not all were checked by name this pass — see
-`find "/Applications/Logic Pro.app/Contents/Frameworks" -maxdepth 1 -iname "*.framework"` for the full list).
-**Not determined**: would need a broader framework-by-framework search in a future pass. Match EQ itself was not
-revisited (already documented in `mixer.md`).
+The real function was found with a plain `nm -arch x86_64 … | c++filt` symbol-table search (no Ghidra needed) in
+**`MAAudioEngine.framework`**: a free (non-member) C++ function, `CalcPanValues(ePanLaw, float, float&, float&)`
+at `0x594920`. Its body (46 bytes of SSE scalar-float code, read directly from `otool -tv` output and interpreted
+by hand — short enough not to need a decompiler) computes:
+
+```
+left  = B[panLaw] × (1 + A[panLaw]×p×(1−p) − p)
+right = B[panLaw] × (A[panLaw]×p×(1−p) + p)
+```
+
+where `p` is the pan position, constrained to **`[0.0, 1.0]`** by two guard checks at the top of the function
+(returns immediately, without writing `left`/`right`, if `p < 0` or `p > 1.0` — confirmed `1.0` is the exact
+upper-bound constant). `panLaw` is a byte-sized enum, valid range **0–6** (7 entries — exactly matching the Pan
+Law popup's own 7-item list captured in Block 5: `0 dB`, `-3 dB`, `-3 dB Compensated`, `-4.5 dB`,
+`-4.5 dB Compensated`, `-6 dB`, `-6 dB Compensated`). `A[]` and `B[]` are two 7-entry `double` lookup tables,
+read directly from the binary's own `__TEXT` constant data (file offsets `0x777980` and `0x7779c0` — same as
+virtual address here, since `__TEXT`'s `vmaddr`/`fileoff` are both 0):
+
+| Index | A (curvature) | B (center-compensation gain) | Matches |
+|---|---|---|---|
+| 0 | 0.0 | 0.0 | `0 dB` (both zero — this law is evidently handled elsewhere, before this function is even called; see below) |
+| 1 | 0.83178313… | 1.0 | `-3 dB` |
+| 2 | 0.83178313… (identical to index 1) | 1.41253754… | `-3 dB Compensated` |
+| 3 | 0.38264857… | 1.0 | `-4.5 dB` |
+| 4 | 0.38739750… | 1.67880401… | `-4.5 dB Compensated` |
+| 5 | 0.00474893… | 1.0 | `-6 dB` |
+| 6 | 0.0 | 1.99526231… | `-6 dB Compensated` |
+
+**The `B` column is an exact, confirmed match**: `1.41253754 = 10^(3/20)`, `1.67880401 = 10^(4.5/20)`,
+`1.99526231 = 10^(6/20)` — i.e. **`B` is precisely the linear-gain equivalent of each law's own dB figure**,
+applied only to the "Compensated" variants (`B=1.0`, no boost, for the plain ones) — this is a byte-exact,
+numerically verified confirmation of what "Compensated" means for Logic's pan laws: it multiplies the whole
+curve by the inverse of the center-pan attenuation, restoring perceived center loudness to match hard-left/
+hard-right. The `A` (curvature) term is identical between the `-3 dB` pair (both `0.83178313…`) but *not*
+perfectly identical between the `-4.5 dB` pair (`0.38265` vs `0.38740`) — a small, real, observed asymmetry, not
+a transcription error (both values read directly from the binary). `A=0` exactly at index 6 (`-6 dB
+Compensated`) collapses the quadratic term entirely, making that one law **purely linear** (`left=B×(1−p)`,
+`right=B×p`) — consistent with "-6 dB" being the textbook linear-crossfade pan law before compensation. Index 5
+(`-6 dB`, non-compensated) is *not* exactly 0 (`0.0047…`) despite representing the "same" law — plausibly a tiny
+empirical/measured correction rather than the pure theoretical value. Index 0 (`0 dB`) having both constants at
+exactly `0.0` strongly suggests the `0 dB` pan law (likely the classic constant-power sine/cosine law) is
+special-cased by the caller and never actually reaches this function with index 0 doing real work — **not
+independently confirmed, since the caller wasn't traced**.
+
+### Fader — not found
+
+Searched `MAAudioEngine.framework`'s symbol table for `Fader`/`dBTo`/`ToVolume`/`VolumeTo`/`ChannelStrip.*Fader`
+patterns — only automation-event-dictionary and Dolby/spatial-audio fader-position functions turned up, nothing
+resembling a plain channel-strip fader-taper or meter-ballistics curve. **Not determined**: the fader/meter math
+either lives in yet another framework, or (more likely for something this simple) is just inlined `10^(dB/20)`
+at each call site with no dedicated named function to find by symbol search.
 
 ### Source
 
 `search_procedures` literal/regex against `MADSP.x86_64`. `CLimiter::CalcAmp` (`0xd17e0`), `::Coefficients`
 (`0xd0bc0`), `CNoisegateFX::Coefficients` (`0x134a10`) all decompiled directly via the same REA/Ghidra session
-used for Block 2g above.
+used for Block 2g above. Channel EQ's band table captured live from the plugin's own UI (`Untitled 13.logicx`
+test project, EQ inserted on the Audio 1 channel strip, default preset, never saved).
+
+`CalcPanValues` and the Fader search used a completely different, Ghidra-free method: `/Applications/Logic
+Pro.app/Contents/Frameworks/MAAudioEngine.framework/Versions/A/MAAudioEngine` thinned to x86_64
+(`/tmp/rea-bins/MAAudioEngine.x86_64`), symbol table read with `nm -arch x86_64 … | c++filt`, the one matching
+function's raw bytes read directly with `otool -tv -arch x86_64` (46 bytes — short enough to hand-decode without
+a decompiler), and its RIP-relative constant-table addresses resolved with a short Python script before reading
+the real `float`/`double` values straight out of the file with `struct.unpack`. Used because the REA/Ghidra
+session for `MADSP.x86_64` was mid-analysis on `CKnockVoice::CalcCoeffs` (Block 4) at the time and switching
+targets would have reset that ~11-minute wait; this path turned out faster and fully sufficient on its own.

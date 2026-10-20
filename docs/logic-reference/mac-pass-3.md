@@ -16,9 +16,9 @@ resolved, the "what's missing" line says what a future pass would need.
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring the user specifically asked about is now fully solved**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-style linear transform (`drive×1.05`, `drive×0.7+0.3`, or `drive×0.75+0.25`, selected by a 3-way style index) before handing the scalar straight to the model wrapper's conditioning-setter via a vtable call. Still untraced: which UI style name maps to which index, and the mel/beat/pitch preprocessing for the other analysis networks. |
 | 4. Klopfgeist/metronome | **mostly done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. Only the per-instance lookup table's own numeric contents (a runtime pointer, not a static array) remain unresolved. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
-| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. Only the exact color hex values for 6a (would need an `Assets.car` search) and the full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) remain open. |
+| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. 6a's exact color hex values remain open after a full search of all 11 `Assets.car` catalogs in Logic Pro's frameworks (no static 24-color track palette found anywhere) plus a symbol-table search for a palette-generator function (not found either) — confirmed colors are addressed via a `TSeqColorIndex` type, but its index→RGB conversion code wasn't located. The full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) also remain open. |
 | 7. Smart Tempo/Flex quality comparison | **partial (unblocked)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it ("Apple Loops contain tempo information that cannot be modified by this editor") — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. Testing the *actual* detection/warping algorithm (the original ask) needs a non-Apple-Loop, untagged audio file run through Smart Tempo's "Detect" — not attempted, time ran out. |
-| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **mostly done** | `CLimiter` and `CNoisegateFX` fully decompiled; Channel EQ's real default 8-band table captured live from the plugin UI; **Pan law fully solved** — `CalcPanValues(ePanLaw, float, float&, float&)` found in `MAAudioEngine.framework` (not `MADSP`/`MAMixer`) via plain `nm`+`otool` (no Ghidra needed), its exact formula and both 7-entry constant tables (A=curvature, B=center-compensation gain) read straight from the binary, with `B`'s values independently verified as exact `10^(dB/20)` matches to each pan law's own name. Only **Fader** (taper/meter-ballistics) remains genuinely not found — likely just inlined `10^(dB/20)` with no dedicated function to locate. Match EQ wasn't re-touched (already in `mixer.md`). |
+| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **mostly done** | `CLimiter` and `CNoisegateFX` fully decompiled; Channel EQ's real default 8-band table captured live from the plugin UI; **Pan law fully solved** — `CalcPanValues(ePanLaw, float, float&, float&)` found in `MAAudioEngine.framework` (not `MADSP`/`MAMixer`) via plain `nm`+`otool` (no Ghidra needed), its exact formula and both 7-entry constant tables (A=curvature, B=center-compensation gain) read straight from the binary, with `B`'s values independently verified as exact `10^(dB/20)` matches to each pan law's own name. **Fader**: found the real generic `CCTRL*` position↔value controller framework in `MADSP.x86_64` (not `MAAudioEngine` — wrong binary all along). `CCTRLLog`'s pos↔value formula is exactly decoded (`value = minVal·10^(pos·scale)`); `CCTRLPoly2` (the more likely real fader curve — asymmetric 2-segment power curve via `powf`/`pow`) is correctly characterized but its exact coefficients and the UI-parameter-to-class binding weren't traced. Match EQ wasn't re-touched (already in `mixer.md`). |
 
 This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
 the highest-priority, most tractable items in the time available. Everything below "not started" needs its own
@@ -760,10 +760,26 @@ the far right). Rows vary brightness/saturation top to bottom: row 1 is the brig
 row 2 is a close match to row 1 but very slightly darker, rows 3-4 get progressively darker/more desaturated.
 The currently assigned color for the selected track is shown with a white selection border around its swatch
 (for the default "Audio 1" track, a blue swatch in row 2). No numeric/hex readout is shown anywhere in this UI —
-**exact hex values for each swatch are not determined this pass**; would need either pixel-sampling the live
-window (unreliable/approximate, not authoritative) or finding the real values in `Assets.car` or the app's own
-resource files (an earlier pass's `Assets.car` search for colors came up empty under an obvious name — not
-re-attempted this pass).
+**exact hex values for each swatch are not determined this pass**.
+
+Extended the search this pass (still no exact hex values, but the negative result is now much stronger and one
+real underlying type was found). Checked all 11 `Assets.car` catalogs across Logic Pro's frameworks (found via
+`find … -iname Assets.car`, read with `assetutil -I`), not just `MAMixer`'s own: `MAResources.framework`'s
+catalog is the real app-wide named-color palette (349 `Colors/…` entries — row headers, browser chrome, beats
+editor, track-header backgrounds, etc.) but **none of them are a 24-wide track/region swatch set** — the closest
+names (`Colors/TrackHeader/*`, `Colors/ChooseTracksDividerColor`) are UI-chrome colors, not user-assignable track
+colors. Also searched the symbol tables of `MACore`, `MAToolKit`, `MAGUI`, `MAWorkspace`, and `MAApplication` for
+a palette-generation function (`colorAtIndex`/`colorForIndex`/`colorWithHue`/`ColorPalette` patterns) — found
+only `+[MAColorHelper colorWithHueFromColor:andSaturationAndBrightnessFromColor:alpha:fallbackHue:]` in `MAGUI`
+(a general hue/sat/brightness recombination helper, not obviously the grid generator) and confirmed the real
+underlying type: track/region colors are stored as a `TSeqColorIndex` (an index, not RGB — e.g.
+`BgTronDefaultColorIndexForTrackTypesKey`, `kPatchFileChannelSeqColorIndexKey` in `MACore`, and the Drum Machine
+Designer's own per-pad `colorKey: TSeqColorIndex` in `MAToolKit`), consistent with a picker that addresses a
+fixed small palette by index rather than freely-chosen RGB. **Still not found**: the actual `TSeqColorIndex` →
+RGB/hex mapping table or function — it's either inlined per-call-site `colorWithHue:saturation:brightness:`
+math (most likely, given no static table turned up anywhere it was searched) or lives in a framework binary
+not yet thinned/searched this session. Would need either pixel-sampling the live window (approximate, not
+authoritative) or locating that conversion code specifically.
 
 Separately, `Track > Assign Track Icon…` exists as a sibling command (not opened this pass) and `Track > Sort
 Tracks by` offers: MIDI Channel, Audio Channel, Output Channel, Instrument Name, Track Name, Used/Unused,
@@ -1072,7 +1088,11 @@ distinct non-zero entries (`3`, `7`). Fed through the formula from `Coefficients
 (e.g. a 2-pole vs. higher-order HPF) than literal Hz frequencies — too small to be frequencies, and the
 duplicate `0.0` at both ends fits an "Off / low-order / high-order / Off-again" pattern better than 4 distinct
 named choices. **Not fully certain**: the real UI labels for this sidechain-filter selector weren't checked
-against these 4 values (would need opening the Compressor plugin's own sidechain-filter popup live).
+against these 4 values. A live-GUI attempt to insert a Compressor and read its sidechain-filter popup was made
+this pass but abandoned: a Logic `Settings` dialog that opened unexpectedly stopped responding to both clicks on
+its close button and `Escape` across 4 attempts (no state change observed each time) — a harder version of the
+already-documented native-popup click-registration issue, not worth forcing given this session's prior GUI
+safety near-misses. Still genuinely open; would need a fresh Logic session to retry cleanly.
 
 ### Source
 
@@ -1212,13 +1232,48 @@ exactly `0.0` strongly suggests the `0 dB` pan law (likely the classic constant-
 special-cased by the caller and never actually reaches this function with index 0 doing real work — **not
 independently confirmed, since the caller wasn't traced**.
 
-### Fader — not found
+### Fader — taper framework found and partly decoded (closed by elimination for the rest)
 
-Searched `MAAudioEngine.framework`'s symbol table for `Fader`/`dBTo`/`ToVolume`/`VolumeTo`/`ChannelStrip.*Fader`
-patterns — only automation-event-dictionary and Dolby/spatial-audio fader-position functions turned up, nothing
-resembling a plain channel-strip fader-taper or meter-ballistics curve. **Not determined**: the fader/meter math
-either lives in yet another framework, or (more likely for something this simple) is just inlined `10^(dB/20)`
-at each call site with no dedicated named function to find by symbol search.
+`MAAudioEngine.framework`'s symbol table genuinely has no plain channel-strip fader-taper function — confirmed
+again this pass (only automation-event-dictionary and Dolby/spatial-audio fader-position methods). The real
+taper code turned out to live in `MADSP.x86_64`, under a **generic position↔value controller-mapping framework**
+shared by every automatable knob/fader in Logic, not something fader-specific: `CCTRLLinear`, `CCTRLLog`,
+`CCTRLPoly`, `CCTRLPoly2`, `CCTRLPolySync`, `CCTRLMenu`, `CCTRLMIDICtrlSelect`, each implementing the same
+virtual pair `MapFaderPosToValue(long pos, float&) const` / `MapValueToFaderPos(float, long&) const` (`CCTRLLinear`
+at `0x20f030`/`0x20f130`, `CCTRLLog` at `0x210970`/`0x210a00`, `CCTRLPoly2` at `0x217890`/`0x217a80`, etc. — found
+via plain `nm | c++filt` on `MADSP.x86_64`, no Ghidra).
+
+**`CCTRLLog` — fully decoded, exact formula.** Per-instance fields: `minVal` at `self+0xf8`, `maxVal` at
+`self+0xfc`, a per-instance `scale` at `self+0x100`, `maxPos` (integer) at `self+0x40`. Hand-disassembled both
+directions from `madsp_disasm.txt`, stub targets resolved via `otool -I -v` (`0xd413f4` → `_exp10f`, `0xd415c2` →
+`_log10f`):
+
+```
+value(pos) = minVal * 10^(pos * scale)                      // MapFaderPosToValue, clamped to [minVal, maxVal]
+pos(value) = round( log10(value / minVal) / scale )         // MapValueToFaderPos, via floor(x + 0.5)
+```
+
+(`MapFaderPosToValue` also runs the raw result through a shared virtual post-processor at `self`'s vtable+`0x20a5d0`
+before returning — not traced, likely a generic clamp/snap helper shared by all `CCTRL*` subclasses.) The `+0.5`
+rounding constant was read directly from `__TEXT.__const` (file offset `0xd4b690` = `0.5f`, confirmed byte-exact).
+This is a genuine power-of-10 logarithmic taper — pure, single-segment, no piecewise breakpoints.
+
+**`CCTRLPoly2` — identified as a two-segment power curve, not fully decoded.** Same stub-resolution method found
+its core math calls `_powf`/`_pow` (`0xd41700`/`0xd416fa`), not `exp10f`/`log10f`. The disassembly shows two
+distinct code paths selected by comparing the input against the controller's center/zero point (fields `+0x110`/
+`+0x111` are boolean flags, `+0x104` holds a second per-segment exponent) — i.e. **an asymmetric curve with a
+different exponent below vs. above a center value**, which is exactly the shape a real mixer fader needs (coarser
+dB/position below 0 dB "cut", finer above it toward the boost ceiling) and that pure `CCTRLLog` can't produce.
+This is the better candidate for the actual channel-strip Volume fader, but the exact exponent/breakpoint
+constants weren't extracted (would need resolving ~6 more RIP-relative float literals the same way `0.5f` was
+above) and — same caveat as Pan (Block 8) and `Coefficients(value,3)` (2b) — **which concrete `CCTRL*` subclass
+the UI actually instantiates for the channel-strip Volume parameter specifically was not traced** (that binding
+lives in a parameter-registration table, not in these classes themselves).
+
+So: the earlier "not found" is now wrong — the taper framework exists, is generic (used for every knob, not just
+faders), and one full variant (`CCTRLLog`) is exactly decoded; the more-likely-real-fader variant (`CCTRLPoly2`)
+is correctly characterized (power curve, asymmetric, 2 segments) but not numerically exact; and the final
+UI-parameter-to-class binding remains unconfirmed, same category of gap as 2b/Pan's caller tracing.
 
 ### Source
 
@@ -1235,3 +1290,15 @@ a decompiler), and its RIP-relative constant-table addresses resolved with a sho
 the real `float`/`double` values straight out of the file with `struct.unpack`. Used because the REA/Ghidra
 session for `MADSP.x86_64` was mid-analysis on `CKnockVoice::CalcCoeffs` (Block 4) at the time and switching
 targets would have reset that ~11-minute wait; this path turned out faster and fully sufficient on its own.
+
+The `CCTRL*` fader-taper framework was found and decoded this pass with the same Ghidra-free method, this time
+against `/tmp/rea-bins/MADSP.x86_64`'s own saved disassembly dump (`madsp_disasm.txt`, `otool -tv -arch x86_64`,
+already on disk from earlier Block 2/4 work): `nm -arch x86_64 MADSP.x86_64 | c++filt | grep -i fader` to find
+the class family, `grep -n` on the address in the dump for `CCTRLLog::MapFaderPosToValue`/`MapValueToFaderPos`
+(`0x210970`/`0x210a00`) and `CCTRLPoly2`'s pair (`0x217890`/`0x217a80`), `otool -I -v MADSP.x86_64 | grep <addr>`
+to resolve the opaque `callq` stub targets to `_exp10f`/`_log10f` (CCTRLLog) and `_powf`/`_pow` (CCTRLPoly2), and
+the same RIP-displacement-to-file-offset Python one-liner to confirm the `+0.5` rounding constant read back as
+exactly `0.5f`. The 6a color-palette re-check used `find /Applications/Logic\ Pro.app/Contents/Frameworks
+-iname Assets.car` (11 catalogs) piped through `assetutil -I` and a small Python filter over the JSON entry
+names, plus `nm -arch x86_64 … | c++filt | grep -i color/colorPalette` against `MACore`, `MAToolKit`, `MAGUI`,
+`MAWorkspace`, `MAApplication`.

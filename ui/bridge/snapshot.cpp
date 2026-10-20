@@ -52,6 +52,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
     s.key = QString::fromStdString(p.key);
     s.sampleRate = p.sampleRate;
     s.masterVolumeDb = p.masterVolumeDb;
+    s.panLaw = QString::fromLatin1(lpc::panLawName(p.panLaw));
+    for (const auto& [key, value] : p.settings) s.settings.insert(QString::fromStdString(key), QString::fromStdString(value));
     s.bpm = p.tempoMap.tempos().empty() ? 120.0 : p.tempoMap.tempos().front().bpm;
     s.beatsPerBar = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().numerator;
     s.beatUnit = p.tempoMap.signatures().empty() ? 4 : p.tempoMap.signatures().front().denominator;

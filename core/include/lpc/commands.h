@@ -36,6 +36,7 @@ CommandPtr makeRemoveTrack(Uuid trackId);
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch);
 CommandPtr makeSetMasterVolume(float gainDb);  // the Master strip
 CommandPtr makeSetPanLaw(PanLaw law);  // Project Settings > Audio > Pan Law
+CommandPtr makeSetProjectSetting(std::string key, std::string value);  // Project Settings choices; an empty value removes the key (the default applies)
 CommandPtr makeSetTempo(Ticks tick, double bpm);
 CommandPtr makeRemoveTempo(Ticks tick);
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch);

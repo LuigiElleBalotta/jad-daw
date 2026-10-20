@@ -74,3 +74,16 @@ TEST_CASE("pan law: a strip is stereo until it is made mono, and the flag is sav
     CHECK(p.tracks.back().strip.mono);
     CHECK(projectFromJson(toJson(p)).tracks.back().strip.mono);
 }
+
+TEST_CASE("project settings: a choice is saved, undone and validated", "[panlaw][settings]") {
+    Project p;
+    CHECK(!toJson(p).contains("settings"));
+    const ApplyResult r = commandFromJson({{"type", "set_project_setting"}, {"key", "tempoMode"}, {"value", "keep"}})->apply(p);
+    REQUIRE(r.ok());
+    CHECK(p.settings.at("tempoMode") == "keep");
+    CHECK(projectFromJson(toJson(p)).settings.at("tempoMode") == "keep");
+    REQUIRE(r.inverse->apply(p).ok());  // the key was not set: it goes away
+    CHECK(p.settings.empty());
+    CHECK(!commandFromJson({{"type", "set_project_setting"}, {"key", "bad key"}, {"value", "x"}})->apply(p).ok());
+    CHECK(!commandFromJson({{"type", "set_project_setting"}, {"key", ""}, {"value", "x"}})->apply(p).ok());
+}

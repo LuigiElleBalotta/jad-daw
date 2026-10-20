@@ -387,6 +387,8 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     beatUnit_ = s.beatUnit;
     masterId_.clear();
     masterGain_ = s.masterVolumeDb;
+    panLaw_ = s.panLaw;
+    projectSettings_ = s.settings;
     for (const TrackRow& t : s.tracks)
         if (t.master) masterId_ = t.id;
     emit routingRevisionChanged();

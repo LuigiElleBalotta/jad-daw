@@ -82,6 +82,7 @@ void AudioEngine::handle(const AudioMsg& m) noexcept {
             recPass_ = 0;
             countLeft_ = std::max<std::int64_t>(m.frame, 0);
             countPos_ = 0;
+            recFrom_ = m.frame2 > 0 ? position_ + m.frame2 : 0;  // a pre-roll: the project plays and the capture starts later
             playing_ = playing_ || countLeft_ == 0;  // while the transport already runs (a punch-in) there is no count-in
             if (playing_) countLeft_ = 0;
             recordingPub_.store(true, std::memory_order_relaxed);
@@ -249,7 +250,7 @@ void AudioEngine::drainMidi() noexcept {
         } else if (type == 0xB0 || type == 0xD0 || type == 0xE0) {  // controllers, aftertouch and the pitch wheel go to a plug-in instrument
             if (!liveTarget_.isNull()) graph_.liveControl(liveTarget_, type, e.data1, e.data2);
         }
-        if (recording_ && playing_ && (on || off || type == 0xB0 || type == 0xE0)) midiRec_.push(MidiRecEvent{position_, e, recPass_ + (recNext_ >= 0 && position_ != recNext_ ? 1u : 0u)});
+        if (recording_ && playing_ && position_ >= recFrom_ && (on || off || type == 0xB0 || type == 0xE0)) midiRec_.push(MidiRecEvent{position_, e, recPass_ + (recNext_ >= 0 && position_ != recNext_ ? 1u : 0u)});
     };
     MidiEvent e;
     while (midiDevice_.pop(e)) handle(e);
@@ -335,7 +336,15 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames, float* cons
             if (extraPairs > 0) graph_.copyOutputPairs(extra, extraPairs, done, n);
             applyMasterGain(outL, outR, extra, extraPairs, done, n);
             if (clickOn_ && click_) mixClick(outL + done, outR + done, position_, n);
-            if (recording_) capture(done, n);
+            if (recording_) {
+                const std::int64_t skip = std::clamp<std::int64_t>(recFrom_ - position_, 0, n);  // the part of the block that is still pre-roll
+                if (skip < n) {
+                    const std::int64_t at = position_;
+                    position_ += skip;
+                    capture(done + static_cast<int>(skip), n - static_cast<int>(skip));
+                    position_ = at;
+                }
+            }
             position_ += n;
         } else if (graph_.liveNeeded()) {  // stopped, but notes ring or an input is monitored
             for (int c = 0; c < inChannels_; ++c) inPtr_[c] = inBuf_[c].data() + std::min(done, static_cast<int>(inBuf_[c].size()));

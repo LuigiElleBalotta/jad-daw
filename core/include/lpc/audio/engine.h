@@ -100,6 +100,7 @@ private:
     int inFrames_ = 0, inChannels_ = 0;
     std::atomic<float> inPeak_[kMaxInputs];
     bool recording_ = false;
+    std::int64_t recFrom_ = 0;     // nothing is captured before this position (the end of a pre-roll)
     std::int64_t recNext_ = -1;    // where the recording continues when the passes follow each other; -1 before the first block
     std::uint32_t recPass_ = 0;    // the pass in progress: a block that does not continue the one before starts the next
     std::int64_t countLeft_ = 0, countPos_ = 0;  // the count-in before a recording: frames left, frames played

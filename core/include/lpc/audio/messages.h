@@ -41,7 +41,8 @@ enum class MsgKind : std::uint8_t { AddTrack, RemoveTrack, SetStrip, SetConfig, 
 //   StopRecord: stops capturing but not the transport (frame unused), SetMonitor: track = the track, frame = first input channel + 1 (0 = off),
 //   frame2 = second input channel + 1 (0 = the first one on both sides),
 //   StartRecord: ClickTrack* (the count-in clicks from 0), frame = count-in length in frames; the transport starts after it
-//   and the input is captured from then until Stop,
+//   and the input is captured from then until Stop; frame2 > 0: a pre-roll, no count-in: the project plays from where the transport is and the input
+//   is captured from frame2 frames later (Project Settings > Recording > Pre-roll),
 //   SetAudition: AuditionClip* (null stops it), frame = where in the clip to start, frame2 = 1 to repeat it until replaced or stopped,
 //   SetLowLatency: frame = the longest latency (frames) an insert may have on a monitored track before it is bypassed (0 = off),
 //   SetMasterGain: strip.gain = the linear gain of the Master strip (all outputs),

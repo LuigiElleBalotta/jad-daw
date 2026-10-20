@@ -1219,6 +1219,14 @@ void ProjectController::startRecording() {
         }
         countFrames = static_cast<std::int64_t>(std::llround(beats * framesPerBeat));
     }
+    // Project Settings > Recording > When beginning: Pre-roll plays the project for some bars before the take instead of counting in
+    std::int64_t preRollFrames = 0;
+    if (!quickPunch && projectSetting("recordStart", "countin") == "preroll") {
+        const double framesPerBeat = sampleRate_ * 60.0 / tempoMap_.bpmAt(tick) * 4.0 / beatUnit_;
+        preRollFrames = static_cast<std::int64_t>(std::llround(std::clamp(projectSetting("preRollBars", "2").toInt(), 1, 16) * beatsPerBar_ * framesPerBeat));
+        count = lpc::audio::ClickTrack{};
+        countFrames = 0;
+    }
     recChannels_.clear();
     recChunks_.clear();
     punchStopSent_ = false;
@@ -1226,7 +1234,7 @@ void ProjectController::startRecording() {
     discardOnFinish_ = repeatOnFinish_ = false;
     recording_ = true;
     recFinishing_ = false;
-    host_->startRecording(startFrame, countFrames, std::move(count), !quickPunch);
+    host_->startRecording(startFrame, countFrames, std::move(count), !quickPunch, preRollFrames);
     applyMonitoring();
     emit recordingChanged();
 }
@@ -4291,5 +4299,20 @@ void ProjectController::marqueeAction(const QString& what) {
     });
 }
 
+
+}  // namespace jad
+
+namespace jad {
+
+void ProjectController::setPanLaw(const QString& law) {
+    static const QStringList known{"0db", "minus3", "minus3comp", "minus45comp", "minus6", "minus6comp"};
+    if (!host_ || !known.contains(law) || law == panLaw_) return;
+    sendCommand({{"type", "set_pan_law"}, {"law", law.toStdString()}});
+}
+
+void ProjectController::setProjectSetting(const QString& key, const QString& value) {
+    if (!host_ || key.isEmpty() || projectSettings_.value(key).toString() == value) return;
+    sendCommand({{"type", "set_project_setting"}, {"key", key.toStdString()}, {"value", value.toStdString()}});
+}
 
 }  // namespace jad

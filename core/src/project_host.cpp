@@ -1,5 +1,6 @@
 #include "lpc/project_host.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -267,13 +268,15 @@ void ProjectHost::postKit() {
     post(m);
 }
 
-std::future<void> ProjectHost::startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn, bool relocate) {
-    return call([this, startFrame, countInFrames, relocate, c = std::move(countIn)]() mutable {
+std::future<void> ProjectHost::startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn, bool relocate, std::int64_t preRollFrames) {
+    return call([this, startFrame, countInFrames, relocate, preRollFrames, c = std::move(countIn)]() mutable {
         if (degraded_) return;
-        if (relocate) postTransport(audio::MsgKind::Locate, startFrame);
+        const std::int64_t roll = std::clamp<std::int64_t>(preRollFrames, 0, startFrame);  // the project cannot start before its beginning
+        if (relocate) postTransport(audio::MsgKind::Locate, startFrame - roll);
         audio::AudioMsg m;
         m.kind = audio::MsgKind::StartRecord;
-        m.frame = countInFrames;
+        m.frame = roll > 0 ? 0 : countInFrames;
+        m.frame2 = roll;
         m.obj = audio::makeOwned(new audio::ClickTrack(std::move(c)));
         post(m);
     });

@@ -134,6 +134,8 @@ struct Snapshot {
     int sampleRate = 48000;
     double bpm = 120.0;
     double masterVolumeDb = 0.0;  // the Master strip
+    QString panLaw = QStringLiteral("minus3comp");  // Project Settings > Audio > Pan Law
+    QVariantMap settings;                            // the plain Project Settings choices (key -> value)
     int beatsPerBar = 4;
     int beatUnit = 4;  // the denominator of the first time signature
     std::vector<TrackRow> tracks;  // project order, master included

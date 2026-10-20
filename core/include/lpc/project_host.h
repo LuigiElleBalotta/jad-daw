@@ -57,7 +57,7 @@ public:
     std::future<void> setClickSettings(audio::ClickSettings settings);  // how the bar is counted and the click sounds (sample files)
     // Starts recording: the transport is placed at startFrame, the count-in clicks play for countInFrames, then playback starts and
     // the engine captures the input until stop(). The click track is the count-in's beats from frame 0 (may be empty).
-    std::future<void> startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn, bool relocate = true);
+    std::future<void> startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn, bool relocate = true, std::int64_t preRollFrames = 0);
     std::future<void> stopRecording();
     std::future<void> setLiveTarget(Uuid track);  // the instrument track that plays the live MIDI (null: none)  // the transport keeps playing
     // Which input channels a track plays through its strip (first/second 1-based, 0 = not monitored)

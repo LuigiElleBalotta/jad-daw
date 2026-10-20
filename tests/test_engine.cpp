@@ -391,3 +391,27 @@ TEST_CASE("engine: the built-in click is the Klopfgeist, a resonator that rings 
     REQUIRE(tail < 1e-3f);                                 // 30 ms long: it has ended by frame 1900
     REQUIRE(std::abs(bar[0] - 0.6f) < 0.02f);              // the first sample is 0.6 x level whatever the note
 }
+
+TEST_CASE("engine: a pre-roll plays the project first and captures only from its end, in the middle of a block too", "[engine][record]") {
+    AudioEngine e(kSr);
+    e.applyDirect(msg(MsgKind::Locate, 1, 1000));
+    AudioMsg rec = msg(MsgKind::StartRecord, 2, 0, 300);   // 300 frames of pre-roll, no count-in
+    rec.obj = makeOwned(new ClickTrack);
+    e.applyDirect(rec);
+    REQUIRE(e.playing());
+    std::vector<float> l(256), r(256), a(256, 0.5f);
+    const float* in[1] = {a.data()};
+    AudioEngine::RecChunk c;
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);              // 1000..1255: still pre-roll
+    REQUIRE_FALSE(e.takeRecorded(c));
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);              // 1256..1511: the capture starts at 1300
+    REQUIRE(e.takeRecorded(c));
+    CHECK(c.position == 1300);
+    CHECK(c.frames == 212);
+    e.input(in, 1, 256);
+    e.processBlock(l.data(), r.data(), 256);
+    REQUIRE(e.takeRecorded(c));
+    CHECK(c.position == 1512);
+}

@@ -1,5 +1,6 @@
 #include "lpc/commands.h"
 
+#include <cctype>
 #include <algorithm>
 #include <cmath>
 #include <iterator>
@@ -230,6 +231,28 @@ public:
 
 private:
     PanLaw law_;
+};
+
+class SetProjectSettingCmd final : public Command {
+public:
+    SetProjectSettingCmd(std::string key, std::string value) : key_(std::move(key)), value_(std::move(value)) {}
+    std::string type() const override { return "set_project_setting"; }
+    json toJson() const override { return {{"type", type()}, {"key", key_}, {"value", value_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        if (key_.empty() || key_.size() > 64) return fail("bad_value", "a project setting name has 1 to 64 characters");
+        for (const char c : key_)
+            if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '.' || c == '-')) return fail("bad_value", "a project setting name has letters, digits, _ . and - only");
+        if (value_.size() > 512) return fail("bad_value", "a project setting value has at most 512 characters");
+        const auto it = p.settings.find(key_);
+        const std::string previous = it == p.settings.end() ? std::string() : it->second;
+        if (value_.empty()) p.settings.erase(key_);
+        else p.settings[key_] = value_;
+        return success(makeSetProjectSetting(key_, previous));
+    }
+
+private:
+    std::string key_, value_;
 };
 
 class RemoveTempoCmd final : public Command {
@@ -1129,6 +1152,7 @@ CommandPtr makeRemoveTrack(Uuid trackId) { return std::make_unique<RemoveTrackCm
 CommandPtr makeSetStrip(Uuid trackId, StripPatch patch) { return std::make_unique<SetStripCmd>(trackId, patch); }
 CommandPtr makeSetMasterVolume(float gainDb) { return std::make_unique<SetMasterVolumeCmd>(gainDb); }
 CommandPtr makeSetPanLaw(PanLaw law) { return std::make_unique<SetPanLawCmd>(law); }
+CommandPtr makeSetProjectSetting(std::string key, std::string value) { return std::make_unique<SetProjectSettingCmd>(std::move(key), std::move(value)); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
@@ -1179,6 +1203,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (!panLawFromName(j.at("law").get<std::string>(), law)) throw std::runtime_error("unknown pan law");
             return makeSetPanLaw(law);
         }
+        if (type == "set_project_setting") return makeSetProjectSetting(j.at("key").get<std::string>(), j.at("value").get<std::string>());
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());

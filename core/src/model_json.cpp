@@ -341,6 +341,7 @@ nlohmann::json toJson(const Project& p) {
     if (p.key != "C major") j["key"] = p.key;
     if (p.masterVolumeDb != 0.0f) j["masterVolumeDb"] = p.masterVolumeDb;
     if (p.panLaw != PanLaw::Minus3Comp) j["panLaw"] = panLawName(p.panLaw);
+    if (!p.settings.empty()) j["settings"] = p.settings;
     return j;
 }
 
@@ -358,6 +359,7 @@ Project projectFromJson(const nlohmann::json& j) {
     if (j.contains("groups")) j.at("groups").get_to(p.groups);
     p.masterVolumeDb = j.value("masterVolumeDb", 0.0f);
     if (!panLawFromName(j.value("panLaw", std::string("minus3comp")), p.panLaw)) throw std::runtime_error("unknown pan law");
+    if (j.contains("settings")) j.at("settings").get_to(p.settings);
     const auto masters = std::count_if(p.tracks.begin(), p.tracks.end(),
                                        [](const Track& t) { return t.kind == TrackKind::Master; });
     if (masters != 1) throw std::runtime_error("project must contain exactly one master track");

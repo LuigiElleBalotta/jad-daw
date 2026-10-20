@@ -128,6 +128,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(QString clickGrouping READ clickGrouping WRITE setClickGrouping NOTIFY clickSettingsChanged)  // "3+2+2"
     Q_PROPERTY(int clickRevision READ clickRevision NOTIFY clickSettingsChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(QString panLaw READ panLaw WRITE setPanLaw NOTIFY projectChanged)  // Project Settings > Audio: 0db, minus3, minus3comp, minus45comp, minus6, minus6comp
+    Q_PROPERTY(QVariantMap projectSettings READ projectSettings NOTIFY projectChanged)  // the plain choices of Project Settings, saved with the project
     Q_PROPERTY(bool autoInputMonitoring READ autoInputMonitoring WRITE setAutoInputMonitoring NOTIFY recordingChanged)  // Record > Auto Input Monitoring
     Q_PROPERTY(bool countInEnabled READ countInEnabled WRITE setCountInEnabled NOTIFY recordingChanged)
     Q_PROPERTY(int countInChoice READ countInChoice WRITE setCountInChoice NOTIFY recordingChanged)  // the count-in before a recording: 1..6 bars, or -1..-9 for 1/4..9/4 in beats
@@ -206,6 +208,11 @@ public:
     QString projectKey() const { return key_.endsWith(" major") ? key_.chopped(5) + "maj" : (key_.endsWith(" minor") ? key_.chopped(5) + "min" : key_); }
     QString signatureText() const { return QStringLiteral("%1/%2").arg(beatsPerBar_).arg(beatUnit_); }
     double masterGainDb() const { return masterGain_; }
+    QString panLaw() const { return panLaw_; }
+    void setPanLaw(const QString& law);
+    QVariantMap projectSettings() const { return projectSettings_; }
+    Q_INVOKABLE QString projectSetting(const QString& key, const QString& fallback = {}) const { return projectSettings_.value(key, fallback).toString(); }
+    Q_INVOKABLE void setProjectSetting(const QString& key, const QString& value);  // empty value: the default again
     bool mixerVisible() const { return mixerVisible_; }
     QString tool() const { return tool_; }
     void setTool(const QString& tool);  // pointer, pencil, eraser, scissors or glue; anything else is ignored
@@ -1058,6 +1065,8 @@ private:
     int beatsPerBar_ = 4;
     int beatUnit_ = 4;
     double masterGain_ = 0.0;
+    QString panLaw_ = QStringLiteral("minus3comp");
+    QVariantMap projectSettings_;
     QString masterId_;
     bool mixerVisible_ = true;
     QString tool_ = QStringLiteral("pointer");

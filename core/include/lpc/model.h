@@ -225,6 +225,8 @@ struct Project {
     std::vector<MediaItem> mediaPool;
     PanLaw panLaw = PanLaw::Minus3Comp;  // Project Settings > Audio > Pan Law
     float masterVolumeDb = 0.0f;  // the Master strip: scales Stereo Out and every Output strip together (-96..24 dB)
+    // Project Settings that are plain choices ("tempoMode": keep|adapt|automatic, "preRoll", "colorizeTakes", ...): key -> value, saved with the project. A key that is not set has its default.
+    std::map<std::string, std::string> settings;
 
     Project();
     explicit Project(Uuid masterId);

@@ -11,7 +11,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2c. The 4 trailing `CBasicFX::Process` slots | **done** | — identified directly in `CAutoMasterFX`'s own constructor: `CLevelMeterFX`, `CLoudnessMeterFX`, `CCorrelationMeterFX`, `CSpectrumAnalyzerFX` — the window's metering chain, not further audio processing. |
 | 2d. `nativeAvailable` meaning | **closed** | Decisively settled by direct ONNX comparison (not REA): `T` vs `TSO` and `G` vs `G_SO` each have **byte-identical graph structure** (187 nodes, 8 op types, 194 initializers, 115504 weight bytes — exact match) but **different weight-tensor SHA-256 hashes** — i.e. two independently-trained models sharing one architecture, not one model deployed two ways for speed. `nativeAvailable` therefore selects a genuinely different-sounding model (different learned weights), settling the sound-vs-speed question in favor of **sound** (it may also affect speed, but it is not *only* a speed optimization). |
 | 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **closed (mechanism fully explained)** | The exact addressing of the `+0xd8`/`+0xe0`-indexed trim table decoded by hand: `value = *(float*)(self + modeIdx×8 + 0x3c0 + circuitIdx×4)` — **inline per-instance object data, not a static array**, so its contents can't be read from the binary directly. Traced further: it's populated at runtime from the Mastering Assistant's `#default.pst` preset (found: `GAME`/`TSPP`-magic binary blob, 4132 bytes, a flat parameter array) via `Coefficients()` calls. Reading the *specific* preset-parameter index that lands in this exact table slot needs tracing `CAutoMaster::Coefficients()`'s own full parameter-index map (a large function, not covered this pass) — the mechanism is now fully understood even though the literal numbers remain preset-loaded state rather than binary-embedded constants. |
-| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **mostly done** | Stereo spread (`ProcessSpread`) fully decoded. `AutoAdjustMBCompressor` fully hand-disassembled: the "opaque" calls Ghidra flagged turned out to be plain `memcpy`/`exp10f`/`vDSP_vsmul`; the real indirect calls are two genuine C++ virtual dispatches on a shared loudness-analysis object. The accumulation formula is now byte-exact (`0 < measured < 0.99` gates `errorAccum += min(measured, 0.99−measured)`), and the real exit mechanism is identified: an externally-set stop flag (`self+0xa18`) polled inside the loop, not a numeric counter — explaining why no static tool can fully resolve it without tracing the measurement object's own runtime type. `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub**. The 31-band Auto EQ's coefficient-calculation code remains untraced. |
+| 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **done** | Stereo spread (`ProcessSpread`) fully decoded. `AutoAdjustMBCompressor` fully hand-disassembled: the "opaque" calls Ghidra flagged turned out to be plain `memcpy`/`exp10f`/`vDSP_vsmul`; the real indirect calls are two genuine C++ virtual dispatches on a shared loudness-analysis object. The accumulation formula is now byte-exact (`0 < measured < 0.99` gates `errorAccum += min(measured, 0.99−measured)`), and the real exit mechanism is identified: an externally-set stop flag (`self+0xa18`) polled inside the loop, not a numeric counter. `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub**. The "31-band Auto EQ" turned out not to be a separate algorithm at all: `ProcessSpectralBalance` is a one-line thunk into a `CMatchEQFX` instance built by `CAutoMaster::MatchEQFactory` — the exact same class `mixer.md` already fully decompiled for Match EQ — so its coefficient math was already documented, just not previously connected to this call site. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **closed** | **The complete, exact enum↔class↔UI-name mapping is now confirmed straight from `CCompressorShell::OnSetup`'s menu registration and `CCompressor`'s own constructor switch** — see below. **Correction to this doc's own earlier guess**: `CCompressorSSL` is *not* "Classic VCA" — it's **"Vintage VCA"**; "Classic VCA" is actually **`CCompressorDBX`**. Every one of the 7 real UI circuit names now has a confirmed class and, for all 7, at least partial decoded curve math (either in `mixer.md` from an earlier pass, or this session for Opto/SSL). Two internal circuit values exist that are *not* exposed in this menu at all: a 3rd `CCompressorClassA` variant and a wholly separate `CDownwardCompressor` class. |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring the user specifically asked about is now fully solved**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-style linear transform (`drive×1.05`, `drive×0.7+0.3`, or `drive×0.75+0.25`, selected by a 3-way style index) before handing the scalar straight to the model wrapper's conditioning-setter via a vtable call. Still untraced: which UI style name maps to which index, and the mel/beat/pitch preprocessing for the other analysis networks. |
 | 4. Klopfgeist/metronome | **mostly done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. Only the per-instance lookup table's own numeric contents (a runtime pointer, not a static array) remain unresolved. |
@@ -372,12 +372,25 @@ build 6306, not a working feature (consistent with other half-built things found
 `CPickupModelingFX`'s missing model files). `ProcessDynEQ` itself is live (it processes a `CGen` object at
 `+0x600` via `ProcessGenInplace`) but nothing calls `AutoAdjustDynEQ` to actually tune it, going by what's visible
 here — **this also corrects `analog-model-chain.md`'s guess that the `+0x600` object was "most likely
-saturation/waveshaper"; it's the Dynamic EQ object instead.** The actual spectral-correction "Auto EQ" (31
-third-octave bands, smoothing, ±dB limits, "amount") is a **separate** mechanism: `ProcessSpectralBalance` drives
-its own, third biquad-chain object (`+0x580`, distinct from the `+0x588` chain used before/after the neural stage
-and the `+0x568`/`+0x570` pair from `mixer.md`'s Match EQ work) — narrowed to the right object, but the actual
-31-band coefficient-calculation code (where the correction curve itself gets computed from the measured spectrum)
-wasn't traced this pass.
+saturation/waveshaper"; it's the Dynamic EQ object instead.**
+
+**The spectral-correction "Auto EQ" coefficient math — now closed, not a separate untraced algorithm.**
+`ProcessSpectralBalance` itself is a one-line thunk (`self+0x580` object → the shared `ProcessGenInplace`
+trampoline, same pattern as `ProcessUserEQ`'s `+0x588` and `ProcessDynEQ`'s `+0x600`) — it does no math of its
+own. Traced what actually builds and tunes that `+0x580` object: `CAutoMaster::MatchEQFactory(float)` (`0x5ff730`),
+hand-disassembled directly — it `operator new`s a `0xd48`-byte object, sets a chain of hardcoded defaults each
+followed by the same property-setter call (`0x259b60`), and runs the exact "search a band-center-frequency array
+for the first entry past a threshold" loop pattern (reading `self+0xd00`/`+0xd10`, a count + float-array pair)
+three times over to populate low/mid/high band-index fields — i.e. it constructs a **`CMatchEQFX` instance**, the
+same class `mixer.md`'s own Match EQ investigation already fully decompiled (`CMatchEQFX::UpdateCoeffAndCaches`,
+documented there across several passes: band-boundary curve, fade-extremes windows, the `GraphRelXToFreq` mapping
+the on-screen curve also uses). **So the "31-band Auto EQ" was never a separate algorithm** — the Mastering
+Assistant's spectral correction is literally the Mastering-Assistant-flavored `CMatchEQFX` instance that
+`MatchEQFactory` builds with mastering-sensible hardcoded defaults (confirmed already in `mixer.md`'s "Match EQ's
+model factory" section, independently re-derived here from the `+0x580` object identity) — its coefficient math
+is the one already fully traced in `mixer.md`, not an unknown third biquad-chain implementation. Nothing further
+to trace here; the earlier "31-band coefficient-calculation code … wasn't traced" note in this doc was chasing a
+function that doesn't exist separately from the already-documented Match EQ engine.
 
 **The four Loudness-Macro gain formulas, now confirmed byte-exact** (previously documented from indirect evidence;
 this pass read them straight from their own named functions and literal constant bytes):
@@ -440,6 +453,14 @@ at `0x60a5d0`; `ProcessSpectralBalance` at `0x60a4f0`; the four Loudness-Macro f
 `0x607420`, `0x607460`, `0x6074a0` (constants cross-checked with `read_bytes` at their literal data addresses,
 e.g. `0xd449c0`); `SetSaturationAmnt` at `0x606840`. Full `CAutoMaster` method list (130+ names) enumerated via
 `search_procedures`, used to locate all of the above by name rather than guessing addresses.
+
+The "31-band Auto EQ" closure used the Ghidra-free hand-disassembly method against `madsp_disasm.txt`:
+`ProcessSpectralBalance` confirmed as a thunk by reading its 12-byte body directly at `0x60a4f0`;
+`CAutoMaster::MatchEQFactory` (`0x5ff730`, found via `nm -arch x86_64 MADSP.x86_64 | c++filt | grep CAutoMaster`)
+hand-disassembled far enough to see the `operator new(0xd48)` allocation and the repeated
+set-field/call-`0x259b60` property-setter pattern, identifying it as the same `CMatchEQFX`-constructing factory
+`mixer.md`'s "Match EQ's model factory" section already named and decompiled independently — cross-referenced
+against that file's existing analysis rather than re-decompiling `CMatchEQFX` itself.
 
 ---
 

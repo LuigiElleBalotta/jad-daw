@@ -16,7 +16,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
 | 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
-| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **partial** | Create New Track dialog's 4 top-level categories captured (screenshots taken, not yet transcribed below). Score tab's own 16-color "User Palette" documented as part of Block 5. Track/region colors (the actual 48-color picker), I/O Labels, Global Tracks, overlapping-recordings behavior, Bounce dialogs, and the channel-strip automation-mode popup are still not done — needs further live UI passes plus, for exact color hex values, an `Assets.car` search (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
+| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **partial** | Track/region color picker's grid layout captured live (6a). I/O Labels window's full column structure and channel-name scope captured live, including confirming busses run past 232 (6b). Create New Track dialog's 4 top-level categories identified from the Track menu (6c, not opened/screenshotted this pass). Global Tracks, overlapping-recordings behavior, Bounce dialogs, and the channel-strip automation-mode popup are still not done (the automation-mode popup specifically kept opening the adjacent Group popup instead of Read's own popup via simulated clicks — same general Logic-popup click unreliability noted elsewhere in this doc, not resolved this pass) — needs further live UI passes plus, for exact color hex values, an `Assets.car` search (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
 | 7. Smart Tempo/Flex quality comparison | **not started** | Needs a throwaway test project with real Apple Loops, built and played in the live app. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **not started** | Match EQ's pipeline architecture is already documented in `mixer.md`; the exact per-band Q/slope/curve constants for Channel EQ, Limiter/Adaptive Limiter/Noise Gate tables, and pan/fader taper formulas are not yet decompiled. |
 
@@ -596,3 +596,68 @@ sub-tab, `Wait` where needed, `Snapshot` with vision) against a disposable test 
 created via File > New, "Don't Close" chosen to keep the user's real `ProvaPianoforte.logicx` open untouched in
 the background per the standing safety rule). No settings were changed or saved; every opened popup was closed
 via Escape or by clicking its own already-selected item, never a different one.
+
+---
+
+## Block 6 — missing dialogs (partial)
+
+### 6a. Track/region color picker
+
+Opened via Track > Assign Track Color… A floating palette window titled "Color", with a single reset/undo arrow
+button at top-left and a grid of solid color swatches: **4 rows × roughly 24 columns** (counted from swatch
+spacing across the window — not a round 16 or 48 as earlier passes guessed). Columns sweep a continuous hue
+wheel left to right (red → orange → yellow → green → cyan → blue → purple → magenta, wrapping back toward red at
+the far right). Rows vary brightness/saturation top to bottom: row 1 is the brightest/most saturated "pure" set,
+row 2 is a close match to row 1 but very slightly darker, rows 3-4 get progressively darker/more desaturated.
+The currently assigned color for the selected track is shown with a white selection border around its swatch
+(for the default "Audio 1" track, a blue swatch in row 2). No numeric/hex readout is shown anywhere in this UI —
+**exact hex values for each swatch are not determined this pass**; would need either pixel-sampling the live
+window (unreliable/approximate, not authoritative) or finding the real values in `Assets.car` or the app's own
+resource files (an earlier pass's `Assets.car` search for colors came up empty under an obvious name — not
+re-attempted this pass).
+
+Separately, `Track > Assign Track Icon…` exists as a sibling command (not opened this pass) and `Track > Sort
+Tracks by` offers: MIDI Channel, Audio Channel, Output Channel, Instrument Name, Track Name, Used/Unused,
+Creation Date.
+
+### 6b. I/O Labels window
+
+Opened via Mix > I/O Labels… Columns: **Channel**, **Provided by Driver**, **User** (a toggle/radio per row,
+selecting whether the User name or the driver-provided name is shown), **Long**, **Short**. A **Reset** button
+(with its own dropdown arrow, suggesting a scoped-reset submenu not explored) sits above the table.
+
+Row groups seen, in order: `Input 1`-`Input 6` (individual mono inputs; `Input 5`/`Input 6` show driver names
+`Loop 1`/`Loop 2` — this test Mac's audio device exposes loopback inputs), `Output 1`-`Output 4`, stereo-paired
+rows `Input 1-2`/`Input 3-4`/`Input 5-6`, `Output 1-2` (greyed/disabled — this is the actual Stereo Out pair, with
+**User already enabled and both Long/Short pre-filled as "Stereo Output"**, the one row with real default
+content), `Output 3-4`, then a very long run of **`Bus 1` through at least `Bus 232`** (confirmed by scrolling;
+the exact upper bound — Logic Pro's documented internal bus limit is commonly cited as 256, consistent with what
+was seen, but the exact final row was **not scrolled to and is not confirmed**). Every Bus row defaults to driver
+name `-` (no name) and both Long/Short `-`, with User disabled until a custom name is typed. This confirms the
+I/O Labels window is a single flat per-channel naming table (driver inputs/outputs plus all internal busses), not
+split into separate per-category windows.
+
+### 6c. Create New Track — only partially covered this pass
+
+Not re-opened/screenshotted this pass (an earlier screenshot pass was done but lost to context compaction before
+being written up). Confirmed again from `Track` menu that the relevant command is `Track > New Tracks…`
+(⌥⌘N) — distinct from the single-track shortcuts `New Audio Track` (⌥⌘A), `New Software Instrument Track`
+(⌥⌘S), `New Session Player SI Track…` (⌥⌘U), `New External MIDI Track` (⌥⌘X), and an `Other` submenu. The
+dialog's own 4 top-level categories (MIDI, Pattern, Session Player, Audio) and their sub-options, as described in
+an earlier pass, were **not re-verified or re-screenshotted this pass** — still open for a future pass.
+
+### Not reached this pass
+
+Global Tracks (Chord, Arrangement) content/editors, overlapping-recordings dialogs (Create Take Folder etc. with
+Cycle On/Off), Bounce dialogs (Project/Section and Regions/Tracks in Place), and the channel-strip
+automation-mode popup (clicking the "Read" button at the bottom of a channel strip repeatedly opened the
+*adjacent* Group popup instead, both this pass and on retry — likely a coordinate-precision issue against the
+narrower track-header layout once the Project Settings window was closed, not a fundamental click-reliability
+problem like the SwiftUI sheets noted elsewhere in this doc; worth retrying with a fresh coordinate read in a
+future pass).
+
+### Source
+
+Live UI capture via `mcp__macos-mcp__*` against the same disposable `Untitled 13.logicx` test project. Track >
+Assign Track Color… and Mix > I/O Labels… opened via the application menu bar; I/O Labels scrolled with the
+`Scroll` tool to confirm its row count extends past Bus 232.

@@ -12,13 +12,13 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2d. `nativeAvailable` meaning | **partial** | Confirmed it's read from an Apple-Silicon-ML-capability check; whether it changes *sound* vs only *speed* not independently re-verified this pass (carried over from earlier passes' finding). |
 | 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **partial** | Found the "Character" Smart Control parameter (ID 10), the Mastering Assistant's `#default.pst` flat-parameter block, and the concrete `+0xd8`/`+0xe0`-indexed trim table at `+0x3c0` that `ProcessAnalogModel` reads from (2a); the table's actual stored values weren't read this pass. |
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
-| 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **not started** | Builds on existing `mixer.md` findings (ClassA, DBX, FET, LP curves already partly decompiled there); the other circuits (Platinum, Studio VCA/FET, Opto, Classic VCA) not yet touched. |
+| 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **partial** | Found the real class hierarchy: `CCompressorBase` with 6 derived circuits — `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (already in `mixer.md`), plus `CCompressorOpto` and `CCompressorSSL` (new this pass, with real decompiled `GainRedCurve`/`Coefficients` constants below). `CCompressorSSL` is almost certainly "Classic VCA" (SSL G-bus-style). Exact UI-name↔class mapping for "Platinum"/"Studio VCA"/"Studio FET" is not confirmed — `CPlatinumVerb` exists but is a reverb, not a compressor circuit, so "Platinum" compressor likely maps to the generic `CCompressor`/`CCompressorBase` itself (not independently confirmed). |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
 | 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **mostly done** | 6a (track color grid), 6b (I/O Labels structure), 6c (Create New Track, all categories), 6d (Global Tracks' 8 track types + default 5-lane set), 6f (Bounce "Project or Section" dialog, full field table), 6g (automation-mode popup: Read/Touch/Latch/Write, no Off mode, plus Trim/Relative) all captured live. Only **6e** (overlapping-recordings behavior — Create Take Folder, Cycle On/Off) remains not done, since it needs an actual recording pass rather than read-only/cancel-only navigation. Exact color hex values for 6a still need an `Assets.car` search (not re-attempted this pass). |
 | 7. Smart Tempo/Flex quality comparison | **blocked** | Loop Browser opened live (20158 Apple Loops indexed, full filter/column structure captured). Could not get a loop onto a track: simulated drag-and-drop from the Loop Browser list to the Tracks area does not register as a real macOS drag with Logic Pro (tried direct drag, multi-step drag, right-click, and a toolbar "add" control — none created a track), so the actual tempo-detection/Flex-quality test itself could not run. This looks like a tooling limitation (native NSDraggingSession-based drag vs. a synthesized mouse-down/move/up sequence), not a coordinate or timing issue — worth trying a different automation approach (e.g. an Automator/AppleScript "Finder drag" proxy, or importing a loop file via File > Import instead of the Loop Browser) in a future pass. |
-| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **not started** | Match EQ's pipeline architecture is already documented in `mixer.md`; the exact per-band Q/slope/curve constants for Channel EQ, Limiter/Adaptive Limiter/Noise Gate tables, and pan/fader taper formulas are not yet decompiled. |
+| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **partial** | `CLimiter`'s real gain-smoothing algorithm and its full `Coefficients` parameter table (gain/lookahead/true-peak/release/ceiling, all with real ranges and constants) decompiled — see below. `CNoisegateFX::Coefficients`'s real threshold/reduction/attack/hold/release ranges and formulas decompiled too. Channel EQ's per-band Q/slope constants, Pan law formula, and Fader taper/meter ballistics were **not found in `MADSP.x86_64`** — `CPan`/`CFader`-named classes don't exist in this binary, meaning that code most likely lives in a different framework (the mixer-engine binary, not the plugin-DSP one) not available on this disposable Mac session; Match EQ itself wasn't re-touched (already covered in `mixer.md`). |
 
 This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
 the highest-priority, most tractable items in the time available. Everything below "not started" needs its own
@@ -775,3 +775,153 @@ window is frontmost rather than opening a panel within the current one.
 
 `mcp__macos-mcp__*` live UI capture, `Untitled 13.logicx` test project, Loop Browser opened via
 `View > Show Loop Browser`.
+
+---
+
+## Block 2g — compressor circuit tables (partial)
+
+### The real class hierarchy
+
+`search_procedures` for `^__ZN\d+CCompressor` reveals the actual structure: a shared `CCompressorBase` (envelope
+smoothing, auto-gain, limiter sub-stage, clip mode) with 6 concrete circuit subclasses, each implementing its own
+`GainRedCurve`/`Coefficients`: `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (all
+already partly covered in `mixer.md` from an earlier pass), plus two **not previously documented**:
+`CCompressorOpto` and `CCompressorSSL`. A separate, unrelated `CCompressor` class (no `Base`/circuit suffix) is
+the multi-channel **link/sidechain-routing engine** used by the Compressor plugin's channel-linking feature, not
+a circuit model — its own `Coefficients` is a 28-case parameter dispatcher (link table, EQ pre/post routing,
+distortion calc, etc.), not curve math. `CPlatinumVerb` also exists in this binary but is a **reverb**, not a
+compressor circuit, so the UI name "Platinum" for a compressor circuit most likely routes to the generic
+`CCompressor`/`CCompressorBase` path itself rather than a same-named class — **not independently confirmed**.
+
+### `CCompressorOpto` — real T4-cell/LA-2A-style emulation, now decoded
+
+`GainRedCurve` (`0x9e740`) implements a genuine nonlinear opto-cell model, 30× oversampled per output sample
+(`lVar6 = 0x1e`):
+
+1. One-pole envelope: `coeff = exp(-2300 / (2 × sampleRate))` (same "2300" RC-time-constant numerator seen
+   throughout MADSP's dynamics processors — confirmed here as a shared internal utility, not circuit-specific).
+2. A **cubic soft-knee** region: for envelope values in `(0.6151, 1.1925]`, adds
+   `(envelope − 0.6151)³ − threshold` to the raw `envelope − 1.0` gain-reduction candidate, taking the max of
+   the two — the two literal constants `0.6151`/`1.1925` are the knee boundaries of the T4-cell response curve.
+3. Final per-sample gain: `g = (x^−1.2 × 37.15) / (x^−1.2 × 37.15 + 100.0)`, where `x` is the clamped
+   (≥0.001) knee output — `37.15`/`100.0` are the photocell-response curve constants, `−1.2` the shaping
+   exponent (`0xbf99999a`).
+4. A **second, independent "Limit" sub-path** (only active if a flag at `+0xac` is set, itself toggled by
+   `Coefficients` parameter index `0x19 > 0`): computes `1/x` clamped to 1.0 via SIMD `divps`/`blendvps`, scaled
+   by a ratio parameter (index `0x18`, `10^(−dB/20)`) and makeup gain, then takes the `min()` against the
+   opto-curve's own output — i.e. **Opto can run a hard parallel brick-wall limiter on top of its own nonlinear
+   compression**, confirmed structurally, not just inferred from the UI.
+
+`Coefficients(value, index)` parameter map (indices confirmed by their exact effect, matching `GainRedCurve`'s
+own offset reads):
+
+| Index | Parameter | Formula / range |
+|---|---|---|
+| 2 | Threshold | `10^(−dB/20)`, stored at the curve's own threshold slot |
+| 3 | Ratio → knee shape | `max(p×0.445−1.3, p×0.3325 + (p−1)^0.7^−2×0.2695 − 0.602)`, floored at 0 — a genuine two-branch empirical curve, not a simple ratio |
+| 5, 6, 7 | Attack/program-dependent timing | `1 − exp(−2300/(time×sampleRate))`, time floor/ceiling clamps at 0.2–5.0 |
+| 8 | Makeup gain | `10^(dB/20)` |
+| 9 | (unlabeled, "crest"-like) | `(1 − p) × 0.057022` |
+| 0xb | SC/limiter-related gain | `10^(dB×0.05)`, gated by `p ≤ 0` |
+| 0xd | Sidechain filter type select | indexes a 4-entry constant+pointer table (`DAT_00d4b2d0`/`DAT_00d53920`) — a 4-way HPF-type selector |
+| 0x18 | Limit-mode ratio | `10^(−dB/20)` |
+| 0x19 | Limit-mode enable | boolean, `p > 0` |
+
+### `CCompressorSSL` — almost certainly "Classic VCA" (SSL bus-style), now decoded
+
+Shares the **identical** `Coefficients` parameter-index map with `CCompressorOpto` (same case numbers, same
+formulas byte-for-byte) — confirming both circuits sit behind one common parameter-dispatch interface. Its
+`GainRedCurve` (`0x9d030`) differs from Opto in the actual curve math:
+
+- Same cubic-knee shaping (`0.6151`/`1.1925` thresholds, same cubic formula) as Opto.
+- **Dual envelope time constants** instead of Opto's single one: a fast coefficient `exp(−2300/(2×sampleRate))`
+  and a slow one `exp(−2300/(6×sampleRate))`, chosen per-sample by comparing the new target against the
+  running envelope (fast when the target is above/growing, slow otherwise) — this is the classic SSL G-Bus
+  "auto-release"/program-dependent behavior, now confirmed as real, present code rather than marketing copy.
+- **10× oversampling** per output sample in real-time mode (`lVar6 = 10`, vs Opto's 30×), 900× in single-sample
+  offline mode.
+- Final gain via `10^(−envelope)` (plain log-domain), not Opto's `pow(x,−1.2)` cell-response curve — a cleaner,
+  more "VCA-like" response, consistent with SSL's VCA (not opto-cell) gain element.
+- The same secondary hard-limit sub-path as Opto (identical structure, same offsets).
+
+### Not reached this pass
+
+Exact UI-name↔class confirmation for "Platinum"/"Studio VCA"/"Studio FET" (plausible but unconfirmed: Platinum =
+plain `CCompressor`/digital path, Studio VCA = `CCompressorDBX`, Studio FET = `CCompressorFET` — both already in
+`mixer.md`). The sidechain-filter 4-entry constant table at `DAT_00d4b2d0`/`DAT_00d53920` wasn't read directly
+(would give the 4 HPF type names/frequencies).
+
+### Source
+
+`search_procedures` regex `^__ZN\d+CCompressor` against `MADSP.x86_64` (REA + Ghidra 12.1.4, same thinned
+x86_64 slice used throughout this doc). `CCompressorOpto::GainRedCurve` (`0x9e740`), `::Coefficients`
+(`0x9e310`), `CCompressorSSL::GainRedCurve` (`0x9d030`), `::Coefficients` (`0x9cc00`) all decompiled directly.
+
+---
+
+## Block 8 — Limiter and Noise Gate tables (partial; Channel EQ/Pan/Fader not found in this binary)
+
+### `CLimiter` — real gain-smoothing algorithm and parameter table
+
+`CalcAmp` (`0xd17e0`) is the core per-sample gain-smoothing state machine — a lookahead-free limiter design:
+
+- Running gain `g` (never exceeds 1.0 / 0 dBFS — confirmed hard ceiling).
+- **Release** (target gain ≥ current): linear ramp, `g += (target − g) × releaseCoeff + 1e-10` (the `1e-10`
+  epsilon avoids float denormals during long silence), resets an internal "hold" counter.
+- **Attack** (target gain < current): on a *new* gain-reduction event, computes a program-dependent attack
+  multiplier via `pow(target/g, exponent)` (the exponent is itself a stored coefficient, so attack "shape" is
+  tunable, not fixed); while still within that same reduction event (held below the last threshold), it just
+  reapplies the same cached multiplier each sample rather than recomputing `pow()` — an optimization that also
+  smooths rapid successive reductions into one continuous curve.
+
+`Coefficients(eCoeffIndex, value)` (`0xd0bc0`) parameter map:
+
+| Index | Parameter | Range | Formula |
+|---|---|---|---|
+| 0 | Input Gain | ±100 dB | `10^(dB/20)` |
+| 1 | Lookahead | 0–10 ms | buffer-size samples = `time × sampleRate × 0.001`; **sample-rate-tiered extra delay**: +48 samples below 50 kHz, +24 samples 50–100 kHz, +0 samples ≥100 kHz (only applied if a separate "enable" condition from index 6/7 holds) |
+| 2 | True Peak (bool) | 0/1 | boolean flag, gates oversampled peak detection elsewhere |
+| 3 | Release | 0–2000 ms | main release coefficient `1 − exp(−2300/(ms×sampleRate))`; **also** computes a separate dither/noise-floor constant via a fast log2 bit-trick (constants `−0.33985`, `−0.9150375`, `−6.0206003` — the last is `20×log10(2)`, confirming this is a dB-domain noise-floor-vs-release-time curve) |
+| 4 | (linked to same state as 3) | 0–2000 | sets a related ratio field, recomputed from index 3's stored sample rate |
+| 5 | Output Ceiling | ±100 dB | `10^(dB/20)` |
+| 6 | Lookahead enable (bool) | — | combines with index 7's channel/oversample count to decide the sample-rate-tiered extra delay (same table as index 1) |
+| 7 | Channel/oversample count | int | paired with index 6, same delay-table selection |
+
+The sample-rate-tiered lookahead delay table (+48/+24/+0 samples at <50 kHz / 50–100 kHz / ≥100 kHz) is a new,
+concrete, previously-undocumented fact — it means the Limiter's actual look-ahead latency is **not** a pure
+function of the Lookahead ms setting; it also silently grows at lower sample rates to keep inter-sample-peak
+detection accurate.
+
+### `CNoisegateFX` — real threshold/reduction/attack/release ranges
+
+`Coefficients(threshold, _, reduction, attack, lookahead, holdOrRelease, self, keyFilterIndex)` (`0x134a10`):
+
+| Parameter | Range | Formula |
+|---|---|---|
+| Threshold | ≤ 0 dB (values below −100 dB snap to a fixed −5.0 floor constant) | `10^(dB/20)` |
+| Reduction | ±120 dB | sign-dependent: stores both an "open" and "closed" gain multiplier (`10^(±dB/20)`) — confirms the gate can both attenuate (gate/duck, negative) and boost (expand upward, positive) |
+| Attack | 0–1000 ms | `ceil(ms × sampleRate × 0.001) + 1` samples |
+| Hold/Release | 0–5000 ms | same shared `1 − exp(−2300/(ms×sampleRate))` formula as every other MADSP dynamics processor |
+| Lookahead | clamped, ms-to-sample via `×0.001×sampleRate` | feeds a buffered-delay object shared with a paired level-meter object |
+
+The `2300` RC-time-constant numerator is now confirmed present, byte-identical, across **four** independent
+dynamics processors this project — `CAutoMaster`'s Loudness-Macro compressor (earlier pass), `CCompressorOpto`/
+`CCompressorSSL`, `CLimiter`, and `CNoisegateFX` — strong evidence it's a shared, standardized internal utility
+constant in MADSP's envelope-follower code, not something tuned per-circuit.
+
+### Channel EQ, Pan, Fader — not found in `MADSP.x86_64`
+
+Searched for `^__ZN\d+CPan` (no matches) and `^__ZN\d+C(ChannelEQ|...)` patterns — no `CPan`/`CFader` classes
+exist in this binary. `MADSP.x86_64` appears to be specifically the **plugin DSP framework** (Compressor,
+Limiter, Noise Gate, reverbs, EQs-as-plugins, the Mastering Assistant chain already covered); channel-strip-level
+primitives like Pan and Fader almost certainly live in a different framework binary (the mixer/channel-strip
+engine) that wasn't thinned/opened this session. **Not determined**: would need to locate and open that other
+framework to continue this part of Block 8. Match EQ itself was not revisited (already documented in
+`mixer.md`); Channel EQ's exact per-band Q/slope constants were not located either (search for an EQ-specific
+class by name wasn't attempted this pass, time ran out).
+
+### Source
+
+`search_procedures` literal/regex against `MADSP.x86_64`. `CLimiter::CalcAmp` (`0xd17e0`), `::Coefficients`
+(`0xd0bc0`), `CNoisegateFX::Coefficients` (`0x134a10`) all decompiled directly via the same REA/Ghidra session
+used for Block 2g above.

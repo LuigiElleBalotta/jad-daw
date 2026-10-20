@@ -5,7 +5,7 @@ resolved, the "what's missing" line says what a future pass would need.
 
 | Block | Status | What's missing (if any) |
 |---|---|---|
-| 1. ONNX vs CoreML numeric verification | **partial** | `tools/ml/coreml_reference.swift`, `tools/ml/compare_with_coreml.py`, and `jad-daw-private/onnx/` don't exist on this machine (checked the whole repo and filesystem) — the actual ONNX-vs-CoreML diff table could not be produced. What *could* be done without those files: fixed the CoreML load failure (same rename trick, now confirmed to generalize beyond Analog Model), found all 6 Analog Model models' real MIL output is full audio (not scalar), found `prediction(from:)` itself still fails for every state-threaded model tried. Needs: the missing tools/onnx files copied onto this machine, or this pass run on the machine that has them.
+| 1. ONNX vs CoreML numeric verification | **done** (for everything that can run through the public API) | The 6 Analog Model + 10 Saturation-family networks (317 of 321 bundle/block-size combinations) can't be numerically compared at all — Core ML's public `prediction(from:)` API itself refuses to run them (see below), independent of ONNX correctness. A real conversion bug was found and confirmed in `OnsetDetectionCNN` (0.226 max-abs-err, flagged as suspect in `ml-conversion.md` already) — needs a fix in `espresso2onnx.py`'s weight-layout/flatten-order handling, not a Mac-side task. |
 | 2a. `ProcessAllDynamicCBs` stage order | **done** | — |
 | 2b. `Coefficients(value,3)` origin/range | **done** | Other `index` values beyond 3: not determined (would need the rest of the function decompiled). |
 | 2c. The 4 trailing `CBasicFX::Process` slots | **not started** | Needs `CAutoMasterFX`'s constructor decompiled to identify the 4 object types at `+0xb08/0xb10/0xb18/0xb20`. |
@@ -30,14 +30,46 @@ what's in this file so far.
 
 ## Block 1 — ONNX vs Core ML numeric verification
 
-### Blocker
+Correction mid-pass: `tools/ml/coreml_reference.swift`/`compare_with_coreml.py` and `jad-daw-private/onnx/` weren't
+on this machine yet because this repo's `main` had moved on (the parallel Windows session pushed a large batch of
+work, including those two tools) and `jad-daw-private` is its own separate, gitignored repo
+(`LuigiElleBalotta/jad-daw-private` on GitHub, never a subfolder of `jad-daw`'s own git history). `git pull`
+(actually a rebase, since local work had diverged) plus `gh repo clone LuigiElleBalotta/jad-daw-private
+jad-daw-private` got both. With that, the full verification described below was possible.
 
-`tools/ml/coreml_reference.swift`, `tools/ml/compare_with_coreml.py`, and `jad-daw-private/onnx/` are not present
-anywhere on this machine (checked the full repo tree and a filesystem-wide search for `jad-daw-private`). The
-actual max-abs-err / max-rel-err comparison table the block asks for **could not be produced** — it needs either
-those files copied here, or this specific sub-task run on whichever machine already has them.
+### Real numeric results
 
-### What was done instead: fixing and generalizing the Core ML load failure
+Compiled `coreml_reference.swift` (`swiftc -O`) and ran it against every `.mlmodelc` in
+`../logic-pro-reference/all-ml-models/`, on a prepared copy where every bundle needing the `model.mil` rename fix
+(see below) got it — 321 bundle/block-size combinations total (one per `.mil` file, matching the ONNX side's own
+319 conversions 1:1, plus the 2 Espresso-format bundles). Then ran `compare_with_coreml.py` against
+`jad-daw-private/onnx/`.
+
+**Models that actually run through the public API (4 of 321) — real max-abs-err table:**
+
+| Model | Output(s) | Max abs err | Verdict |
+|---|---|---|---|
+| `DownbeatTrackerCondMPS` | `output_beats` | 8.2e-7 | OK |
+| | `output_downbeats` | 1.79e-7 | OK |
+| | `output_beats_no_downbeats` | 5.89e-7 | OK |
+| | `output_tempo` | 2e-6 | OK |
+| | `output_bpb` | 2.41e-6 | OK |
+| `PT` | `Identity` | 7.63e-4 | OK |
+| `RTPT` | sigmoid output | 5.96e-5 | OK (compared manually — the stock script's exact-shape input matcher doesn't account for ONNX's extra leading batch dim; same deterministic input formula, reshaped) |
+| `OnsetDetectionCNN` | `output1` | **0.226** | **BAD — real conversion bug, not a tolerance nit** |
+
+`OnsetDetectionCNN`'s mismatch is a genuine, confirmed problem, not a comparison-harness artifact (checked by
+hand with the identical deterministic-input formula, reshaped to the ONNX file's own declared input order). It
+lines up exactly with `ml-conversion.md`'s own flagged uncertainty: *"Not verifiable without Core ML:
+`OnsetDetectionCNN`'s `inner_product` weight layout (taken as `[nC, nB]`) and the flatten order (NCHW)."* That
+guess is now proven wrong by a real number. Needs a fix in `tools/ml/espresso2onnx.py`'s weight-layout handling —
+a conversion-code task, not something to chase further from the Mac side.
+
+Everything else — the 6 Analog Model and 10 Saturation-family networks, across every block size and sample rate —
+**cannot be run through the public API at all**, so no ONNX comparison is possible for them regardless of how
+correct the conversion is. Details below.
+
+### Fixing (and generalizing) the Core ML load failure
 
 The known failure (`MLModel(contentsOf:)` → `Error Domain=com.apple.CoreML Code=3 "Error in reading the MIL
 network."`) comes from the compiled `.mlmodelc`'s main graph file not being named `model.mil` (the name CoreML's
@@ -85,10 +117,21 @@ Both methods agree, for every one of `T`, `TSO`, `G`, `G_SO`, `S`, `S_SO`:
   `metadata.json`, which carries the same wrong `[]` annotation** — those docs need the same correction (not yet
   applied this pass; flagging here first since this doc is the priority-1 deliverable).
 
-Root cause of the `[]` vs `[1,1,1,1024]` metadata inconsistency: **not determined** — plausibly a shape-inference
-bug in the early-beta `coremltools 7.0b1` used for `G`/`G_SO`/`S`/`S_SO` specifically (their
-`userDefinedMetadata` shows `7.0b1`; `T`/`TSO`, which got the shape right, use the same `7.0b1` too per earlier
-notes, so tool-version alone doesn't fully explain it — genuinely not determined).
+**Root cause, now better supported (not fully proven, but no longer a guess)**: `PT` gave direct runtime evidence
+of the same pattern. Its static `modelDescription` (and `metadata.json`) declare output shape `[]`, exactly like
+`G`/`S` — but running it with real deterministic input through `coreml_reference.swift` returned an actual,
+observed `[96, 360]` array. A statically-declared `[]` that resolves to a real, multi-element shape only once you
+actually run the model is strong evidence that **`[]` is CoreML's placeholder for "shape not statically
+determined / dynamic," not a true scalar declaration** — these MLProgram models have input- or
+state-dependent output shapes that the static analyzer can't resolve ahead of time, and whichever tool produced
+`metadata.json` just printed the placeholder as if it were the real shape. This explains `G`/`S` too, without
+needing a coremltools-version-specific bug.
+
+Also found this pass: `RTPTM`'s declared input shape in `modelDescription` (`[1, 1, 1024, 1]`) does **not** match
+what the compiled program actually expects at prediction time (`[1, 1, 1, 1024]` — confirmed by the exact
+mismatch error) — a second, independent example of the same declared-vs-real metadata gap, on the input side this
+time. `coreml_reference.swift` (unmodified) fails to run `RTPTM` for this reason; not a model problem, a
+declared-shape problem.
 
 ### Input/output shapes confirmed via Core ML for the other requested models (load-only, no ONNX diff possible)
 
@@ -99,9 +142,9 @@ Block 3:
 |---|---|---|
 | `OnsetDetectionCNN` | `input1` `[3, 80, 15]` | `output1` `[1]` |
 | `DownbeatTrackerCondMPS` | `input_melspec` `[1, 4096, 131]` | `output_bpb` `[1,4096,13]`, `output_beats` `[1,4096,1]`, `output_tempo` `[1,4096,251]`, `output_beats_no_downbeats` `[1,4096,1]`, `output_downbeats` `[1,4096,1]` |
-| `PT` | `input_1` `[1, 1, 16224, 1]` | `Identity` `[]` (scalar) |
+| `PT` | `input_1` `[1, 1, 16224, 1]` | `Identity` — statically declared `[]`, **really `[96, 360]` at runtime** (see below) |
 | `RTPT` | `input_1` `[1, 1, 1024]` | `Identity` `[360]` |
-| `RTPTM` | `input_1` `[1, 1, 1024, 1]` | `Identity` `[]` (scalar — not cross-checked against its own raw `.mil` return statement this pass, so unlike `G`/`S` this one **might** be a genuine scalar; not determined) |
+| `RTPTM` | `input_1` `[1, 1, 1024, 1]` (statically declared — **wrong**, see below) | `Identity` `[]` (not independently confirmed at runtime this pass; given the `PT`/`G`/`S` pattern, likely also a placeholder, not determined for certain) |
 
 `DownbeatTrackerCondMPS`'s **`input_melspec [1, 4096, 131]`** is a direct, concrete confirmation of two numbers
 from your hypothesis: a **4096-frame window** and **131 mel bands** — both now Core-ML-confirmed facts, not
@@ -113,8 +156,11 @@ this pass (would need the preprocessing/postprocessing code, Block 3's actual re
 
 ### Source
 
-CoreML load/predict tests via throwaway Swift scripts (`swift <script>.swift`, no Xcode project) against copies
-under `/tmp` (never against `/Applications` originals) of files from
-`../logic-pro-reference/all-ml-models/` and `../logic-pro-reference/analog-model-ml-models/`. Raw `.mil` text read
-directly from the same files (`modelstreaming_transformed.mil` for Analog Model, `model_2048_transformed.mil` for
-`RTRST`).
+`tools/ml/coreml_reference.swift` compiled with `swiftc -O` and run against a prepared copy (321
+bundle/block-size combinations, `model.mil`-renamed where needed) of
+`../logic-pro-reference/all-ml-models/` under `/tmp` (never against `/Applications` originals).
+`tools/ml/compare_with_coreml.py` run against `jad-daw-private/onnx/` (cloned this pass via
+`gh repo clone LuigiElleBalotta/jad-daw-private`). Raw `.mil` text read directly from the same files
+(`modelstreaming_transformed.mil` for Analog Model, `model_2048_transformed.mil` for `RTRST`). Python env for
+`onnx`/`onnxruntime`/`numpy`: a throwaway venv (`python3 -m venv`, system Python disallows global pip installs on
+this machine).

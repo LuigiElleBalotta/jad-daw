@@ -14,7 +14,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **partial** | Found the real class hierarchy: `CCompressorBase` with 6 derived circuits — `CCompressorClassA`, `CCompressorDBX`, `CCompressorFET`, `CCompressorLP` (already in `mixer.md`), plus `CCompressorOpto` and `CCompressorSSL` (new this pass, with real decompiled `GainRedCurve`/`Coefficients` constants below). `CCompressorSSL` is almost certainly "Classic VCA" (SSL G-bus-style). Exact UI-name↔class mapping for "Platinum"/"Studio VCA"/"Studio FET" is not confirmed — `CPlatinumVerb` exists but is a reverb, not a compressor circuit, so "Platinum" compressor likely maps to the generic `CCompressor`/`CCompressorBase` itself (not independently confirmed). |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
-| 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice` found and confirmed structurally (`SetCutoff`/`SetQ`/`CalcCoeffs` — the click is a synthesized resonant-filter voice, not a sample); the exact `CalcCoeffs()` formula itself wasn't pulled before the REA session moved on to Block 8. |
+| 4. Klopfgeist/metronome | **mostly done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. Only the per-instance lookup table's own numeric contents (a runtime pointer, not a static array) remain unresolved. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. Only the exact color hex values for 6a (would need an `Assets.car` search) and the full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) remain open. |
 | 7. Smart Tempo/Flex quality comparison | **partial (unblocked)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it ("Apple Loops contain tempo information that cannot be modified by this editor") — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. Testing the *actual* detection/warping algorithm (the original ask) needs a non-Apple-Loop, untagged audio file run through Smart Tempo's "Detect" — not attempted, time ran out. |
@@ -387,20 +387,53 @@ user's real `ProvaPianoforte.logicx`, which stayed open untouched in the backgro
 Tone and Volume sliders both at their default center position. MIDI Click's `Port:` popup shows `Off` (no MIDI
 destination routed by default). Audio Click's `Output:` popup shows `1-2`.
 
-**`CKnockVoice` found and structurally confirmed** (real class in `MADSP.x86_64`): `SetLevel(float)`,
-`SetCutoff(float)`, `SetQ(float)`, `CalcCoeffs()`, `Start()`/`SoftStart()`, `Process()`, `GetSignal()` — this
-proves the Klopfgeist click **is a synthesized, filtered signal, not a sampled one**: each voice is built around
-a resonant filter with its own tunable cutoff frequency and Q, recalculated via `CalcCoeffs()`, exactly matching
-the UI's single `Tone` slider (which almost certainly drives `SetCutoff` directly) and consistent with
-`Polyphonic clicks` needing multiple independent `CKnockVoice` instances active at once. **Not determined**: the
-exact formula inside `CalcCoeffs()` (the literal cutoff/Q-to-filter-coefficient math) — the REA session was
-reused for Block 8's Pan/Fader search before this could be pulled, and reopening `MADSP.x86_64` costs another
-~11-minute Ghidra re-analysis; left for a future pass.
+**`CKnockVoice` found and its filter design decoded** (real class in `MADSP.x86_64`; read via the same
+Ghidra-free `nm`/`otool` hand-disassembly method used for Block 8's Pan law, once the REA/Ghidra session got
+tied up elsewhere — see Source): `SetLevel(float)`, `SetCutoff(float)`, `SetQ(float)`, `CalcCoeffs()`,
+`Start()`/`SoftStart()`, `Process()`, `GetSignal()`. This proves the Klopfgeist click **is a synthesized,
+filtered signal, not a sampled one** — each voice is a real resonant filter, not a playback engine.
+
+`CalcCoeffs()`'s actual body (72 bytes of scalar SSE, hand-read from `otool -tv`) reveals a **two-stage
+interpolated-lookup-table filter-coefficient design**, the standard pattern for a numerically stable resonant
+digital filter:
+
+1. Reads the stored cutoff (`this+0x44`, written by `SetCutoff`), multiplies by a constant, clamps to a valid
+   range, truncates to an integer table index.
+2. Looks up two adjacent entries in a **per-instance table pointed to by `this+0x18`** (`table[idx]`,
+   `table[idx+1]`) and **linearly interpolates** between them using the fractional part of the scaled cutoff —
+   a classic frequency-pre-warping table (e.g. for a `tan(π·f/fs)`-style stable 2-pole design), not a raw
+   closed-form formula.
+3. Separately reads the stored Q (`this+0x48`, written by `SetQ`) through a second, independent scale+clamp+max
+   computation, combined with cutoff-derived fields at `this+0x4c`/`this+0x50`.
+4. Writes two final coefficients to `this+0x38` (the resonator's main coefficient, `min()`-clamped) and
+   `this+0x3c` (the "normalized cutoff" value itself, reused elsewhere — likely the filter's second
+   state-variable coefficient).
+
+**`SetQ(float)` independently re-runs the same interpolated-lookup-table logic over the cutoff** every time Q
+changes (not just storing the value for the next `CalcCoeffs()` call) — both functions write to the identical
+`this+0x38`/`this+0x3c` targets, confirming they're two entry points into the same underlying coefficient
+recompute rather than a simple getter/setter split. This is consistent with a 2-pole state-variable/TPT-style
+resonant filter, where frequency and damping coefficients are coupled and both need recomputing on either
+parameter change.
+
+The scale/clamp constants (resolved the same way as Block 8's Pan tables — RIP-relative address computed by
+hand, raw `float` bytes read from the file): the cutoff/Q inputs are scaled by **127.0** (confirming they're
+taken in a 0–127, MIDI-velocity-like range, not 0–1 or Hz — consistent with velocity-driven accent levels), the
+Q-dependent term is `Q² × (−1.39) + 1.4` (an inverted parabola in Q, peaking at `1.4` when `Q=0`, clamped via
+`min()` against that same `1.4` ceiling — a resonance-safety limiter, standard for a 2-pole filter to stay
+stable at high Q), a floor clamp of **0.01** prevents the derived coefficient from reaching zero/going unstable,
+and a **2.0** constant feeds the final resonance-gain term (the natural "unity-damping" boundary in many 2-pole
+state-variable-filter designs, consistent with the earlier TPT/SVF read). **Not determined**: the actual numeric
+contents of the per-instance table at `this+0x18` itself — it's a runtime pointer set at construction, not a
+static array resolvable from this disassembly pass (would need tracing the constructor to find where it points).
 
 ### Source
 
 Live UI capture via `mcp__macos-mcp__*` (Click + Snapshot with vision) on Project Settings > Metronome, disposable
-test project.
+test project. `CKnockVoice::CalcCoeffs`/`SetQ` found via `nm -arch x86_64 MADSP.x86_64 | c++filt`; bodies read
+with `otool -tv -arch x86_64`; constants resolved with the same RIP-relative-address-by-hand + `struct.unpack`
+Python approach used for Block 8's Pan law — all Ghidra-free (the REA/Ghidra session was occupied elsewhere at
+the time, but this path turned out faster regardless).
 
 ---
 

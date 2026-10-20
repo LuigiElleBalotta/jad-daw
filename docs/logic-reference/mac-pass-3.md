@@ -14,9 +14,9 @@ resolved, the "what's missing" line says what a future pass would need.
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **partial** | Stereo spread (`ProcessSpread`) fully decoded: real Mid/Side matrix processing, exact formula and a `-1.0` sentinel for full mono. `AutoAdjustMBCompressor`'s per-iteration mechanics are clear (2 dB steps, shared loudness-meter object) but its exact convergence/exit check wasn't recoverable (same unresolved-control-flow pattern as 2a). Found that `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub** — "Dynamic EQ" looks unused/vestigial in this build. The 31-band spectral-correction EQ ("Auto EQ") was narrowed to a specific biquad-chain object (`ProcessSpectralBalance`, filter at `+0x580`, distinct from the other two EQ chains) but its coefficient-calculation code (the actual 31-band correction math) wasn't traced. The 4 Loudness-Macro gain formulas are now confirmed byte-exact (not just structurally) straight from their own named functions and literal constant tables. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **not started** | Builds on existing `mixer.md` findings (ClassA, DBX, FET, LP curves already partly decompiled there); the other circuits (Platinum, Studio VCA/FET, Opto, Classic VCA) not yet touched. |
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — confirms a **second, classical** saturation path exists alongside the neural one (`CPassiveEQFX::SetOutputDrive`, amount parameter scaled ×127, 0-127 range) for when the neural model isn't used; the neural path's drive→`cond` wiring itself, and all the mel/beat/pitch preprocessing code, remain untraced. |
-| 4. Klopfgeist/metronome | **not started** | Needs both decompilation (`CKnockVoice`'s frequency table) and live Project Settings > Metronome UI inspection. |
-| 5. Project Settings (remaining tabs) | **not started** | Needs live UI inspection across ~10 tabs. |
-| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **not started** | Needs live UI inspection/screenshots and, for colors, an `Assets.car` search specifically for track/UI color swatches (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
+| 4. Klopfgeist/metronome | **partial** | Live Project Settings > Metronome tab fully captured (full note/velocity table for both Audio Click/Klopfgeist and MIDI Click, all options). `CKnockVoice`'s own frequency table / synthesis internals not decompiled this pass — only the UI-level defaults are confirmed. |
+| 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
+| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **partial** | Create New Track dialog's 4 top-level categories captured (screenshots taken, not yet transcribed below). Score tab's own 16-color "User Palette" documented as part of Block 5. Track/region colors (the actual 48-color picker), I/O Labels, Global Tracks, overlapping-recordings behavior, Bounce dialogs, and the channel-strip automation-mode popup are still not done — needs further live UI passes plus, for exact color hex values, an `Assets.car` search (the main app catalog searched in an earlier pass didn't have them under an obvious name). |
 | 7. Smart Tempo/Flex quality comparison | **not started** | Needs a throwaway test project with real Apple Loops, built and played in the live app. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **not started** | Match EQ's pipeline architecture is already documented in `mixer.md`; the exact per-band Q/slope/curve constants for Channel EQ, Limiter/Adaptive Limiter/Noise Gate tables, and pan/fader taper formulas are not yet decompiled. |
 
@@ -348,3 +348,251 @@ at `0x60a5d0`; `ProcessSpectralBalance` at `0x60a4f0`; the four Loudness-Macro f
 `0x607420`, `0x607460`, `0x6074a0` (constants cross-checked with `read_bytes` at their literal data addresses,
 e.g. `0xd449c0`); `SetSaturationAmnt` at `0x606840`. Full `CAutoMaster` method list (130+ names) enumerated via
 `search_procedures`, used to locate all of the above by name rather than guessing addresses.
+
+---
+
+## Block 4 — Klopfgeist / metronome
+
+Captured live from Project Settings > Metronome on a disposable test project (`Untitled 13.logicx`, never the
+user's real `ProvaPianoforte.logicx`, which stayed open untouched in the background the whole session).
+
+**Options:**
+
+| Checkbox | State |
+|---|---|
+| Simple mode | on |
+| Click while recording | on (parent, forces "Only during count-in" greyed off) |
+| Only during count-in | off, disabled |
+| Click while playing | on |
+| Polyphonic clicks | on |
+
+**Source: Audio Click (Klopfgeist) — note/velocity table**, Audio Click itself enabled:
+
+| Row | Enabled | Note | Velocity |
+|---|---|---|---|
+| Bar | on | G5 | 127 |
+| Group | on | D#5 | 119 |
+| Beat | on | C5 | 112 |
+| Division | off | C2 | 60 |
+
+**Source: MIDI Click — channel/note/velocity table**, same 4 rows, independent of the Audio Click enable state:
+
+| Row | Channel | Note | Velocity |
+|---|---|---|---|
+| Bar | 10 | C#1 | 112 |
+| Group | 10 | C#1 | 88 |
+| Beat | 10 | C#1 | 68 |
+| Division | 10 | C#1 | 52 |
+
+Tone and Volume sliders both at their default center position. MIDI Click's `Port:` popup shows `Off` (no MIDI
+destination routed by default). Audio Click's `Output:` popup shows `1-2`.
+
+**Not determined this pass**: `CKnockVoice`'s own synthesis internals (how `Tone` maps to the actual oscillator/
+envelope, whether the audio click is a synthesized click or a sampled one) — this would need decompiling
+`CKnockVoice` itself, not just reading the Project Settings UI defaults above.
+
+### Source
+
+Live UI capture via `mcp__macos-mcp__*` (Click + Snapshot with vision) on Project Settings > Metronome, disposable
+test project.
+
+---
+
+## Block 5 — Project Settings, all 11 tabs
+
+All captured live on the same disposable test project, via Click on each tab/sub-tab icon followed by a vision
+Snapshot. Values shown are the **defaults of a freshly created project** — not verified against any other project.
+
+### General
+
+- Project Type: "Use musical grid" — on (the only Project Type option exposed in this build; its description:
+  "The primary ruler displays bars and beats. Tempo information is recorded in audio files.")
+- Opening Project: "Only load plug-ins needed for project playback" — on; "Reset record enable state of Software
+  Instrument tracks" — on
+- Automation: "Region automation takes priority over track automation" — on; "Use preset parameter value for
+  regions without region automation (if no track automation is present)" — off
+
+### Audio
+
+**General sub-tab:**
+
+| Control | Default |
+|---|---|
+| Sample Rate | 48 kHz |
+| Spatial Audio | Off |
+| Surround Format | 7.1.2 |
+| Pan Law | **-3 dB Compensated** |
+| Apply Pan Law compensation to stereo balancers | off |
+| Apple Loops: High quality | on |
+
+**Pan Law popup — full option list** (7 items, confirmed by opening the dropdown): `0 dB`, `-3 dB`,
+`-3 dB Compensated` (default, checked), `-4.5 dB`, `-4.5 dB Compensated`, `-6 dB`, `-6 dB Compensated`.
+
+**Channel Strips sub-tab:** "Automatic management of channel strip objects" — on (parent); "Automatic naming of
+channel strip objects" — on (child, nested under the first).
+
+### Recording
+
+**General:** "When Beginning" radio group — `Count-in` selected (vs. `Pre-roll`), count-in length popup set to
+`1 Bar`. Pre-roll's own seconds field greyed out at `0` while Count-in is selected. "Allow tempo change recording"
+— off. "Automatically colorize takes" — off.
+
+**Count-in popup — full option list** (confirmed by opening the dropdown): `None`, `1 Bar` (default, checked),
+`2 Bars`, `3 Bars`, `4 Bars`, `5 Bars`, `6 Bars`, then a second group of note-value-style options: `1/4`, `2/4`,
+`3/4`, `4/4`, `5/4`, `6/4`, `7/4`, `8/4`, `9/4` (list likely continues scrolled off-screen past `9/4` — not
+confirmed where it ends).
+
+**MIDI:** "MIDI data reduction" — on; "Automatically erase duplicates" — on.
+
+**Audio Recording Path:** Folder set to `Project` (the project's own folder, via the `Project` quick-button next
+to `Set…`).
+
+### Smart Tempo
+
+| Control | Default |
+|---|---|
+| Project Tempo Mode | **Keep Project Tempo** (3-option popup: `Keep Project Tempo` ✓ / `Adapt Project Tempo` / `Automatic`) |
+| Set New Recordings To: | Off, "Trim start of new regions" unchecked |
+| Set Imported Files To: | Off, "Trim start of new regions" unchecked |
+| Create matching Editing group when creating Smart Tempo multitrack set | off |
+| Export Tempo Resolution | Smoothed |
+| Default Tempo Behavior (Free Tempo Recording) | Ask |
+
+The Flex & Follow Region Setting popups ("Set New Recordings To:"/"Set Imported Files To:") did not reliably open
+via simulated click in this pass (same general unreliability with Logic's native popups noted elsewhere in this
+doc) — their full option lists are **not determined**; their current default value (`Off`) is confirmed from the
+field itself. "Export Tempo Resolution" and "Default Tempo Behavior" popups' own full option lists were also not
+opened — **not determined**, only their current defaults are confirmed.
+
+### MIDI (4 sub-tabs)
+
+**General:** "Send After Loading Project": Used instrument MIDI settings (off), All fader values (off), Control
+change message 7/10 sets Volume fader/Pan knob for channel strips (off). MIDI Thru: "SysEx with MIDI Thru
+function" (off); "Instrument Without MIDI Thru Function" popup = `Not Assigned`.
+
+**Input Filter:** 7 independent checkboxes, all **off** by default: Notes, Program changes, Pitch Bend, Control
+Changes, Aftertouch, Polyphonic Aftertouch, System Exclusive. (This is a filter list — checked = filtered out —
+consistent with everything passing through by default.)
+
+**Chase:** Notes (off, with 2 disabled sub-options "Sustained"/"In No Transpose instrument channel strips"),
+Program Change (on), Pitch Bend (on), Control Changes (on, with 3 checked sub-items: `0-15`, `64-71`,
+`All Other`), Aftertouch (on), Polyphonic Aftertouch (on), System Exclusive (on), Text Meta Events (off), "Chase
+separate channels in All Channels instruments" (on), "Chase on cycle jump" (on, with a nested, unchecked "Notes"
+sub-option), "Send full MIDI reset before chasing" (off).
+
+**Clip Length:** 5 independent "...to zero/max" checkboxes, all **off** by default: Aftertouch to zero, Pitch Bend
+to center position, Control 1 (Modulation) to zero, Control 2 (Breath Control) to zero, Control 4 (Foot Control)
+to zero, Control 11 (Expression) to max.
+
+### Score (8 sub-tabs — typesetting defaults, not audio DSP)
+
+**Global:** Margins all 0.50 cm (Score and Part columns identical), Header Space 1.00 cm, Line Distance 0.00 cm,
+Maximum Bars/Line 0 (no limit), Constant/Proportional/Slash Spacing all 16, Beaming Slant Factor 4 (Min 1 / Max
+4), Default Pedal Position 144. Checkboxes: "Add bracket space" on, "Alternating margins" off, "Open single
+staffs" off, "Justify last staff" on, "Alternate repeat symbols" off, "Hide muted notes" off, "Hide muted
+regions" on, "Hide muted tracks" off, "Allow alias/loop editing" off, "Fill gaps" on. Breve symbol popup: `-`.
+Symbol Font: Internal, "Font-specific spacing and positioning" on.
+
+**Numbers & Names:** Page Numbers (on) — Horizontal Position `Alternating`, Vertical Position `Top`, Page Offset
+0, font Times 12, "Prefix" off. Bar Numbers (on) — Horizontal Position `At Bar Line`, Vertical Position 32, Step
+4, Start With 1, font Times 10; "Follow staff size"/"Count multiple rests"/"Show at double bars"/"Top/bottom
+staff only"/"Hide bar numbers in linear view" all off. Instrument Names (on) — Position `Beside Staffs`, Align
+`Left`, First Staff `Full Names`, Other Staffs `Short Names`, font Times 10, "Follow staff size" off.
+
+**Tablature:** a built-in instrument-tuning table (Guitar standard E1-A1-D2-G2-B2-E3 plus Guitar D/G/lowG/D7/CG/CD
+variants, Bass 4/5-C/5-B/6-C, more rows scrolled off-screen) each with its own Strings count, Assign mode
+(`Pitch`), and per-string open-note names. Head Style: `Numbers only` (of 4 radio options: Numbers only / Numbers
+in circle / Circle 1/1,1/2 notes only / Black and white (1/1,1/2 notes) circles), font Times 8. TAB Markings:
+Palm Mute = "P.M.", Let Ring = "let ring", Slap = "slap", Line style `Solid`, font Times 8.
+
+**Chords & Grids:** Chords — Root Font Times 14, Extension Font Times 10, "Follow staff size" off, Slash Note
+Position `Normal`, Accidental Scale 0, Language `International (B, Bb, F#...)`, Alignment `Right-Aligned`. Grids
+— font Times 8, Grid Scaling 75/100/125% (Reduced/Normal/Enlarged), Chord Scaling same 75/100/125%, "Show
+Fingering" on for Normal and Enlarged (off for Reduced), Minimum Number of Frets 5, Barré style = curved-line icon
+(of 2 options), Thumb style = circled-6 icon (of 2 options), "Left-Handed" off.
+
+**Clefs & Signatures:** Clefs popup `Every Staff`, "Display warnings at line breaks" on, Smaller Clef Changes `-2`.
+Signatures: Key Signatures popup `Every Staff` (warnings on, "Automatic key transposition" on, "Minimize
+transposed accidentals" off, "Show naturals" on, "Show grace accidentals" off), Time Signatures popup `First
+Staff on Page 1` (warnings on), Size `Regular`, "Hide bar lines" off. Octave Symbols: +8 = "8va", -8 = "8va
+bassa", 0 = "Loco", +15 = "15ma", -15 = "15ma bassa", font Times 9, Line `Solid`.
+
+**Layout:** Line Thickness — Stavelines/Stems/Leger Lines/Barlines/Tuplet Brackets/Text Boxes/Crescendi all `2`
+except Endlines `12`. Slurs — Line Thickness 2, Horizontal/Vertical Distance/Curve Height/Curvature all 0. Ties —
+Line Thickness 2, Horizontal Position 5, Vertical Position 6. Spacing — Bar Start 12, Bar End 16, Dot to Note 5,
+Dot to Dot 3, Accidental to Note 0, Accidental to Accidental 0. Others — Stem Length 7. A `Defaults` reset button
+is present.
+
+**MIDI Meaning:** a 15-row table mapping score articulation symbols (staccato dot, accent marks, fermata, etc. —
+glyphs, not transcribable as text) to Velocity (all `-`, i.e. unmodified) and Length (all `100 %`, i.e.
+unmodified) — **every symbol is a no-op on playback by default**, confirming these are purely notational markings
+unless explicitly configured.
+
+**Colors:** Pitch Colors — Type radio `Diatonic` (vs `Chromatic`), 7 note-name swatches shown (one per diatonic
+degree) plus a parallel row of 7 solid colors. Velocity Colors — 7 swatches labeled with velocity breakpoints `1,
+17, 33, 49, 65, 81, 97, 113` (a velocity-to-color gradient in 16-unit steps). Note Color Options — "Accidentals",
+"Dots", "Ties", "Rests" all off (so none of these sub-elements inherit the pitch/velocity coloring by default).
+**User Palette** — a named 16-color list (`Color 0` through `Color 15`), each with its own solid swatch; this is
+the same kind of user-color list likely shared with/parallel to the main app's track-color picker referenced in
+Block 6a, though this one is specifically Score-context (note coloring), not confirmed to be the identical
+48-color track palette.
+
+### Movie
+
+Position: Movie / Region timecode fields both `00:00:00:00.00` (no movie loaded). Region Borders: Start/End/
+Length all `00:00:00:00.00`. Movie Volume slider at a default position, "Mute" button present. A "Movie
+Settings…" button opens further (unexplored) options. No movie file was loaded in the test project, so these are
+all empty/placeholder states, not meaningful defaults.
+
+### Synchronization (4 sub-tabs)
+
+**General:** Sync Mode popup `Internal` (self-clocked — disables "Transmit and Receive Start/Stop"). "Auto-enable
+external sync and Tap Tempo" off. Frame Rate `24 fps`, "Auto detect format of MTC" on, Validate MTC popup
+`Always`. Bar Position `1 1 1 1` plays at SMPTE `01:00:00:00.00` (i.e. the project's bar 1 is offset to start at
+the 1-hour SMPTE mark, Logic's standard convention to avoid negative timecode). "Enable separate SMPTE view
+offset" off.
+
+**Audio:** Current Sync Status — MTC/Sample Rate/Deviation shown as live meters (not numeric defaults, just UI
+widgets: MTC centered at 24.0 fps, Sample Rate centered at 48.0 kHz, Deviation centered at 0 ms, each with a
+±10%/±40 ms range). Audio Sync Mode: Core Audio popup = `MTC Continuous`.
+
+**MIDI:** A 10-row MIDI Clock destination table (Destination/Clock/Delay[ms]/PDC/MTC/MMC columns), every row
+`Off` and unchecked by default (no MIDI sync destinations configured). Clock Mode popup = `Song — SPP at Play
+Start and Stop/SPP/Continue at Cycle Jump`. Clock Start: "at position 1 1 1 1 with a pattern length of 1 bar(s)".
+"Transmit MIDI Machine Control (MMC)" off, "Listen to MIDI Machine Control (MMC) input" off.
+
+**Unitor:** General — Device Firmware "(not recognized)" (no Unitor hardware attached), SMPTE Mode radio `Read`
+(vs `Generate`), "Refresh" unchecked, SMPTE Type radio `LTC` (vs `VITC`/`Off`), Freewheel slider+field = 1 Frame,
+TV Format popup `PAL` (disabled, no hardware), VITC Line 1/2 popups both `Scan` (disabled). Visible Timecode
+Display: Size `Small` (disabled), Style `White 1` (disabled), Horizontal/Vertical Position sliders both at a
+default/centered value (disabled) — this entire sub-tab is effectively inert without Unitor hardware connected,
+consistent with its name.
+
+### Metronome
+
+See Block 4 above — this is the same tab, documented there since it was the explicit ask.
+
+### Tuning
+
+Software Instrument Pitch: Tune slider at `0.0 cent (440.0 Hz)`. Software Instrument Tuning Table: 3-way radio —
+`Equal Tempered` (selected default), `Fixed` (Type popup shows `Ethnic - Arabic` as an example entry even while
+unselected, with its own Root Key popup and a "Copy to User" button), `User` (a 2-row × 6-column custom
+cents-offset grid, all `0.000`, plus `Reset`/`Export` buttons). Stretch Upper/Lower sliders both `0%`. Root Key
+popup `C`. Hermode Tuning (HMT) — unselected radio, Type popup `Classic (3/5-All)` (disabled while unselected),
+Depth slider `100%` (disabled).
+
+### Assets
+
+A single "Project Package" checklist, all **off** by default except one: "Copy audio files into project" off,
+"Convert audio file sample rate when importing" off (disabled, depends on the first), "Copy Sampler audio files
+into project" off, **"Copy Alchemy audio files into project" — on** (the one default-enabled item), "Copy
+Ultrabeat audio files into project" off, "Copy Space Designer impulse responses into project" off, "Copy movie
+file into project" off, "Copy Apple Sound Library content into project" off.
+
+### Source
+
+All of Block 5 and Block 4's tables are live UI captures via `mcp__macos-mcp__*` (`Click` on each tab icon/
+sub-tab, `Wait` where needed, `Snapshot` with vision) against a disposable test project (`Untitled 13.logicx`,
+created via File > New, "Don't Close" chosen to keep the user's real `ProvaPianoforte.logicx` open untouched in
+the background per the standing safety rule). No settings were changed or saved; every opened popup was closed
+via Escape or by clicking its own already-selected item, never a different one.

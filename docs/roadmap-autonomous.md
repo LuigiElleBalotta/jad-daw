@@ -509,3 +509,9 @@ Order: things that are exact and testable first, then the ML runtime, then the U
 - [ ] F6. Section E gaps E1-E16 (one commit each).
 - [ ] F7. Icons: pick the traced SVGs the UI needs (Preferences, MIDI, Waveform, IO labels, Key Commands, mixer knobs/meters), simplify, recolour with the colour tokens, wire into QML.
 - [ ] F8. (owner, 2026-10-19: fix later; CI is left alone until told) GitHub macOS build: ctest 385/386, "364 - undo: random command sequences undo and redo exactly" fails there (passes on Windows). Reproduce the random sequence with the seed from the macOS log, find the command whose undo does not restore the project exactly (likely float or ordering differences between platforms).
+
+## G. Graphical windows for the stock effects (the owner, 2026-10-21: "la UI dei plugin stock e' pessima, sono solo parametri da impostare")
+Today `EffectEditorWindow.qml` is a list of parameters (plus the Channel EQ curve). Logic has a real graphical window per stock effect.
+- [ ] G1. Ask the Mac for screenshots of the stock plug-in windows (Channel EQ, Compressor, Limiter, Noise Gate, Match EQ, Delay, Reverb, Neural Saturation, Mastering Assistant, Drum/Synth instruments) at 2x, with the controls at their defaults and one moved.
+- [ ] G2. Reusable controls from the screenshots and `jad-daw-private/legacy-mixer-graphics`: large knob with value readout, draggable-node EQ display, compressor transfer curve with live input level, gain-reduction meter, level meters, switches and menus in Logic's style, colours from the colour tokens.
+- [ ] G3. One window per effect built from those controls (the parameter table stays as the fallback view), then the instruments.

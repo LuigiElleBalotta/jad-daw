@@ -390,3 +390,52 @@ elsewhere. The two `Mix` sliders show a fine tick scale beside them (about 20 ti
 Opened by the owner (`Delay > Delay Designer`). The first capture attempt grabbed the wrong region because the window had not
 been drawn yet; it was retaken after raising the transport state. A stray region `Untitled 13_1#01` appeared on `Audio 1`
 (from earlier playback with the project's record button lit, in the disposable `Untitled 13.logicx`); nothing was saved.
+
+## Mastering Assistant
+
+`plugin-mastering-assistant-default.png` / `-moved.png` / `-character-menu.png`. Opened by double-clicking the `Mastering` slot of the
+Stereo Out channel strip in the Mixer (the window title is `Stereo Out`, the channel's name). 1028x647 pt, `View: 100%`. The default
+shot was taken right after opening (no analysis yet); the other two come after Mastering Assistant had analysed some playback
+(an Auto EQ curve is drawn), so they show the "analysed" look.
+
+**1. Layout.** Standard dark header. Body split into a **left EQ area** (~60 % of the width) and a **right column of two panels**
+(`Dynamics` above, `Spread` below), a bottom action row and the `Mastering Assistant` identity bar. Left area: top-left a
+`Character` box (small label + current value in magenta with ▲▼ chevrons, default `Clean`); under it the **Auto EQ display**
+(log axis `20 … 10k`, ticks at `20, 50, 100, 300, 700, 2k, 5k, 10k`, right-hand scale `+12 … -12 dB` in steps of 6) with a thin
+**vertical fader on its left edge** (`Auto EQ` amount, label + magenta readout below it `100 %`, the fader thumb is a small magenta
+pill) and three round blue nodes on the zero line at ~100 Hz, ~900 Hz and ~8 kHz (the user-adjustable `Custom EQ` bands); bottom-left
+a `Custom EQ` toggle (blue filled when on). Right column: **Dynamics** panel with a big `Loudness` knob + an `Excite` toggle under
+it (magenta text), and on its right `True Peak` (bar meter `-60 … 0 … 6` plus a small clip box) and `LUFS` (three bars `M`, `S`, `I`
+for momentary / short-term / integrated, `-60 … 0`) and `LU Range` with a numeric slot (`-` when empty) and `Start` / `Reset`
+buttons; **Spread** panel with a `Width` knob and a `Correlation` meter (`-1 … 0 … +1`, a red-to-green gradient bar with a white
+tick for the current value and a numeric readout `0.0` at the right). Bottom row: `Analyze` (with a sparkle icon, becomes
+`Reanalyze Section` after the first analysis), `Bypass`, `Loudness Compensation` (the last one has orange text and a brownish
+fill = on).
+
+**2. Controls and defaults.** `Character: Clean` (menu items: `Clean`, `Valve`, `Punch`, `Transparent`); `Auto EQ 100 %`
+(range goes **above 100**: dragging the fader up gave `137 %`, thumb moves up past the zero line, the curve gets deeper); `Loudness`
+knob (centered default, arc fills with magenta when moved), `Excite` (off), `Width` (default centered = 0; moved to `+0.22`, a
+magenta numeric value appears *above* the knob only while it is away from the default), `Custom EQ` (on), `Loudness
+Compensation` (on), `Bypass` (off). Knobs are dark-teal discs with a thin pink arc and pointer; the whole plug-in uses a
+**magenta/pink accent** on a very dark navy background (`#06101c`-ish), different from the orange (reverbs), blue (EQ), red/gold
+(Compressor skins) of the others.
+
+**3. Displays.** The Auto EQ curve is a soft magenta line with a translucent magenta fill between the curve and the zero line
+(above and below), computed from the analysed material — drawn by the plug-in itself, not by the user. The meters are empty
+until playback. The correlation meter showed `0.7` with a small green block near +0.7 and a yellow tick (a held/peak
+value) during playback.
+
+**4-5.** Header identical to the other stock plug-ins; two-line label style for toggles (`Loudness Compensation` wraps on two lines).
+`Compare` lights blue after any change.
+
+**Important compatibility finding from the Character menu**: on this Intel Mac the menu shows `Valve (Requires Apple silicon)`,
+`Punch (Requires Apple silicon)`, `Transparent (Requires Apple silicon, using Clean instead)` — greyed out. So the three
+neural Analog Model characters (the Block 2d / Block 3 models in `mac-pass-3.md`) are **only available on Apple silicon**; on Intel
+only `Clean` runs. The same is true of Chroma Glow (the neural saturation plug-in): searching `Chroma` / `Glow` in the Audio FX
+insert menu returns only `ChromaVerb` — Chroma Glow is not offered here, so it could not be captured on this machine
+(its `Plug-In Settings/ChromaGlow` folder and the `CMLSaturation` code exist in the app bundle, but the plug-in is not selectable).
+
+### Source (Mastering Assistant)
+Double-click on the `Mastering` insert of the Stereo Out strip in the Mixer window (`cmd+2`), captured via `screencapture -x -R`
+against the window's `osascript`-read bounds. The Character popup was opened with a single click and photographed immediately
+via `screencapture` (not `Snapshot`, which dismisses transient popups).

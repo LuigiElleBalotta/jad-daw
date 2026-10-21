@@ -32,7 +32,9 @@ the format checkable: the ONNX of both give the same output on the same input (m
 * batchnorm blob: per channel `[gamma, beta, mean, sqrt(var + eps)]` interleaved (C x 4), epsilon already folded into the last value.
 * activation `mode` 2 = leaky ReLU (`alpha`), 3 = sigmoid, 0 = ReLU; `fused_relu` on convolutions; the `reshape` layer of RTPT = transpose
   `[0,3,2,1]` then reshape to `[-1, 360]`.
-* Not verifiable without Core ML: `OnsetDetectionCNN`'s `inner_product` weight layout (taken as `[nC, nB]`) and the flatten order (NCHW).
+* `OnsetDetectionCNN`: the `inner_product` weights are `[nC, nB]` (confirmed) but the flatten layer flattens in **H, W, C** order, not NCHW. Found on 2026-10-21
+  from the Mac's Core ML run (max-abs-err 0.226 with NCHW): on the deterministic input the output must be 0.3988 - 0.226 = 0.1728, and only the (H, W, C) order gives
+  it (0.17290). `espresso2onnx.py` now transposes `[0, 2, 3, 1]` before the Flatten.
 
 ## Checking against Core ML (needs a Mac)
 `tools/ml/coreml_reference.swift` runs every `.mlmodelc` through Core ML (CPU only) on deterministic inputs and writes the outputs;

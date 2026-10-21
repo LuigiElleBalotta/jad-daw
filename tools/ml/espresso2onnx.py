@@ -5,7 +5,8 @@ Layout facts (found by comparing RTPT against its mlProgram twin RTPTM, see docs
   * weights file: uint64 blob count N, then N pairs (uint64 index, uint64 byte size), then the blobs back to back.
   * batchnorm blob: per channel [gamma, beta, mean, sqrt(var + eps)] interleaved (C x 4); epsilon is already folded in.
   * fp16 blobs are named *_f16 in the layer, everything else is fp32.
-  * activation mode: 2 = leaky ReLU (alpha), 3 = sigmoid. Flatten mode 1 = NCHW flatten.
+  * activation mode: 2 = leaky ReLU (alpha), 3 = sigmoid. Flatten mode 1 = H, W, C order (verified against Core ML on a Mac:
+    NCHW gave 0.399, HWC gives 0.173 = Core ML's 0.1728).
   * convolution weights are [C_out, K_in, Ny, Nx]; inner product weights are [nC, nB] (out, in).
 
     python espresso2onnx.py <model.mlmodelc> <out.onnx> [--check]
@@ -108,7 +109,8 @@ class Conv:
                 self.emit("MaxPool", [bot], [top], kernel_shape=[l["size_y"], l["size_x"]], strides=[l["stride_y"], l["stride_x"]],
                           pads=[l.get("pad_t", 0), l.get("pad_l", 0), l.get("pad_b", 0), l.get("pad_r", 0)])
             elif typ == "flatten":
-                self.emit("Flatten", [bot], [top], axis=1)
+                self.emit("Transpose", [bot], [top + "_t"], perm=[0, 2, 3, 1])
+                self.emit("Flatten", [top + "_t"], [top], axis=1)
             elif typ == "inner_product":
                 nB, nC = l["nB"], l["nC"]
                 wgt = self.blob(l, "blob_weights", (nC, nB))

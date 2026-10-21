@@ -398,6 +398,71 @@ TEST_CASE("engine: the built-in click is the Klopfgeist, a resonator that rings 
     REQUIRE(peak(render(1, 0, kLevelBar, true, 0.4f)) == Catch::Approx(peak(bar) * 0.5f).margin(0.02f));   // Volume scales the click
 }
 
+TEST_CASE("engine: the Metronome Settings options choose when the click sounds and whether clicks overlap", "[engine][click]") {
+    auto render = [](auto setup, bool recording = false) {
+        AudioEngine e(kSr);
+        auto* kit = new ClickKit;
+        setup(*kit);
+        e.applyDirect([&] { AudioMsg k = msg(MsgKind::SetClickKit, 1); k.obj = makeOwned(kit); return k; }());
+        AudioMsg c = msg(MsgKind::SetClick, 2, 1);
+        c.obj = makeOwned(new ClickTrack{{0, 100}, {1, 0}, {0, 0}, {kLevelBar, kLevelBeat}});
+        e.applyDirect(c);
+        if (recording) {
+            AudioMsg rec = msg(MsgKind::StartRecord, 3, 0);
+            rec.obj = makeOwned(new ClickTrack);
+            e.applyDirect(rec);
+        } else {
+            e.applyDirect(msg(MsgKind::Play, 3));
+        }
+        std::vector<float> l(1024), r(1024);
+        e.processBlock(l.data(), r.data(), 1024);
+        return l;
+    };
+    auto peak = [](const std::vector<float>& x, int from, int to) { float p = 0; for (int i = from; i < to; ++i) p = std::max(p, std::abs(x[static_cast<std::size_t>(i)])); return p; };
+    REQUIRE(peak(render([](ClickKit&) {}), 0, 1024) > 0.1f);                                                  // the defaults: it sounds while playing
+    REQUIRE(peak(render([](ClickKit& k) { k.whilePlaying = false; }), 0, 1024) == 0.0f);                       // Click while playing off
+    REQUIRE(peak(render([](ClickKit& k) { k.onlyCountIn = true; }), 0, 1024) == 0.0f);                         // Only during count-in: nothing once the transport runs
+    REQUIRE(peak(render([](ClickKit& k) { k.whileRecording = false; }, true), 0, 1024) == 0.0f);               // Click while recording off
+    REQUIRE(peak(render([](ClickKit& k) { k.whilePlaying = false; }, true), 0, 1024) > 0.1f);                  // ...which is not Click while playing
+    // monophonic: the second click cuts the first, so the sound of the first ends at the second beat; polyphonic: it rings on
+    const auto mono = render([](ClickKit& k) { k.polyphonic = false; });
+    const auto poly = render([](ClickKit& k) { k.polyphonic = true; });
+    REQUIRE(peak(mono, 100, 1024) > 0.0f);
+    REQUIRE(std::abs(poly[110]) != std::abs(mono[110]));                                                       // the two differ where the first still rings
+}
+
+namespace {
+struct ClickPort final : lpc::IMidiOutput {
+    struct Sent { unsigned char status, d1, d2; };
+    std::vector<Sent> sent;
+    void send(unsigned char status, unsigned char d1, unsigned char d2) noexcept override { sent.push_back({status, d1, d2}); }
+};
+}  // namespace
+
+TEST_CASE("engine: the MIDI Click sends the note of the level on its port at every beat and ends it 50 ms later", "[engine][click]") {
+    AudioEngine e(kSr);
+    auto port = std::make_shared<ClickPort>();
+    auto* kit = new ClickKit;
+    kit->midiOut = port;
+    kit->midiLevels[kLevelBar] = {10, 91, 127};
+    kit->midiLevels[kLevelBeat] = {3, 60, 90};
+    e.applyDirect([&] { AudioMsg k = msg(MsgKind::SetClickKit, 1); k.obj = makeOwned(kit); return k; }());
+    AudioMsg c = msg(MsgKind::SetClick, 2, 1);
+    c.obj = makeOwned(new ClickTrack{{0, 4000}, {1, 0}, {0, 0}, {kLevelBar, kLevelBeat}});
+    e.applyDirect(c);
+    e.applyDirect(msg(MsgKind::Play, 3));
+    std::vector<float> l(8192), r(8192);
+    e.processBlock(l.data(), r.data(), 8192);
+    REQUIRE(port->sent.size() == 4);  // two notes on, two off
+    REQUIRE(port->sent[0].status == 0x99);   // channel 10
+    REQUIRE(port->sent[0].d1 == 91);
+    REQUIRE(port->sent[0].d2 == 127);
+    REQUIRE(port->sent[1].status == 0x89);   // the bar note ends
+    REQUIRE(port->sent[2].status == 0x92);   // channel 3
+    REQUIRE(port->sent[2].d1 == 60);
+    REQUIRE(port->sent[3].status == 0x82);
+}
+
 TEST_CASE("engine: a pre-roll plays the project first and captures only from its end, in the middle of a block too", "[engine][record]") {
     AudioEngine e(kSr);
     e.applyDirect(msg(MsgKind::Locate, 1, 1000));

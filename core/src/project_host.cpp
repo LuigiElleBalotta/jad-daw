@@ -235,6 +235,12 @@ void ProjectHost::postKit() {
     auto* kit = new audio::ClickKit;
     kit->levels = clickSettings_.levels;
     kit->tonality = std::clamp(clickSettings_.tonality, 0.0f, 1.0f);
+    kit->whilePlaying = clickSettings_.whilePlaying;
+    kit->whileRecording = clickSettings_.whileRecording;
+    kit->onlyCountIn = clickSettings_.onlyCountIn;
+    kit->polyphonic = clickSettings_.polyphonic;
+    kit->midiOut = clickSettings_.midiOut;
+    kit->midiLevels = clickSettings_.midiLevels;
     kit->volume = std::clamp(clickSettings_.volume, 0.0f, 1.0f);
     for (int slot = 1; slot < audio::kClickSlots; ++slot) {
         const std::string& file = clickSettings_.files[static_cast<std::size_t>(slot)];

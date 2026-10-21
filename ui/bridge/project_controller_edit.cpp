@@ -4667,7 +4667,41 @@ void ProjectController::applyKlopfgeistSettings() {
     }
     const float tonality = std::clamp(projectSettings_.value("click.tone", 0.5).toFloat(), 0.0f, 1.0f);
     const float volume = std::clamp(projectSettings_.value("click.volume", 0.8).toFloat(), 0.0f, 1.0f);
-    if (levels == clickSettings_.levels && tonality == clickSettings_.tonality && volume == clickSettings_.volume) return;
+    auto flag = [this](const char* key, bool fallback) {
+        const QVariant v = projectSettings_.value(QLatin1String(key));
+        return v.isValid() ? v.toString() == QLatin1String("1") : fallback;
+    };
+    const bool whilePlaying = flag("click.whilePlaying", true), whileRecording = flag("click.whileRecording", true), onlyCountIn = flag("click.onlyCountIn", false), polyphonic = flag("click.polyphonic", false);
+    // the MIDI Click: the port and the four rows
+    static const char* const midiDefaults[lpc::audio::kClickLevels] = {"bar", "group", "beat", "division"};
+    std::array<lpc::audio::MidiClickLevel, lpc::audio::kClickLevels> midiLevels = lpc::audio::defaultMidiClickLevels();
+    for (int i = 0; i < lpc::audio::kClickLevels; ++i) {
+        const QString base = QStringLiteral("midiClick.") + QLatin1String(midiDefaults[i]);
+        lpc::audio::MidiClickLevel& row = midiLevels[static_cast<std::size_t>(i)];
+        row.channel = std::clamp(projectSettings_.value(base + ".channel", row.channel).toInt(), 1, 16);
+        row.note = std::clamp(projectSettings_.value(base + ".note", row.note).toInt(), 0, 127);
+        row.velocity = std::clamp(projectSettings_.value(base + ".velocity", row.velocity).toInt(), 1, 127);
+    }
+    const std::string midiPort = projectSettings_.value("midiClick.port").toString().toStdString();
+    if (levels == clickSettings_.levels && tonality == clickSettings_.tonality && volume == clickSettings_.volume && whilePlaying == clickSettings_.whilePlaying &&
+        whileRecording == clickSettings_.whileRecording && onlyCountIn == clickSettings_.onlyCountIn && polyphonic == clickSettings_.polyphonic &&
+        midiLevels == clickSettings_.midiLevels && midiPort == clickSettings_.midiPort) return;
+    if (midiPort != clickSettings_.midiPort) {
+        clickSettings_.midiOut.reset();
+#ifdef JAD_HAVE_JUCE
+        if (!midiPort.empty()) {
+            ensureJuce();
+            clickSettings_.midiOut = lpc::openJuceMidiOutput(midiPort);
+            if (!clickSettings_.midiOut) emit notice("The MIDI port \"" + QString::fromStdString(midiPort) + "\" of the MIDI click cannot be opened");
+        }
+#endif
+        clickSettings_.midiPort = midiPort;
+    }
+    clickSettings_.midiLevels = midiLevels;
+    clickSettings_.whilePlaying = whilePlaying;
+    clickSettings_.whileRecording = whileRecording;
+    clickSettings_.onlyCountIn = onlyCountIn;
+    clickSettings_.polyphonic = polyphonic;
     clickSettings_.levels = levels;
     clickSettings_.tonality = tonality;
     clickSettings_.volume = volume;

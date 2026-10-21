@@ -126,6 +126,9 @@ private:
     };
     static constexpr int kClickVoices = 6;
     ClickVoice voices_[kClickVoices];
+    struct MidiOff { int left = 0; unsigned char channel = 0, note = 0; };  // a MIDI Click note waiting for its note off
+    MidiOff midiOffs_[8];
+    bool clickAllowed() const noexcept;  // Metronome Settings > Options
     void mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept;
     std::int64_t position_ = 0;
     float masterGain_ = 1.0f, masterGainApplied_ = 1.0f;  // the Master strip (every output); the applied one ramps to the wanted one within a block

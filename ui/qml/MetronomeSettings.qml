@@ -161,6 +161,18 @@ Item {
 
         Head { text: qsTr("Source: MIDI Click") }
         RowLayout {
+            spacing: Theme.spacing[2]
+            Cap { Layout.preferredWidth: 90; text: qsTr("Port") }
+            SelectField {
+                objectName: "midiClickPort"
+                Layout.preferredWidth: 240
+                choices: [""].concat(root.project.midiOutputNames())
+                value: root.values["midiClick.port"] ?? ""
+                format: (p) => p === "" ? qsTr("No MIDI click") : p
+                onChosen: (c) => root.project.setProjectSetting("midiClick.port", c)
+            }
+        }
+        RowLayout {
             spacing: Theme.spacing[3]
             Cap { Layout.preferredWidth: 110; text: "" }
             Cap { Layout.preferredWidth: 60; text: qsTr("Channel") }
@@ -180,6 +192,6 @@ Item {
                 Item { Layout.fillWidth: true }
             }
         }
-        Cap { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("The MIDI click is kept with the project; it is not sent to a MIDI port yet.") }
+        Cap { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("With a port chosen, every click also sends the note of its row on that port (the note ends after 50 ms).") }
     }
 }

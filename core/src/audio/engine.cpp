@@ -141,6 +141,13 @@ float knockQ(float tonality) {
 
 // Every beat starts a sound: the sample of its slot, or the Klopfgeist click (higher on the first beat of a bar, quieter on
 // subdivisions) when the slot has none. Sounds overlap, up to a few at once, and are added to the master output.
+// Metronome Settings > Options: the click while playing, while recording, or only in the count-in (which has its own click)
+bool AudioEngine::clickAllowed() const noexcept {
+    if (!kit_) return true;
+    if (kit_->onlyCountIn) return false;
+    return recording_ ? kit_->whileRecording : kit_->whilePlaying;
+}
+
 void AudioEngine::mixClick(float* outL, float* outR, std::int64_t from, int n) noexcept { mixClickTrack(click_, outL, outR, from, n); }
 
 void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* outR, std::int64_t from, int n) noexcept {
@@ -154,10 +161,19 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
         while (next < frames.size() && frames[next] == from + i) {  // a beat starts here
             const int slot = next < track->slot.size() ? track->slot[next] : 0;
             ClickVoice* v = nullptr;
+            if (!rows.polyphonic)
+                for (ClickVoice& c : voices_) c.pos = c.length;  // monophonic clicks: a new one cuts the one before
             for (ClickVoice& c : voices_)
                 if (c.pos >= c.length) { v = &c; break; }
             if (!v) v = &voices_[0];  // all busy: the oldest sound is cut
             const int rowIndex = next < track->level.size() ? std::min<int>(track->level[next], kClickLevels - 1) : (track->accent[next] ? kLevelBar : kLevelBeat);
+            if (kit_ && kit_->midiOut) {  // the MIDI Click: a note on the port, off after 50 ms
+                const MidiClickLevel& m = kit_->midiLevels[static_cast<std::size_t>(rowIndex)];
+                const unsigned char channel = static_cast<unsigned char>(std::clamp(m.channel, 1, 16) - 1), note = static_cast<unsigned char>(std::clamp(m.note, 0, 127));
+                kit_->midiOut->send(static_cast<unsigned char>(0x90 | channel), note, static_cast<unsigned char>(std::clamp(m.velocity, 1, 127)));
+                for (MidiOff& o : midiOffs_)
+                    if (o.left <= 0) { o = MidiOff{static_cast<int>(sampleRate_ * 0.05), channel, note}; break; }
+            }
             const KnockLevel& row = rows.levels[static_cast<std::size_t>(rowIndex)];
             if (kit_ && slot > 0 && slot < kClickSlots && !kit_->sample[static_cast<std::size_t>(slot)].empty()) {
                 v->knock = false;
@@ -191,6 +207,8 @@ void AudioEngine::mixClickTrack(const ClickTrack* track, float* outL, float* out
             v->pos = 0;
             ++next;
         }
+        for (MidiOff& o : midiOffs_)
+            if (o.left > 0 && --o.left == 0 && kit_ && kit_->midiOut) kit_->midiOut->send(static_cast<unsigned char>(0x80 | o.channel), o.note, 0);
         float sum = 0.0f;
         for (ClickVoice& c : voices_) {
             if (c.pos >= c.length) continue;
@@ -341,7 +359,7 @@ void AudioEngine::processBlock(float* outL, float* outR, int frames, float* cons
             graph_.render(position_, n, outL + done, outR + done);
             if (extraPairs > 0) graph_.copyOutputPairs(extra, extraPairs, done, n);
             applyMasterGain(outL, outR, extra, extraPairs, done, n);
-            if (clickOn_ && click_) mixClick(outL + done, outR + done, position_, n);
+            if (clickOn_ && click_ && clickAllowed()) mixClick(outL + done, outR + done, position_, n);
             if (recording_) {
                 const std::int64_t skip = std::clamp<std::int64_t>(recFrom_ - position_, 0, n);  // the part of the block that is still pre-roll
                 if (skip < n) {

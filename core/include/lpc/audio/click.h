@@ -1,8 +1,11 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "lpc/audio/external_midi.h"
 
 namespace lpc::audio {
 
@@ -32,6 +35,15 @@ struct KnockLevel {
 // Logic's defaults: Bar G5/127, Group D#5/119, Beat C5/112, Division C2/60 (off)
 inline std::array<KnockLevel, kClickLevels> defaultKnockLevels() { return {{{91, 127, true}, {87, 119, true}, {84, 112, true}, {48, 60, false}}}; }
 
+// Metronome Settings > Source: MIDI Click: the same four levels sent as a note on a MIDI port (a drum machine, a hardware click) at every beat.
+struct MidiClickLevel {
+    int channel = 10;  // 1..16
+    int note = 84;
+    int velocity = 100;
+    bool operator==(const MidiClickLevel&) const = default;
+};
+inline std::array<MidiClickLevel, kClickLevels> defaultMidiClickLevels() { return {{{10, 91, 127}, {10, 87, 119}, {10, 84, 112}, {10, 48, 60}}}; }
+
 // The samples loaded for the slots (mono, at the engine's rate); an empty slot plays the built-in blip.
 struct ClickKit {
     std::array<std::vector<float>, kClickSlots> sample;
@@ -39,6 +51,10 @@ struct ClickKit {
     std::array<KnockLevel, kClickLevels> levels = defaultKnockLevels();
     float tonality = 0.5f;  // Klopfgeist Tone, 0..1
     float volume = 0.8f;    // Klopfgeist Volume, 0..1
+    // Metronome Settings > Options: when the click sounds and whether a new click lets the one before ring on
+    bool whilePlaying = true, whileRecording = true, onlyCountIn = false, polyphonic = false;
+    std::shared_ptr<IMidiOutput> midiOut;  // the MIDI Click: null sends nothing
+    std::array<MidiClickLevel, kClickLevels> midiLevels = defaultMidiClickLevels();
     ClickKit() { gain.fill(1.0f); }
 };
 
@@ -51,6 +67,10 @@ struct ClickSettings {
     std::array<KnockLevel, kClickLevels> levels = defaultKnockLevels();  // the Klopfgeist, Logic's own click
     float tonality = 0.5f;
     float volume = 0.8f;
+    bool whilePlaying = true, whileRecording = true, onlyCountIn = false, polyphonic = false;
+    std::shared_ptr<IMidiOutput> midiOut;
+    std::string midiPort;  // the name of the port midiOut was opened for
+    std::array<MidiClickLevel, kClickLevels> midiLevels = defaultMidiClickLevels();
     ClickSettings() { gain.fill(1.0f); }
 };
 

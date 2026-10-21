@@ -25,6 +25,8 @@ FxShell {
     property int analyzerMode: 0                 // 0 off, 1 after the EQ (POST), 2 before it (PRE)
     onAnalyzerModeChanged: editor.project.setEditorAnalyzer(analyzerMode > 0, analyzerMode === 1)
     Component.onDestruction: editor.project.setEditorAnalyzer(false, true)
+    property bool qCouple: true                  // dragging a node makes the Q follow the gain: the more boost or cut, the narrower the band
+    function qFactor(g) { return 1 + Math.min(Math.abs(g), 15) / 15 * 0.8 }
     property int hot: -1                         // the band under the pointer or being dragged
     readonly property real plotX: 37
     readonly property real plotW: 876
@@ -170,6 +172,8 @@ FxShell {
                 readonly property real gainDb: modelData.cut ? 0 : root.val(modelData.key + "Gain")
                 property real dragFreq: -1
                 property real dragGain: -1000
+                property real dragQ: -1
+                property real q0: 1
                 x: root.xOfFreq(dragFreq > 0 ? dragFreq : freq) - 14
                 y: root.yOfDb(dragGain > -1000 ? dragGain : gainDb) - 14
                 width: 28; height: 28
@@ -195,13 +199,20 @@ FxShell {
                             const g = root.dbOfY(p.y)
                             node.dragGain = g
                             root.editor.edit(node.modelData.key + "Gain", g)
+                            if (root.qCouple) {
+                                const qs = root.editor.param(node.modelData.key + "Q")
+                                node.dragQ = Math.max(qs.min, Math.min(qs.max, node.q0 * root.qFactor(g)))
+                                root.editor.edit(node.modelData.key + "Q", node.dragQ)
+                            }
                         }
                     }
-                    onPressed: root.hot = node.index
+                    onPressed: { root.hot = node.index; node.q0 = root.val(node.modelData.key + "Q") / root.qFactor(node.gainDb) }
                     onReleased: {
                         const changes = {}
                         if (node.dragFreq > 0) changes[node.modelData.key + "Freq"] = node.dragFreq
                         if (node.dragGain > -1000) changes[node.modelData.key + "Gain"] = node.dragGain
+                        if (node.dragQ > 0) changes[node.modelData.key + "Q"] = node.dragQ
+                        node.dragQ = -1
                         node.dragFreq = -1
                         node.dragGain = -1000
                         if (Object.keys(changes).length > 0) root.editor.commitMany(changes)
@@ -355,7 +366,7 @@ FxShell {
         x: 36; y: 360
         spacing: 6
         FxPlainKey { objectName: "eqAnalyzer"; label: qsTr("Analyzer"); sup: root.analyzerMode === 2 ? "PRE" : "POST"; on: root.analyzerMode > 0; onToggled: root.analyzerMode = (root.analyzerMode + 1) % 3 }
-        FxPlainKey { label: qsTr("Q-Couple"); on: true; enabledKey: false }
+        FxPlainKey { objectName: "eqQCouple"; label: qsTr("Q-Couple"); on: root.qCouple; onToggled: (v) => root.qCouple = v }
         FxPlainKey { label: qsTr("HQ"); on: false; enabledKey: false }
         Item { width: 14; height: 1 }
         Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Processing:"); color: "#a8b6c6"; font.family: Theme.fontFamily; font.pixelSize: 17 }

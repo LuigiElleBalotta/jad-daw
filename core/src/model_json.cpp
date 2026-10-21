@@ -338,6 +338,8 @@ nlohmann::json toJson(const Project& p) {
     nlohmann::json j = {{"name", p.name},         {"sampleRate", p.sampleRate}, {"tempoMap", p.tempoMap},
                         {"markers", p.markers},   {"tracks", p.tracks},         {"mediaPool", p.mediaPool}};
     if (!p.groups.empty()) j["groups"] = p.groups;  // only when there are some: older files stay as they were
+    if (!p.arrangement.empty()) j["arrangement"] = p.arrangement;
+    if (!p.chords.empty()) j["chords"] = p.chords;
     if (p.key != "C major") j["key"] = p.key;
     if (p.masterVolumeDb != 0.0f) j["masterVolumeDb"] = p.masterVolumeDb;
     if (p.panLaw != PanLaw::Minus3Comp) j["panLaw"] = panLawName(p.panLaw);
@@ -357,6 +359,8 @@ Project projectFromJson(const nlohmann::json& j) {
     j.at("tracks").get_to(p.tracks);
     j.at("mediaPool").get_to(p.mediaPool);
     if (j.contains("groups")) j.at("groups").get_to(p.groups);
+    if (j.contains("arrangement")) j.at("arrangement").get_to(p.arrangement);
+    if (j.contains("chords")) j.at("chords").get_to(p.chords);
     p.masterVolumeDb = j.value("masterVolumeDb", 0.0f);
     if (!panLawFromName(j.value("panLaw", std::string("minus3comp")), p.panLaw)) throw std::runtime_error("unknown pan law");
     if (j.contains("settings")) j.at("settings").get_to(p.settings);

@@ -44,6 +44,33 @@ TEST_CASE("markers: the command round-trips through JSON", "[markers]") {
     REQUIRE(again->toJson() == j);
 }
 
+TEST_CASE("arrangement and chord global tracks: sorted, undoable, saved with the project, apart from the markers", "[markers][global]") {
+    std::mt19937_64 rng(7);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Marker verse{Uuid::random(rng), 8 * kPPQ, "Verse"}, intro{Uuid::random(rng), 0, "Intro"};
+    REQUIRE_FALSE(s.execute(p, makeSetMarkerList(MarkerList::Arrangement, {verse, intro})).has_value());
+    Marker am{Uuid::random(rng), 4 * kPPQ, "F"}, c{Uuid::random(rng), 0, "Am"};
+    REQUIRE_FALSE(s.execute(p, makeSetMarkerList(MarkerList::Chords, {am, c})).has_value());
+    REQUIRE(p.markers.empty());
+    REQUIRE(p.arrangement.size() == 2);
+    REQUIRE(p.arrangement[0].name == "Intro");
+    REQUIRE(p.chords[0].name == "Am");
+    const Project again = projectFromJson(toJson(p));
+    REQUIRE(again.arrangement == p.arrangement);
+    REQUIRE(again.chords == p.chords);
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.chords.empty());
+    REQUIRE(p.arrangement.size() == 2);
+    REQUIRE_FALSE(s.undo(p).has_value());
+    REQUIRE(p.arrangement.empty());
+    const nlohmann::json j = makeSetMarkerList(MarkerList::Chords, {c})->toJson();
+    REQUIRE(j.at("type") == "set_chords");
+    REQUIRE(commandFromJson(j)->toJson() == j);
+    REQUIRE(makeSetMarkerList(MarkerList::Arrangement, {})->toJson().at("type") == "set_arrangement");
+    REQUIRE(s.execute(p, makeSetMarkerList(MarkerList::Chords, {c, c})).has_value());  // duplicate ids
+}
+
 TEST_CASE("automation: set_automation creates, replaces and removes a lane with undo", "[automation]") {
     std::mt19937_64 rng(6);
     Project p(Uuid::random(rng));

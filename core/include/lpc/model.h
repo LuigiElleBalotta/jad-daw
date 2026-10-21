@@ -220,6 +220,8 @@ struct Project {
     int sampleRate = 48000;
     TempoMap tempoMap;
     std::vector<Marker> markers;
+    std::vector<Marker> arrangement;  // the Arrangement global track: sections, each named, running to the next one (the last one to the end of the music)
+    std::vector<Marker> chords;       // the Chord global track: a chord symbol (name) from its position to the next chord
     std::vector<Group> groups;
     std::vector<Track> tracks;  // tracks[0] is the master track in a new project
     std::vector<MediaItem> mediaPool;

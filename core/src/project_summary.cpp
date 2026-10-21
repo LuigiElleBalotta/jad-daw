@@ -29,6 +29,14 @@ json projectSummary(const Project& p) {
     for (const auto& e : p.tempoMap.signatures()) j["timeSignature"].push_back({{"beat", static_cast<double>(e.tick) / kPPQ}, {"numerator", e.numerator}, {"denominator", e.denominator}});
     j["markers"] = json::array();
     for (const Marker& m : p.markers) j["markers"].push_back({{"id", m.id.toString()}, {"beat", static_cast<double>(m.tick) / kPPQ}, {"name", m.name}, {"text", m.text}});
+    if (!p.arrangement.empty()) {
+        j["arrangement"] = json::array();
+        for (const Marker& m : p.arrangement) j["arrangement"].push_back({{"beat", static_cast<double>(m.tick) / kPPQ}, {"name", m.name}});
+    }
+    if (!p.chords.empty()) {
+        j["chords"] = json::array();
+        for (const Marker& m : p.chords) j["chords"].push_back({{"beat", static_cast<double>(m.tick) / kPPQ}, {"chord", m.name}});
+    }
     j["lengthSeconds"] = std::round(static_cast<double>(projectEndFrame(p)) / std::max(1, p.sampleRate) * 100.0) / 100.0;
     json tracks = json::array();
     for (const Track& t : p.tracks) {

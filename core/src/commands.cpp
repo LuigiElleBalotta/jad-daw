@@ -372,8 +372,8 @@ private:
 
 class SetMarkersCmd final : public Command {
 public:
-    explicit SetMarkersCmd(std::vector<Marker> markers) : markers_(std::move(markers)) {}
-    std::string type() const override { return "set_markers"; }
+    explicit SetMarkersCmd(std::vector<Marker> markers, MarkerList list = MarkerList::Markers) : markers_(std::move(markers)), list_(list) {}
+    std::string type() const override { return list_ == MarkerList::Markers ? "set_markers" : (list_ == MarkerList::Arrangement ? "set_arrangement" : "set_chords"); }
     json toJson() const override { return {{"type", type()}, {"markers", markers_}}; }
 
     ApplyResult apply(Project& p) const override {
@@ -385,14 +385,16 @@ public:
             for (std::size_t k = 0; k < i; ++k)
                 if (markers_[k].id == markers_[i].id) return fail("bad_marker", "marker ids must be unique");
         }
-        std::vector<Marker> previous = std::move(p.markers);
-        p.markers = markers_;
-        std::stable_sort(p.markers.begin(), p.markers.end(), [](const Marker& a, const Marker& b) { return a.tick < b.tick; });
-        return success(makeSetMarkers(std::move(previous)));
+        std::vector<Marker>& target = list_ == MarkerList::Markers ? p.markers : (list_ == MarkerList::Arrangement ? p.arrangement : p.chords);
+        std::vector<Marker> previous = std::move(target);
+        target = markers_;
+        std::stable_sort(target.begin(), target.end(), [](const Marker& a, const Marker& b) { return a.tick < b.tick; });
+        return success(makeSetMarkerList(list_, std::move(previous)));
     }
 
 private:
     std::vector<Marker> markers_;
+    MarkerList list_;
 };
 
 class SetAutomationCmd final : public Command {
@@ -1163,6 +1165,7 @@ CommandPtr makeSetTrackAlternatives(Uuid trackId, std::string active, std::vecto
 CommandPtr makeSetProjectKey(std::string key) { return std::make_unique<SetProjectKeyCmd>(std::move(key)); }
 CommandPtr makeSetProjectName(std::string name) { return std::make_unique<SetProjectNameCmd>(std::move(name)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
+CommandPtr makeSetMarkerList(MarkerList list, std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers), list); }
 CommandPtr makeRemoveTempo(Ticks tick) { return std::make_unique<RemoveTempoCmd>(tick); }
 CommandPtr makeSetTrackProps(Uuid trackId, TrackPatch patch) { return std::make_unique<SetTrackPropsCmd>(trackId, std::move(patch)); }
 CommandPtr makeSetSignature(Ticks tick, int numerator, int denominator) { return std::make_unique<SetSignatureCmd>(tick, numerator, denominator); }
@@ -1222,6 +1225,8 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "set_project_key") return makeSetProjectKey(j.at("key").get<std::string>());
         if (type == "set_project_name") return makeSetProjectName(j.at("name").get<std::string>());
         if (type == "set_markers") return makeSetMarkers(j.at("markers").get<std::vector<Marker>>());
+        if (type == "set_arrangement") return makeSetMarkerList(MarkerList::Arrangement, j.at("markers").get<std::vector<Marker>>());
+        if (type == "set_chords") return makeSetMarkerList(MarkerList::Chords, j.at("markers").get<std::vector<Marker>>());
         if (type == "remove_tempo") return makeRemoveTempo(j.at("tick").get<Ticks>());
         if (type == "set_track_props") {
             TrackPatch patch;

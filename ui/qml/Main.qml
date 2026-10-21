@@ -397,7 +397,7 @@ ApplicationWindow {
         "track.showTrackAlternatives": () => { controller.trackAlternativesShown = !controller.trackAlternativesShown },
         "navigate.openMarkerText": () => markerList.openText(),
         "edit.selectSmpteLockedRegions": () => controller.selectAbsoluteRegions(),
-        "edit.selectDeselectGlobalTracks": () => controller.notice(qsTr("No global track is selected (the Marker, Tempo and Signature tracks are not selectable)")),
+        "edit.selectDeselectGlobalTracks": () => controller.notice(qsTr("No global track is selected (the Arrangement, Marker, Tempo, Signature and Chord tracks are not selectable)")),
         "navigate.openMarkerList": () => markerList.open(),
         "mix.createTrackAutomation": () => controller.createTrackAutomation(),
         "mix.deleteAutomation": () => controller.deleteAutomationOfSelected(),

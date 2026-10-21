@@ -1906,10 +1906,11 @@ void ProjectController::sessionRegenerate(const QString& regionId) {
     emit notice("Made the part again");
 }
 
-// The chords written as marker names ("Am", "F", "C/E", "G7"...): one per bar from the marker to the next marker (a marker that is not a chord
+// The chords of the Chord global track, or written as marker names ("Am", "F", "C/E", "G7"...): one per bar from the marker to the next marker (a marker that is not a chord
 // ends the one before it). `chords` is the text for the dialog, `startBeats` the bar of the first chord marker.
 QVariantMap ProjectController::sessionChordsFromMarkers() const {
-    std::vector<MarkerRow> markers = markerRows_;
+    // the Chord global track is the source when it has chords; otherwise the markers named as chords
+    std::vector<MarkerRow> markers = chordRows_.empty() ? markerRows_ : chordRows_;
     std::sort(markers.begin(), markers.end(), [](const MarkerRow& a, const MarkerRow& b) { return a.beats < b.beats; });
     const double barBeats = std::max(1, beatsPerBar_) * 4.0 / std::max(1, beatUnit_);
     QStringList bars;

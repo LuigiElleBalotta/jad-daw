@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import Jad
 
-// The global tracks: markers, tempo and signature lanes under the ruler.
+// The global tracks: Arrangement, Marker, Tempo, Signature and Chord lanes under the ruler.
 TestCase {
     name: "GlobalTracks"
     width: 1000; height: 500
@@ -72,7 +72,7 @@ TestCase {
         const t = createTemporaryObject(tlC, this, { project: c })
         compare(t.rulerHeight, 24)
         c.globalTracksVisible = true
-        compare(t.rulerHeight, 24 + 3 * 18)
+        compare(t.rulerHeight, 24 + 5 * 18)
         c.globalTracksVisible = false
         compare(t.rulerHeight, 24)
     }
@@ -81,8 +81,36 @@ TestCase {
         const c = setup()
         const t = createTemporaryObject(tlC, this, { project: c })
         c.globalTracksVisible = true
-        mouseDoubleClickSequence(t, 100, 24 + 9)   // the Marker lane
+        mouseDoubleClickSequence(t, 100, 24 + 18 + 9)   // the Marker lane, under the Arrangement lane
         tryVerify(function () { return c.markers().length === 1 })
+    }
+
+    function test_arrangement_sections_and_chords_are_added_renamed_moved_and_removed() {
+        const c = setup()
+        c.globalAdd("arrangement", 8, "Verse")
+        tryVerify(function () { return c.globalList("arrangement").length === 1 })
+        c.globalAdd("arrangement", 0, "Intro")
+        tryVerify(function () { return c.globalList("arrangement").length === 2 })
+        compare(c.globalList("arrangement")[0].name, "Intro")        // sorted by position
+        c.globalAdd("chords", 0, "Am")
+        tryVerify(function () { return c.globalList("chords").length === 1 })
+        c.globalAdd("chords", 4, "not a chord")                      // refused: a chord needs a chord symbol
+        c.globalAdd("chords", 4, "F/A")
+        tryVerify(function () { return c.globalList("chords").length === 2 })
+        compare(c.globalList("chords")[1].name, "F/A")
+        compare(c.markers().length, 0)                               // the markers are a separate track
+        const id = c.globalList("chords")[1].id
+        c.globalRename("chords", id, "G7")
+        tryVerify(function () { return c.globalList("chords")[1].name === "G7" })
+        c.globalMove("chords", id, 8)
+        tryVerify(function () { return c.globalList("chords")[1].beats === 8 })
+        c.globalAdd("chords", 8, "C")                                // one chord per position: it replaces the G7
+        tryVerify(function () { return c.globalList("chords").length === 2 && c.globalList("chords")[1].name === "C" })
+        c.globalRemove("chords", c.globalList("chords")[1].id)
+        tryVerify(function () { return c.globalList("chords").length === 1 })
+        c.undo()
+        tryVerify(function () { return c.globalList("chords").length === 2 })
+        compare(c.sessionChordsFromMarkers().chords, "Am % C")   // the Session Player reads the Chord track
     }
 
     function test_cycle_area_is_kept_while_the_cycle_is_off_and_moves_by_its_length() {

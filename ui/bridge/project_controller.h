@@ -469,6 +469,12 @@ public:
     Q_INVOKABLE void setMarkerText(const QString& id, const QString& text);   // Marker Text: the text kept with a marker
     Q_INVOKABLE QString markerAtOrBefore(double beats) const;                  // the id of the marker the playhead is in (the last at or before it), "" when none
     Q_INVOKABLE void removeMarker(const QString& id);
+    // The Arrangement and Chord global tracks (list "arrangement" | "chords"): {id, beats, name}, sorted; a chord is a chord symbol ("Am", "F/A", "G7"), a section any name
+    Q_INVOKABLE QVariantList globalList(const QString& list) const;
+    Q_INVOKABLE void globalAdd(const QString& list, double beats, const QString& name = QString());
+    Q_INVOKABLE void globalMove(const QString& list, const QString& id, double beats);
+    Q_INVOKABLE void globalRename(const QString& list, const QString& id, const QString& name);
+    Q_INVOKABLE void globalRemove(const QString& list, const QString& id);
     Q_INVOKABLE void setTempoAt(double beats, double bpm);
     Q_INVOKABLE void removeTempoAt(double beats);
     Q_INVOKABLE void setSignatureAt(double beats, int numerator, int denominator);
@@ -1201,6 +1207,10 @@ private:
     QTimer aqaRelease_;
     void autoselectLane(const QString& trackId, const QString& param);  // Autoselect Automation Parameter in Read Mode
     std::vector<MarkerRow> markerRows_;
+    std::vector<MarkerRow> arrangementRows_, chordRows_;
+    std::vector<MarkerRow>* globalRows(const QString& list) { return list == QLatin1String("arrangement") ? &arrangementRows_ : (list == QLatin1String("chords") ? &chordRows_ : nullptr); }
+    const std::vector<MarkerRow>* globalRows(const QString& list) const { return list == QLatin1String("arrangement") ? &arrangementRows_ : (list == QLatin1String("chords") ? &chordRows_ : nullptr); }
+    void sendGlobalList(const QString& list, const std::vector<MarkerRow>& rows);
     void sendMarkers(const std::vector<MarkerRow>& rows);
     QHash<QString, double> meter_, hold_, reduction_;
     std::array<lpc::InputLevelStats, 8> inputStats_;  // what each input channel looked like lately (the recording assistant reads it through the live link)

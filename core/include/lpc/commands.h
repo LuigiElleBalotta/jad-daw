@@ -53,6 +53,8 @@ CommandPtr makeSetTrackOrder(std::vector<Uuid> order);
 CommandPtr makeSetTrackAlternatives(Uuid trackId, std::string active, std::vector<TrackAlternative> others, std::vector<Region> regions);
 CommandPtr makeSetProjectKey(std::string key);  // "C major" ... "B minor" (sharps, no flats)
 CommandPtr makeSetProjectName(std::string name);  // 1 to 128 characters without control characters
+enum class MarkerList { Markers, Arrangement, Chords };
+CommandPtr makeSetMarkerList(MarkerList list, std::vector<Marker> markers);  // the same for the Arrangement and Chord global tracks
 CommandPtr makeSetMarkers(std::vector<Marker> markers);  // replaces the whole list (sorted by tick, unique ids); the undo is the previous list
 CommandPtr makeAddMedia(MediaItem item, int index = -1);  // index -1 appends
 CommandPtr makeRemoveMedia(Uuid mediaId);

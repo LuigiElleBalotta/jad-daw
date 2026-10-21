@@ -40,7 +40,7 @@ Rectangle {
             onClicked: root.project.automationParam = params[(params.indexOf(root.project.automationParam) + 1) % params.length]
         }
         Repeater {  // the names of the global tracks, next to their lanes
-            model: root.project.globalTracksVisible ? [qsTr("Marker"), qsTr("Tempo"), qsTr("Signature")] : []
+            model: root.project.globalTracksVisible ? [qsTr("Arrangement"), qsTr("Marker"), qsTr("Tempo"), qsTr("Signature"), qsTr("Chord")] : []
             delegate: Text {
                 required property string modelData
                 required property int index

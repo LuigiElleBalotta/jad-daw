@@ -1,7 +1,8 @@
 import QtQuick
 import Jad
 
-// The global tracks under the ruler (Track > Show Global Tracks, key G): Marker, Tempo and Signature lanes.
+// The global tracks under the ruler (Track > Show Global Tracks, key G): Arrangement, Marker, Tempo, Signature and Chord lanes (Logic's order).
+// Arrangement and Chord: double-click on the lane adds a section or a chord, a drag moves it, a double-click on it renames it, right-click deletes it.
 // Marker: double-click on the lane creates a marker, a drag moves it, a double-click on it renames it, right-click deletes it.
 // Tempo and Signature: double-click on the lane adds an event at the bar, a double-click on an event edits it, right-click deletes it.
 Item {
@@ -11,15 +12,20 @@ Item {
     required property real scrollBeats
     property real snapUnit: 1                       // beats; the timeline's snap, at least a beat for events
     readonly property real laneHeight: 18
-    readonly property int lanes: 3
+    readonly property int lanes: 5
+    readonly property var laneOf: ({ arrangement: 0, marker: 1, tempo: 2, signature: 3, chord: 4 })
     height: laneHeight * lanes
     clip: true
 
     // refreshed whenever the project changes (a binding on project.revision alone was not re-evaluated for a project opened at start)
+    property var arrangementList: []
+    property var chordList: []
     property var markerList: []
     property var tempoList: []
     property var signatureList: []
     function refresh() {
+        arrangementList = project.globalList("arrangement")
+        chordList = project.globalList("chords")
         markerList = project.markers()
         tempoList = project.tempoEvents()
         signatureList = project.signatureEvents()
@@ -34,13 +40,13 @@ Item {
     function bpmText(v) { return Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2) }
 
     // one text field for every rename and value entry
-    property string editKind: ""                     // "marker", "tempo" or "signature"
+    property string editKind: ""                     // "arrangement", "marker", "tempo", "signature" or "chord"
     property string editKey: ""                      // a marker id, or the position of an event in beats
     property real editBeats: 0
     function startEdit(kind, key, beats, text, x) {
         editKind = kind; editKey = key; editBeats = beats
         editor.x = Math.max(0, Math.min(root.width - editor.width, x))
-        editor.y = (kind === "marker" ? 0 : (kind === "tempo" ? 1 : 2)) * laneHeight
+        editor.y = laneOf[kind] * laneHeight
         editField.text = text
         editor.visible = true
         editField.forceActiveFocus()
@@ -51,7 +57,13 @@ Item {
         editor.visible = false
         if (!accept) return
         const t = editField.text.trim()
-        if (editKind === "marker") {
+        if (editKind === "arrangement") {
+            if (editKey === "") project.globalAdd("arrangement", editBeats, t)
+            else if (t !== "") project.globalRename("arrangement", editKey, t)
+        } else if (editKind === "chord") {
+            if (editKey === "") project.globalAdd("chords", editBeats, t)
+            else if (t !== "") project.globalRename("chords", editKey, t)
+        } else if (editKind === "marker") {
             if (editKey === "") project.addMarker(editBeats, t)
             else if (t !== "") project.renameMarker(editKey, t)
         } else if (editKind === "tempo") {
@@ -74,6 +86,8 @@ Item {
     Lane { index: 0 }
     Lane { index: 1 }
     Lane { index: 2 }
+    Lane { index: 3 }
+    Lane { index: 4 }
 
     // empty lane: double-click adds
     MouseArea {
@@ -81,12 +95,71 @@ Item {
         acceptedButtons: Qt.LeftButton
         onDoubleClicked: (m) => {
             const lane = Math.floor(m.y / root.laneHeight)
-            const beats = root.snapTo(root.xToBeats(m.x), lane === 0 ? Math.min(root.snapUnit, 1) : root.barBeats)
-            if (lane === 0) root.project.addMarker(beats)
-            else if (lane === 1) root.startEdit("tempo", "", beats, root.bpmText(root.project.bpm), m.x)
-            else root.startEdit("signature", "", beats, root.project.signatureText, m.x)
+            const beats = root.snapTo(root.xToBeats(m.x), lane === root.laneOf.marker ? Math.min(root.snapUnit, 1) : (lane === root.laneOf.chord ? 1 : root.barBeats))
+            if (lane === root.laneOf.arrangement) root.startEdit("arrangement", "", root.snapTo(root.xToBeats(m.x), root.barBeats), qsTr("Section"), m.x)
+            else if (lane === root.laneOf.marker) root.project.addMarker(beats)
+            else if (lane === root.laneOf.tempo) root.startEdit("tempo", "", beats, root.bpmText(root.project.bpm), m.x)
+            else if (lane === root.laneOf.signature) root.startEdit("signature", "", beats, root.project.signatureText, m.x)
+            else root.startEdit("chord", "", beats, "C", m.x)
         }
     }
+
+    // ---- arrangement sections and chords: from their position to the next one
+    component RangeItems: Repeater {
+        id: range
+        property string list              // "arrangement" or "chords"
+        property string kind              // the edit kind
+        property int lane: 0
+        property color tint: Theme.accentPrimary
+        delegate: Item {
+            id: item
+            required property var modelData
+            required property int index
+            property real dragBeats: -1
+            readonly property real beats: dragBeats >= 0 ? dragBeats : modelData.beats
+            readonly property var items: range.model
+            readonly property real nextBeats: index + 1 < items.length ? items[index + 1].beats : Math.max(beats + root.barBeats * (range.kind === "chord" ? 1 : 4), root.xToBeats(root.width) + 1)
+            x: root.beatsToX(beats)
+            y: root.laneHeight * range.lane
+            width: Math.max(4, (nextBeats - beats) * root.pixelsPerBeat - 1)
+            height: root.laneHeight
+            visible: x + width > 0 && x < root.width
+            objectName: range.kind + "_" + modelData.name
+            Rectangle { x: 0; y: 2; width: parent.width; height: parent.height - 4; radius: 2; color: Qt.rgba(range.tint.r, range.tint.g, range.tint.b, itemArea.pressed ? 0.5 : 0.28); border.color: range.tint }
+            Text {
+                x: 5
+                width: parent.width - 8
+                anchors.verticalCenter: parent.verticalCenter
+                text: item.modelData.name
+                elide: Text.ElideRight
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontTypeCaptionSize
+            }
+            MouseArea {
+                id: itemArea
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                property real pressX: 0
+                onPressed: (m) => {
+                    if (m.button === Qt.RightButton) { rangeMenu.list = range.list; rangeMenu.target = item.modelData.id; rangeMenu.popup(); return }
+                    pressX = m.x
+                }
+                onPositionChanged: (m) => {
+                    if (!pressed || Math.abs(m.x - pressX) < 3 && item.dragBeats < 0) return
+                    item.dragBeats = root.snapTo(item.modelData.beats + (m.x - pressX) / root.pixelsPerBeat, range.kind === "chord" ? 1 : root.barBeats)
+                }
+                onReleased: {
+                    if (item.dragBeats >= 0 && item.dragBeats !== item.modelData.beats) root.project.globalMove(range.list, item.modelData.id, item.dragBeats)
+                    item.dragBeats = -1
+                }
+                onClicked: (m) => { if (m.button === Qt.LeftButton && item.dragBeats < 0) root.project.locateBeats(item.modelData.beats) }
+                onDoubleClicked: root.startEdit(range.kind, item.modelData.id, item.modelData.beats, item.modelData.name, item.x)
+            }
+        }
+    }
+    RangeItems { list: "arrangement"; kind: "arrangement"; lane: 0; tint: Theme.trackOrangeSolid; model: root.arrangementList }
+    RangeItems { list: "chords"; kind: "chord"; lane: 4; tint: Theme.trackGreenSolid; model: root.chordList }
 
     // ---- markers
     Repeater {
@@ -97,6 +170,7 @@ Item {
             property real dragBeats: -1
             readonly property real beats: dragBeats >= 0 ? dragBeats : modelData.beats
             x: root.beatsToX(beats)
+            y: root.laneHeight * root.laneOf.marker
             width: Math.max(32, label.implicitWidth + 14)
             height: root.laneHeight
             visible: x + width > 0 && x < root.width
@@ -150,7 +224,7 @@ Item {
             required property int index
             readonly property real nextBeats: index + 1 < root.tempoList.length ? root.tempoList[index + 1].beats : root.xToBeats(root.width) + 1
             x: root.beatsToX(modelData.beats)
-            y: root.laneHeight
+            y: root.laneHeight * root.laneOf.tempo
             width: Math.max(2, (nextBeats - modelData.beats) * root.pixelsPerBeat)
             height: root.laneHeight
             visible: x + width > 0 && x < root.width
@@ -181,7 +255,7 @@ Item {
             required property int index
             readonly property real nextBeats: index + 1 < root.signatureList.length ? root.signatureList[index + 1].beats : root.xToBeats(root.width) + 1
             x: root.beatsToX(modelData.beats)
-            y: root.laneHeight * 2
+            y: root.laneHeight * root.laneOf.signature
             width: Math.max(2, (nextBeats - modelData.beats) * root.pixelsPerBeat)
             height: root.laneHeight
             visible: x + width > 0 && x < root.width
@@ -203,6 +277,12 @@ Item {
         }
     }
 
+    ThemedMenu {
+        id: rangeMenu
+        property string list
+        property string target
+        ThemedMenuItem { text: rangeMenu.list === "chords" ? qsTr("Delete Chord") : qsTr("Delete Arrangement Section"); onTriggered: root.project.globalRemove(rangeMenu.list, rangeMenu.target) }
+    }
     ThemedMenu {
         id: markerMenu
         property string target

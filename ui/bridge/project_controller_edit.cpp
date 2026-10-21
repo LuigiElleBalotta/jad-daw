@@ -28,6 +28,7 @@
 #include "juce_plugin_host.h"
 #endif
 #include "lpc/model_json.h"
+#include "lpc/session_player.h"
 #include "lpc/media_store.h"
 #include "lpc/wav.h"
 #include "lpc/offline_render.h"
@@ -486,6 +487,79 @@ QVariantList ProjectController::markers() const {
     QVariantList out;
     for (const MarkerRow& m : markerRows_) out.append(QVariantMap{{"id", m.id}, {"beats", m.beats}, {"name", m.name}, {"text", m.text}});
     return out;
+}
+
+QVariantList ProjectController::globalList(const QString& list) const {
+    QVariantList out;
+    if (const std::vector<MarkerRow>* rows = globalRows(list))
+        for (const MarkerRow& m : *rows) out.append(QVariantMap{{"id", m.id}, {"beats", m.beats}, {"name", m.name}});
+    return out;
+}
+
+void ProjectController::sendGlobalList(const QString& list, const std::vector<MarkerRow>& rows) {
+    nlohmann::json out = nlohmann::json::array();
+    for (const MarkerRow& m : rows)
+        out.push_back({{"id", m.id.toStdString()},
+                       {"tick", static_cast<std::int64_t>(std::llround(std::clamp(m.beats, 0.0, kMaxBeatsEdit) * lpc::kPPQ))},
+                       {"name", m.name.left(200).toStdString()},
+                       {"text", m.text.left(4000).toStdString()}});
+    sendCommand({{"type", list == QLatin1String("chords") ? "set_chords" : "set_arrangement"}, {"markers", out}});
+}
+
+namespace {
+// a chord symbol the Session Players can play ("Am", "F/A", "G7"...)
+bool isChordSymbol(const QString& name, int beatsPerBar) {
+    std::string error;
+    const std::string text = name.trimmed().toStdString();
+    return !text.empty() && text.find_first_of(" .%") == std::string::npos && !lpc::parseChords(text, std::max(1, beatsPerBar), error).empty() && error.empty();
+}
+}  // namespace
+
+void ProjectController::globalAdd(const QString& list, double beats, const QString& name) {
+    std::vector<MarkerRow>* rows = globalRows(list);
+    if (!host_ || !rows || !std::isfinite(beats)) return;
+    const bool chord = list == QLatin1String("chords");
+    if (chord && !isChordSymbol(name, beatsPerBar_)) {
+        emit notice(QStringLiteral("\"%1\" is not a chord symbol (try Am, F/A, G7, Cmaj7)").arg(name));
+        return;
+    }
+    auto next = *rows;
+    // one chord or section per position: adding at an occupied position replaces it
+    next.erase(std::remove_if(next.begin(), next.end(), [&](const MarkerRow& m) { return std::abs(m.beats - beats) < 1e-6; }), next.end());
+    next.push_back({QUuid::createUuid().toString(QUuid::WithoutBraces), name.isEmpty() ? QStringLiteral("Section %1").arg(next.size() + 1) : name.trimmed(), std::max(0.0, beats)});
+    sendGlobalList(list, next);
+}
+
+void ProjectController::globalMove(const QString& list, const QString& id, double beats) {
+    std::vector<MarkerRow>* rows = globalRows(list);
+    if (!host_ || !rows || !std::isfinite(beats)) return;
+    auto next = *rows;
+    const double to = std::max(0.0, beats);
+    next.erase(std::remove_if(next.begin(), next.end(), [&](const MarkerRow& m) { return m.id != id && std::abs(m.beats - to) < 1e-6; }), next.end());
+    for (MarkerRow& m : next)
+        if (m.id == id) m.beats = to;
+    sendGlobalList(list, next);
+}
+
+void ProjectController::globalRename(const QString& list, const QString& id, const QString& name) {
+    std::vector<MarkerRow>* rows = globalRows(list);
+    if (!host_ || !rows || name.trimmed().isEmpty()) return;
+    if (list == QLatin1String("chords") && !isChordSymbol(name, beatsPerBar_)) {
+        emit notice(QStringLiteral("\"%1\" is not a chord symbol (try Am, F/A, G7, Cmaj7)").arg(name));
+        return;
+    }
+    auto next = *rows;
+    for (MarkerRow& m : next)
+        if (m.id == id) m.name = name.trimmed();
+    sendGlobalList(list, next);
+}
+
+void ProjectController::globalRemove(const QString& list, const QString& id) {
+    std::vector<MarkerRow>* rows = globalRows(list);
+    if (!host_ || !rows) return;
+    auto next = *rows;
+    next.erase(std::remove_if(next.begin(), next.end(), [&](const MarkerRow& m) { return m.id == id; }), next.end());
+    sendGlobalList(list, next);
 }
 
 QVariantList ProjectController::tempoEvents() const {
@@ -2372,6 +2446,8 @@ void ProjectController::closeProject() {
     allRows_.clear();
     regionRows_.clear();
     markerRows_.clear();
+    arrangementRows_.clear();
+    chordRows_.clear();
     groupRows_.clear();
     tracks_.reset(std::vector<TrackRow>());
     mixer_.reset(std::vector<TrackRow>());

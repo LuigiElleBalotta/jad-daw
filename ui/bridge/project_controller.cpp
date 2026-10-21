@@ -376,6 +376,8 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     regionRows_ = s.regions;
     tempoMap_ = s.tempoMap;
     markerRows_ = s.markers;
+    arrangementRows_ = s.arrangement;
+    chordRows_ = s.chords;
     groupRows_ = s.groups;
     ++groupsRevision_;
     mediaPaths_ = s.mediaPaths;

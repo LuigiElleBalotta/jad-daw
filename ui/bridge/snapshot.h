@@ -141,6 +141,8 @@ struct Snapshot {
     std::vector<TrackRow> tracks;  // project order, master included
     std::vector<RegionRow> regions;
     std::vector<MarkerRow> markers;  // sorted by position
+    std::vector<MarkerRow> arrangement;  // the Arrangement global track (sections)
+    std::vector<MarkerRow> chords;       // the Chord global track (name = the chord symbol)
     std::vector<GroupRow> groups;
     lpc::TempoMap tempoMap;
     QHash<QString, QString> mediaPaths;  // media id -> path relative to the project folder

@@ -2471,6 +2471,8 @@ void ProjectController::closeProject() {
     dir_.clear();
     allRows_.clear();
     regionRows_.clear();
+    pendingSmartFollow_.clear();
+    pendingSmartTempo_.clear();
     markerRows_.clear();
     arrangementRows_.clear();
     chordRows_.clear();

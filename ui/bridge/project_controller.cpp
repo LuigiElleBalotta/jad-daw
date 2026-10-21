@@ -374,6 +374,12 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     }
     allRows_ = s.tracks;
     regionRows_ = s.regions;
+    for (const QString& id : std::exchange(pendingSmartTempo_, {}))
+        if (regions_.find(id)) QTimer::singleShot(0, this, [this, id] { smartApplyRegionTempo(id); });
+        else pendingSmartTempo_ << id;
+    for (const QString& id : std::exchange(pendingSmartFollow_, {}))
+        if (regions_.find(id)) QTimer::singleShot(0, this, [this, id] { smartFollowRegion(id, true); });
+        else pendingSmartFollow_ << id;
     tempoMap_ = s.tempoMap;
     markerRows_ = s.markers;
     arrangementRows_ = s.arrangement;
@@ -1369,6 +1375,13 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             const double endFrames = musical ? 0.0 : static_cast<double>(startMicros + region.length) * projectRate / 1e6;
             const double endBeats = musical ? static_cast<double>(region.start + region.length) / lpc::kPPQ
                                             : static_cast<double>(self->tempoMap_.samplesToTicks(endFrames, projectRate)) / lpc::kPPQ;
+            // Project Settings > Smart Tempo: Flex & Follow for new recordings and imported files, and Automatic (the first audio sets the project tempo)
+            {
+                const QString regionId = QString::fromStdString(region.id.toString());
+                const bool firstAudio = std::none_of(self->regionRows_.begin(), self->regionRows_.end(), [](const RegionRow& r) { return r.audio; });
+                if (self->projectSetting("tempoMode", "adapt") == QLatin1String("automatic") && firstAudio) self->pendingSmartTempo_ << regionId;
+                else if (self->projectSetting(recorded ? "followNewRecordings" : "followImports", "off") == QLatin1String("follow")) self->pendingSmartFollow_ << regionId;
+            }
             self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [target, done, endBeats, beats](bool accepted) {
                 if (!accepted) {
                     std::error_code ec;

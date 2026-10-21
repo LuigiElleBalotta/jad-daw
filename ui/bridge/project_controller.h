@@ -1035,6 +1035,7 @@ private:
         std::string json;
     };
     std::vector<ClipRegion> clipboard_;   // the copied regions
+    QStringList pendingSmartFollow_, pendingSmartTempo_;  // new audio regions the Smart Tempo project settings act on, when the next snapshot lists them
     QStringList pendingRegionSelection_;  // ids of regions just pasted: selected when the next snapshot has them
     double nudgeBeats_ = 0.25;
     std::vector<const RegionRow*> selectedRegionRows() const;

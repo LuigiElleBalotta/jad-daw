@@ -2400,12 +2400,12 @@ void ProjectController::finishAutomationCapture(const QString& trackId) {
 }
 
 namespace {
-// "io.<key>" = "<user 0|1>	<long>	<short>"
+// "io.<key>" = "<user 0|1>\t<long>\t<short>"
 struct IoRow { bool user = false; QString longName, shortName; };
 QString ioSettingKey(QString key) { return QStringLiteral("io.") + key.replace(QLatin1Char(' '), QLatin1Char('_')); }
 IoRow parseIoRow(const QString& v) {
     IoRow r;
-    const QStringList f = v.split(QLatin1Char('	'));
+    const QStringList f = v.split(QLatin1Char('\t'));
     if (f.size() == 3) { r.user = f[0] == QLatin1String("1"); r.longName = f[1]; r.shortName = f[2]; }
     return r;
 }
@@ -2419,9 +2419,9 @@ QVariantMap ProjectController::ioLabel(const QString& key) const {
 
 void ProjectController::setIoLabel(const QString& key, bool user, const QString& longName, const QString& shortName) {
     if (key.isEmpty() || key.size() > 40) return;
-    const QString l = longName.trimmed().left(32).remove(QLatin1Char('	')), s = shortName.trimmed().left(16).remove(QLatin1Char('	'));
+    const QString l = longName.trimmed().left(32).remove(QLatin1Char('\t')), s = shortName.trimmed().left(16).remove(QLatin1Char('\t'));
     const bool plain = !user && l.isEmpty() && s.isEmpty();
-    setProjectSetting(ioSettingKey(key), plain ? QString() : QStringLiteral("%1	%2	%3").arg(user ? 1 : 0).arg(l, s));
+    setProjectSetting(ioSettingKey(key), plain ? QString() : QStringLiteral("%1\t%2\t%3").arg(user ? 1 : 0).arg(l, s));
 }
 
 void ProjectController::resetIoLabels() {

@@ -24,6 +24,59 @@ TestCase {
         compare(got, [1000])
     }
 
+    function openInsert(processor) {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("audio")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        const id = c.tracks.trackIdAt(0)
+        c.addInsert(id, processor)
+        tryVerify(function () { return c.trackInserts(id).length === 1 })
+        const w = createTemporaryObject(winC, this, { project: c })
+        c.openEffectEditor(id, 0)
+        tryVerify(function () { return w.spec !== null })
+        return { c: c, w: w, id: id }
+    }
+
+    function test_the_channel_eq_window_draws_eight_handles_and_a_drag_is_one_undo_step() {
+        const o = openInsert("builtin.eq")
+        verify(o.w.graphical)
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        for (const k of ["lc", "ls", "p1", "p2", "p3", "p4", "hs", "hc"]) verify(findChild(view.item, "eqHandle_" + k) !== null)
+        o.w.edit("p2Gain", 6)
+        o.w.edit("p2Freq", 500)
+        o.w.commitMany({ p2Gain: 6, p2Freq: 500 })
+        tryVerify(function () { return o.c.trackInserts(o.id)[0].params.p2Gain === 6 && o.c.trackInserts(o.id)[0].params.p2Freq === 500 })
+        verify(o.w.curve.length > 10)
+        o.c.undo()
+        tryVerify(function () { return o.c.trackInserts(o.id)[0].params.p2Gain === undefined || o.c.trackInserts(o.id)[0].params.p2Gain === 0 })
+    }
+
+    function test_the_compressor_window_has_the_circuit_menu_and_the_parameter_list_is_one_click_away() {
+        const o = openInsert("builtin.compressor")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        verify(findChild(view.item, "compCircuit") !== null)
+        o.w.setNow("circuit", 5)
+        tryVerify(function () { return o.c.trackInserts(o.id)[0].params.circuit === 5 })
+        verify(findChild(o.w.contentItem, "showParameterList") !== null)
+        o.w.showList = true
+        verify(!o.w.graphical)
+        o.w.showList = false
+        verify(o.w.graphical)
+    }
+
+    function test_other_effects_get_a_knob_for_each_parameter() {
+        const o = openInsert("builtin.delay")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        verify(view.item.implicitHeight > 40)
+        o.w.edit("time", 400)
+        o.w.commit("time", 400)
+        tryVerify(function () { return o.c.trackInserts(o.id)[0].params.time === 400 })
+    }
+
     function test_the_editor_window_follows_the_insert_it_edits() {
         const c = createTemporaryObject(ctlC, this)
         verify(c.newProjectInTempForTest())

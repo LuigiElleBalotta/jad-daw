@@ -19,11 +19,18 @@ Window {
     property var masterStats: ({})
     readonly property bool isMastering: spec !== null && spec.id === "builtin.mastering"
     readonly property bool isMatchEq: spec !== null && spec.id === "builtin.matcheq"
+    property bool showList: false       // the parameter list instead of the graphical window
+    // the graphical window: a layout of its own for the Channel EQ and the Compressor, knobs for every other effect and instrument; the Mastering
+    // Assistant and Match EQ keep their panels above the list
+    readonly property bool hasGraphic: spec !== null && !isMastering && !isMatchEq
+    readonly property bool graphical: hasGraphic && !showList
+    readonly property string kind: spec ? spec.id : ""
 
     visible: trackId !== "" && spec !== null
-    width: 520
-    height: Math.min(Screen.height - 80, 120 + (spec ? spec.params.length : 0) * 30 + (curveBox.visible ? 150 : 0) + (isMastering ? 80 - 9 * 30 : 0))
-    minimumWidth: 420
+    width: graphical ? (kind === "builtin.eq" ? 820 : (kind === "builtin.compressor" ? 800 : 640)) : 520
+    height: Math.min(Screen.height - 80, graphical ? (kind === "builtin.eq" ? 560 : (kind === "builtin.compressor" ? 480 : 150 + (graphic.item ? graphic.item.implicitHeight : 200)))
+                                                  : 120 + (spec ? spec.params.length : 0) * 30 + (curveBox.visible ? 150 : 0) + (isMastering ? 80 - 9 * 30 : 0))
+    minimumWidth: graphical ? 560 : 420
     minimumHeight: 200
     title: spec ? qsTr("%1 - %2").arg(project.trackName(trackId)).arg(spec.name) : ""
     color: Theme.surfacePanel
@@ -66,6 +73,27 @@ Window {
         running: Object.keys(root.pending).length > 0
         onTriggered: root.flush()
     }
+    // the interface of the graphical views: the spec of a parameter by name, a drag (many moves, one undo step at the end) and a single change
+    function param(name) {
+        if (spec) for (const p of spec.params) if (p.name === name) return p
+        return { name: name, label: name, unit: "", min: 0, max: 1, def: 0, logarithmic: false }
+    }
+    function edit(name, value) {
+        if (!gesture) { gesture = true; project.beginGesture() }
+        const p = Object.assign({}, pending)
+        p[name] = value
+        pending = p
+        if (spec && spec.id === "builtin.eq") curve = project.eqCurve(valuesOf(), 160, 20, 20000)
+    }
+    function commit(name, value) { commitMany(({ [name]: value })) }
+    function commitMany(values) {
+        const p = Object.assign({}, pending)
+        for (const n in values) p[n] = values[n]
+        pending = p
+        flush()
+        if (gesture) { gesture = false; project.endGesture() }
+    }
+    function setNow(name, value) { flush(); setParam(name, value) }
     function setParam(name, value) {
         if (index === -2) project.setInstrumentParam(trackId, name, value)
         else project.setInsertParam(trackId, index, name, value)
@@ -136,7 +164,7 @@ Window {
         }
         Rectangle {  // the response of the Channel EQ
             id: curveBox
-            visible: root.spec !== null && root.spec.id === "builtin.eq"
+            visible: root.spec !== null && root.spec.id === "builtin.eq" && !root.graphical
             Layout.fillWidth: true
             Layout.preferredHeight: 130
             color: Theme.surfaceCanvas
@@ -292,7 +320,32 @@ Window {
             }
         }
 
+        Loader {  // the graphical window
+            id: graphic
+            objectName: "graphicView"
+            visible: root.graphical
+            active: root.graphical
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            sourceComponent: root.kind === "builtin.eq" ? eqView : (root.kind === "builtin.compressor" ? compressorView : gridView)
+        }
+        Component { id: eqView; FxChannelEq { editor: root } }
+        Component { id: compressorView; FxCompressor { editor: root } }
+        Component { id: gridView; FxKnobGrid { editor: root } }
+        RowLayout {
+            visible: root.hasGraphic
+            Layout.fillWidth: true
+            Item { Layout.fillWidth: true }
+            IconButton {
+                objectName: "showParameterList"
+                implicitHeight: 22
+                label: root.showList ? qsTr("Graphic") : qsTr("Parameters")
+                onClicked: root.showList = !root.showList
+            }
+        }
+
         Flickable {
+            visible: !root.graphical
             Layout.fillWidth: true
             Layout.fillHeight: true
             contentHeight: grid.height

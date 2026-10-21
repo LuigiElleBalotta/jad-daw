@@ -35,6 +35,13 @@ qt_add_qml_module(jad_ui_lib
         qml/Main.qml
         qml/Theme.qml
         qml/TrackColors.qml
+        qml/FxKnob.qml
+        qml/FxValue.qml
+        qml/FxSwitch.qml
+        qml/FxDisplay.qml
+        qml/FxKnobGrid.qml
+        qml/FxChannelEq.qml
+        qml/FxCompressor.qml
         qml/IconButton.qml
         qml/Panel.qml
         qml/Fader.qml

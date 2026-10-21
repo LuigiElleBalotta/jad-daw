@@ -17,7 +17,7 @@ F0, F0b converters and icon tracer; F1 presets (324) and Match EQ curves (75); F
 Everything is built and tested: core (`build-core`) 420 test cases, 1 skipped; UI QML 219, bridge 172 (1 skipped), all green. The UI had never been compiled before this day: only missing includes showed up.
 
 ## What is missing, in order
-1. G (the owner, 2026-10-21): graphical windows for the stock effects. Done: Channel EQ, Compressor, Limiter, Adaptive Limiter, Noise Gate, Mastering Assistant, Match EQ, Reverb, Delay, Neural Saturation (files `ui/qml/Fx*View.qml`, frame `FxShell.qml`, chosen in the Loader of `EffectEditorWindow.qml`). Left: instruments (still the knob grid), and G4 in the roadmap (what the windows draw but the engine does not do).
+1. G (the owner, 2026-10-21): graphical windows for the stock effects. Done: Channel EQ, Compressor, Limiter, Adaptive Limiter, Noise Gate, Mastering Assistant, Match EQ, Reverb, Delay, Neural Saturation, Synth (files `ui/qml/Fx*View.qml`, frame `FxShell.qml`, chosen in the Loader of `EffectEditorWindow.qml`). Left: Drum Kit/External MIDI (still the knob grid), and G4 in the roadmap (what the windows draw but the engine does not do).
 2. E15b Pattern tracks (Step Sequencer): `ui/qml/StepSequencer.qml` exists, the Pattern card of Create New Track is disabled until a pattern region exists.
 3. E1 sub-item: Record Automation with Audio Regions (Trim and Relative are done).
 4. Engine behaviour still only saved for: region automation priority, preset value for regions, balancer pan law, colorize takes, loadOnlyNeeded, resetRecordEnable, midi send/thru, assets copy flags, trim start of new regions; metronome Options and MIDI click output; CAF bounce.

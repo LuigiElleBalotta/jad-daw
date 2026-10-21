@@ -1924,7 +1924,7 @@ void ProjectController::applyLiveTarget() {
     const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
     for (const TrackRow& t : allRows_)
         if (t.kind == "instrument" && armed.contains(t.id)) { target = t.id; break; }
-    if (target.isEmpty())
+    if (target.isEmpty() && projectSetting("midiThru") != QLatin1String("0"))  // Project Settings > MIDI > MIDI Thru: without it only a record-enabled track hears the keyboard
         for (const QString& id : std::as_const(selectedTracks_))
             for (const TrackRow& t : allRows_)
                 if (t.id == id && t.kind == "instrument") { target = id; break; }

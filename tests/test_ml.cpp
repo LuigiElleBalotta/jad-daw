@@ -1,7 +1,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <chrono>
 #include <cstdlib>
+#include <iostream>
 #include <filesystem>
 #include <random>
 
@@ -260,4 +262,31 @@ TEST_CASE("ml: the Mastering Analog Model without its files keeps the approximat
     ProcessorRef clean{kProcMastering, {{"character", 0}}, "", "", false}, valve{kProcMastering, {{"character", 1}}, "", "", false};
     CHECK(audio::makeBuiltinEffect(valve, 48000.0)->latencySamples() == audio::makeBuiltinEffect(clean, 48000.0)->latencySamples());
     ml::setModelDirectory(LPC_ONNX_MODELS_DIR);
+}
+
+// Not run by default (`lpc_tests "[.bench]"`): how much of the real time the neural effects take on this CPU (blocks of 512 frames of a noisy sine, 48 kHz stereo)
+TEST_CASE("bench: the neural effects against real time", "[.bench][ml]") {
+    ml::setModelDirectory(LPC_ONNX_MODELS_DIR);
+    if (!ml::available()) SKIP("onnxruntime is not available");
+    auto run = [](const ProcessorRef& ref) {
+        auto fx = audio::makeBuiltinEffect(ref, 48000.0);
+        REQUIRE(fx != nullptr);
+        std::mt19937 rng(1);
+        std::normal_distribution<float> noise(0.0f, 0.05f);
+        const int blocks = 48000 * 8 / 512;
+        std::vector<float> l(512), r(512);
+        double worst = 0.0, total = 0.0;
+        for (int b = 0; b < blocks; ++b) {
+            for (int i = 0; i < 512; ++i) l[static_cast<std::size_t>(i)] = r[static_cast<std::size_t>(i)] = 0.3f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * 220.0 * (b * 512 + i) / 48000.0)) + noise(rng);
+            const auto t0 = std::chrono::steady_clock::now();
+            fx->process(l.data(), r.data(), 512);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            worst = std::max(worst, ms);
+            total += ms;
+        }
+        const double budget = 512.0 / 48000.0 * 1000.0;
+        std::cout << ref.processorId << " character " << (ref.params.count("character") ? ref.params.at("character") : -1) << ": mean " << total / blocks / budget * 100.0 << " %\n";
+        };
+    for (int character = 0; character <= 3; ++character) run(ProcessorRef{kProcMastering, {{"character", character}}, "", "", false});
+    for (int type = 0; type <= 9; type += 3) run(ProcessorRef{kProcMlSaturation, {{"type", type}, {"drive", 70}}, "", "", false});
 }

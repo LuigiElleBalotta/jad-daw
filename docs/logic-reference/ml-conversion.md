@@ -53,3 +53,7 @@ graphs (the `_in_state`/`_out_state` pairs match by name). Gain for a 1 kHz sine
 T -3.5, G_SO -1.1, G -4.3, S_SO -4.0, S -4.3), then compressing: at 0 dBFS in the output is 15 to 18 dB under the input. So they behave as a level-dependent
 compressor/colour with a knee near -27 dBFS, and the chain must feed them a level and make it up afterwards (`MasteringProcessor` feeds -12 dB and makes up 12 dB
 plus the linear gain; Apple's real scaling is an open question for the Mac pass).
+
+## CPU cost on Windows (2026-10-21, onnxruntime CPU, blocks of 512 frames at 48 kHz, one instance)
+
+Measured with `lpc_tests "[.bench]"` (`tests/test_ml.cpp`): Mastering Assistant Clean 0.5 % of real time, Valve / Punch / Transparent about 10.6 % each, Neural Saturation 22-30 % depending on the model family. So the Analog Model characters run in real time without Apple silicon; Neural Saturation is the heavy one (a handful of instances would fill a core).

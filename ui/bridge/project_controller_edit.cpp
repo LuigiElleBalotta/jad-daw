@@ -31,6 +31,8 @@
 #include "lpc/model_json.h"
 #include "lpc/session_player.h"
 #include "lpc/compressed_audio.h"
+#include "lpc/effect_presets.h"
+#include "lpc/patch_library.h"
 #include "lpc/media_store.h"
 #include "lpc/wav.h"
 #include "lpc/offline_render.h"

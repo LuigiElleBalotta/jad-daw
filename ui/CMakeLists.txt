@@ -51,6 +51,7 @@ qt_add_qml_module(jad_ui_lib
         qml/FxHSlider.qml
         qml/FxGateView.qml
         qml/FxMasteringView.qml
+        qml/FxMatchEqView.qml
         qml/FxGenericView.qml
         qml/IconButton.qml
         qml/Panel.qml

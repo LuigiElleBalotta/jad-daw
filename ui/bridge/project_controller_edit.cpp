@@ -409,7 +409,7 @@ QVariantMap ProjectController::regionInfo(const QString& regionId) const {
             trackName = t.name;
             flexMode = t.flexMode;
         }
-    return {{"found", true}, {"trackId", row->trackId}, {"trackName", trackName}, {"flexMode", flexMode}, {"flexMarkers", row->flexMarkers}, {"generated", row->generated}, {"followTempo", row->followTempo}, {"beatsBpm", row->beatsBpm}, {"beatFracs", row->beatFracs}, {"startBeats", row->startBeats},
+    return {{"found", true}, {"loopBeats", row->loopBeats}, {"trackId", row->trackId}, {"trackName", trackName}, {"flexMode", flexMode}, {"flexMarkers", row->flexMarkers}, {"generated", row->generated}, {"followTempo", row->followTempo}, {"beatsBpm", row->beatsBpm}, {"beatFracs", row->beatFracs}, {"startBeats", row->startBeats},
             {"lengthBeats", row->lengthBeats}, {"audio", row->audio}, {"color", row->color}, {"mediaId", row->mediaId},
             {"sourceOffsetFrames", static_cast<double>(row->sourceOffsetFrames)}, {"lengthFrames", static_cast<double>(row->lengthFrames)},
             {"mediaFrames", static_cast<double>(row->mediaFrames)}};

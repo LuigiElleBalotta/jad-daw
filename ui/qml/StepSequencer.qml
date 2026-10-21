@@ -19,7 +19,7 @@ Item {
     readonly property var rows: [{ pitch: 49, name: qsTr("Crash") }, { pitch: 46, name: qsTr("Open Hat") }, { pitch: 42, name: qsTr("Closed Hat") },
         { pitch: 45, name: qsTr("Mid Tom") }, { pitch: 41, name: qsTr("Low Tom") }, { pitch: 39, name: qsTr("Clap") }, { pitch: 38, name: qsTr("Snare") }, { pitch: 36, name: qsTr("Kick") }]
     readonly property real stepBeats: 0.25
-    readonly property int steps: hasMidi ? Math.max(1, Math.round(info.lengthBeats / stepBeats)) : 0
+    readonly property int steps: hasMidi ? Math.max(1, Math.round((info.loopBeats > 0 ? info.loopBeats : info.lengthBeats) / stepBeats)) : 0   // a looped (pattern) region: the steps of the loop
     readonly property real cell: 22
     readonly property real labelWidth: 90
     property int defaultVelocity: 100

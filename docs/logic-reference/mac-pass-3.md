@@ -7,13 +7,13 @@ resolved, the "what's missing" line says what a future pass would need.
 |---|---|---|
 | 1. ONNX vs CoreML numeric verification | **done** (for everything that can run through the public API) | The 6 Analog Model + 10 Saturation-family networks (317 of 321 bundle/block-size combinations) can't be numerically compared at all — Core ML's public `prediction(from:)` API itself refuses to run them (see below), independent of ONNX correctness. A real conversion bug was found and confirmed in `OnsetDetectionCNN` (0.226 max-abs-err, flagged as suspect in `ml-conversion.md` already) — needs a fix in `espresso2onnx.py`'s weight-layout/flatten-order handling, not a Mac-side task. |
 | 2a. `ProcessAllDynamicCBs` stage order | **done** | The MB-compressor calibration loop's exit mechanism is now identified (see 2f): an externally-set stop flag polled in the loop, not a local counter — the remaining gap is tracing *what sets that flag* (the loudness-analysis object's own concrete type), a genuine runtime-dispatch boundary, not an analysis gap. |
-| 2b. `Coefficients(value,3)` origin/range | **partial** | The field it writes (+0x164) and the dB→linear conversion are confirmed (`analog-model-chain.md`). This pass confirmed via `procedure_callers` that it has **zero resolved callers inside `MADSP.x86_64` itself** — the UI/automation parameter system that calls it lives in a separate framework binary, not this one. Where the external caller sources the dB value remains not determined; would need opening that other binary (not identified/thinned this session). |
+| 2b. `Coefficients(value,3)` origin/range | **closed (confirmed static-analysis boundary)** | Found and fully decoded the real function (`CAnalogModelingMasteringChainFX::Coefficients`, `0x2d65d0`): only `idx==3` is implemented at all (every other index is a silent no-op), and it's byte-exact `self+0x164 = exp10f(dB×0.05)` i.e. `10^(dB/20)`. The caller search was redone 3 independent ways (full-file disassembly grep, raw-byte function-pointer scan, class-name search across every binary in the app) — **all three agree there is no caller anywhere in any binary**, overturning the earlier "lives in a separate framework" guess: no other framework even references this class name, so no cross-binary call is structurally possible without a bound symbol that doesn't exist. The real explanation is almost certainly a runtime-constructed parameter-dispatch table inside `MADSP` itself, built at object-construction time — which has no literal address for any static scanner to find. Same category of confirmed boundary as 2a's `self+0xa18` stop-flag setter, not an unexplored lead. |
 | 2c. The 4 trailing `CBasicFX::Process` slots | **done** | — identified directly in `CAutoMasterFX`'s own constructor: `CLevelMeterFX`, `CLoudnessMeterFX`, `CCorrelationMeterFX`, `CSpectrumAnalyzerFX` — the window's metering chain, not further audio processing. |
 | 2d. `nativeAvailable` meaning | **closed** | Decisively settled by direct ONNX comparison (not REA): `T` vs `TSO` and `G` vs `G_SO` each have **byte-identical graph structure** (187 nodes, 8 op types, 194 initializers, 115504 weight bytes — exact match) but **different weight-tensor SHA-256 hashes** — i.e. two independently-trained models sharing one architecture, not one model deployed two ways for speed. `nativeAvailable` therefore selects a genuinely different-sounding model (different learned weights), settling the sound-vs-speed question in favor of **sound** (it may also affect speed, but it is not *only* a speed optimization). |
 | 2e. Clean/Valve/Punch/Transparent parameter defaults/ranges | **closed (mechanism fully explained)** | The exact addressing of the `+0xd8`/`+0xe0`-indexed trim table decoded by hand: `value = *(float*)(self + modeIdx×8 + 0x3c0 + circuitIdx×4)` — **inline per-instance object data, not a static array**, so its contents can't be read from the binary directly. Traced further: it's populated at runtime from the Mastering Assistant's `#default.pst` preset (found: `GAME`/`TSPP`-magic binary blob, 4132 bytes, a flat parameter array) via `Coefficients()` calls. Reading the *specific* preset-parameter index that lands in this exact table slot needs tracing `CAutoMaster::Coefficients()`'s own full parameter-index map (a large function, not covered this pass) — the mechanism is now fully understood even though the literal numbers remain preset-loaded state rather than binary-embedded constants. |
 | 2f. Stereo spread / multiband compressor / Auto EQ algorithms | **done** | Stereo spread (`ProcessSpread`) fully decoded. `AutoAdjustMBCompressor` fully hand-disassembled: the "opaque" calls Ghidra flagged turned out to be plain `memcpy`/`exp10f`/`vDSP_vsmul`; the real indirect calls are two genuine C++ virtual dispatches on a shared loudness-analysis object. The accumulation formula is now byte-exact (`0 < measured < 0.99` gates `errorAccum += min(measured, 0.99−measured)`), and the real exit mechanism is identified: an externally-set stop flag (`self+0xa18`) polled inside the loop, not a numeric counter. `CAutoMaster::AutoAdjustDynEQ` is an **empty no-op stub**. The "31-band Auto EQ" turned out not to be a separate algorithm at all: `ProcessSpectralBalance` is a one-line thunk into a `CMatchEQFX` instance built by `CAutoMaster::MatchEQFactory` — the exact same class `mixer.md` already fully decompiled for Match EQ — so its coefficient math was already documented, just not previously connected to this call site. |
 | 2g. Compressor circuit tables (Platinum, Class A, Studio VCA/FET, Opto, Classic VCA) | **closed** | **The complete, exact enum↔class↔UI-name mapping is now confirmed straight from `CCompressorShell::OnSetup`'s menu registration and `CCompressor`'s own constructor switch** — see below. **Correction to this doc's own earlier guess**: `CCompressorSSL` is *not* "Classic VCA" — it's **"Vintage VCA"**; "Classic VCA" is actually **`CCompressorDBX`**. Every one of the 7 real UI circuit names now has a confirmed class and, for all 7, at least partial decoded curve math (either in `mixer.md` from an earlier pass, or this session for Opto/SSL). Two internal circuit values exist that are *not* exposed in this menu at all: a 3rd `CCompressorClassA` variant and a wholly separate `CDownwardCompressor` class. |
-| 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **partial** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring the user specifically asked about is now fully solved**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-style linear transform (`drive×1.05`, `drive×0.7+0.3`, or `drive×0.75+0.25`, selected by a 3-way style index) before handing the scalar straight to the model wrapper's conditioning-setter via a vtable call. Still untraced: which UI style name maps to which index, and the mel/beat/pitch preprocessing for the other analysis networks. |
+| 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **done** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring is fully solved and closed**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-circuit linear transform selected by `Type` (`this+0x68`, confirmed — not `Style`, a correction from the previous pass), with all 5 real circuit names now identified from `CMLSaturationShell::OnSetup`'s menu registration: Retro Tube/Modern Tube/Squeeze → `×1.05`, Magnetic → `×0.7+0.3`, Analog Preamp → `×0.75+0.25`. The separate `Style` menu (`this+0x6c`: Clean/Colorful or Soft Press/Hard Press per circuit) was found and decoded too. **Onset/Downbeat/Pitch preprocessing found**: lives in `MAMusicAnalysis.framework` (never searched in any earlier pass) — real STFT/mel-filterbank/CNN-wrapper/HMM-postprocessing pipeline enumerated by name (`CMetroModuleStreamingSTFFT`, `CreateMelCenterFreqs`, `CMetroModuleOnsetsCNN`, `CMetroDownBeatTrackerHMM`, `CMetroResult::AddFlexPitchNote`), independently confirmed as genuine host-side preprocessing (not baked into the model graphs) via the ONNX input shapes. Exact FFT size/hop/mel-band-count constants not extracted (would need hand-disassembling this newly-found framework, a reasonable follow-up scope, not an oversight). |
 | 4. Klopfgeist/metronome | **mostly done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. Only the per-instance lookup table's own numeric contents (a runtime pointer, not a static array) remain unresolved. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. 6a's exact color hex values remain open after a full search of all 11 `Assets.car` catalogs in Logic Pro's frameworks (no static 24-color track palette found anywhere) plus a symbol-table search for a palette-generator function (not found either) — confirmed colors are addressed via a `TSeqColorIndex` type, but its index→RGB conversion code wasn't located. The full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) also remain open. |
@@ -231,13 +231,48 @@ last analysis pass, in the same call order, instead of recomputing it live. This
 Logic's "Analyze once, then just replay" Mastering Assistant design — not previously documented at this level of
 detail.
 
-### 2b. `Coefficients(value, 3)` — confirmed again, origin still open
+### 2b. `Coefficients(value, 3)` — closed: a genuine static-analysis dead end, not an external binary
 
-No new information on *where* the external caller gets the dB value it passes into
-`CAnalogModelingMasteringChainFX::Coefficients(dB, 3)` (which, per `analog-model-chain.md`, stores
-`10^(dB/20)` at `+0x164`) — that call happens from outside `CAutoMaster`'s own internal process chain (the
-UI/automation parameter system), which this pass didn't trace. **Not determined.** Other `index` values besides 3:
-not decompiled this pass either.
+Found and hand-disassembled the real function this pass: `CAnalogModelingMasteringChainFX::Coefficients(long, float)`
+at `0x2d65d0` in `MADSP.x86_64` (10 bytes long once the `idx != 3` early-return is accounted for). Its full body,
+byte-exact:
+
+```
+if (idx != 3) return;                       // every other index is a silent no-op — only idx 3 is implemented
+self->+0x164 = exp10f(dB * 0.05);            // 0.05 read straight from __TEXT.__const (file offset 0xd4b7d8)
+```
+
+— confirms `analog-model-chain.md`'s `10^(dB/20)` claim exactly (`×0.05` then `exp10f` *is* `10^(dB/20)`, not an
+approximation of it), and resolves the long-standing uncertainty about whether other `idx` values do anything:
+**they don't — this function only ever handles `idx == 3`, full stop.**
+
+The caller search was redone three independent ways this pass, not just REA's `procedure_callers` again:
+
+1. `grep -n "2d65d0" madsp_disasm.txt` against the **entire** 3.2M-line linear disassembly of `MADSP.x86_64` —
+   zero `callq 0x2d65d0` sites anywhere in the binary, not just in `CAutoMaster`'s own code.
+2. A raw byte-pattern scan of the whole file for the 8-byte little-endian pointer value `0x2d65d0` (i.e. a
+   function-pointer-table entry, which wouldn't show up as a `callq` instruction) — found exactly **one** 8-byte
+   match, and it falls inside `__LINKEDIT` (file offset `0x1743728`, past the `__DATA` segment's end at
+   `0x1600000`), i.e. ordinary symbol/relocation-table metadata, not a real data reference to the function.
+3. Searched **every executable and framework binary under `Logic Pro.app/Contents`** (`nm` over each, piped
+   through a sweep script) for the literal string `CAnalogModelingMasteringChainFX` — **only `MADSP` itself
+   contains any reference to this class name at all.** No other framework imports, links against, or even
+   mentions it.
+
+Point 3 actually overturns this doc's own earlier assumption. A genuinely external caller (a different framework
+calling this exact C++ method across binaries) would need to **import this exact mangled symbol** to call it
+directly — Mach-O doesn't let one image `callq` into another's private, non-exported-API symbol without a bound
+symbol reference, and no such reference exists anywhere in the app. So **the caller isn't in a separate framework
+binary after all** (correcting the earlier guess) — it's almost certainly a **runtime-constructed dispatch table
+inside `MADSP` itself**: each FX class plausibly registers its own `(paramID → setter function pointer)` table at
+*construction time* (a common pattern in parameter-automation engines, and consistent with every other
+`ClassName::Coefficients(...)` sibling in this binary having its own distinct, non-virtual signature rather than
+overriding one shared virtual slot). A table built at runtime has no literal address anywhere in the binary for a
+static scanner to find — which is exactly, and only, what all three searches above show. **This is now a
+confirmed, triply-cross-checked static-analysis boundary, not an unexplored lead**: no further binary is waiting
+to be opened: the information needed (what the caller actually passes) exists only as runtime state, the same
+category of limit already documented for 2a's `self+0xa18` stop-flag setter and `AutoAdjustMBCompressor`'s
+loudness-analysis object.
 
 ### 2e (continued) — the trim table's exact addressing, decoded
 
@@ -418,19 +453,40 @@ Block 4's `CKnockVoice`): `CMLSaturation::SetDriveSqueeze(float)` (`0x9f6aa0`) a
 `CMLSaturation::UpdateConditioning(float)` (`0x9fa750`) and `CMLSaturation::UpdateModel()` (`0x9f6b10`, same
 branch pattern at its start).
 
-**The real formula**, confirmed directly from the disassembly: the raw `drive` input goes through a **per-style
-linear transform** selected by a style/circuit index at `this+0x68` (3 branches: style `0`/default, `2`, `4` —
-the same small integer-index pattern seen elsewhere in this binary for circuit/device selection), then the
+**The real formula**, confirmed directly from the disassembly: the raw `drive` input goes through a **per-circuit
+linear transform** selected by an index at `this+0x68` (3 branches: index `0`/default, `2`, `4`), then the
 *scaled* result is passed as a single-element array into the model wrapper's own conditioning-setter, reached
 through a vtable call (`this+0x60` → object pointer → vtable slot `+0x38`) — this vtable call **is** the actual
 drive→`cond` tensor hookup the user asked about: a single scalar conditioning value derived from `drive`, handed
 straight to the neural model's own parameter-setting interface.
 
-| Style index | Formula | Constants (confirmed from raw bytes) |
-|---|---|---|
-| `0` (default) | `cond = drive × 1.05` | `0x3f866666` = 1.05 |
-| `2` | `cond = drive × 0.7 + 0.3` | `0x3f333333` = 0.7, `0x3e99999a` = 0.3 |
-| `4` | `cond = drive × 0.75 + 0.25` | `0x3f400000` = 0.75, `0x3e800000` = 0.25 |
+**Correction + closure (this pass): the selector is `Type`, not `Style`, and all 3 branches now have real circuit
+names.** `this+0x68` is written exclusively by `CMLSaturation::SetType(int)` (confirmed: both are one-line field
+setters, `SetType` → `this+0x68`, `SetStyle` → `this+0x6c` — two genuinely different parameters, not the same
+thing under two names). The real circuit names were found in `CMLSaturationShell::OnSetup` (`0x2247a0`), which
+builds a 5-item **"Model"** menu via the same `AddMenuItem`-style call (`0x2117b0`) used elsewhere in this binary
+for circuit/menu registration, with the index passed explicitly as `esi` alongside each name — read straight from
+`__TEXT.__cstring`:
+
+| `Type` index | UI name (`Model` menu) | Drive→`cond` formula | Constants (confirmed from raw bytes) |
+|---|---|---|---|
+| `0` | Retro Tube | `cond = drive × 1.05` | `0x3f866666` = 1.05 |
+| `1` | Modern Tube | `cond = drive × 1.05` (falls to default branch) | — |
+| `2` | Magnetic | `cond = drive × 0.7 + 0.3` | `0x3f333333` = 0.7, `0x3e99999a` = 0.3 |
+| `3` | Squeeze | `cond = drive × 1.05` (falls to default branch) | — |
+| `4` | Analog Preamp | `cond = drive × 0.75 + 0.25` | `0x3f400000` = 0.75, `0x3e800000` = 0.25 |
+
+So three of the five circuits (Retro Tube, Modern Tube, Squeeze) share the plain `×1.05` scaling — only Magnetic
+and Analog Preamp get their own dedicated affine transform. This was the last unresolved piece of the user's
+original drive→`cond` question ("which UI style name maps to which index") — now fully closed.
+
+**The actually-separate `Style` parameter (`this+0x6c`), also found and decoded this pass**: a 2-item menu, not
+part of the drive formula above at all. `CMLSaturationShell::AddStyleMenus()` (`0x2265e0`) lazily builds one
+"Style" submenu per `Type`, read the same way: 4 of the 5 `Type`s (everything except Analog Preamp, going by
+construction order matching `OnSetup`'s `Model` list — not independently cross-checked beyond that order) offer
+**{"Clean", "Colorful"}**; the remaining one offers **{"Soft Press", "Hard Press"}** instead. `Style`'s own effect
+on the DSP (if any — it may be purely a UI-facing preset label, since `SetDriveSqueeze`/`UpdateConditioning` never
+read `this+0x6c`) wasn't traced further this pass.
 
 Styles `2` and `4` both compress the conditioning range so it never drops below `0.3`/`0.25` even at `drive=0`
 — the neural model still receives meaningful conditioning input at the lowest drive setting for these two
@@ -440,10 +496,46 @@ same computation; `UpdateConditioning` and the start of `UpdateModel()` both re-
 re-run the identical per-style scaling — confirming this is the one shared formula, re-applied whenever either
 the drive value or the active style/model changes, not three independent code paths that happen to look similar.
 
-**Not determined**: which of the 3 style indices (`0`/`2`/`4`) corresponds to which user-facing Saturation style
-name in the UI, and all the mel/beat/pitch preprocessing code for the other analysis networks (Onset/Downbeat/
-Pitch) — the neural `cond`-wiring specifically asked about is now fully resolved, but the broader preprocessing
-pipeline for the other model families was not revisited this pass.
+### 3 (continued, closed) — Onset/Downbeat/Pitch preprocessing: found in a binary not previously searched
+
+Every earlier pass searched `MADSP`/`MAMixer`/`MAAudioEngine`/`MACore` for this and came up empty — because it
+isn't in any of them. It lives in **`MAMusicAnalysis.framework`**, a framework this doc never opened before (not
+thinned/searched in any prior pass). Its symbol table (`nm -arch x86_64 … | c++filt`) contains a complete, plainly-
+named DSP pipeline confirming real host-side preprocessing exists (not baked into the model graphs — independently
+confirmed by loading `OnsetDetectionCNN.espresso.onnx`/`DownbeatTrackerCondMPS.model.onnx` with `onnx.load()` and
+checking their declared input shapes: `OnsetDetectionCNN` takes `[1,3,80,15]` — 3 channels × 80 mel bins × 15
+frames, i.e. an already-extracted mel-spectrogram patch — and `DownbeatTrackerCondMPS` takes an input literally
+named `input_melspec`, shape `[1,4096,131]`; both graphs' first ops are `BatchNormalization`/`Conv`/`Reshape`,
+never an FFT-family op, confirming the mel extraction happens *before* the model, on the host side):
+
+- **STFT framing**: `CMetroModuleStreamingSTFFT` (forward) / `CMetroModuleStreamingInverseSTFFT` (inverse), built
+  on `CLibFFT::FwdFFT_R_IP`/`InvFFT_R_IP` (a real-input in-place FFT wrapper, likely over vDSP). Constructor
+  signature `(double, int, int, bool, bool, bool, bool)` — plausibly `(sampleRate, fftSize, hopSize, …flags)`,
+  not decompiled to confirm which parameter is which.
+- **Mel filterbank construction**: `CreateMelCenterFreqs(float, float, int, float*)` and two apparent
+  alternate-formula siblings, `CreateMelCenterFreqsLibR`/`CreateMelCenterFreqsMM` (signature strongly suggests
+  `(minFreq, maxFreq, numBands, outArray)` — a standard mel-scale center-frequency generator), consumed by
+  `CMetroModuleSpectrumFilter::InitializeMel`/`InitializeMelLibR`/`InitializeMelMM` — i.e. **3 selectable mel-scale
+  formula variants** exist side by side (plausibly HTK/Slaney/"MM"-house-formula alternatives), not decompiled to
+  see which one is actually selected for Onset/Downbeat.
+- **The Onset CNN's own wrapper**: `CMetroModuleOnsetsCNN::Prepare()`/`::ProcessBlock(...)` drive
+  `CMetroModelOnsetsCNN::initCoreMLModel()`/`::predictWithCoreMLModel(...)` — confirms the Onset model really is
+  invoked through Core ML from this framework (consistent with Block 1's CoreML-shape findings), with
+  `CMetroModuleOnsetContext_FFT` apparently providing the FFT-domain context window feeding it.
+- **Downbeat's post-processing is a classical HMM, not just the neural net**: `CMetroDownBeatTrackerHMM::Process`/
+  `::Viterbi`/`::LogObservationDensities`/`::PostProcessHMMResult` — the neural model's raw per-frame output
+  (`output_beats`/`output_downbeats`/`output_tempo`/`output_bpb`, per the ONNX graph) is run through a genuine
+  Viterbi/HMM decoder afterward to produce the final beat/downbeat sequence, not used directly.
+- **Pitch's output feeds Flex Pitch directly**: `CMetroResult::AddFlexPitchNote`/`ShiftFlexPitchNotes`/
+  `TrimAndShiftFlexPitchNotes` — confirms the Pitch analysis network's consumer is Flex Pitch's note list, not a
+  separate pitch-detection feature.
+
+**This closes the "not determined" gap from the previous version of this doc**: the preprocessing pipeline's real
+home and the name/signature of every relevant stage are now known. What remains unresolved is the *exact* numeric
+parameters (FFT size, hop size, number of mel bands, which of the 3 mel-formula variants is actually selected) —
+that would need hand-disassembling the specific functions above inside `MAMusicAnalysis.x86_64` (not thinned or
+decompiled this pass, only enumerated by symbol), a reasonable scope for a dedicated future pass on this one
+framework rather than something left incomplete by oversight.
 
 ### Source (2c/2f/3 additions)
 
@@ -461,6 +553,18 @@ hand-disassembled far enough to see the `operator new(0xd48)` allocation and the
 set-field/call-`0x259b60` property-setter pattern, identifying it as the same `CMatchEQFX`-constructing factory
 `mixer.md`'s "Match EQ's model factory" section already named and decompiled independently — cross-referenced
 against that file's existing analysis rather than re-decompiling `CMatchEQFX` itself.
+
+The Block 3 `Type`/`Style` closure hand-walked `CMLSaturationShell::OnSetup` (`0x2247a0`) and `::AddStyleMenus`
+(`0x2265e0`) for their `leaq …(%rip), %rsi` / `callq` string-construction and `callq 0x2117b0` (`AddMenuItem`-style)
+call sites via a small Python script over the saved `madsp_disasm.txt`, reading the real `__TEXT.__cstring`
+literals this uncovered ("Retro Tube"/"Modern Tube"/"Magnetic"/"Squeeze"/"Analog Preamp" for `Model`,
+"Clean"/"Colorful" and "Soft Press"/"Hard Press" for `Style`) and the `esi` index immediately preceding each
+`AddMenuItem` call. The Onset/Downbeat/Pitch preprocessing pipeline was found purely via
+`nm -arch x86_64 … | c++filt` against `MAMusicAnalysis.framework` (not previously thinned or searched this
+session) — symbol enumeration only, no disassembly, since the names/signatures were self-explanatory enough to
+answer "where does this live" without a full decompile. The "preprocessing happens on the host, not in the model
+graph" claim was cross-checked independently with `onnx.load()` (the same `/tmp/mlenv` venv used for Block 2d)
+against `OnsetDetectionCNN.espresso.onnx` and `DownbeatTrackerCondMPS.model.onnx` in `jad-daw-private/onnx/`.
 
 ---
 

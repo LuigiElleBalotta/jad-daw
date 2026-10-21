@@ -37,6 +37,10 @@ public:
     void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackReductions(out); }
     void takeTrackPeaksPre(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackPeaksPre(out); }
     bool takeInsertMeters(const Uuid& track, int insert, float& in, float& out, float& reduction) { return graph_.takeInsertMeters(track, insert, in, out, reduction); }
+    // the spectrum of one insert (before or after it) for the Analyzer of its window; disarm when the window closes
+    void armSpectrum(const Uuid& track, int insert, bool post) { graph_.spectrumTap().arm(track, insert, post); }
+    void disarmSpectrum() { graph_.spectrumTap().disarm(); }
+    bool spectrumBands(std::vector<float>& out, int bands);
     float masterPeak() const { return masterPeakPub_.load(std::memory_order_relaxed); }
     std::size_t pendingMessages() const { return messages_.sizeApprox(); }
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }

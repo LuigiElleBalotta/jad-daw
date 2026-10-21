@@ -22,6 +22,9 @@ FxShell {
         { key: "hs", shape: "highshelf", cut: false, color: "#a572e8" },
         { key: "hc", shape: "highcut", cut: true, color: "#c9ccd2" }
     ]
+    property int analyzerMode: 0                 // 0 off, 1 after the EQ (POST), 2 before it (PRE)
+    onAnalyzerModeChanged: editor.project.setEditorAnalyzer(analyzerMode > 0, analyzerMode === 1)
+    Component.onDestruction: editor.project.setEditorAnalyzer(false, true)
     property int hot: -1                         // the band under the pointer or being dragged
     readonly property real plotX: 37
     readonly property real plotW: 876
@@ -310,11 +313,48 @@ FxShell {
         }
     }
 
+    // the analyzer: the live spectrum of the sound going into or coming out of the EQ, behind the curve
+    Canvas {
+        id: spectrum
+        objectName: "eqSpectrum"
+        x: 0; y: 0; width: root.bodyWidth; height: 300
+        visible: root.analyzerMode > 0
+        property var shown: []
+        readonly property int bandCount: 120
+        Timer {
+            interval: 40; repeat: true; running: root.analyzerMode > 0
+            onTriggered: {
+                const now = root.editor.project.editorSpectrum(spectrum.bandCount)
+                if (now.length === 0) return
+                const prev = spectrum.shown
+                const out = []
+                for (let i = 0; i < now.length; ++i) out.push(prev.length === now.length ? Math.max(now[i], prev[i] - 1.5) : now[i])
+                spectrum.shown = out
+                spectrum.requestPaint()
+            }
+        }
+        onPaint: {
+            const c = getContext("2d")
+            c.reset()
+            const v = shown
+            if (v.length < 2) return
+            const y = (db) => 44 + Math.min(60, Math.max(0, -db)) / 5 * 19.7
+            const x = (i) => root.plotX + i / (v.length - 1) * root.plotW
+            c.beginPath(); c.moveTo(x(0), 44 + 12 * 19.7)
+            for (let i = 0; i < v.length; ++i) c.lineTo(x(i), y(v[i]))
+            c.lineTo(x(v.length - 1), 44 + 12 * 19.7); c.closePath()
+            c.fillStyle = "rgba(190,215,240,0.16)"; c.fill()
+            c.beginPath()
+            for (let i = 0; i < v.length; ++i) { if (i === 0) c.moveTo(x(i), y(v[i])); else c.lineTo(x(i), y(v[i])) }
+            c.strokeStyle = "rgba(220,235,250,0.55)"; c.lineWidth = 1; c.stroke()
+        }
+    }
+
     // the switches under the numbers
     Row {
         x: 36; y: 360
         spacing: 6
-        FxPlainKey { label: qsTr("Analyzer"); sup: "POST"; on: true; enabledKey: false }
+        FxPlainKey { objectName: "eqAnalyzer"; label: qsTr("Analyzer"); sup: root.analyzerMode === 2 ? "PRE" : "POST"; on: root.analyzerMode > 0; onToggled: root.analyzerMode = (root.analyzerMode + 1) % 3 }
         FxPlainKey { label: qsTr("Q-Couple"); on: true; enabledKey: false }
         FxPlainKey { label: qsTr("HQ"); on: false; enabledKey: false }
         Item { width: 14; height: 1 }

@@ -5,6 +5,14 @@
 
 namespace lpc::audio {
 
+bool AudioEngine::spectrumBands(std::vector<float>& out, int bands) {
+    std::vector<float> x;
+    if (!graph_.spectrumTap().latest(x)) return false;
+    out = lpc::audio::spectrumBands(x, sampleRate_, bands);
+    return true;
+}
+
+
 AudioEngine::AudioEngine(double sampleRate) : sampleRate_(sampleRate), graph_(sampleRate) {
     for (auto& b : inBuf_) b.assign(8192, 0.0f);
     for (auto& p : inPeak_) p.store(0.0f, std::memory_order_relaxed);

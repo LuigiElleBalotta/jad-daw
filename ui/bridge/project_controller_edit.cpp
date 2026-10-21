@@ -1653,7 +1653,23 @@ void ProjectController::openEffectEditor(const QString& trackId, int index) {
     emit effectEditorChanged();
 }
 
+void ProjectController::setEditorAnalyzer(bool on, bool post) {
+    if (!engine_) return;
+    const auto id = lpc::Uuid::parse(effectEditorTrack_.toStdString());
+    if (on && id && effectEditorIndex_ >= 0) engine_->armSpectrum(*id, effectEditorIndex_, post);
+    else engine_->disarmSpectrum();
+}
+
+QVariantList ProjectController::editorSpectrum(int bands) const {
+    QVariantList out;
+    std::vector<float> db;
+    if (engine_ && engine_->spectrumBands(db, bands))
+        for (const float v : db) out.append(static_cast<double>(v));
+    return out;
+}
+
 void ProjectController::closeEffectEditor() {
+    if (engine_) engine_->disarmSpectrum();
     if (effectEditorTrack_.isEmpty()) return;
     effectEditorTrack_.clear();
     effectEditorIndex_ = -1;

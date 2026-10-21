@@ -67,6 +67,23 @@ TestCase {
         verify(o.w.graphical)
     }
 
+    function test_the_eq_analyzer_key_cycles_off_post_pre() {
+        const o = openInsert("builtin.eq")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        const key = findChild(view.item, "eqAnalyzer")
+        const spectrum = findChild(view.item, "eqSpectrum")
+        verify(!spectrum.visible)
+        key.toggled(!key.on)
+        compare(view.item.analyzerMode, 1)
+        verify(spectrum.visible)
+        key.toggled(!key.on)
+        compare(view.item.analyzerMode, 2)
+        key.toggled(!key.on)
+        compare(view.item.analyzerMode, 0)
+        compare(o.c.editorSpectrum(32).length, 0)   // nothing is heard without the audio thread
+    }
+
     function test_the_compressor_side_chain_panel_sets_the_filter() {
         const o = openInsert("builtin.compressor")
         const view = findChild(o.w.contentItem, "graphicView")

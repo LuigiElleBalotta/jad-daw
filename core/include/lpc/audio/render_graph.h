@@ -1,4 +1,5 @@
 #pragma once
+#include "lpc/audio/spectrum.h"
 #include <algorithm>
 #include <array>
 #include <utility>
@@ -185,6 +186,7 @@ public:
     void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) noexcept;
     // The peak going into and out of one insert (linear) and its gain reduction (dB) since the last call for it; reading resets them. False when the track or the insert is not there.
     bool takeInsertMeters(const Uuid& track, int insert, float& in, float& out, float& reduction) noexcept;
+    SpectrumTap& spectrumTap() noexcept { return tap_; }
     int trackCount() const noexcept { return count_; }
     nlohmann::json describe() const;  // not real-time; tracks in processing order
 
@@ -213,6 +215,7 @@ private:
     std::array<std::atomic<float>, kMaxTracks> reductionVal_{};
     std::array<std::atomic<float>, kMaxTracks> peakValPre_{};
     std::array<std::atomic<float>, kMaxTracks * kMeterInserts> insIn_{}, insOut_{}, insRed_{};
+    SpectrumTap tap_;
     std::atomic<int> peakCount_{0};
 };
 

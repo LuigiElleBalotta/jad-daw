@@ -306,7 +306,9 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
             if (lowLatencyLimit_ > 0 && t.monitorL >= 0 && insert->latencySamples() > lowLatencyLimit_) continue;
             float peakIn = 0.0f;
             for (int i = 0; i < n; ++i) peakIn = std::max({peakIn, std::abs(l[i]), std::abs(r[i])});
+            if (tap_.wants(t.id, at, false)) tap_.push(l, r, n);
             insert->process(l, r, n);
+            if (tap_.wants(t.id, at, true)) tap_.push(l, r, n);
             float peakOut = 0.0f;
             for (int i = 0; i < n; ++i) peakOut = std::max({peakOut, std::abs(l[i]), std::abs(r[i])});
             const float reduction = insert->reductionDb();

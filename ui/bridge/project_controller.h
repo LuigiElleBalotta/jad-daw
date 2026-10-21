@@ -306,6 +306,8 @@ public:
     int effectEditorIndex() const { return effectEditorIndex_; }
     Q_INVOKABLE void openEffectEditor(const QString& trackId, int index);
     Q_INVOKABLE void closeEffectEditor();
+    Q_INVOKABLE void setEditorAnalyzer(bool on, bool post);   // the spectrum of the open insert (before or after it), read by editorSpectrum
+    Q_INVOKABLE QVariantList editorSpectrum(int bands) const; // the band levels in dB, log-spaced 20 Hz to 20 kHz; empty while nothing has been heard
     Q_INVOKABLE QVariantList effectSpecs() const;                    // the built-in effects and their parameters (effect_specs.h)
     Q_INVOKABLE QVariantList instrumentSpecs() const;                // the built-in instruments and their parameters
     // Logic's factory presets of a built-in effect: [{category, names: [...]}] (a preset without a category is listed under ""), applied in one undo step

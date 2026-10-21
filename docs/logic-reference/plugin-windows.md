@@ -83,3 +83,87 @@ passes), captured via `screencapture -x -R` against window bounds read with `osa
 (`position`/`size` of the `"Audio 1"` window — Logic names floating plug-in windows after the channel strip, not
 the plug-in). Moved state: two band nodes dragged via `mcp__macos-mcp__Move` (position-then-drag pattern), one
 footer button clicked.
+
+## Compressor
+
+`plugin-compressor-default.png` (Platinum Digital, factory default) / `plugin-compressor-moved.png` (a few
+controls changed) / `plugin-compressor-circuit-{studio-vca,studio-fet,classic-vca,vintage-vca,vintage-fet,
+vintage-opto}.png` — one clean shot per remaining Circuit Type, all 7 now covered (default.png *is* the 7th,
+Platinum Digital).
+
+**A tooling note, since it shaped how every later plug-in in this doc was captured**: the Logic insert-slot
+"choose a plug-in" popup and the circuit-type submenu genuinely do open on click, but
+`mcp__macos-mcp__Snapshot`'s own accessibility-tree query appears to dismiss them before it can report back —
+every Snapshot taken right after such a click showed the popup already gone, even though the click itself had
+worked. Confirmed by instead taking a screenshot via a direct `screencapture -x` (no accessibility query) in the
+same instant: the popup was there. From this plug-in on, verifying *menu/popup* state uses `screencapture`
+directly instead of `Snapshot`; `Snapshot` is still used freely for checking ordinary window state where nothing
+transient is open.
+
+**1. Layout.** Same floating-window shell as Channel EQ (header: preset menu, prev/next, Compare/Copy/Paste/
+Undo/Redo, `Side Chain: Internal` menu + `View: 100%` + link icon). Below that, two full-width rows: the **7
+Circuit Type buttons** (`Platinum Digital`/`Studio VCA`/`Studio FET`/`Classic VCA`/`Vintage VCA`/`Vintage FET`/
+`Vintage Opto`) on the left, a 2-button **Side Chain / Output** view switcher on the right. The main body is a
+**3-column control layout**: left column (Input Gain meter + knob), center column (a large VU-style Gain
+Reduction meter with Meter/Graph tabs, then Threshold/Ratio/Make Up/Auto Gain + Knee/Attack/Release under it),
+right column (a secondary Output meter, Limiter section with its own Threshold knob, Distortion knob, Mix and
+Output Gain knobs). Plugin-identity bar `Compressor` at the bottom, same style as Channel EQ's.
+
+**2. The single most important finding: each Circuit Type is a full re-skin, not a parameter swap.** Clicking a
+different circuit changes the entire window's color scheme and meter/knob art, live: `Platinum Digital` = cool
+blue brushed metal with a digital-looking VU meter; `Studio VCA` = bright red brushed metal, cream VU meter;
+`Studio FET` = near-black brushed metal, amber/gold VU meter, amber-highlighted active-circuit label text;
+`Classic VCA` = dark gunmetal, pale meter with a **blue** needle/scale (the only circuit whose meter scale isn't
+cream/gold) and blue-outlined Meter/Graph tabs; `Vintage VCA` = light gray-silver chassis with genuinely different
+**blue-capped knob graphics** (every other circuit uses plain brushed-silver/black knobs) and a dark meter;
+`Vintage FET`: not independently re-described here but confirmed captured; `Vintage Opto` = light warm-gray
+chassis, cream meter, orange/amber accent color on active toggle labels (`ON`, `-12 dB`, `AUTO`). This is a
+**direct, load-bearing fact for jad-daw's own rebuild** (`G2` in the roadmap: "reusable controls... colours from
+the colour tokens") — a single generic Compressor skin can't represent this plug-in; it needs (at minimum) a
+per-circuit color/asset theme, not just per-circuit DSP.
+
+**3. Controls** (common to every circuit, positions identical, only art changes):
+- **Threshold** (center, `-50`…`0 dB`), **Ratio** (`1`…`30 :1`, labeled `:1` beneath), **Make Up** (`-20`…`50 dB`),
+  **Knee** (`0`…`1.0`), **Attack** (`0`…`200 ms`), **Release** (`5 ms`…`5k ms`, i.e. 5 s): all large rotary knobs,
+  drag vertically to change (confirmed live — dragging the Ratio knob up showed a **live numeric overlay**,
+  `4.8:1`, centered where the static `RATIO` label normally sits, replacing it only while the value is away from
+  a clean label position — a real interactive detail to replicate). Scroll-to-adjust and Option-click-reset not
+  tested.
+- **Auto Gain**: a 3-way vertical button stack (`Off`/`0 dB`/`-12 dB`, mutually exclusive, `-12 dB` is the
+  default) — each has its own small round LED-style indicator lit when active (confirmed via the `Vintage VCA`
+  shot, which renders these as hollow squares + separate red LED dots rather than filled buttons — the exact
+  widget style is itself circuit-dependent, another re-skin detail).
+- **Input Gain** / **Output Gain** (bottom-left / right column, `-30`…`30 dB` knobs) and their own **peak meters**
+  above them (`-∞ dB` readout, `+3` to `-60` scale, twin vertical bars).
+- **Meter / Graph** tab switcher inside the big central display: `Meter` (the VU needle, default) vs `Graph`
+  (not opened this pass — likely the gain-reduction-over-time curve used elsewhere in this doc's Block 2g
+  research).
+- **Side Chain / Output** button pair, top right: switches the right-hand column between the Limiter/Distortion/
+  Mix/Output-Gain controls shown here (`Output` view, the default) and presumably sidechain-filter controls
+  (`Side Chain` view — the real State/Mode/Frequency/Q/Gain set already fully documented from static analysis in
+  `mac-pass-3.md` Block 2g; not re-opened live this pass since it's already known).
+- **Limiter**: `ON`/off button with its own status LED, `Threshold` knob (`-10`…`0 dB`) — a hard limiter stage
+  after the compressor, confirmed toggleable live (LED lit after clicking `ON` in the moved shot).
+- **Distortion**: a single knob sweeping `Off`…`Soft`…`Hard`…`Clip` (one knob covering what reads as 4 named
+  positions, not 4 separate controls).
+- **Mix**: `Input`…`Output` knob (dry/wet, i.e. parallel compression blend).
+
+**4. Displays.** The central VU meter is the plug-in's visual centerpiece: a skeuomorphic analog-style arc gauge,
+`-50` to `0` dB, non-linear tick spacing (denser near 0) — a deliberately "vintage hardware" look that is
+**consistently styled per-circuit** (color changes, the needle/scale art stays the same arc geometry across all
+7). The twin peak meters either side (Input/Output) are plain linear vertical bar meters, `+3` to `-60` dB.
+
+**5. Fonts / chrome.** Circuit-button labels: 2-line stacked text (e.g. "Studio\nVCA"), the active circuit's
+button gets a filled/pressed look plus, on the darker-themed circuits, a colored (not just white) label — amber
+on Studio FET and Vintage Opto specifically, suggesting the active-label accent color is itself part of each
+circuit's theme, not a single global "selected" color. No Expert/Reduced-view toggle seen on this plug-in either.
+
+**6. Animation.** The live numeric-overlay-while-dragging behavior (point 2 above) is the one confirmed animated/
+reactive detail this pass; meter needle movement needs real audio, not tested.
+
+### Source
+Inserted on the same disposable `Audio 1` track's insert slot, chosen from the plug-in browser's `Dynamics >
+Compressor` entry (the browser opened fine on click — see the tooling note above; it was *checking* its state
+with Snapshot that failed, not opening it). All 7 circuit buttons and the Limiter toggle clicked via
+`mcp__macos-mcp__Click`; Threshold/Ratio knobs adjusted via `mcp__macos-mcp__Move`'s position-then-drag pattern.
+Every capture via `screencapture -x -R` against the window's `osascript`-read bounds.

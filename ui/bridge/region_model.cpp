@@ -19,6 +19,16 @@ const RegionRow* RegionModel::find(const QString& regionId) const {
     return nullptr;
 }
 
+int RegionModel::takeIndex(const RegionRow& r) const {
+    if (r.takeGroup.isEmpty()) return -1;
+    int n = 0;
+    for (const RegionRow& o : rows_) {
+        if (o.id == r.id) break;
+        if (o.trackId == r.trackId && o.takeGroup == r.takeGroup) ++n;
+    }
+    return n;
+}
+
 int RegionModel::takeCount(const RegionRow& r) const {
     if (r.takeGroup.isEmpty()) return 0;
     int n = 0;
@@ -50,6 +60,7 @@ QVariant RegionModel::data(const QModelIndex& index, int role) const {
         case Flexed: return r.flexed;
         case FlexMarkers: return r.flexMarkers;
         case FlexNotes: return r.flexNotes;
+        case TakeIndex: return takeIndex(r);
     }
     return {};
 }
@@ -57,7 +68,7 @@ QVariant RegionModel::data(const QModelIndex& index, int role) const {
 QHash<int, QByteArray> RegionModel::roleNames() const {
     return {{RegionId, "regionId"},       {TrackId, "trackId"},   {TrackIndex, "trackIndex"}, {StartBeats, "startBeats"},
             {LengthBeats, "lengthBeats"}, {IsAudio, "isAudio"},   {Missing, "missing"},       {MediaId, "mediaId"},       {Color, "trackColor"}, {Muted, "muted"},
-            {FadeInBeats, "fadeInBeats"}, {FadeOutBeats, "fadeOutBeats"}, {LoopBeats, "loopBeats"}, {Takes, "takes"}, {GainDb, "gainDb"}, {Name, "name"}, {Flexed, "flexed"}, {FlexMarkers, "flexMarkers"}, {FlexNotes, "flexNotes"}};
+            {FadeInBeats, "fadeInBeats"}, {FadeOutBeats, "fadeOutBeats"}, {LoopBeats, "loopBeats"}, {Takes, "takes"}, {GainDb, "gainDb"}, {Name, "name"}, {Flexed, "flexed"}, {FlexMarkers, "flexMarkers"}, {FlexNotes, "flexNotes"}, {TakeIndex, "takeIndex"}};
 }
 
 }  // namespace jad

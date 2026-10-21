@@ -22,6 +22,8 @@ Item {
     property string tool: "pointer"
     property bool selected: false
     property bool muted: false
+    property int takeIndex: -1                 // which take of its group it is (-1: not a take)
+    property bool colorizeTakes: true          // each take of a group gets its own shade of the track's colour
     property real loopBeats: 0             // > 0: the region repeats its first loopBeats
     property int takes: 0                  // > 0: the region is one of that many takes of a passage
     property real gainDb: 0                // the Gain tool drags it
@@ -98,8 +100,13 @@ Item {
         resized(regionId, s, l)
     }
 
-    readonly property color solid: TrackColors.solid(trackColor)
-    readonly property color fill: TrackColors.fill(trackColor)
+    // a take is shifted round the colour wheel by 40 degrees for each take before it
+    function takeShade(c) {
+        if (!colorizeTakes || takeIndex <= 0) return c
+        return Qt.hsla((c.hslHue + 0.1111 * takeIndex) % 1.0, c.hslSaturation, c.hslLightness, c.a)
+    }
+    readonly property color solid: takeShade(TrackColors.solid(trackColor))
+    readonly property color fill: takeShade(TrackColors.fill(trackColor))
     property var peaks: []
     readonly property int buckets: Math.min(4096, Math.ceil(width / 2 / 32) * 32)
 

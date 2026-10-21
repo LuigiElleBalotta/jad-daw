@@ -11,10 +11,11 @@ class RegionModel : public QAbstractListModel {
     Q_OBJECT
     QML_ANONYMOUS
 public:
-    enum Role { RegionId = Qt::UserRole + 1, TrackId, TrackIndex, StartBeats, LengthBeats, IsAudio, Missing, MediaId, Color, Muted, FadeInBeats, FadeOutBeats, LoopBeats, Takes, GainDb, Name, Flexed, FlexMarkers, FlexNotes };
+    enum Role { RegionId = Qt::UserRole + 1, TrackId, TrackIndex, StartBeats, LengthBeats, IsAudio, Missing, MediaId, Color, Muted, FadeInBeats, FadeOutBeats, LoopBeats, Takes, GainDb, Name, Flexed, FlexMarkers, FlexNotes, TakeIndex };
     explicit RegionModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
     void reset(const std::vector<RegionRow>& rows);
     const RegionRow* find(const QString& regionId) const;
+    int takeIndex(const RegionRow& r) const;  // which take of its group this region is (0 for the first), -1 when it has no group
     int takeCount(const RegionRow& r) const;  // the regions of the track in the same take group (0 when it has none)
     const std::vector<RegionRow>& rows() const { return rows_; }
     Q_INVOKABLE bool hasRegion(const QString& regionId) const { return find(regionId) != nullptr; }

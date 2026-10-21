@@ -333,6 +333,8 @@ Item {
                 tool: root.project.tool
                 selected: root.project.selectedRegionIds.indexOf(model.regionId) >= 0
                 muted: model.muted
+                takeIndex: model.takeIndex
+                colorizeTakes: root.project.projectSettings["colorizeTakes"] !== "0"   // Project Settings > Recording: Automatically colorize takes
                 loopBeats: model.loopBeats
                 gainDb: model.gainDb
                 onGainRequested: (id, db) => root.project.setRegionGain(id, db)

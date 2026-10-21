@@ -67,6 +67,19 @@ TestCase {
         verify(o.w.graphical)
     }
 
+    function test_the_compressor_side_chain_panel_sets_the_filter() {
+        const o = openInsert("builtin.compressor")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        const panel = findChild(view.item, "compSideChain")
+        verify(!panel.visible)
+        view.item.scOpen = true
+        verify(panel.visible)
+        o.w.setNow("scState", 2)
+        o.w.setNow("scMode", 3)
+        tryVerify(function () { const p = o.c.trackInserts(o.id)[0].params; return p.scState === 2 && p.scMode === 3 })
+    }
+
     function test_other_effects_get_a_knob_for_each_parameter() {
         const o = openInsert("builtin.delay")
         const view = findChild(o.w.contentItem, "graphicView")

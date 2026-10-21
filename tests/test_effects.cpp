@@ -117,6 +117,21 @@ TEST_CASE("compressor: a loud sine is reduced as the ratio says, a quiet one is 
     REQUIRE(peakOf(lifted, 2000) == Catch::Approx(0.2f).margin(0.01f));
 }
 
+TEST_CASE("compressor: the side chain filter takes the bass out of what the detector hears, Listen plays the filtered signal", "[effects][compressor]") {
+    const double amp = std::pow(10.0, -8.0 / 20.0);
+    const std::map<std::string, double> base{{"threshold", -20}, {"ratio", 4}, {"knee", 0}, {"attack", 1}, {"release", 50}, {"gain", 0}, {"autoGain", 0}, {"autoRelease", 0}, {"peakRms", 0}};
+    auto withKey = [&](double state) {
+        auto m = base;
+        m["scState"] = state; m["scMode"] = 2; m["scFreq"] = 2000;   // a high-pass at 2 kHz
+        return makeBuiltinEffect(ref(kProcCompressor, m), kSr);
+    };
+    auto off = withKey(0), on = withKey(2), listen = withKey(1);
+    const auto bass = sine(100, amp, 24000);
+    REQUIRE(20 * std::log10(peakOf(run(*off, bass), 2000)) < -15.0);       // reduced
+    REQUIRE(20 * std::log10(peakOf(run(*on, bass), 2000)) > -9.0);         // the detector no longer hears the bass: left alone
+    REQUIRE(peakOf(run(*listen, bass), 2000) < 0.02f);                     // and Listen plays what is left of it
+}
+
 TEST_CASE("compressor: auto gain makes up what the reduction takes at 0 dBFS, the mix blends, the limiter holds its threshold", "[effects][compressor]") {
     // threshold -20, ratio 4: a signal at 0 dBFS loses 15 dB, auto gain lifts the output by the same 15 dB
     ProcessorRef a = ref(kProcCompressor, {{"threshold", -20}, {"ratio", 4}, {"knee", 0}, {"attack", 1}, {"release", 50}, {"autoGain", 1}, {"autoRelease", 0}, {"peakRms", 0}});

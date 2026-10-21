@@ -48,7 +48,8 @@ std::vector<EffectSpec> build() {
                   p("attack", "Attack", "ms", 0, 250, 15), p("release", "Release", "ms", 5, 5000, 51, true), p("autoRelease", "Auto Release", "", 0, 1, 1),
                   p("gain", "Gain", "dB", -24, 24, 0), p("autoGain", "Auto Gain (0 off, 1 from 0 dB, 2 from -12 dB)", "", 0, 2, 2), p("knee", "Knee", "", 0, 1, 0.7),
                   p("peakRms", "Detection (0 peak, 1 RMS)", "", 0, 1, 1), p("outputDistortion", "Output Distortion (0 off, 1 soft, 2 hard, 3 clip)", "", 0, 3, 0),
-                  p("limiter", "Limiter", "", 0, 1, 0), p("limiterThreshold", "Limiter Threshold", "dB", -12, 0, 0), p("mix", "Mix", "%", 0, 100, 100),
+                  p("limiter", "Limiter", "", 0, 1, 0), p("limiterThreshold", "Limiter Threshold", "dB", -12, 0, 0), p("scState", "Side Chain Filter (0 off, 1 listen, 2 on)", "", 0, 2, 0), p("scMode", "Side Chain Mode (0 LP, 1 BP, 2 HP, 3 Par EQ, 4 Hi Shelf)", "", 0, 4, 2),
+                  p("scFreq", "Side Chain Frequency", "Hz", 16.35, 19912, 1000, true), p("scQ", "Side Chain Q", "", 0.5, 5, 0.71, true), p("scGain", "Side Chain Gain", "dB", -24, 24, 0), p("mix", "Mix", "%", 0, 100, 100),
                   p("inputGain", "Input Gain", "dB", -30, 30, 0), p("outputGain", "Output Gain", "dB", -30, 30, 0)}});
     v.push_back({kProcLimiter, "Limiter", "Dynamics",
                  {p("gain", "Gain", "dB", -20, 20, 0), p("lookahead", "Lookahead", "ms", 0, 10, 5), p("softKnee", "Soft Knee", "", 0, 1, 1),

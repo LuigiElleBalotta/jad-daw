@@ -30,6 +30,7 @@ FxShell {
     readonly property int current: { for (let i = 0; i < circuits.length; ++i) if (circuits[i].value === circuit) return i; return 0 }
     readonly property var sk: skins[circuits[current].skin]
     property bool graph: false
+    property bool scOpen: false
     readonly property var meters: editor.project.editorMeters
     readonly property real reduction: meters.reductionDb ?? 0
 
@@ -108,9 +109,73 @@ FxShell {
                 width: 83; height: 38; radius: 4
                 color: index === 1 ? (root.sk.button === "red" ? "#f4a60a" : (root.sk.light ? "#838587" : "#10141a")) : (root.sk.light ? "#e9e9ea" : (root.sk.button === "red" ? "#704a08" : "#9a9a9a"))
                 border.color: "#1d1d1d"
-                opacity: index === 0 ? 0.8 : 1
+                opacity: index === 0 && root.val("scState") < 0.5 && !root.scOpen ? 0.8 : 1
                 Text { anchors.centerIn: parent; text: parent.modelData; color: index === 1 ? (root.sk.button === "red" ? "#2a1800" : root.sk.accent === "#4cc2ff" ? "#59c6ff" : (root.sk.light ? root.sk.accent : "#ffffff")) : (root.sk.light ? "#333" : "#303030"); font.family: Theme.fontFamily; font.pixelSize: 15 }
+                MouseArea { anchors.fill: parent; enabled: index === 0; onClicked: root.scOpen = !root.scOpen }
             }
+        }
+    }
+    // the side chain filter: State, Mode, Frequency, Q and Gain of what the detector listens to
+    Rectangle {
+        id: scPanel
+        objectName: "compSideChain"
+        visible: root.scOpen
+        z: 20
+        x: 760; y: 70; width: 262; height: 300; radius: 8
+        color: "#10161d"; border.color: "#3d4a58"
+        Text { x: 14; y: 8; text: qsTr("Side Chain Filter"); color: "#9db2c8"; font.family: Theme.fontFamily; font.pixelSize: 16 }
+        Row {
+            x: 14; y: 34; spacing: 4
+            Repeater {
+                model: [qsTr("Off"), qsTr("Listen"), qsTr("On")]
+                delegate: Rectangle {
+                    required property string modelData
+                    required property int index
+                    width: 72; height: 28; radius: 4
+                    color: Math.round(root.val("scState")) === index ? "#1e78d6" : "#26313d"
+                    Text { anchors.centerIn: parent; text: parent.modelData; color: "#e4eaf0"; font.family: Theme.fontFamily; font.pixelSize: 15 }
+                    MouseArea { anchors.fill: parent; onClicked: root.editor.setNow("scState", parent.index) }
+                }
+            }
+        }
+        Row {
+            x: 14; y: 70; spacing: 3
+            Repeater {
+                model: [qsTr("LP"), qsTr("BP"), qsTr("HP"), qsTr("Par EQ"), qsTr("Hi Shelf")]
+                delegate: Rectangle {
+                    required property string modelData
+                    required property int index
+                    width: index >= 3 ? 52 : 38; height: 28; radius: 4
+                    color: Math.round(root.val("scMode")) === index ? "#1e78d6" : "#26313d"
+                    Text { anchors.centerIn: parent; text: parent.modelData; color: "#e4eaf0"; font.family: Theme.fontFamily; font.pixelSize: 13 }
+                    MouseArea { anchors.fill: parent; onClicked: root.editor.setNow("scMode", parent.index) }
+                }
+            }
+        }
+        FxHSlider {
+            x: 14; y: 112; width: 234
+            property var p: root.editor.param("scFreq")
+            label: qsTr("Frequency"); unit: "Hz"; decimals: 0; logarithmic: true; from: p.min; to: p.max; defaultValue: p.def
+            value: root.val("scFreq")
+            onMoved: (v) => root.editor.edit("scFreq", v)
+            onReleased: (v) => root.editor.commit("scFreq", v)
+        }
+        FxHSlider {
+            x: 14; y: 172; width: 234
+            property var p: root.editor.param("scQ")
+            label: qsTr("Q"); decimals: 2; logarithmic: true; from: p.min; to: p.max; defaultValue: p.def
+            value: root.val("scQ")
+            onMoved: (v) => root.editor.edit("scQ", v)
+            onReleased: (v) => root.editor.commit("scQ", v)
+        }
+        FxHSlider {
+            x: 14; y: 232; width: 234
+            property var p: root.editor.param("scGain")
+            label: qsTr("Gain"); unit: "dB"; decimals: 1; from: p.min; to: p.max; defaultValue: p.def
+            dimmed: Math.round(root.val("scMode")) < 3
+            value: root.val("scGain")
+            onMoved: (v) => root.editor.edit("scGain", v)
+            onReleased: (v) => root.editor.commit("scGain", v)
         }
     }
 

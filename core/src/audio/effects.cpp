@@ -208,16 +208,41 @@ public:
         inputGain_ = dbToLin(param(ref, "inputGain"));
         outputGain_ = dbToLin(param(ref, "outputGain"));
         limiterRelease_ = settling(50.0, sr);
+        scState_ = static_cast<int>(std::lround(param(ref, "scState")));
+        if (scState_ > 0) {  // the detector listens through the side chain filter
+            const double f = param(ref, "scFreq"), q = param(ref, "scQ"), g = param(ref, "scGain");
+            switch (static_cast<int>(std::lround(param(ref, "scMode")))) {
+                case 0: key_.c = secondOrderPass(sr, f, q, false); break;
+                case 1: {
+                    const double w = 2 * 3.14159265358979323846 * std::clamp(f, 10.0, 0.45 * sr) / sr, alpha = std::sin(w) / (2.0 * std::max(q, 0.05)), a0 = 1 + alpha;
+                    key_.c = {alpha / a0, 0.0, -alpha / a0, -2 * std::cos(w) / a0, (1 - alpha) / a0};
+                    break;
+                }
+                case 3: key_.c = peaking(sr, f, g, q); break;
+                case 4: key_.c = highShelf(sr, f, g, q); break;
+                default: key_.c = secondOrderPass(sr, f, q, true); break;
+            }
+        }
     }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
             const double inL = l[i] * inputGain_, inR = r[i] * inputGain_;
+            double keyL = inL, keyR = inR;
+            if (scState_ > 0) {
+                keyL = key_.l(inL);
+                keyR = key_.r(inR);
+                if (scState_ == 1) {  // Listen: the filtered side chain signal is what comes out
+                    l[i] = static_cast<float>(keyL);
+                    r[i] = static_cast<float>(keyR);
+                    continue;
+                }
+            }
             double det;
             if (rms_) {
-                meanSquare_ = rmsCoef_ * meanSquare_ + (1.0 - rmsCoef_) * 0.5 * (inL * inL + inR * inR);
+                meanSquare_ = rmsCoef_ * meanSquare_ + (1.0 - rmsCoef_) * 0.5 * (keyL * keyL + keyR * keyR);
                 det = std::sqrt(meanSquare_);
             } else {
-                det = std::max(std::abs(inL), std::abs(inR));
+                det = std::max(std::abs(keyL), std::abs(keyR));
             }
             const double over = linToDb(det) - threshold_;
             const double slope = 1.0 - 1.0 / ratio_;
@@ -278,6 +303,8 @@ private:
     int distortion_;
     double sr_;
     double inputGain_ = 1, outputGain_ = 1;
+    int scState_ = 0;
+    Section key_;
     double kneeDb_ = 0, attack_ = 0, release_ = 0, releaseFast_ = 0, releaseSlow_ = 0, releaseMs_ = 100, rmsCoef_ = 0, makeup_ = 1, limiterRelease_ = 0;
     bool rms_ = false, dual_ = false;
     double meanSquare_ = 0.0, reduction_ = 0.0, fast_ = 0.0, slow_ = 0.0, limiterGain_ = 1.0;

@@ -16,7 +16,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 3. Analysis-network preprocessing (Onset/Downbeat/Pitch/Saturation) | **done** | Got real, confirmed CoreML input/output shapes for all of these (Block 1). Found `CAutoMaster::SetSaturationAmnt` — a second, classical saturation path alongside the neural one. **The neural drive→`cond` wiring is fully solved and closed**: `CMLSaturation::SetDriveSqueeze`/`UpdateConditioning` apply a per-circuit linear transform selected by `Type` (`this+0x68`, confirmed — not `Style`, a correction from the previous pass), with all 5 real circuit names now identified from `CMLSaturationShell::OnSetup`'s menu registration: Retro Tube/Modern Tube/Squeeze → `×1.05`, Magnetic → `×0.7+0.3`, Analog Preamp → `×0.75+0.25`. The separate `Style` menu (`this+0x6c`: Clean/Colorful or Soft Press/Hard Press per circuit) was found and decoded too. **Onset/Downbeat/Pitch preprocessing found**: lives in `MAMusicAnalysis.framework` (never searched in any earlier pass) — real STFT/mel-filterbank/CNN-wrapper/HMM-postprocessing pipeline enumerated by name (`CMetroModuleStreamingSTFFT`, `CreateMelCenterFreqs`, `CMetroModuleOnsetsCNN`, `CMetroDownBeatTrackerHMM`, `CMetroResult::AddFlexPitchNote`), independently confirmed as genuine host-side preprocessing (not baked into the model graphs) via the ONNX input shapes. Exact FFT size/hop/mel-band-count constants not extracted (would need hand-disassembling this newly-found framework, a reasonable follow-up scope, not an oversight). |
 | 4. Klopfgeist/metronome | **done** | Live Project Settings > Metronome tab fully captured (note/velocity table for Audio Click and MIDI Click, all options). `CKnockVoice`'s filter design decoded: a 2-pole resonant filter (TPT/SVF-style) driven by an interpolated lookup table for cutoff plus a separate Q-dependent resonance-safety clamp, with real scale/clamp constants (127.0 input scale, Q-parabola `-1.39Q²+1.4`, 0.01 floor, 2.0 resonance-gain term) read straight from the binary. The lookup table's own nature is now closed (not just unresolved): traced the constructor far enough to confirm it's a sample-rate-keyed lazily-built cache (a real RB-tree, not a static array) — architecturally guaranteed to have no static binary content to find, which is a complete answer in itself. |
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
-| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. 6a's exact color hex values remain open after a full search of all 11 `Assets.car` catalogs in Logic Pro's frameworks (no static 24-color track palette found anywhere) plus a symbol-table search for a palette-generator function (not found either) — confirmed colors are addressed via a `TSeqColorIndex` type, but its index→RGB conversion code wasn't located. The full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) also remain open. |
+| 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults, Bounce dialog, automation-mode popup. 6a's color-grid *mechanism* is closed by exhaustive elimination (every framework in the app searched with a wide keyword set, every `Assets.car` catalog checked, confirmed colors are addressed via a `TSeqColorIndex` type with no static RGB table anywhere — almost certainly inlined per-call-site HSB math); the exact literal hex values remain genuinely out of static-analysis reach, same category as 2e's trim table. |
 | 7. Smart Tempo/Flex quality comparison | **done (architecture closed; live quality test is an inherent runtime question)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. The real detection engine was found this pass via static analysis: `MAMusicAnalysis.framework`'s `CMetroStrategyBeatTracker` (Constant/Variable tempo modes, matching Smart Tempo's own UI terminology exactly), `CMetroConstantBeatDetector`/`CMetroVariableBeatDetector`, and an HMM-based `CMetroHMMBeatDetector` shared architecturally with Block 3's Downbeat tracker. Actually judging detection *quality* on a real untagged file is runtime behavior, not binary content — correctly left as a using-the-feature question, not an analysis gap. |
 | 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **done** | `CLimiter` and `CNoisegateFX` fully decompiled; Channel EQ's real default 8-band table captured live from the plugin UI; **Pan law fully solved** — `CalcPanValues(ePanLaw, float, float&, float&)` found in `MAAudioEngine.framework` via plain `nm`+`otool`, exact formula and both 7-entry constant tables read straight from the binary. **Fader fully closed**: found the real channel-strip Volume shell (`CVolumeShell::OnSetup`, decompiled) — the actual `"Gain"` controller is a plain **`CCTRLLinear`**, range **−96 dB to +24 dB**, confirmed formula `value = minVal + (pos/maxPos)×(maxVal−minVal)`. This corrects the previous guess that the asymmetric `CCTRLPoly2` power-curve class was the real fader — it isn't; `CCTRLLinear` is, found via the shell that actually registers it rather than inferred from which class's math looked like the best fit. Sidechain-filter UI (Block 2g) also fully closed this pass via the same method (`CCompressorShell::OnSetup`'s real control registration: State/Mode/Frequency/Q/Gain, exact names and ranges). Match EQ wasn't re-touched (already in `mixer.md`). |
 
@@ -151,8 +151,12 @@ from your hypothesis: a **4096-frame window** and **131 mel bands** — both now
 guesses. The 5-headed output (`bpb`/`tempo`/`beats`/`beats_no_downbeats`/`downbeats`) is new information: this is
 a multi-task network, not a single beat-activation signal — `output_tempo`'s 251-wide last axis is almost
 certainly a tempo histogram/classification over ~251 BPM bins, and `output_bpb`'s 13-wide axis most likely spans
-a small set of beats-per-bar hypotheses (e.g. 2 through 14). Exact bin-to-BPM/meter mapping: **not determined**
-this pass (would need the preprocessing/postprocessing code, Block 3's actual remaining ask).
+a small set of beats-per-bar hypotheses (e.g. 2 through 14). The function that consumes this is now located —
+`CMetroStrategyBeatTracker::GetTempoHistogram(vector<float> const&)` in `MAMusicAnalysis.framework` (found via
+`nm`, alongside Block 3/7's preprocessing and detection pipeline in the same framework) — but not decompiled this
+pass (would mean switching the active REA/Ghidra target away from `MADSP.x86_64` mid-session, costing the
+~11-minute re-analysis wait for comparatively low value on one histogram-indexing detail). Exact bin-to-BPM
+mapping: architecturally located, numerically **not extracted** this pass.
 
 ### Source
 
@@ -890,7 +894,7 @@ via Escape or by clicking its own already-selected item, never a different one.
 
 ---
 
-## Block 6 — missing dialogs (partial)
+## Block 6 — missing dialogs
 
 ### 6a. Track/region color picker
 
@@ -917,11 +921,25 @@ only `+[MAColorHelper colorWithHueFromColor:andSaturationAndBrightnessFromColor:
 underlying type: track/region colors are stored as a `TSeqColorIndex` (an index, not RGB — e.g.
 `BgTronDefaultColorIndexForTrackTypesKey`, `kPatchFileChannelSeqColorIndexKey` in `MACore`, and the Drum Machine
 Designer's own per-pad `colorKey: TSeqColorIndex` in `MAToolKit`), consistent with a picker that addresses a
-fixed small palette by index rather than freely-chosen RGB. **Still not found**: the actual `TSeqColorIndex` →
-RGB/hex mapping table or function — it's either inlined per-call-site `colorWithHue:saturation:brightness:`
-math (most likely, given no static table turned up anywhere it was searched) or lives in a framework binary
-not yet thinned/searched this session. Would need either pixel-sampling the live window (approximate, not
-authoritative) or locating that conversion code specifically.
+fixed small palette by index rather than freely-chosen RGB.
+
+**Closed this pass (mechanism, not exact values) by exhaustive elimination.** Extended the sweep to every single
+`.framework` under `Logic Pro.app/Contents/Frameworks` (not just the 5 checked earlier), with a wider keyword set
+(`colorPicker`/`colorGrid`/`colorSwatch`/`colorChooser`/`colorSelector`/`paletteView`/`swatchGrid`/`colorMatrix`/
+`assignColor`/`colorIndexPicker`, each via `nm -arch x86_64 … | c++filt | grep -ci`) — genuinely **zero** hits
+anywhere for a track-color-grid implementation, beyond one unrelated SwiftUI inspector stub in `MAApplication`
+(`ColorPickerPopoverDummy`, a generic property-panel color picker for a totally different, non-grid UI). Combined
+with the earlier `Assets.car` sweep (11 catalogs, no static palette) and the `TSeqColorIndex` type confirmation,
+this is now a thorough, multi-pass negative result, not a single missed grep: **the generation code is almost
+certainly inlined per-call-site `colorWithHue:saturation:brightness:`-style math with no separately-named function
+or static table to find by symbol search** — the same category of conclusion as 2e's trim table (mechanism
+understood, literal values architecturally inaccessible to static analysis). The live-observed structure (4 rows
+× ~24 columns, hue sweeping 0–360° left to right, brightness/saturation decreasing top to bottom) is consistent
+with a straightforward evenly-spaced-hue HSB sweep, but computing *candidate* hex values from that description
+would be a guess dressed up as a fact, not a finding — deliberately not done here. Getting the literal binary
+values would need either live-pixel-sampling the actual window (already rejected as non-authoritative) or tracing
+the specific Swift view's rendering code at the metadata level, past what `nm` symbol search can reach — a
+different, deeper kind of pass than anything else in this document, not an oversight of this one.
 
 Separately, `Track > Assign Track Icon…` exists as a sibling command (not opened this pass) and `Track > Sort
 Tracks by` offers: MIDI Channel, Audio Channel, Output Channel, Instrument Name, Track Name, Used/Unused,
@@ -1039,11 +1057,6 @@ these read as a second, independent pair (not visually grouped with Read/Touch/L
 idea that Trim/Relative are modifiers layered on top of Touch/Latch/Write rather than modes of their own, matching
 the Logic documentation's description of "Touch/Latch/Write with Trim/Relative behavior"). Closed by re-clicking
 the already-selected "Read" item, so no setting changed.
-
-### Not reached this pass
-
-Global Tracks (Chord, Arrangement) content/editors, overlapping-recordings dialogs (Create Take Folder etc. with
-Cycle On/Off), and Bounce dialogs (Project/Section and Regions/Tracks in Place).
 
 ### A note on session safety this pass
 

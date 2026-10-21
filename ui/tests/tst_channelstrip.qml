@@ -170,6 +170,20 @@ TestCase {
         s.info = { trackId: "t", name: "Keys", color: "purple", kind: "instrument", master: false, automationMode: "latch", gainDb: 0, pan: 0, mute: false, solo: false, outputName: "Stereo Out", inserts: [], sends: [] }
         compare(s.automationSlot.text, "Latch")
     }
+    function test_trim_and_relative_label_the_automation_mode_and_go_with_touch_latch_and_write() {
+        var s = createTemporaryObject(stripC, this)
+        compare(s.modeLabel("t-touch"), "T-Touch")
+        compare(s.modeLabel("r-write"), "R-Write")
+        compare(s.modeBase("r-latch"), "latch")
+        compare(s.modeOption("t-latch"), "t")
+        compare(s.modeOption("read"), "")
+        compare(s.withOption("touch", "t"), "t-touch")
+        compare(s.withOption("write", "t"), "write")       // Trim does not go with Write
+        compare(s.withOption("write", "r"), "r-write")
+        compare(s.withOption("read", "r"), "read")         // nor does anything go with Read
+        s.info = { trackId: "t", name: "Keys", color: "purple", kind: "instrument", master: false, automationMode: "r-latch", gainDb: 0, pan: 0, mute: false, solo: false, outputName: "Stereo Out", inserts: [], sends: [] }
+        compare(s.automationSlot.text, "R-Latch")
+    }
     function test_changing_track_mid_drag_sends_nothing() {
         var s = createTemporaryObject(stripC, this)
         var got = []

@@ -146,8 +146,10 @@ TestCase {
         const d = createTemporaryObject(paramC, this, { project: c, trackId: track })
         d.open()
         tryCompare(d, "visible", true)
-        compare(d.all.length, 2)                                // Volume and Pan: no sends, no plug-ins
+        compare(d.all.length, 4)                                // Volume and Pan and their Relative lanes: no sends, no plug-ins
         compare(d.all[0].param, "volume")
+        compare(d.all[2].param, "volumeRel")
+        compare(c.automationAvailable(track, "panRel"), true)
         compare(c.automationParamFor(track), "volume")
         c.setTrackAutomationParam(track, "pan")                 // this track alone shows the pan
         compare(c.automationParamFor(track), "pan")

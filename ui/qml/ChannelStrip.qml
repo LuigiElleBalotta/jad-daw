@@ -194,7 +194,19 @@ Panel {
         }
     }
     readonly property string groupName: { for (const g of groupChoices) if (g.id === (info.groupId ?? "")) return g.name; return "" }
-    function modeLabel(m) { return ({ off: qsTr("Off"), read: qsTr("Read"), touch: qsTr("Touch"), latch: qsTr("Latch"), write: qsTr("Write") })[m] ?? m }
+    // "t-touch" is Trim on Touch (T-Touch), "r-write" Relative on Write (R-Write)
+    function modeBase(m) { return m.length > 2 && m.charAt(1) === "-" ? m.slice(2) : m }
+    function modeOption(m) { return m.length > 2 && m.charAt(1) === "-" ? m.charAt(0) : "" }
+    function modeLabel(m) {
+        const name = ({ off: qsTr("Off"), read: qsTr("Read"), touch: qsTr("Touch"), latch: qsTr("Latch"), write: qsTr("Write") })[modeBase(m)] ?? m
+        return modeOption(m) === "" ? name : modeOption(m).toUpperCase() + "-" + name
+    }
+    // Trim works with Touch and Latch, Relative with Touch, Latch and Write; a mode that does not go with the option leaves it
+    function withOption(base, option) {
+        if (option === "t" && (base === "touch" || base === "latch")) return "t-" + base
+        if (option === "r" && (base === "touch" || base === "latch" || base === "write")) return "r-" + base
+        return base
+    }
     function modeColor(m) { return m === "off" ? Theme.textSecondary : (m === "read" ? Theme.statePlay : Theme.stateRecord) }
     ThemedMenu {  // the automation mode of a track
         id: automationMenu
@@ -204,11 +216,34 @@ Panel {
                 required property string modelData
                 text: root.modeLabel(modelData)
                 checkable: true
-                checked: (root.info.automationMode ?? "read") === modelData
-                onTriggered: root.automationModeChosen(root.trackId, modelData)
+                checked: root.modeBase(root.info.automationMode ?? "read") === modelData
+                onTriggered: root.automationModeChosen(root.trackId, root.withOption(modelData, root.modeOption(root.info.automationMode ?? "read")))
             }
             onObjectAdded: (index, object) => automationMenu.insertItem(index, object)
             onObjectRemoved: (index, object) => automationMenu.removeItem(object)
+        }
+        MenuSeparator {}
+        ThemedMenuItem {
+            objectName: "automationTrim"
+            text: qsTr("Trim")
+            checkable: true
+            checked: root.modeOption(root.info.automationMode ?? "read") === "t"
+            onTriggered: {
+                const m = root.info.automationMode ?? "read"
+                const base = root.modeBase(m)
+                root.automationModeChosen(root.trackId, root.modeOption(m) === "t" ? base : root.withOption(base === "touch" || base === "latch" ? base : "touch", "t"))
+            }
+        }
+        ThemedMenuItem {
+            objectName: "automationRelative"
+            text: qsTr("Relative")
+            checkable: true
+            checked: root.modeOption(root.info.automationMode ?? "read") === "r"
+            onTriggered: {
+                const m = root.info.automationMode ?? "read"
+                const base = root.modeBase(m)
+                root.automationModeChosen(root.trackId, root.modeOption(m) === "r" ? base : root.withOption(base === "touch" || base === "latch" || base === "write" ? base : "touch", "r"))
+            }
         }
     }
     ThemedMenu {  // the group of a track

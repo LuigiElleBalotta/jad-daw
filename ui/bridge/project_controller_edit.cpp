@@ -1049,6 +1049,8 @@ void ProjectController::setAutomationParam(const QString& param) {
 // "volume", "pan" or "send1".."send4" (the first sends of the track) as the Core's target name; empty when the track has no such send
 QString ProjectController::automationTarget(const QString& trackId, const QString& param) const {
     if (param == "volume" || param == "pan") return param;
+    if (param == "volumeRel") return QStringLiteral("volume.rel");
+    if (param == "panRel") return QStringLiteral("pan.rel");
     if (param.startsWith(QLatin1String("param/"))) {
         const auto target = lpc::parseParamTarget(param.toStdString());
         if (!target) return {};
@@ -1076,7 +1078,7 @@ QVariantList ProjectController::automationPoints(const QString& trackId, const Q
     if (target.isEmpty()) return out;
     for (const TrackRow& t : allRows_) {
         if (t.id != trackId) continue;
-        const std::vector<AutoRow>* points = target == "pan" ? &t.panAuto : (target == "volume" ? &t.volumeAuto : nullptr);
+        const std::vector<AutoRow>* points = target == "pan" ? &t.panAuto : (target == "volume" ? &t.volumeAuto : (target == "volume.rel" ? &t.volumeRel : (target == "pan.rel" ? &t.panRel : nullptr)));
         if (!points)
             for (const auto& lane : t.sendAuto)
                 if (QStringLiteral("send:") + lane.first == target) points = &lane.second;
@@ -1094,7 +1096,9 @@ void ProjectController::setAutomationPoints(const QString& trackId, const QStrin
     const QString target = automationTarget(trackId, param);
     if (target.isEmpty()) return;
     const bool normalised = target.startsWith(QLatin1String("param/"));
-    const double lo = normalised ? 0.0 : (target == "pan" ? -1.0 : -96.0), hi = normalised ? 1.0 : (target == "pan" ? 1.0 : (target == "volume" ? 24.0 : 12.0));
+    const bool rel = target == "volume.rel" || target == "pan.rel";
+    const double lo = normalised ? 0.0 : (target == "pan" ? -1.0 : (target == "pan.rel" ? -2.0 : (rel ? -120.0 : -96.0))),
+                 hi = normalised ? 1.0 : (target == "pan" ? 1.0 : (target == "pan.rel" ? 2.0 : (rel ? 120.0 : (target == "volume" ? 24.0 : 12.0))));
     nlohmann::json list = nlohmann::json::array();
     for (const QVariant& v : points) {
         const QVariantMap m = v.toMap();
@@ -2332,7 +2336,8 @@ void ProjectController::deleteGroup(const QString& groupId) {
 }
 
 void ProjectController::setAutomationMode(const QString& trackId, const QString& mode) {
-    if (!host_ || (mode != "off" && mode != "read" && mode != "touch" && mode != "latch" && mode != "write")) return;
+    static const QStringList modes{"off", "read", "touch", "latch", "write", "t-touch", "t-latch", "r-touch", "r-latch", "r-write"};
+    if (!host_ || !modes.contains(mode)) return;
     finishAutomationCapture(trackId);
     sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"automationMode", mode.toStdString()}});
 }
@@ -2351,12 +2356,43 @@ const TrackRow* findTrackRow(const std::vector<TrackRow>& rows, const QString& i
 }
 }  // namespace
 
+namespace {
+// "t-touch" is Trim with Touch, "r-write" is Relative with Write: the option letter and the mode under it
+struct ModeParts { QString option, base; };
+ModeParts splitMode(const QString& m) {
+    if (m.size() > 2 && m[1] == QLatin1Char('-')) return {m.left(1), m.mid(2)};
+    return {QString(), m};
+}
+// the value of a lane at a position (linear between its points, the first and last value held), `fallback` when the lane is empty
+double rowsAt(const std::vector<AutoRow>& rows, double beats, double fallback) {
+    if (rows.empty()) return fallback;
+    if (beats <= rows.front().beats) return rows.front().value;
+    if (beats >= rows.back().beats) return rows.back().value;
+    std::size_t i = 0;
+    while (i + 1 < rows.size() && rows[i + 1].beats <= beats) ++i;
+    double t = (beats - rows[i].beats) / std::max(1e-9, rows[i + 1].beats - rows[i].beats);
+    if (rows[i].curve != 0.0) t = std::pow(t, std::exp2(2.0 * rows[i].curve));
+    return rows[i].value + (rows[i + 1].value - rows[i].value) * t;
+}
+// the same for the moves of a take: (beats, value) pairs
+double movesAt(const std::vector<std::pair<double, double>>& moves, double beats) {
+    if (moves.empty()) return 0.0;
+    if (beats <= moves.front().first) return moves.front().second;
+    if (beats >= moves.back().first) return moves.back().second;
+    std::size_t i = 0;
+    while (i + 1 < moves.size() && moves[i + 1].first <= beats) ++i;
+    const double t = (beats - moves[i].first) / std::max(1e-9, moves[i + 1].first - moves[i].first);
+    return moves[i].second + (moves[i + 1].second - moves[i].second) * t;
+}
+}  // namespace
+
 // A fader or pan move while the project plays and the track is in a writing mode: keep it with its position.
 void ProjectController::captureAutomation(const QString& trackId, bool isPan, double value) {
     if (!playing_) return;
     const TrackRow* t = findTrackRow(allRows_, trackId);
     if (!t || t->master) return;
-    const bool touch = t->automationMode == "touch", latch = t->automationMode == "latch", write = t->automationMode == "write";
+    const QString base = splitMode(t->automationMode).base;
+    const bool touch = base == "touch", latch = base == "latch", write = base == "write";
     if (!touch && !latch && !write) return;
     if (touch && !gestureActive_) return;  // touch writes only while the fader is held
     AutoCapture& c = autoCapture_[trackId];
@@ -2370,8 +2406,9 @@ void ProjectController::captureAutomation(const QString& trackId, bool isPan, do
 void ProjectController::tickAutomationWrite() {
     for (const TrackRow& t : allRows_) {
         if (t.master) continue;
-        const bool write = t.automationMode == "write";
-        const bool latched = t.automationMode == "latch" && autoCapture_.contains(t.id) && autoCapture_[t.id].latched;
+        const QString base = splitMode(t.automationMode).base;
+        const bool write = base == "write";
+        const bool latched = base == "latch" && autoCapture_.contains(t.id) && autoCapture_[t.id].latched;
         if (!write && !latched) continue;
         if (gestureActive_) continue;  // the drag itself is captured move by move
         AutoCapture& c = autoCapture_[t.id];
@@ -2384,7 +2421,7 @@ void ProjectController::finishAutomationCaptures(bool latchedToo) {
     const QStringList ids = autoCapture_.keys();
     for (const QString& id : ids) {
         const TrackRow* t = findTrackRow(allRows_, id);
-        const bool keepGoing = !latchedToo && t && (t->automationMode == "latch" || t->automationMode == "write");
+        const bool keepGoing = !latchedToo && t && (splitMode(t->automationMode).base == "latch" || splitMode(t->automationMode).base == "write");
         if (!keepGoing) finishAutomationCapture(id);
     }
 }
@@ -2409,8 +2446,62 @@ void ProjectController::finishAutomationCapture(const QString& trackId) {
         for (const auto& [b, v] : kept) points.append(QVariantMap{{"beats", b}, {"value", v}});
         setAutomationPoints(trackId, QString::fromLatin1(target), points);
     };
-    merge(c.gain, t->volumeAuto, "volume", 0.05);
-    merge(c.pan, t->panAuto, "pan", 0.01);
+    const ModeParts mode = splitMode(t->automationMode);
+    if (mode.option.isEmpty()) {
+        merge(c.gain, t->volumeAuto, "volume", 0.05);
+        merge(c.pan, t->panAuto, "pan", 0.01);
+        return;
+    }
+    // Trim and Relative (Logic's automation options). A Touch take lets go at its end, so the lane is as it was a moment after the last move; Latch goes on.
+    const double release = 1.0 / 64.0;
+    const bool letGo = !c.latched;
+    auto thin = [](const std::vector<std::pair<double, double>>& in, double eps) {
+        std::vector<std::pair<double, double>> kept;
+        for (std::size_t i = 0; i < in.size(); ++i)
+            if (kept.empty() || i + 1 == in.size() || std::abs(in[i].second - kept.back().second) > eps) kept.push_back(in[i]);
+        return kept;
+    };
+    auto outside = [](const std::vector<AutoRow>& lane, double from, double to) {
+        QVariantList points;
+        for (const AutoRow& p : lane)
+            if (p.beats < from - 1e-9 || p.beats > to + 1e-9) points.append(QVariantMap{{"beats", p.beats}, {"value", p.value}, {"curve", p.curve}});
+        return points;
+    };
+    auto relative = [&](const std::vector<std::pair<double, double>>& moves, const std::vector<AutoRow>& primary, const std::vector<AutoRow>& old, const char* param, double eps) {
+        if (moves.empty()) return;
+        // Relative: what the take moved the control away from the lane, written on a lane of its own that is added to the first
+        std::vector<std::pair<double, double>> offsets;
+        for (const auto& [b, v] : moves) offsets.emplace_back(b, v - rowsAt(primary, b, moves.front().second));
+        const double from = moves.front().first, to = moves.back().first + (letGo ? release : 0.0);
+        QVariantList points = outside(old, from, to);
+        for (const auto& [b, v] : thin(offsets, eps)) points.append(QVariantMap{{"beats", b}, {"value", v}});
+        if (letGo) points.append(QVariantMap{{"beats", to}, {"value", rowsAt(old, to, 0.0)}});
+        setAutomationPoints(trackId, QString::fromLatin1(param), points);
+    };
+    auto trim = [&](const std::vector<std::pair<double, double>>& moves, const std::vector<AutoRow>& lane, const char* param, double eps) {
+        if (moves.empty()) return;
+        // Trim: how far the take moved the control from where it began is added to the lane, point by point
+        std::vector<std::pair<double, double>> delta;
+        for (const auto& [b, v] : moves) delta.emplace_back(b, v - moves.front().second);
+        const double from = moves.front().first, last = moves.back().first, to = last + (letGo ? release : 0.0);
+        std::set<double> times;
+        for (const auto& m : moves) times.insert(m.first);
+        for (const AutoRow& p : lane)
+            if (p.beats > from && p.beats < last) times.insert(p.beats);
+        std::vector<std::pair<double, double>> inside;
+        for (const double b : times) inside.emplace_back(b, rowsAt(lane, b, moves.front().second) + movesAt(delta, b));
+        QVariantList points = outside(lane, from, to);
+        for (const auto& [b, v] : thin(inside, eps)) points.append(QVariantMap{{"beats", b}, {"value", v}});
+        if (letGo) points.append(QVariantMap{{"beats", to}, {"value", rowsAt(lane, to, moves.front().second)}});
+        setAutomationPoints(trackId, QString::fromLatin1(param), points);
+    };
+    if (mode.option == "r") {
+        relative(c.gain, t->volumeAuto, t->volumeRel, "volumeRel", 0.05);
+        relative(c.pan, t->panAuto, t->panRel, "panRel", 0.01);
+    } else {
+        trim(c.gain, t->volumeAuto, "volume", 0.05);
+        trim(c.pan, t->panAuto, "pan", 0.01);
+    }
 }
 
 namespace {
@@ -3531,6 +3622,8 @@ QVariantList ProjectController::automationChoices(const QString& trackId) const 
     if (!t || t->master) return out;
     out.append(QVariantMap{{"param", "volume"}, {"label", "Volume"}});
     out.append(QVariantMap{{"param", "pan"}, {"label", "Pan"}});
+    out.append(QVariantMap{{"param", "volumeRel"}, {"label", "Volume (Relative)"}});
+    out.append(QVariantMap{{"param", "panRel"}, {"label", "Pan (Relative)"}});
     for (std::size_t i = 0; i < t->sends.size() && i < 4; ++i) out.append(QVariantMap{{"param", QStringLiteral("send%1").arg(i + 1)}, {"label", QStringLiteral("Send %1: %2").arg(i + 1).arg(t->sends[i].targetName)}});
 #ifdef JAD_HAVE_JUCE
     if (pluginHost_) {

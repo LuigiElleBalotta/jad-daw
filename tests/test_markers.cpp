@@ -1,4 +1,6 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <random>
 #include "lpc/commands.h"
 #include "lpc/graph_builder.h"
@@ -232,6 +234,50 @@ TEST_CASE("automation modes: set_track_props carries the mode, the JSON omits th
     REQUIRE_FALSE(s.execute(p, makeSetTrackProps(t.id, patch)).has_value());
     auto withoutLane = buildConfig(p, *p.findTrack(t.id), media, nullptr, nullptr);
     REQUIRE(withoutLane->volumeAuto.empty());                                            // off: ignored
+}
+
+TEST_CASE("relative automation: the Relative lane is added to the volume lane in the engine, Trim and Relative are modes", "[automation][mode]") {
+    std::mt19937_64 rng(31);
+    Project p(Uuid::random(rng));
+    UndoStack s;
+    Track t;
+    t.id = Uuid::random(rng);
+    t.kind = TrackKind::Audio;
+    t.name = "A";
+    REQUIRE_FALSE(s.execute(p, makeAddTrack(t)).has_value());
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume", {{0, -6.0}, {4 * kPPQ, -6.0}})).has_value());
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume.rel", {{kPPQ, 0.0}, {2 * kPPQ, 6.0}, {3 * kPPQ, 6.0}})).has_value());
+    REQUIRE(s.execute(p, makeSetAutomation(t.id, "volume.rel", {{0, 500.0}})).has_value());   // out of range
+    REQUIRE(s.execute(p, makeSetAutomation(t.id, "bass.rel", {{0, 1.0}})).has_value());       // not a target
+    MediaStore media;
+    auto cfg = buildConfig(p, *p.findTrack(t.id), media, nullptr, nullptr);
+    // the points of both lanes, each the sum of the two: -6 until beat 1, then the offset rises to +6 at beat 2 (so 0 dB), and holds
+    REQUIRE(cfg->volumeAuto.size() >= 5);
+    auto db = [](float lin) { return 20.0f * std::log10(lin); };
+    REQUIRE(db(cfg->volumeAuto.front().value) == Catch::Approx(-6.0f).margin(0.01));
+    bool sawZero = false;
+    for (const auto& pt : cfg->volumeAuto)
+        if (std::abs(db(pt.value)) < 0.01f) sawZero = true;
+    REQUIRE(sawZero);
+    REQUIRE(db(cfg->volumeAuto.back().value) == Catch::Approx(0.0f).margin(0.01));
+    // without a Relative lane the volume lane is as it was
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume.rel", {})).has_value());
+    REQUIRE(buildConfig(p, *p.findTrack(t.id), media, nullptr, nullptr)->volumeAuto.size() == 2);
+    // only a Relative lane: it is added to the fader of the strip
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume", {})).has_value());
+    REQUIRE_FALSE(s.execute(p, makeSetAutomation(t.id, "volume.rel", {{0, 3.0}})).has_value());
+    auto only = buildConfig(p, *p.findTrack(t.id), media, nullptr, nullptr);
+    REQUIRE(only->volumeAuto.size() == 1);
+    REQUIRE(db(only->volumeAuto[0].value) == Catch::Approx(3.0f).margin(0.01));
+    for (const char* mode : {"t-touch", "t-latch", "r-touch", "r-latch", "r-write"}) {
+        TrackPatch patch;
+        patch.automationMode = mode;
+        REQUIRE_FALSE(s.execute(p, makeSetTrackProps(t.id, patch)).has_value());
+        REQUIRE(p.findTrack(t.id)->automationMode == mode);
+    }
+    TrackPatch bad;
+    bad.automationMode = "t-write";  // Trim goes with Touch and Latch only
+    REQUIRE(s.execute(p, makeSetTrackProps(t.id, bad)).has_value());
 }
 
 TEST_CASE("project name: set_project_name is validated and undone", "[project]") {

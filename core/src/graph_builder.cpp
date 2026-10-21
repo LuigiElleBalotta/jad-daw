@@ -223,6 +223,68 @@ void fillSendAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
     }
 }
 
+// The volume and pan of a track while it plays: its lane, plus the Relative lane ("volume.rel", "pan.rel": dB, or a pan offset) when there is one. The two curves
+// are added at every point of either one, and inside a curved segment at a few more places. Without a Relative lane this is the lane as it is.
+double laneValueAt(const std::vector<AutomationPoint>& pts, Ticks tick, double fallback) {
+    if (pts.empty()) return fallback;
+    if (tick <= pts.front().tick) return pts.front().value;
+    if (tick >= pts.back().tick) return pts.back().value;
+    std::size_t i = 0;
+    while (i + 1 < pts.size() && pts[i + 1].tick <= tick) ++i;
+    const AutomationPoint& a = pts[i];
+    const AutomationPoint& b = pts[i + 1];
+    double t = static_cast<double>(tick - a.tick) / static_cast<double>(std::max<Ticks>(1, b.tick - a.tick));
+    if (a.curve != 0.0) t = std::pow(t, std::exp2(2.0 * a.curve));
+    return a.value + (b.value - a.value) * t;
+}
+
+const std::vector<AutomationPoint>* findLane(const Track& t, const std::string& target) {
+    for (const AutomationLane& lane : t.automation)
+        if (lane.target == target) return &lane.points;
+    return nullptr;
+}
+
+std::vector<AutomationPoint> effectiveLane(const Track& t, const std::string& target, double base) {
+    static const std::vector<AutomationPoint> none;
+    const std::vector<AutomationPoint>* primary = findLane(t, target);
+    const std::vector<AutomationPoint>* relative = findLane(t, target + ".rel");
+    if (!relative || relative->empty()) return primary ? *primary : none;
+    const std::vector<AutomationPoint>& a = primary ? *primary : none;
+    std::vector<Ticks> ticks;
+    for (const AutomationPoint& pt : a) ticks.push_back(pt.tick);
+    for (const AutomationPoint& pt : *relative) ticks.push_back(pt.tick);
+    std::sort(ticks.begin(), ticks.end());
+    ticks.erase(std::unique(ticks.begin(), ticks.end()), ticks.end());
+    auto curvedAt = [](const std::vector<AutomationPoint>& pts, Ticks from) {
+        for (const AutomationPoint& pt : pts)
+            if (pt.tick == from) return pt.curve != 0.0;
+        return false;
+    };
+    std::vector<AutomationPoint> out;
+    const bool pan = target == "pan";
+    auto add = [&](Ticks tick) {
+        double v = laneValueAt(a, tick, base) + laneValueAt(*relative, tick, 0.0);
+        if (pan) v = std::clamp(v, -1.0, 1.0);
+        out.push_back(AutomationPoint{tick, v, 0.0});
+    };
+    for (std::size_t i = 0; i < ticks.size(); ++i) {
+        add(ticks[i]);
+        if (i + 1 < ticks.size() && (curvedAt(a, ticks[i]) || curvedAt(*relative, ticks[i])))
+            for (int k = 1; k < 8; ++k) add(ticks[i] + (ticks[i + 1] - ticks[i]) * k / 8);
+    }
+    return out;
+}
+
+void fillFaderAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
+    if (t.automationMode == "off") return;  // the fader and the pan stay where the strip has them
+    for (const char* target : {"volume", "pan"}) {
+        const bool volume = std::string(target) == "volume";
+        std::vector<AutoPoint>& out = volume ? cfg.volumeAuto : cfg.panAuto;
+        for (const AutomationPoint& pt : effectiveLane(t, target, volume ? static_cast<double>(t.strip.gainDb) : static_cast<double>(t.strip.pan)))
+            out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), volume ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value), static_cast<float>(pt.curve)});
+    }
+}
+
 std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
     cfg->outputPair = t.outputPair;
@@ -237,14 +299,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
                 cfg->regions.push_back(rp);
                 cfg->keepAlive.push_back(std::move(src));
             }
-        for (const AutomationLane& lane : t.automation) {
-            if (t.automationMode == "off") break;
-            std::vector<AutoPoint>& out = lane.target == "volume" ? cfg->volumeAuto : cfg->panAuto;
-            if (lane.target != "volume" && lane.target != "pan") continue;
-            for (const AutomationPoint& pt : lane.points)
-                out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)),
-                                        lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value), static_cast<float>(pt.curve)});
-        }
+        fillFaderAutomation(p, t, *cfg);
         for (const Send& s : t.strip.sends) cfg->sends.push_back(SendPlayback{s.targetTrackId, dbToLinear(s.levelDb), s.preFader, {}, {}});
         fillSendAutomation(p, t, *cfg);
         cfg->output = t.strip.output;
@@ -334,14 +389,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         cfg->instrument = out ? std::static_pointer_cast<IInstrument>(std::make_shared<ExternalMidiInstrument>(out, static_cast<int>(ch == t.instrument->params.end() ? 1 : std::lround(ch->second))))
                               : std::static_pointer_cast<IInstrument>(std::make_shared<SilentInstrument>(false));
     }
-    for (const AutomationLane& lane : t.automation) {
-        if (t.automationMode == "off") break;  // the fader and the pan stay where the strip has them
-        std::vector<AutoPoint>& out = lane.target == "volume" ? cfg->volumeAuto : cfg->panAuto;
-        if (lane.target != "volume" && lane.target != "pan") continue;
-        for (const AutomationPoint& pt : lane.points)
-            out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)),
-                                    lane.target == "volume" ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value), static_cast<float>(pt.curve)});
-    }
+    fillFaderAutomation(p, t, *cfg);
     int slotIndex = 0;
     std::vector<int> builtAt(t.strip.inserts.size(), -1);  // where each insert of the model ended up in the config
     for (const ProcessorRef& ref : t.strip.inserts) {

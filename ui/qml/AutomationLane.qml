@@ -13,7 +13,9 @@ Item {
     property real snapBeats: 0
     readonly property bool normalised: param.startsWith("param/")   // a plug-in parameter: 0..1
     signal parameterRequested(string trackId)
-    property color lineColor: param === "volume" ? Theme.accentPrimary : (param === "pan" ? Theme.stateSolo : (normalised ? Theme.stateMute : Theme.statePlay))
+    readonly property bool relative: param === "volumeRel" || param === "panRel"   // the offset lane added to the volume or the pan
+    readonly property bool isPan: param === "pan" || param === "panRel"
+    property color lineColor: relative ? Theme.stateMute : (param === "volume" ? Theme.accentPrimary : (param === "pan" ? Theme.stateSolo : (normalised ? Theme.stateMute : Theme.statePlay)))
     property bool available: true                // false: a send the track does not have
 
     property var stored: []                      // the points in the project, read again whenever it changes
@@ -38,21 +40,21 @@ Item {
     property bool moving: false
     property bool ranging: false
     property var moveBase: []
-    readonly property real minDb: -60
-    readonly property real maxDb: 6
+    readonly property real minDb: relative ? -24 : -60
+    readonly property real maxDb: relative ? 24 : 6
 
     function beatsToX(b) { return (b - scrollBeats) * pixelsPerBeat }
     function xToBeats(x) { return Math.max(0, x / pixelsPerBeat + scrollBeats) }
     function snapBeat(b) { return snapBeats > 0 ? Math.round(b / snapBeats) * snapBeats : b }
     function valueToY(v) {
         if (normalised) return (1 - Math.max(0, Math.min(1, v))) * (height - 2) + 1
-        if (param === "pan") return (1 - v) / 2 * height
+        if (isPan) return (1 - Math.max(-1, Math.min(1, v))) / 2 * height
         return (maxDb - Math.max(minDb, Math.min(maxDb, v))) / (maxDb - minDb) * height
     }
     function yToValue(y) {
         const f = Math.max(0, Math.min(1, y / height))
         if (normalised) return Math.round((1 - f) * 1000) / 1000
-        return param === "pan" ? Math.round((1 - 2 * f) * 100) / 100 : Math.round((maxDb - f * (maxDb - minDb)) * 10) / 10
+        return isPan ? Math.round((1 - 2 * f) * 100) / 100 : Math.round((maxDb - f * (maxDb - minDb)) * 10) / 10
     }
     function pointAt(x, y) {
         for (let i = 0; i < points.length; ++i)
@@ -80,7 +82,7 @@ Item {
         if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) { deleteSelection(); event.accepted = true }
         else if (event.key === Qt.Key_Escape) { selFrom = -1; selTo = -1; event.accepted = true }
     }
-    function label(v) { return normalised ? Math.round(v * 100) + " %" : param === "pan" ? (v === 0 ? "C" : (v < 0 ? "L" : "R") + Math.round(Math.abs(v) * 64)) : v.toFixed(1) + " dB" }
+    function label(v) { return normalised ? Math.round(v * 100) + " %" : isPan ? (relative ? (v > 0 ? "+" : "") + Math.round(v * 64) : (v === 0 ? "C" : (v < 0 ? "L" : "R") + Math.round(Math.abs(v) * 64))) : (relative && v > 0 ? "+" : "") + v.toFixed(1) + " dB" }
 
     onPointsChanged: canvas.requestPaint()
     onPixelsPerBeatChanged: canvas.requestPaint()

@@ -408,7 +408,8 @@ public:
         if (!t) return fail("not_found", "no such track");
         const bool sendTarget = target_.rfind("send:", 0) == 0;
         const auto paramTarget = parseParamTarget(target_);
-        if (target_ != "volume" && target_ != "pan" && !sendTarget && !paramTarget) return fail("bad_target", "automation target must be volume, pan, send:<send id> or param/<plug-in>/<n>/<index>");
+        const bool relative = target_ == "volume.rel" || target_ == "pan.rel";  // the Relative automation: an offset added to the volume or pan lane
+        if (target_ != "volume" && target_ != "pan" && !relative && !sendTarget && !paramTarget) return fail("bad_target", "automation target must be volume, pan, volume.rel, pan.rel, send:<send id> or param/<plug-in>/<n>/<index>");
         if (paramTarget) {
             int count = 0;
             for (const ProcessorRef& ins : t->strip.inserts)
@@ -421,7 +422,8 @@ public:
                 return fail("bad_target", "the track has no such send");
         }
         if (points_.size() > 4096) return fail("too_many", "at most 4096 automation points per lane");
-        const double lo = paramTarget ? 0.0 : (target_ == "pan" ? -1.0 : -96.0), hi = paramTarget ? 1.0 : (target_ == "pan" ? 1.0 : (sendTarget ? 12.0 : 24.0));
+        const double lo = paramTarget ? 0.0 : (target_ == "pan" ? -1.0 : (target_ == "pan.rel" ? -2.0 : (relative ? -120.0 : -96.0))),
+                     hi = paramTarget ? 1.0 : (target_ == "pan" ? 1.0 : (target_ == "pan.rel" ? 2.0 : (relative ? 120.0 : (sendTarget ? 12.0 : 24.0))));
         for (const AutomationPoint& pt : points_)
             if (pt.tick < 0 || pt.tick > kMaxPosition || !(pt.value >= lo && pt.value <= hi) || !(pt.curve >= -1.0 && pt.curve <= 1.0)) return fail("bad_point", "an automation point is out of range");
         std::vector<AutomationPoint> sorted = points_;
@@ -514,7 +516,10 @@ public:
         }
         if (patch_.automationMode) {
             const std::string& m = *patch_.automationMode;
-            if (m != "off" && m != "read" && m != "touch" && m != "latch" && m != "write") return fail("bad_value", "the automation mode is off, read, touch, latch or write");
+            // Trim (t-touch, t-latch) and Relative (r-touch, r-latch, r-write) work together with Touch, Latch and Write
+            static const char* const kModes[] = {"off", "read", "touch", "latch", "write", "t-touch", "t-latch", "r-touch", "r-latch", "r-write"};
+            if (std::none_of(std::begin(kModes), std::end(kModes), [&](const char* k) { return m == k; }))
+                return fail("bad_value", "the automation mode is off, read, touch, latch, write, t-touch, t-latch, r-touch, r-latch or r-write");
         }
         if (patch_.delayMs) {
             if (t->kind != TrackKind::Instrument && t->kind != TrackKind::Audio) return fail("invalid_kind", "only audio and instrument tracks have a delay");

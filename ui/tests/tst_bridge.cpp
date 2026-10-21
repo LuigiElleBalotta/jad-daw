@@ -2016,22 +2016,34 @@ private slots:
         QTRY_COMPARE(c.tracks()->totalCount(), before);
     }
     void inputLabelsNameTheInputs() {
+        TempDir dir;
         jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
         QCOMPARE(c.inputLabel(3), QString("Input 3"));
         c.setInputLabel(3, "  Vocal mic ");
-        QCOMPARE(c.inputLabel(3), QString("Vocal mic"));
+        QTRY_COMPARE(c.inputLabel(3), QString("Vocal mic"));
         QCOMPARE(c.inputLabel(1), QString("Input 1"));
         c.setInputLabel(2, "Vocal mic");
-        QCOMPARE(c.inputChoices().at(2), QString("Vocal mic"));     // listed in the Input menu (stereo, 1, 2...)
-        QVERIFY(c.inputChoices().first().contains("Vocal mic"));    // and in the stereo entry
+        QTRY_COMPARE(c.inputChoices().at(2), QString("Vocal mic"));  // listed in the Input menu (stereo, 1, 2...)
+        QVERIFY(c.inputChoices().first().contains("Vocal mic"));     // and in the stereo entry
         c.setInputLabel(3, "");
-        QCOMPARE(c.inputLabel(3), QString("Input 3"));
-        QSettings s(QDir(QDir::tempPath()).filePath("jad-io-test.ini"), QSettings::IniFormat);
-        c.setInputLabel(2, "Guitar");
-        c.saveIoSettings(s);
-        jad::ProjectController d(false);
-        d.loadIoSettings(s);
-        QCOMPARE(d.inputLabel(2), QString("Guitar"));
+        QTRY_COMPARE(c.inputLabel(3), QString("Input 3"));
+    }
+    void ioLabelsKeepLongShortAndTheUserSwitchWithTheProject() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QVERIFY(c.ioLabel("Bus 5").value("longName").toString().isEmpty());
+        QVERIFY(c.ioLabel("Output 1-2").value("user").toBool());  // Logic's own row: Stereo Output
+        QCOMPARE(c.ioLabel("Output 1-2").value("longName").toString(), QString("Stereo Output"));
+        c.setIoLabel("Bus 5", true, "Reverb send", "Rev");
+        QTRY_COMPARE(c.ioLabel("Bus 5").value("longName").toString(), QString("Reverb send"));
+        QCOMPARE(c.ioLabel("Bus 5").value("shortName").toString(), QString("Rev"));
+        QCOMPARE(c.ioShownName("Bus 5", "Bus 5"), QString("Reverb send"));
+        c.setIoLabel("Bus 5", false, "Reverb send", "Rev");  // the User switch off: the driver name again
+        QTRY_COMPARE(c.ioShownName("Bus 5", "Bus 5"), QString("Bus 5"));
+        c.resetIoLabels();
+        QTRY_VERIFY(c.ioLabel("Bus 5").value("longName").toString().isEmpty());
     }
     void bounceCanWriteAiffNormalizedAndOnlyTheCycleArea() {
         TempDir dir;

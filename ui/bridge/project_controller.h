@@ -741,6 +741,10 @@ public:
     Q_INVOKABLE void selectMutedRegions();
     Q_INVOKABLE void selectInsideLocators();
     Q_INVOKABLE double projectEndBeats() const;  // the end of the last region
+    // Track > New Tracks (Create New Track window). Options: category "audio" | "midi", sub "mic" | "guitar" (audio) or "software" | "external" (midi), count, name,
+    // instrument (a built-in instrument id), input (0 = inputs 1+2 stereo, n = input n), ascending (each track the next input), output ("" = Stereo Out or an Output strip id),
+    // monitoring, recordEnable, loadDefaultPatch, openLibrary, midiDevice, midiChannel. One undo step.
+    Q_INVOKABLE void createTracks(const QVariantMap& options);
     Q_INVOKABLE void addTracks(const QString& kind, int count, const QString& name);  // Track > New Tracks: one undo step; names get a number
     // The fades of an audio region (beats from its start / to its end; 0 = none), one undo step
     Q_INVOKABLE void setRegionFades(const QString& regionId, double fadeInBeats, double fadeOutBeats);

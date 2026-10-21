@@ -1124,6 +1124,30 @@ private slots:
         c.undo();
         QTRY_COMPARE(c.tracks()->rowCount(), before);
     }
+    void createNewTrackWindowOptionsReachTheTracks() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() > 0);
+        const int before = c.tracks()->rowCount();
+        // Audio, Mic or Line: three tracks on ascending inputs starting at input 3, monitoring on, record enable off
+        c.createTracks({{"category", "audio"}, {"sub", "mic"}, {"count", 3}, {"name", "Mic"}, {"input", 3}, {"ascending", true}, {"monitoring", true}, {"recordEnable", false}, {"loadDefaultPatch", true}});
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 3);
+        QStringList ids;
+        for (int i = 0; i < c.tracks()->rowCount(); ++i)
+            if (c.tracks()->nameAt(i).startsWith("Mic ")) ids << c.tracks()->trackIdAt(i);
+        QCOMPARE(ids.size(), 3);
+        for (const QString& id : ids) QVERIFY(c.trackInput(id) >= 3);
+        // the same transaction undoes in one step, the default patch included
+        c.undo();
+        QTRY_COMPARE(c.tracks()->rowCount(), before);
+        // MIDI, External MIDI: a track whose instrument is the MIDI port sender
+        c.createTracks({{"category", "midi"}, {"sub", "external"}, {"name", "Hardware"}});
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 1);
+        // Pattern (no Step Sequencer yet) and unknown categories make nothing
+        c.createTracks({{"category", "pattern"}});
+        QCOMPARE(c.tracks()->rowCount(), before + 1);
+    }
     void droppedAudioOutsideAnAudioTrackMakesATrackNamedAfterTheFile() {
         TempDir dir;
         TempDir other;

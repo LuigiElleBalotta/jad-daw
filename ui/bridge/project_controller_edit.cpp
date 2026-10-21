@@ -1423,6 +1423,64 @@ void ProjectController::addTracks(const QString& kind, int count, const QString&
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
+void ProjectController::createTracks(const QVariantMap& o) {
+    if (!host_) return;
+    const QString category = o.value("category", "audio").toString(), sub = o.value("sub").toString();
+    const bool audio = category == QLatin1String("audio"), external = category == QLatin1String("midi") && sub == QLatin1String("external");
+    if (!audio && category != QLatin1String("midi")) return;
+    const int count = std::clamp(o.value("count", 1).toInt(), 1, 64);
+    const QString name = o.value("name").toString().trimmed().left(60);
+    const QString base = name.isEmpty() ? (audio ? QStringLiteral("Audio") : (external ? QStringLiteral("External MIDI") : QStringLiteral("Instrument"))) : name;
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    const std::string output = o.value("output").toString().isEmpty() ? nullId : o.value("output").toString().toStdString();
+    const int firstInput = std::clamp(o.value("input", audio && sub == QLatin1String("mic") ? 3 : 1).toInt(), 0, 64);
+    const bool ascending = o.value("ascending").toBool();
+    const QStringList ports = external ? midiOutputNames() : QStringList();
+    const QString device = o.value("midiDevice").toString().isEmpty() ? (ports.isEmpty() ? QString() : ports.first()) : o.value("midiDevice").toString();
+    const QString instrumentId = o.value("instrument", lpc::kProcSine).toString();
+    nlohmann::json commands = nlohmann::json::array();
+    QStringList ids;
+    for (int i = 0; i < count; ++i) {
+        const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        ids << id;
+        // a single track keeps the name it was given; several get a number
+        const QString full = name.isEmpty() ? base + " " + QString::number(tracks_.totalCount() + 1 + i) : (count == 1 ? base : base + " " + QString::number(i + 1));
+        nlohmann::json strip = {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()}, {"sends", nlohmann::json::array()}, {"output", output}};
+        nlohmann::json instrument = nullptr;
+        if (audio) {
+            // an ascending run takes the next input for every track (the Input menu goes on to 64)
+            const int in = firstInput == 0 ? 0 : (ascending ? std::min(firstInput + i, 64) : firstInput);
+            if (in != 0) strip["input"] = in;
+        } else if (external) {
+            instrument = {{"processorId", lpc::kProcExternalMidi}, {"params", {{"channel", std::clamp(o.value("midiChannel", 1).toInt(), 1, 16)}}}, {"state", nlohmann::json{{"device", device.toStdString()}}.dump()}};
+        } else {
+            instrument = {{"processorId", instrumentId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}};
+        }
+        commands.push_back({{"type", "add_track"}, {"index", -1},
+                            {"track", {{"id", id.toStdString()}, {"kind", audio ? "audio" : "instrument"}, {"name", full.toStdString()}, {"color", ""}, {"strip", strip},
+                                       {"regions", nlohmann::json::array()}, {"automation", nlohmann::json::array()}, {"instrument", instrument}}}});
+        if (audio) {
+            if (o.value("monitoring").toBool()) trackToggles_[QStringLiteral("track.inputMonitor")].insert(id);
+            if (o.value("recordEnable").toBool()) trackToggles_[QStringLiteral("track.recordArm")].insert(id);
+        }
+        // Load Default Patch: the first patch of the library for the track kind (no patch for an External MIDI track), in the same undo step
+        if (o.value("loadDefaultPatch").toBool() && !external) {
+            const lpc::TrackKind kind = audio ? lpc::TrackKind::Audio : lpc::TrackKind::Instrument;
+            const std::vector<std::string> categories = patches_->categories(kind);
+            const auto uuid = lpc::Uuid::parse(id.toStdString());
+            if (!categories.empty() && uuid) {
+                const auto inCategory = patches_->inCategory(kind, categories.front());
+                if (!inCategory.empty())
+                    if (lpc::CommandPtr apply = patches_->applyCommand(*uuid, kind, inCategory.front()->id)) commands.push_back(apply->toJson());
+            }
+        }
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+    selectWhenListed_ = ids.last();
+    if (o.value("openLibrary").toBool()) setLibraryVisible(true);
+    if (external && ports.isEmpty()) emit notice("No MIDI output was found: connect a device or a virtual cable, then choose it in the instrument's window");
+}
+
 int ProjectController::inputChannels() const { return device_ ? device_->inputChannels() : 0; }
 int ProjectController::outputChannels() const { return device_ ? device_->outputChannels() : 0; }
 double ProjectController::deviceRate() const { return device_ ? device_->sampleRate() : 0.0; }

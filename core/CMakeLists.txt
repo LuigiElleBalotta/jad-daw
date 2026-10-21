@@ -7,7 +7,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(lpc_core PUBLIC Threads::Threads)
 set_target_properties(lpc_core PROPERTIES LINKER_LANGUAGE CXX)
 if(WIN32)
-    target_link_libraries(lpc_core PUBLIC mfplat mfreadwrite mfuuid ole32)  # the MP3 and AAC encoders of Windows Media Foundation (bounce to MP3 and M4A)
+    target_link_libraries(lpc_core PUBLIC mf mfplat mfreadwrite mfuuid ole32)  # the MP3 and AAC encoders of Windows Media Foundation (bounce to MP3 and M4A)
 endif()
 
 # Neural models through onnxruntime (third_party/onnxruntime/onnxruntime-win-x64-*, not in git: see docs/logic-reference/ml-conversion.md).

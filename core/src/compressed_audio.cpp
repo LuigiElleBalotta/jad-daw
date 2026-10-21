@@ -61,7 +61,7 @@ bool openWriter(const std::filesystem::path& path, CompressedFormat format, int 
     ComPtr<IMFAttributes> attributes;
     check(MFCreateAttributes(&attributes, 1), "MFCreateAttributes");
     check(attributes->SetGUID(MF_TRANSCODE_CONTAINERTYPE, format == CompressedFormat::Mp3 ? MFTranscodeContainerType_MP3 : MFTranscodeContainerType_MPEG4), "container");
-    if (FAILED(MFCreateSinkWriterFromURL(path.wstring().c_str(), nullptr, attributes.p, &writer))) return false;
+    check(MFCreateSinkWriterFromURL(path.wstring().c_str(), nullptr, attributes.p, &writer), "creating the file writer");
 
     ComPtr<IMFMediaType> out;
     check(MFCreateMediaType(&out), "MFCreateMediaType");
@@ -73,7 +73,42 @@ bool openWriter(const std::filesystem::path& path, CompressedFormat format, int 
     out->SetUINT32(MF_MT_AUDIO_AVG_BYTES_PER_SECOND, format == CompressedFormat::Mp3 ? 32000 : 24000);  // 256 and 192 kbit/s
     out->SetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, 1);
     if (format == CompressedFormat::M4aAac) out->SetUINT32(MF_MT_AAC_PAYLOAD_TYPE, 0);  // raw AAC in the MP4 container
-    if (FAILED(writer->AddStream(out.p, &stream))) return false;
+    if (format == CompressedFormat::Mp3) {
+        // the MP3 encoder only accepts one of the types it lists (with its own details): take the one for this rate and channels nearest to 256 kbit/s
+        ComPtr<IMFCollection> types;
+        if (SUCCEEDED(MFTranscodeGetAudioOutputAvailableTypes(MFAudioFormat_MP3, MFT_ENUM_FLAG_ALL, nullptr, &types))) {
+            DWORD count = 0;
+            types->GetElementCount(&count);
+            IMFMediaType* best = nullptr;
+            long long bestDiff = -1;
+            for (DWORD i = 0; i < count; ++i) {
+                IUnknown* unknown = nullptr;
+                if (FAILED(types->GetElement(i, &unknown)) || !unknown) continue;
+                IMFMediaType* t = nullptr;
+                UINT32 r = 0, c = 0, bytes = 0;
+                if (SUCCEEDED(unknown->QueryInterface(IID_PPV_ARGS(&t))) && SUCCEEDED(t->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &r)) && SUCCEEDED(t->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &c)) &&
+                    SUCCEEDED(t->GetUINT32(MF_MT_AUDIO_AVG_BYTES_PER_SECOND, &bytes)) && r == static_cast<UINT32>(rate) && c == static_cast<UINT32>(channels)) {
+                    const long long diff = std::llabs(static_cast<long long>(bytes) - 32000);
+                    if (bestDiff < 0 || diff < bestDiff) {
+                        if (best) best->Release();
+                        best = t;
+                        t = nullptr;
+                        bestDiff = diff;
+                    }
+                }
+                if (t) t->Release();
+                unknown->Release();
+            }
+            if (best) {
+                const HRESULT added = writer->AddStream(best, &stream);
+                best->Release();
+                check(added, "adding the MP3 stream");
+                goto input;
+            }
+        }
+    }
+    check(writer->AddStream(out.p, &stream), "adding the encoded stream");
+input:
 
     ComPtr<IMFMediaType> in;
     check(MFCreateMediaType(&in), "MFCreateMediaType");
@@ -84,7 +119,8 @@ bool openWriter(const std::filesystem::path& path, CompressedFormat format, int 
     in->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
     in->SetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, static_cast<UINT32>(2 * channels));
     in->SetUINT32(MF_MT_AUDIO_AVG_BYTES_PER_SECOND, static_cast<UINT32>(rate * 2 * channels));
-    return SUCCEEDED(writer->SetInputMediaType(stream, in.p, nullptr));
+    check(writer->SetInputMediaType(stream, in.p, nullptr), "connecting the encoder");
+    return true;
 }
 
 }  // namespace

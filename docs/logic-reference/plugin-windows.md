@@ -281,3 +281,71 @@ channel while the stage's `Learn` button is armed.
   were not captured.
 - Transport: `Return` goes to the start and `Space` toggles play (Logic key commands); a leftover spectrum stays on screen after
   stopping.
+
+## Space Designer
+
+`plugin-space-designer-default.png` / `-moved.png`. 1028x797 pt, `View: 100%`. A **hybrid dark/light window**: dark
+top half (graph), light-gray bottom half (controls) — the only stock reverb here with that split.
+
+**1. Layout.** Header (power, preset menu, Compare/Copy/Paste, Undo/Redo, View, link; no Side Chain menu), then a
+full-width **mode tab bar** `SAMPLED IR | SYNTHESIZED IR` (the active tab is the light one with orange text, the inactive tab is
+mid-gray), a **toolbar row** (`Volume Env` and `Filter Env` each with a power icon, an IR file menu `1.8s_Large & Brite`, a `Stereo`
+label, `Output EQ` with a power icon), the big **envelope/waveform display** (about 470 pt tall), a readout line under it
+(`Init Level`, `Attack`, `Decay`, `LIN | EXP`, `End Level`), a thin **options strip** (`Quality: High`, `IR Offset: 0.0 s`, a
+`Reverse` button, a gear menu at the right) and the **control strip** (light gray, ~210 pt): `Input` (a vertical slider with 3
+small icons = stereo/mono-ish input routing), `Predelay` (+ a note icon = sync to tempo toggle), `Length`, `Size` (knobs),
+`X-Over` (vertical slider, `200 Hz`…`16k`), `Lo Spread`, `Hi Spread` (knobs), `Dry`, `Wet` (vertical sliders). Bar `Space Designer`.
+
+**2. Controls and defaults.** Predelay `8 ms`, Length `1.30 s`, Size `100 %` (`10…1000`), X-Over `230 Hz`, Lo Spread `38 %`,
+Hi Spread `100 %`, Dry `0.0 dB`, Wet `-10.0 dB`, Quality `High`, IR Offset `0.0 s`. Active values and unit labels are orange
+(`#f4623a`-ish by eye), inactive/grey text for non-value labels. The knobs are large white-faced dials with a thick orange arc
+from the minimum to the value and a thin line pointer; sliders are thin vertical tracks with a small rectangular white thumb
+with a red-orange line and an orange fill below the thumb. Moved: Predelay `127 ms`, Length `823 ms` (changing Length
+**rescaled the horizontal time axis of the graph** and redrew the volume envelope: the axis went from `0.0…1.2 (s)` to
+`0.0…800 (ms)` and the envelope's `Decay` readout changed from `1.22 s` to `774 ms`), and `Filter Env` was turned on (its power
+icon becomes yellow, unlike the orange of the others).
+
+**3. Displays.** The center graph shows the impulse-response waveform (dark blue-gray decaying noise burst, left to right) under the
+blue **volume envelope**: a filled blue area under a bright-cyan curve with three round cyan handles (start top-left, an attack
+point at the bottom near `76.6 ms`, an end point at the right at `30 %`); dragging handles edits Init Level / Attack / Decay /
+End Level, whose current numbers are the readout line. X axis in seconds (ms after Length is shortened), light vertical
+gridlines every `0.2 s`.
+
+**4-5.** Fonts as elsewhere; the tab labels `SAMPLED IR` / `SYNTHESIZED IR` are large (~22 pt), letter-spaced uppercase.
+Not tested: Synthesized IR tab, Filter Env/Output EQ editors, IR file menu, the gear menu, reverse.
+
+## ChromaVerb
+
+`plugin-chromaverb-default.png` / `-moved.png`. 1028x796 pt, `View: 100%`. Same dark-over-light structure as Space Designer
+but a different layout and two **views**: `MAIN` (default) and `DETAILS`.
+
+**1. Layout (MAIN).** Header (power, preset, Compare/Copy/Paste, Undo/Redo, `Side Chain` absent, View, link). Top strip: `DAMPING EQ`
+(left, label), a centred **Room-type selector** showing the current room name in orange (`Room`), the `MAIN | DETAILS` switch
+(right). Graph (dark, ~430 pt tall): the **damping curve** (orange line on a dark grid, decay time as a percentage of the global
+decay `20 %…200 %` on the left axis, absolute seconds on the right axis `0.2 s…2.2 s`) with 3 grey control points; bottom-right of
+the graph a small orange **reverb-visualiser icon** (a dotted orb). Light-gray control strip: `Attack` (`0 %`), `Size`
+(`60 %`), `Density` (`60 %`), `Decay` (`1.10 s`, bigger knob, `0.3…100`, with a `Freeze` button under it), `Distance`
+(`50 %`), `Dry` (`100 %`) and `Wet` (`50 %`) sliders, plus `Predelay 8 ms` (knob-less readout with a note/sync icon at the left).
+**DETAILS view** replaces the graph with the **Output EQ** (6 bands: low cut, low shelf, 2 bells, high shelf, high cut, same
+band-icon row and colours as Channel EQ's, `+24…-24 dB` on both sides, log `20…20k`) and the lower strip with `Quality: High`,
+`Mod Speed` (`0.50 Hz`), `Mod Depth` (`25 %`), `Mod Source` (3 icon buttons: sine, square/step, random/noise — the square one
+selected, in orange), `Smoothing` (`12 %`), `Early/Late` (`50 | 50`, a vertical slider whose scale shows `0 100` at top and
+`100 0` at the bottom, i.e. the two ends mean opposite things), `Width` (`100 %`), `Mono Maker` (power icon + `20 Hz` greyed out).
+
+**2. Controls.** Knobs (Attack, Size, Density, Decay, Distance) are white-faced with a thick orange arc; sliders are vertical.
+Orange = active value / selected state, same palette as Space Designer. Moved: Size `60 → ~65 %`, Decay `1.10 → ~1.7 s`
+(values in the shot were read before DETAILS was opened; the DETAILS view is what the moved shot shows).
+
+**3. Displays.** MAIN: the damping curve is editable by its three grey points (curve in orange, previous/alternate curves thin
+gray). DETAILS: the Output EQ curve fills with a translucent violet area under the curve when a band is active (here the
+high-cut band, with its violet node at 10-12 kHz).
+
+**4-5.** Tab/segment labels `MAIN` / `DETAILS`: the active one orange on dark. The Room-type selector (`Room`) is the plug-in's
+main identity element and is the big visual accent of the top strip (orange text on a slightly lighter dark rounded box).
+Not tested: the room-type popup (Room/Chamber/Hall/…), Freeze, Mono Maker, Mod Source other than the selected one.
+
+### Source (Space Designer, ChromaVerb)
+Both opened by the owner. ChromaVerb extended 12 pt beyond the right screen edge so its window was moved left with
+`osascript` (`set position of window`) before capturing; the Space Designer window was raised by clicking its title bar so
+ChromaVerb's overlapping 11 pt did not cover its right edge, and `Compare` was toggled to recapture the factory-state
+(default) shot after the moved one (Compare switches between the edited and the stored settings).

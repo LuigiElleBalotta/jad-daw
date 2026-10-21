@@ -256,3 +256,28 @@ in the Smoothing thumb (4.0 → 24.0).
 Opened on the same `Audio 1` insert chain by the owner (the plug-in browser is awkward to drive from automation); all
 captures via `screencapture -x -R` on the windows' `osascript`-read bounds. The four windows do not overlap each other,
 so no crop contains another plug-in. Knobs dragged vertically and toggles clicked via `mcp__macos-mcp__Move`/`Click`.
+
+### Match EQ, live behaviour (addendum, captured with audio playing)
+
+Files: `plugin-match-eq-learning-current.png`, `plugin-match-eq-reference-action-menu.png`, `plugin-match-eq-reference-armed.png`,
+`plugin-match-eq-learning-reference.png`, `plugin-match-eq-eq-curve-stage.png`. Playing the `Ambition Beat` loop on the
+channel while the stage's `Learn` button is armed.
+
+- **Each pipeline stage has its own colour**, and the active stage's chevron is filled with it: `Current` teal, `Reference` purple,
+  `EQ Curve` olive-gold. The spectrum drawn in the graph takes the same colour (teal fill for Current, purple fill for Reference),
+  with a thin light line on top of the filled area that is the faster, un-averaged live level (two nearly overlapping outlines
+  were visible: the filled average and the live trace).
+- **Learn is a hold-to-record style toggle**: the button turns bright red while armed and the filled spectrum grows/settles over
+  ~5 s of audio; pressing the button again (or stopping transport and clicking it) ends the capture. Re-arming `Learn` on a stage
+  that already has a spectrum clears and restarts it (the first Current capture disappeared when I clicked Learn a second time).
+- **Spectrum axes**: while learning, the left scale `0…-60 dB` is used. Once the `EQ Curve` stage is active, the **right-hand scale
+  changes to `+30…-30 dB`** (the correction curve's gain axis, 0 dB at the same height as the `-30` on the left), the correction
+  line is a thin yellow line (flat here because Current and Reference were made from the same material), and the analyzer stays
+  as a thin white trace behind it.
+- **Gear (Action) menu of each stage**: for `Reference` it lists (greyed text until hovered): `Clear Reference Spectrum`,
+  `Copy Reference Spectrum`, `Paste Reference Spectrum`, `Load Reference Spectrum from setting file...`,
+  `Generate Reference Spectrum from audio file...`. Clicking the last two with synthesized clicks did not open the file chooser
+  (menu items did not react to simulated mouse clicks; arrow-key + Return closed the menu without a dialog), so those two flows
+  were not captured.
+- Transport: `Return` goes to the start and `Space` toggles play (Logic key commands); a leftover spectrum stays on screen after
+  stopping.

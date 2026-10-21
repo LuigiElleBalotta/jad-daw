@@ -15,6 +15,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <array>
 #include <set>
 #include <filesystem>
 #include <cmath>
@@ -1970,6 +1971,32 @@ void ProjectController::finishMidiRecording(const std::vector<std::pair<std::int
         }
         const std::int64_t endTick = std::max(toTicks(endFrame), lastTick);
         for (const auto& [note, o] : std::map<int, Open>(held)) close(note, endTick);  // notes still held when the pass ends
+        // Project Settings > Recording > MIDI recording: erase duplicate notes and controller data, and reduce the controller data that changes nothing
+        if (projectSetting("eraseDuplicates") == QLatin1String("1")) {
+            std::set<std::pair<std::int64_t, int>> seenNotes;
+            nlohmann::json keptNotes = nlohmann::json::array();
+            for (const auto& n : notes)
+                if (seenNotes.insert({n["start"].get<std::int64_t>(), n["note"].get<int>()}).second) keptNotes.push_back(n);
+            notes = std::move(keptNotes);
+            std::set<std::array<std::int64_t, 4>> seenControls;
+            nlohmann::json keptControls = nlohmann::json::array();
+            for (const auto& c : controls)
+                if (seenControls.insert({c["tick"].get<std::int64_t>(), c["status"].get<int>(), c["data1"].get<int>(), c["data2"].get<int>()}).second) keptControls.push_back(c);
+            controls = std::move(keptControls);
+        }
+        if (projectSetting("midiDataReduction") == QLatin1String("1")) {
+            std::map<std::pair<int, int>, int> last;  // (status, controller) -> the value that is in force
+            nlohmann::json reduced = nlohmann::json::array();
+            for (const auto& c : controls) {
+                const std::pair<int, int> key{c["status"].get<int>(), c["data1"].get<int>()};
+                const int value = c["data2"].get<int>();
+                const auto it = last.find(key);
+                if (it != last.end() && it->second == value) continue;  // the same value again
+                last[key] = value;
+                reduced.push_back(c);
+            }
+            controls = std::move(reduced);
+        }
         if (notes.empty() && controls.empty()) continue;
         parts.push_back({startTick, std::max<std::int64_t>(barTicks, ((endTick - startTick + barTicks - 1) / barTicks) * barTicks), notes, controls});
     }

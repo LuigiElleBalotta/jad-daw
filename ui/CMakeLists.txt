@@ -40,8 +40,17 @@ qt_add_qml_module(jad_ui_lib
         qml/FxSwitch.qml
         qml/FxDisplay.qml
         qml/FxKnobGrid.qml
-        qml/FxChannelEq.qml
-        qml/FxCompressor.qml
+        qml/FxShell.qml
+        qml/FxField.qml
+        qml/FxPlainKey.qml
+        qml/FxChannelEqView.qml
+        qml/FxSkinKnob.qml
+        qml/FxCompressorView.qml
+        qml/FxArcKnob.qml
+        qml/FxLimiterView.qml
+        qml/FxHSlider.qml
+        qml/FxGateView.qml
+        qml/FxGenericView.qml
         qml/IconButton.qml
         qml/Panel.qml
         qml/Fader.qml

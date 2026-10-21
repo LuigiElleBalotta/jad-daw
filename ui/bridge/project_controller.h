@@ -157,6 +157,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(int recordingDelay READ recordingDelay WRITE setRecordingDelay NOTIFY audioSettingsChanged)  // samples
     Q_PROPERTY(QString effectEditorTrack READ effectEditorTrack NOTIFY effectEditorChanged)  // the insert whose editor is open ("" = none)
     Q_PROPERTY(int effectEditorIndex READ effectEditorIndex NOTIFY effectEditorChanged)
+    Q_PROPERTY(QVariantMap editorMeters READ editorMeters NOTIFY editorMetersChanged)  // the levels of the insert whose window is open: {inDb, outDb, reductionDb}, falling back after a peak
+    QVariantMap editorMeters() const { return editorMeters_; }
     Q_PROPERTY(QStringList midiInputsChosen READ midiInputsChosen NOTIFY midiChanged)  // the MIDI inputs in use (empty: all)
     Q_PROPERTY(int midiOpenCount READ midiOpenCount NOTIFY midiChanged)
     Q_PROPERTY(int waveformZoom READ waveformZoom WRITE setWaveformZoom NOTIFY waveformZoomChanged)  // vertical zoom of the waveforms: 1, 2, 4 or 8
@@ -308,6 +310,9 @@ public:
     Q_INVOKABLE QVariantList instrumentSpecs() const;                // the built-in instruments and their parameters
     // Logic's factory presets of a built-in effect: [{category, names: [...]}] (a preset without a category is listed under ""), applied in one undo step
     // (name "" = Logic's own default of that effect); the Match EQ target curves
+    Q_PROPERTY(QVariantMap effectClipboard READ effectClipboard WRITE setEffectClipboard NOTIFY effectClipboardChanged)  // Copy and Paste of the plug-in windows: {processorId, params}
+    QVariantMap effectClipboard() const { return effectClipboard_; }
+    void setEffectClipboard(const QVariantMap& v) { effectClipboard_ = v; emit effectClipboardChanged(); }
     Q_INVOKABLE QVariantList effectPresetMenu(const QString& processorId) const;
     Q_INVOKABLE void applyEffectPreset(const QString& trackId, int index, const QString& processorId, const QString& category, const QString& name);
     Q_INVOKABLE QStringList matchEqCurveNames() const;
@@ -930,6 +935,8 @@ signals:
     void groupsChanged();
     void recentChanged();
     void inputLabelsChanged();
+    void effectClipboardChanged();
+    void editorMetersChanged();
     void groupSettingsChanged();
     void waveformZoomChanged();
     void midiChanged();
@@ -1035,6 +1042,9 @@ private:
         std::string json;
     };
     std::vector<ClipRegion> clipboard_;   // the copied regions
+    QVariantMap effectClipboard_;
+    QVariantMap editorMeters_;
+    double editorIn_ = -120.0, editorOut_ = -120.0, editorRed_ = 0.0;
     QStringList pendingSmartFollow_, pendingSmartTempo_;  // new audio regions the Smart Tempo project settings act on, when the next snapshot lists them
     QStringList pendingRegionSelection_;  // ids of regions just pasted: selected when the next snapshot has them
     double nudgeBeats_ = 0.25;

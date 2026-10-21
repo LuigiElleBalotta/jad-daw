@@ -25,12 +25,80 @@ Window {
     readonly property bool hasGraphic: spec !== null && !isMastering && !isMatchEq
     readonly property bool graphical: hasGraphic && !showList
     readonly property string kind: spec ? spec.id : ""
+    // the header of the graphical windows (FxShell): power, presets, Compare, Copy and Paste, View
+    property int viewPercent: 100
+    property string presetName: qsTr("Default Preset")
+    property var baseline: ({})         // the parameters as the window opened or a preset set them: what Compare goes back to
+    property bool captureBaseline: true
+    property bool comparing: false
+    property var editedValues: ({})
+    readonly property bool bypassed: insert !== null && insert.bypass === true
+    readonly property bool edited: { pending; insert; return comparing || differs(valuesOf(), baseline) }
+    readonly property bool canPaste: spec !== null && project.effectClipboard.processorId === spec.id
+    function differs(a, b) {
+        for (const k in a) if (b[k] === undefined || Math.abs(a[k] - b[k]) > 1e-6) return true
+        return false
+    }
+    function toggleBypass() { if (index >= 0) project.setInsertBypass(trackId, index, !bypassed) }
+    function openPresetMenu(item) { presetMenu.popup(item, 0, item.height) }
+    function flatPresets() {
+        const out = []
+        for (const c of project.effectPresetMenu(spec.id)) for (const n of c.names) out.push({ category: c.category, name: n })
+        return out
+    }
+    function stepPreset(dir) {
+        if (!spec || index === -2) return
+        const list = flatPresets()
+        if (list.length === 0) return
+        let at = -1
+        for (let i = 0; i < list.length; ++i) if (list[i].name === presetName) at = i
+        const next = list[(at + dir + list.length) % list.length]
+        applyPreset(next.category, next.name)
+    }
+    function applyPreset(category, name) {
+        flush()
+        comparing = false
+        project.applyEffectPreset(trackId, index, spec.id, category, name)
+        presetName = name === "" ? qsTr("Default Preset") : name
+        captureBaseline = true
+    }
+    function compare() {
+        if (!spec) return
+        if (comparing) { comparing = false; commitMany(editedValues); return }
+        if (!differs(valuesOf(), baseline)) return
+        editedValues = valuesOf()
+        comparing = true
+        commitMany(baseline)
+    }
+    function copySettings() { if (spec) project.effectClipboard = { processorId: spec.id, params: valuesOf() } }
+    function pasteSettings() { if (canPaste) { comparing = false; commitMany(project.effectClipboard.params); captureBaseline = true } }
+    property bool fitted: false
+    // a window that is taller than the screen starts at the largest View that fits (50, 75 or 100 %): Logic does the same with its own View menu
+    function fitView(extraHeight, bodyHeight, bodyWidth) {
+        if (fitted) return
+        fitted = true
+        const maxH = Screen.desktopAvailableHeight > 0 ? Screen.desktopAvailableHeight - 60 : 900
+        const maxW = Screen.desktopAvailableWidth > 0 ? Screen.desktopAvailableWidth - 20 : 1400
+        for (const z of [viewPercent, 100, 75, 50]) {
+            if (z > viewPercent) continue
+            if (extraHeight + bodyHeight * z / 100 <= maxH && bodyWidth * z / 100 <= maxW) { viewPercent = z; return }
+        }
+        viewPercent = 50
+    }
+    function stepView(dir) {
+        const steps = [50, 75, 100, 125, 150, 200]
+        let i = steps.indexOf(viewPercent)
+        if (i < 0) i = 2
+        viewPercent = steps[Math.max(0, Math.min(steps.length - 1, i + dir))]
+    }
+    readonly property var defaultView: ({ "builtin.limiter": 75, "builtin.adaptivelimiter": 75, "builtin.gate": 75 })
+    onKindChanged: { fitted = false; viewPercent = defaultView[kind] ?? 100; presetName = qsTr("Default Preset"); captureBaseline = true; comparing = false }
 
     visible: trackId !== "" && spec !== null
-    width: graphical ? (kind === "builtin.eq" ? 820 : (kind === "builtin.compressor" ? 800 : 640)) : 520
-    height: Math.min(Screen.height - 80, graphical ? (kind === "builtin.eq" ? 560 : (kind === "builtin.compressor" ? 480 : 150 + (graphic.item ? graphic.item.implicitHeight : 200)))
+    width: graphical ? (graphic.item ? graphic.item.implicitWidth : 700) : 520
+    height: Math.min(Screen.height - 40, graphical ? (graphic.item ? graphic.item.implicitHeight : 400)
                                                   : 120 + (spec ? spec.params.length : 0) * 30 + (curveBox.visible ? 150 : 0) + (isMastering ? 80 - 9 * 30 : 0))
-    minimumWidth: graphical ? 560 : 420
+    minimumWidth: graphical ? Math.min(width, 480) : 420
     minimumHeight: 200
     title: spec ? qsTr("%1 - %2").arg(project.trackName(trackId)).arg(spec.name) : ""
     color: Theme.surfacePanel
@@ -49,6 +117,12 @@ Window {
             if (insert) for (const s of project.effectSpecs()) if (s.id === insert.processorId) found = s
         }
         spec = found
+        if (spec && insert && captureBaseline) {
+            const b = {}
+            for (const p of spec.params) { const v = insert.params ? insert.params[p.name] : undefined; b[p.name] = v === undefined ? p.def : v }
+            baseline = b
+            captureBaseline = false
+        }
         if (spec && spec.id === "builtin.eq") curve = project.eqCurve(valuesOf(), 160, 20, 20000)
     }
     function valueOf(p) {
@@ -103,7 +177,22 @@ Window {
         pending = ({})
     }
 
+    Loader {  // the graphical window: Logic's frame and a layout of the plug-in
+        id: graphic
+        objectName: "graphicView"
+        anchors.fill: parent
+        visible: root.graphical
+        active: root.graphical
+        sourceComponent: root.kind === "builtin.eq" ? eqView : (root.kind === "builtin.compressor" ? compressorView : (root.kind === "builtin.limiter" || root.kind === "builtin.adaptivelimiter" ? limiterView : (root.kind === "builtin.gate" ? gateView : gridView)))
+    }
+    Component { id: eqView; FxChannelEqView { editor: root } }
+    Component { id: compressorView; FxCompressorView { editor: root } }
+    Component { id: gateView; FxGateView { editor: root } }
+    Component { id: limiterView; FxLimiterView { editor: root } }
+    Component { id: gridView; FxGenericView { editor: root } }
+
     ColumnLayout {
+        visible: !root.graphical
         anchors.fill: parent
         anchors.margins: Theme.spacing[3]
         spacing: Theme.spacing[2]
@@ -124,7 +213,7 @@ Window {
             Item { Layout.fillWidth: true }
             ThemedMenu {
                 id: presetMenu
-                ThemedMenuItem { text: qsTr("Default"); onTriggered: { root.flush(); root.project.applyEffectPreset(root.trackId, root.index, root.spec.id, "", "") } }
+                ThemedMenuItem { text: qsTr("Default"); onTriggered: root.applyPreset("", "") }
                 MenuSeparator {}
                 Instantiator {
                     model: presetRow.menuData
@@ -137,7 +226,7 @@ Window {
                             delegate: ThemedMenuItem {
                                 required property string modelData
                                 text: modelData
-                                onTriggered: { root.flush(); root.project.applyEffectPreset(root.trackId, root.index, root.spec.id, categoryMenu.modelData.category, modelData) }
+                                onTriggered: root.applyPreset(categoryMenu.modelData.category, modelData)
                             }
                             onObjectAdded: (index, object) => categoryMenu.insertItem(index, object)
                             onObjectRemoved: (index, object) => categoryMenu.removeItem(object)
@@ -320,18 +409,6 @@ Window {
             }
         }
 
-        Loader {  // the graphical window
-            id: graphic
-            objectName: "graphicView"
-            visible: root.graphical
-            active: root.graphical
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            sourceComponent: root.kind === "builtin.eq" ? eqView : (root.kind === "builtin.compressor" ? compressorView : gridView)
-        }
-        Component { id: eqView; FxChannelEq { editor: root } }
-        Component { id: compressorView; FxCompressor { editor: root } }
-        Component { id: gridView; FxKnobGrid { editor: root } }
         RowLayout {
             visible: root.hasGraphic
             Layout.fillWidth: true

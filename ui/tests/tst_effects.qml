@@ -57,10 +57,10 @@ TestCase {
         const o = openInsert("builtin.compressor")
         const view = findChild(o.w.contentItem, "graphicView")
         tryVerify(function () { return view.item !== null })
-        verify(findChild(view.item, "compCircuit") !== null)
+        verify(findChild(view.item, "compCircuit_5") !== null)
         o.w.setNow("circuit", 5)
         tryVerify(function () { return o.c.trackInserts(o.id)[0].params.circuit === 5 })
-        verify(findChild(o.w.contentItem, "showParameterList") !== null)
+        verify(findChild(o.w.contentItem, "fxShowParameters") !== null)
         o.w.showList = true
         verify(!o.w.graphical)
         o.w.showList = false

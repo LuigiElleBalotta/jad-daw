@@ -174,10 +174,10 @@ TEST_CASE("limiter: the lookahead is the latency, the adaptive limiter holds its
     REQUIRE(makeBuiltinEffect(r, kSr)->latencySamples() == 96);      // 2 ms at 48 kHz
     ProcessorRef none = ref(kProcLimiter, {{"lookahead", 0}});
     REQUIRE(makeBuiltinEffect(none, kSr)->latencySamples() == 1);    // never less than a sample
-    ProcessorRef a = ref(kProcAdaptiveLimiter, {{"gain", 12}, {"ceiling", -3}, {"lookahead", 5}});
+    ProcessorRef a = ref(kProcAdaptiveLimiter, {{"gain", 12}, {"ceiling", -2}, {"lookahead", 5}});
     auto lim = makeBuiltinEffect(a, kSr);
     REQUIRE(lim->latencySamples() == 240);
-    const float ceiling = static_cast<float>(std::pow(10.0, -3.0 / 20.0));
+    const float ceiling = static_cast<float>(std::pow(10.0, -2.0 / 20.0));  // the Out Ceiling goes from -2 to 0 dB
     for (const float v : run(*lim, sine(200, 0.9, 24000))) REQUIRE(std::abs(v) <= ceiling + 1e-6f);
 }
 

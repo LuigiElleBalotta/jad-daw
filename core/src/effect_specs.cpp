@@ -46,20 +46,21 @@ std::vector<EffectSpec> build() {
     v.push_back({kProcCompressor, "Compressor", "Dynamics",
                  {p("circuit", "Circuit Type", "", 0, 8, 0), p("threshold", "Threshold", "dB", -60, 0, -20), p("ratio", "Ratio", ":1", 1, 100, 2.1, true),
                   p("attack", "Attack", "ms", 0, 250, 15), p("release", "Release", "ms", 5, 5000, 51, true), p("autoRelease", "Auto Release", "", 0, 1, 1),
-                  p("gain", "Gain", "dB", -24, 24, 0), p("autoGain", "Auto Gain (0 off, 1-2 on)", "", 0, 2, 2), p("knee", "Knee", "", 0, 1, 0.7),
+                  p("gain", "Gain", "dB", -24, 24, 0), p("autoGain", "Auto Gain (0 off, 1 from 0 dB, 2 from -12 dB)", "", 0, 2, 2), p("knee", "Knee", "", 0, 1, 0.7),
                   p("peakRms", "Detection (0 peak, 1 RMS)", "", 0, 1, 1), p("outputDistortion", "Output Distortion (0 off, 1 soft, 2 hard, 3 clip)", "", 0, 3, 0),
-                  p("limiter", "Limiter", "", 0, 1, 0), p("limiterThreshold", "Limiter Threshold", "dB", -12, 0, 0), p("mix", "Mix", "%", 0, 100, 100)}});
+                  p("limiter", "Limiter", "", 0, 1, 0), p("limiterThreshold", "Limiter Threshold", "dB", -12, 0, 0), p("mix", "Mix", "%", 0, 100, 100),
+                  p("inputGain", "Input Gain", "dB", -30, 30, 0), p("outputGain", "Output Gain", "dB", -30, 30, 0)}});
     v.push_back({kProcLimiter, "Limiter", "Dynamics",
-                 {p("gain", "Gain", "dB", 0, 24, 0), p("lookahead", "Lookahead", "ms", 0, 10, 5), p("softKnee", "Soft Knee", "", 0, 1, 1),
-                  p("release", "Release", "ms", 1, 1000, 250, true), p("ceiling", "Output Level", "dB", -12, 0, 0), p("truePeak", "Inter-Sample Peak Detection", "", 0, 1, 1)}});
+                 {p("gain", "Gain", "dB", -20, 20, 0), p("lookahead", "Lookahead", "ms", 0, 10, 5), p("softKnee", "Soft Knee", "", 0, 1, 1),
+                  p("release", "Release", "ms", 2, 2000, 250, true), p("ceiling", "Output Level", "dB", -10, 1, 0), p("truePeak", "True Peak Detection", "", 0, 1, 1)}});
     v.push_back({kProcAdaptiveLimiter, "Adaptive Limiter", "Dynamics",
-                 {p("inputScale", "Input Scale", "dB", -12, 12, 0), p("gain", "Gain", "dB", 0, 24, 3), p("ceiling", "Out Ceiling", "dB", -12, 0, 0),
-                  p("mode", "Mode (0 low, 1 average, 2 high)", "", 0, 2, 1), p("lookahead", "Lookahead", "ms", 0, 100, 50), p("removeDc", "Remove DC", "", 0, 1, 1)}});
+                 {p("inputScale", "Input Scale", "dB", -12, 12, 0), p("gain", "Gain", "dB", 0, 12, 3), p("ceiling", "Out Ceiling", "dB", -2, 0, 0),
+                  p("mode", "Mode (0 low, 1 average, 2 high)", "", 0, 2, 1), p("lookahead", "Lookahead", "ms", 0, 100, 50), p("removeDc", "Remove DC Offset", "", 0, 1, 1)}});
     v.push_back({kProcGate, "Noise Gate", "Dynamics",
                  {p("threshold", "Threshold", "dB", -100, 0, -50), p("hysteresis", "Hysteresis", "dB", -20, 0, -3), p("range", "Reduction", "dB", -100, 0, -100),
                   p("attack", "Attack", "ms", 0, 500, 3), p("hold", "Hold", "ms", 0, 5000, 40), p("release", "Release", "ms", 1, 5000, 10, true),
                   p("lookahead", "Lookahead", "ms", 0, 10, 0), p("keyFilter", "Side Chain Filter", "", 0, 1, 0), p("keyLowCut", "Low Cut", "Hz", 20, 20000, 20, true),
-                  p("keyHighCut", "High Cut", "Hz", 20, 20000, 20000, true)}});
+                  p("keyHighCut", "High Cut", "Hz", 20, 20000, 20000, true), p("ducker", "Ducker (0 gate, 1 ducker)", "", 0, 1, 0)}});
     v.push_back({kProcDelay, "Delay", "Delay & Reverb",
                  {p("time", "Time", "ms", 1, 2000, 250, true), p("feedback", "Feedback", "%", 0, 95, 35), p("mix", "Mix", "%", 0, 100, 30),
                   p("pingPong", "Ping-Pong", "", 0, 1, 0)}});

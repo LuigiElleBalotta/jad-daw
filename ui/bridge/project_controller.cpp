@@ -1711,6 +1711,23 @@ void ProjectController::tick() {
         }
         if (moved) { ++peaksRevision_; emit peaksChanged(); }
     }
+    {   // the levels the open plug-in window shows
+        double in = -120.0, out = -120.0, red = 0.0;
+        if (!effectEditorTrack_.isEmpty() && effectEditorIndex_ >= 0) {
+            float pi = 0.0f, po = 0.0f, pr = 0.0f;
+            if (const auto id = lpc::Uuid::parse(effectEditorTrack_.toStdString()); id && engine_->takeInsertMeters(*id, effectEditorIndex_, pi, po, pr)) {
+                const auto db = [](float v) { return v > 1e-6f ? 20.0 * std::log10(static_cast<double>(v)) : -120.0; };
+                in = std::max(db(pi), editorIn_ - 1.5);  // a peak falls back by 1.5 dB a tick
+                out = std::max(db(po), editorOut_ - 1.5);
+                red = std::max<double>(pr, editorRed_ - 0.9);
+            }
+        }
+        if (in != editorIn_ || out != editorOut_ || red != editorRed_) {
+            editorIn_ = in; editorOut_ = out; editorRed_ = red;
+            editorMeters_ = QVariantMap{{"inDb", in}, {"outDb", out}, {"reductionDb", red}};
+            emit editorMetersChanged();
+        }
+    }
     if (recording_) {
         drainRecording();
         if (punchEnabled_ && !recFinishing_ && !punchStopSent_ && playing_ && positionBeats_ > punchEndBeats_) {  // Autopunch: out

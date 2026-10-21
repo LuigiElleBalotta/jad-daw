@@ -199,13 +199,19 @@ public:
         dual_ = traits_.dualRelease || param(ref, "autoRelease") >= 0.5;
         rmsCoef_ = std::exp(-1.0 / (0.01 * sr));
         double makeup = param(ref, "gain");
-        if (param(ref, "autoGain") >= 0.5) makeup += -threshold_ * (1.0 - 1.0 / ratio_);  // what the reduction takes off a signal at 0 dBFS
+        if (param(ref, "autoGain") >= 0.5) {
+            // Auto Gain gives back what the reduction takes off a signal at the reference level: 0 dB (1) or -12 dB (2)
+            const double reference = param(ref, "autoGain") >= 1.5 ? -12.0 : 0.0;
+            makeup += (1.0 - 1.0 / ratio_) * std::max(0.0, reference - threshold_);
+        }
         makeup_ = dbToLin(std::min(makeup, 40.0));
+        inputGain_ = dbToLin(param(ref, "inputGain"));
+        outputGain_ = dbToLin(param(ref, "outputGain"));
         limiterRelease_ = settling(50.0, sr);
     }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
-            const double inL = l[i], inR = r[i];
+            const double inL = l[i] * inputGain_, inR = r[i] * inputGain_;
             double det;
             if (rms_) {
                 meanSquare_ = rmsCoef_ * meanSquare_ + (1.0 - rmsCoef_) * 0.5 * (inL * inL + inR * inR);
@@ -242,8 +248,8 @@ public:
             }
             wl = shape(wl);
             wr = shape(wr);
-            l[i] = static_cast<float>(inL * (1.0 - mix_) + wl * mix_);
-            r[i] = static_cast<float>(inR * (1.0 - mix_) + wr * mix_);
+            l[i] = static_cast<float>((inL * (1.0 - mix_) + wl * mix_) * outputGain_);
+            r[i] = static_cast<float>((inR * (1.0 - mix_) + wr * mix_) * outputGain_);
         }
         blockReduction_ = static_cast<float>(reduction_);
     }
@@ -271,6 +277,7 @@ private:
     double limiterThreshold_;
     int distortion_;
     double sr_;
+    double inputGain_ = 1, outputGain_ = 1;
     double kneeDb_ = 0, attack_ = 0, release_ = 0, releaseFast_ = 0, releaseSlow_ = 0, releaseMs_ = 100, rmsCoef_ = 0, makeup_ = 1, limiterRelease_ = 0;
     bool rms_ = false, dual_ = false;
     double meanSquare_ = 0.0, reduction_ = 0.0, fast_ = 0.0, slow_ = 0.0, limiterGain_ = 1.0;
@@ -380,7 +387,7 @@ public:
         : threshold_(param(ref, "threshold")), closeThreshold_(param(ref, "threshold") + param(ref, "hysteresis")), floor_(dbToLin(param(ref, "range"))),
           hold_(static_cast<int>(param(ref, "hold") * 0.001 * sr)), attack_(smoothing(param(ref, "attack"), sr)), release_(smoothing(param(ref, "release"), sr)),
           decay_(smoothing(5.0, sr)), look_(static_cast<int>(std::lround(param(ref, "lookahead") * 0.001 * sr))),
-          keyFilter_(param(ref, "keyFilter") >= 0.5), delayL_(static_cast<std::size_t>(std::max(1, look_)), 0.0f), delayR_(static_cast<std::size_t>(std::max(1, look_)), 0.0f) {
+          keyFilter_(param(ref, "keyFilter") >= 0.5), ducker_(param(ref, "ducker") >= 0.5), delayL_(static_cast<std::size_t>(std::max(1, look_)), 0.0f), delayR_(static_cast<std::size_t>(std::max(1, look_)), 0.0f) {
         if (keyFilter_) {
             key_[0].c = secondOrderPass(sr, param(ref, "keyLowCut"), 0.7071, true);
             key_[1].c = secondOrderPass(sr, param(ref, "keyHighCut"), 0.7071, false);
@@ -401,7 +408,8 @@ public:
             const double db = linToDb(env_);
             if (db > threshold_) { open_ = true; held_ = hold_; }
             else if (open_ && db < closeThreshold_) { if (held_ > 0) --held_; else open_ = false; }  // the hysteresis, then the hold time
-            const double target = open_ ? 1.0 : floor_;
+            // Gate: closed (down to the Reduction) while the signal is below the threshold. Ducker: the other way round, down while it is above
+            const double target = (open_ != ducker_) ? 1.0 : floor_;
             const double coef = target > gain_ ? attack_ : release_;
             gain_ = coef * gain_ + (1 - coef) * target;
             float outL = l[i], outR = r[i];
@@ -417,6 +425,7 @@ public:
             r[i] = static_cast<float>(outR * gain_);
         }
     }
+    float reductionDb() const noexcept override { return gain_ < 1.0 ? static_cast<float>(-linToDb(std::max(gain_, 1e-6))) : 0.0f; }
     nlohmann::json describe() const override { return {{"id", kProcGate}, {"open", open_}}; }
 
 private:
@@ -425,6 +434,7 @@ private:
     double attack_, release_, decay_;
     int look_;
     bool keyFilter_;
+    bool ducker_;
     Section key_[2];
     std::vector<float> delayL_, delayR_;
     std::size_t pos_ = 0;

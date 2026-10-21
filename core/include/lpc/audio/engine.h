@@ -36,6 +36,7 @@ public:
     void takeTrackPeaks(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackPeaks(out); }
     void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackReductions(out); }
     void takeTrackPeaksPre(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackPeaksPre(out); }
+    bool takeInsertMeters(const Uuid& track, int insert, float& in, float& out, float& reduction) { return graph_.takeInsertMeters(track, insert, in, out, reduction); }
     float masterPeak() const { return masterPeakPub_.load(std::memory_order_relaxed); }
     std::size_t pendingMessages() const { return messages_.sizeApprox(); }
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }

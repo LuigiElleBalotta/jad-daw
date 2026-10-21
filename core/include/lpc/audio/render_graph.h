@@ -17,6 +17,7 @@
 namespace lpc::audio {
 
 inline constexpr int kMaxTracks = 1024;
+inline constexpr int kMeterInserts = 12;  // the first inserts of a track whose levels the plug-in windows can read
 inline constexpr int kMaxBlock = 512;         // render() handles at most this many frames per call
 inline constexpr int kMaxBlockEvents = 256;   // MIDI events per track per block; extra events are dropped
 
@@ -144,6 +145,7 @@ struct TrackNode {
     float blockPeak = 0.0f;  // after the fader, this block
     float blockPeakPre = 0.0f;  // before the fader (after the inserts), this block
     float blockReduction = 0.0f;  // the deepest gain reduction of the inserts, this block (dB)
+    std::array<float, kMeterInserts> insIn{}, insOut{}, insRed{};  // the peaks (linear) going into and out of each insert and its gain reduction (dB), this block
     float smoothR = 1.0f;
     bool smoothInit = false;
 };
@@ -181,6 +183,8 @@ public:
     void takeTrackPeaksPre(std::vector<std::pair<Uuid, float>>& out) noexcept;
     // The deepest gain reduction (dB) of each track's inserts since the last call; reading resets it.
     void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) noexcept;
+    // The peak going into and out of one insert (linear) and its gain reduction (dB) since the last call for it; reading resets them. False when the track or the insert is not there.
+    bool takeInsertMeters(const Uuid& track, int insert, float& in, float& out, float& reduction) noexcept;
     int trackCount() const noexcept { return count_; }
     nlohmann::json describe() const;  // not real-time; tracks in processing order
 
@@ -208,6 +212,7 @@ private:
     std::array<std::atomic<float>, kMaxTracks> peakVal_{};
     std::array<std::atomic<float>, kMaxTracks> reductionVal_{};
     std::array<std::atomic<float>, kMaxTracks> peakValPre_{};
+    std::array<std::atomic<float>, kMaxTracks * kMeterInserts> insIn_{}, insOut_{}, insRed_{};
     std::atomic<int> peakCount_{0};
 };
 

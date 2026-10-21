@@ -296,11 +296,27 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
             }
         }
         t.blockReduction = 0.0f;
+        t.insIn.fill(0.0f);
+        t.insOut.fill(0.0f);
+        t.insRed.fill(0.0f);
+        int slot = 0;
         for (const auto& insert : cfg->inserts) {
+            const int at = slot++;
             // Low Latency Monitoring Mode: what is played through is not made to wait for a plug-in with a long latency
             if (lowLatencyLimit_ > 0 && t.monitorL >= 0 && insert->latencySamples() > lowLatencyLimit_) continue;
+            float peakIn = 0.0f;
+            for (int i = 0; i < n; ++i) peakIn = std::max({peakIn, std::abs(l[i]), std::abs(r[i])});
             insert->process(l, r, n);
-            t.blockReduction = std::max(t.blockReduction, insert->reductionDb());
+            float peakOut = 0.0f;
+            for (int i = 0; i < n; ++i) peakOut = std::max({peakOut, std::abs(l[i]), std::abs(r[i])});
+            const float reduction = insert->reductionDb();
+            t.blockReduction = std::max(t.blockReduction, reduction);
+            if (at < kMeterInserts) {
+                const auto a = static_cast<std::size_t>(at);
+                t.insIn[a] = std::max(t.insIn[a], peakIn);
+                t.insOut[a] = std::max(t.insOut[a], peakOut);
+                t.insRed[a] = std::max(t.insRed[a], reduction);
+            }
         }
     }
 
@@ -449,6 +465,12 @@ void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float
         peakLo_[k].store(t.id.lo, std::memory_order_relaxed);
         peakVal_[k].store(std::max(peakVal_[k].load(std::memory_order_relaxed), t.blockPeak), std::memory_order_relaxed);
         reductionVal_[k].store(std::max(reductionVal_[k].load(std::memory_order_relaxed), t.blockReduction), std::memory_order_relaxed);
+        for (int j = 0; j < kMeterInserts; ++j) {
+            const auto a = static_cast<std::size_t>(j), m = k * kMeterInserts + a;
+            insIn_[m].store(std::max(insIn_[m].load(std::memory_order_relaxed), t.insIn[a]), std::memory_order_relaxed);
+            insOut_[m].store(std::max(insOut_[m].load(std::memory_order_relaxed), t.insOut[a]), std::memory_order_relaxed);
+            insRed_[m].store(std::max(insRed_[m].load(std::memory_order_relaxed), t.insRed[a]), std::memory_order_relaxed);
+        }
         peakValPre_[k].store(std::max(peakValPre_[k].load(std::memory_order_relaxed), t.blockPeakPre), std::memory_order_relaxed);
     }
     peakCount_.store(count_, std::memory_order_release);
@@ -464,6 +486,21 @@ void RenderGraph::takeTrackPeaksPre(std::vector<std::pair<Uuid, float>>& out) no
         id.lo = peakLo_[k].load(std::memory_order_relaxed);
         out.emplace_back(id, peakValPre_[k].exchange(0.0f, std::memory_order_relaxed));
     }
+}
+
+bool RenderGraph::takeInsertMeters(const Uuid& track, int insert, float& in, float& out, float& reduction) noexcept {
+    if (insert < 0 || insert >= kMeterInserts) return false;
+    const int n = peakCount_.load(std::memory_order_acquire);
+    for (int i = 0; i < n; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        if (peakHi_[k].load(std::memory_order_relaxed) != track.hi || peakLo_[k].load(std::memory_order_relaxed) != track.lo) continue;
+        const auto m = k * kMeterInserts + static_cast<std::size_t>(insert);
+        in = insIn_[m].exchange(0.0f, std::memory_order_relaxed);
+        out = insOut_[m].exchange(0.0f, std::memory_order_relaxed);
+        reduction = insRed_[m].exchange(0.0f, std::memory_order_relaxed);
+        return true;
+    }
+    return false;
 }
 
 void RenderGraph::takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) noexcept {

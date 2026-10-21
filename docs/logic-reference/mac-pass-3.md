@@ -18,7 +18,7 @@ resolved, the "what's missing" line says what a future pass would need.
 | 5. Project Settings (all tabs) | **done** (live UI capture) | All 11 tabs captured live via screenshots/AX snapshots (General, Audio incl. Pan Law's full 7-item list, Recording incl. Count-in's full list, Smart Tempo, MIDI's 4 sub-tabs, Score's 8 sub-tabs, Movie, Synchronization's 4 sub-tabs, Metronome, Tuning, Assets) — see below. Not every single dropdown's full option list was opened (only the ones explicitly called out); defaults and visible control layout are captured for all of them. |
 | 6. Missing dialogs (colors, I/O Labels, New Tracks, Global Tracks, overlapping recordings, Bounce, automation modes) | **done** (live UI capture) | All 7 sub-items (6a-6g) captured live: track color grid, I/O Labels, Create New Track (all categories), Global Tracks, Overlapping Track Recordings defaults (found in `Logic Pro > Settings > Recording…`, a global app preference, not a project one — MIDI merges, Audio creates a Take Folder, regardless of Cycle mode), Bounce dialog, automation-mode popup. 6a's exact color hex values remain open after a full search of all 11 `Assets.car` catalogs in Logic Pro's frameworks (no static 24-color track palette found anywhere) plus a symbol-table search for a palette-generator function (not found either) — confirmed colors are addressed via a `TSeqColorIndex` type, but its index→RGB conversion code wasn't located. The full option lists behind a few popups (blocked by a recurring native-popup click-registration issue in this app, not left untried) also remain open. |
 | 7. Smart Tempo/Flex quality comparison | **partial (unblocked)** | Loop Browser drag-and-drop never worked (genuine tooling limitation, see below), but `File > Import > Audio File…` did — a real Apple Loop (`Ambition Beat.caf`, 80 BPM) was successfully placed on a track. Key finding: importing it changed project tempo 120→80 instantly, and the Smart Tempo Editor explicitly refused to open on it ("Apple Loops contain tempo information that cannot be modified by this editor") — **Apple Loops bypass Smart Tempo's detection engine entirely, using embedded file metadata instead**. Testing the *actual* detection/warping algorithm (the original ask) needs a non-Apple-Loop, untagged audio file run through Smart Tempo's "Detect" — not attempted, time ran out. |
-| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **mostly done** | `CLimiter` and `CNoisegateFX` fully decompiled; Channel EQ's real default 8-band table captured live from the plugin UI; **Pan law fully solved** — `CalcPanValues(ePanLaw, float, float&, float&)` found in `MAAudioEngine.framework` (not `MADSP`/`MAMixer`) via plain `nm`+`otool` (no Ghidra needed), its exact formula and both 7-entry constant tables (A=curvature, B=center-compensation gain) read straight from the binary, with `B`'s values independently verified as exact `10^(dB/20)` matches to each pan law's own name. **Fader**: found the real generic `CCTRL*` position↔value controller framework in `MADSP.x86_64` (not `MAAudioEngine` — wrong binary all along). `CCTRLLog`'s pos↔value formula is exactly decoded (`value = minVal·10^(pos·scale)`); `CCTRLPoly2` (the more likely real fader curve — asymmetric 2-segment power curve via `powf`/`pow`) is correctly characterized but its exact coefficients and the UI-parameter-to-class binding weren't traced. Match EQ wasn't re-touched (already in `mixer.md`). |
+| 8. Match EQ / Channel EQ / Limiter / Pan / Fader curves | **done** | `CLimiter` and `CNoisegateFX` fully decompiled; Channel EQ's real default 8-band table captured live from the plugin UI; **Pan law fully solved** — `CalcPanValues(ePanLaw, float, float&, float&)` found in `MAAudioEngine.framework` via plain `nm`+`otool`, exact formula and both 7-entry constant tables read straight from the binary. **Fader fully closed**: found the real channel-strip Volume shell (`CVolumeShell::OnSetup`, decompiled) — the actual `"Gain"` controller is a plain **`CCTRLLinear`**, range **−96 dB to +24 dB**, confirmed formula `value = minVal + (pos/maxPos)×(maxVal−minVal)`. This corrects the previous guess that the asymmetric `CCTRLPoly2` power-curve class was the real fader — it isn't; `CCTRLLinear` is, found via the shell that actually registers it rather than inferred from which class's math looked like the best fit. Sidechain-filter UI (Block 2g) also fully closed this pass via the same method (`CCompressorShell::OnSetup`'s real control registration: State/Mode/Frequency/Q/Gain, exact names and ranges). Match EQ wasn't re-touched (already in `mixer.md`). |
 
 This pass covered Block 1 (fully, once `jad-daw-private` was cloned) and Block 2a (fully), 2b/2d/2e (partially) as
 the highest-priority, most tractable items in the time available. Everything below "not started" needs its own
@@ -1401,7 +1401,7 @@ exactly `0.0` strongly suggests the `0 dB` pan law (likely the classic constant-
 special-cased by the caller and never actually reaches this function with index 0 doing real work — **not
 independently confirmed, since the caller wasn't traced**.
 
-### Fader — taper framework found and partly decoded (closed by elimination for the rest)
+### Fader — closed: the real channel-strip Volume fader found, and it's `CCTRLLinear`, not `CCTRLLog`/`CCTRLPoly2`
 
 `MAAudioEngine.framework`'s symbol table genuinely has no plain channel-strip fader-taper function — confirmed
 again this pass (only automation-event-dictionary and Dolby/spatial-audio fader-position methods). The real
@@ -1427,22 +1427,42 @@ before returning — not traced, likely a generic clamp/snap helper shared by al
 rounding constant was read directly from `__TEXT.__const` (file offset `0xd4b690` = `0.5f`, confirmed byte-exact).
 This is a genuine power-of-10 logarithmic taper — pure, single-segment, no piecewise breakpoints.
 
-**`CCTRLPoly2` — identified as a two-segment power curve, not fully decoded.** Same stub-resolution method found
-its core math calls `_powf`/`_pow` (`0xd41700`/`0xd416fa`), not `exp10f`/`log10f`. The disassembly shows two
-distinct code paths selected by comparing the input against the controller's center/zero point (fields `+0x110`/
-`+0x111` are boolean flags, `+0x104` holds a second per-segment exponent) — i.e. **an asymmetric curve with a
-different exponent below vs. above a center value**, which is exactly the shape a real mixer fader needs (coarser
-dB/position below 0 dB "cut", finer above it toward the boost ceiling) and that pure `CCTRLLog` can't produce.
-This is the better candidate for the actual channel-strip Volume fader, but the exact exponent/breakpoint
-constants weren't extracted (would need resolving ~6 more RIP-relative float literals the same way `0.5f` was
-above) and — same caveat as Pan (Block 8) and `Coefficients(value,3)` (2b) — **which concrete `CCTRL*` subclass
-the UI actually instantiates for the channel-strip Volume parameter specifically was not traced** (that binding
-lives in a parameter-registration table, not in these classes themselves).
+**`CCTRLPoly2` — identified as a two-segment power curve, not the fader (see correction below).** Same
+stub-resolution method found its core math calls `_powf`/`_pow` (`0xd41700`/`0xd416fa`), not `exp10f`/`log10f`.
+The disassembly shows two distinct code paths selected by comparing the input against the controller's
+center/zero point (fields `+0x110`/`+0x111` are boolean flags, `+0x104` holds a second per-segment exponent) —
+i.e. an asymmetric curve with a different exponent below vs. above a center value. This was initially guessed as
+"the better candidate for the actual channel-strip Volume fader" — **that guess was wrong, corrected below**;
+`CCTRLPoly2` is presumably used by some *other* asymmetric automatable parameter, not identified this pass.
 
-So: the earlier "not found" is now wrong — the taper framework exists, is generic (used for every knob, not just
-faders), and one full variant (`CCTRLLog`) is exactly decoded; the more-likely-real-fader variant (`CCTRLPoly2`)
-is correctly characterized (power curve, asymmetric, 2 segments) but not numerically exact; and the final
-UI-parameter-to-class binding remains unconfirmed, same category of gap as 2b/Pan's caller tracing.
+**Correction and closure: the UI-parameter-to-class binding was found, and it answers the whole question.**
+Rather than guessing from the shape of each `CCTRL*` subclass's math, found the actual channel-strip Volume/Gain
+plugin shell — `CVolumeShell` (`typeinfo name for CVolumeShell` led to it via a raw string search for `"Volume"`
+in `MADSP.x86_64`) — and decompiled its `OnSetup()` (`0x302330`, via `procedure_pseudo_code`). It registers the
+real, user-facing `"Gain"` controller explicitly as a **`CCTRLLinear`**, not `CCTRLLog` or `CCTRLPoly2`:
+
+```
+CCTRLLinear(minVal=-96.0, maxVal=24.0, "Gain", "Gain", "dB", maxPos=(int)(10^s_HiRes × 1200.0), …)
+AddController(…, paramIndex=5, …)
+```
+
+i.e. **the channel-strip fader's real automatable range is −96 dB to +24 dB**, and `CCTRLLinear::MapFaderPosToValue`
+(hand-disassembled at `0x20f030`) confirms the formula is exactly what the class name promises — plain linear
+interpolation, no exponential/power curve at all:
+
+```
+value(pos) = minVal + (pos / maxPos) × (maxVal − minVal)     // clamped to [minVal, maxVal]
+```
+
+`maxPos` itself isn't a fixed constant — it's `(int)(10^CVolumeShell::s_HiRes × 1200.0)`, a resolution-dependent
+step count (plausibly a "high-resolution automation" display-precision setting), but the **value mapping itself
+is unambiguously linear-in-dB**, confirmed straight from the shell that actually builds the real Volume control,
+not inferred from which `CCTRL*` subclass looked like the best fit. This also explains why `CCTRLLog`/`CCTRLPoly2`
+exist and are fully implemented in the binary without being the fader: they're the taper classes for *other*
+automatable parameters (frequency knobs, asymmetric cut/boost controls) that share this same generic framework —
+the fader itself just happens to use the simplest one. `CVolumeShell::OnSetup` also incidentally confirms the
+real **Phase**/**Balance-Pan**/**Swap-L-R**/**Mono** controls living alongside Gain on every channel strip, with
+their own exact names and ranges (not the focus of this block, not written up further here).
 
 ### Source
 
@@ -1471,3 +1491,11 @@ exactly `0.5f`. The 6a color-palette re-check used `find /Applications/Logic\ Pr
 -iname Assets.car` (11 catalogs) piped through `assetutil -I` and a small Python filter over the JSON entry
 names, plus `nm -arch x86_64 … | c++filt | grep -i color/colorPalette` against `MACore`, `MAToolKit`, `MAGUI`,
 `MAWorkspace`, `MAApplication`.
+
+The Fader's final closure found `CVolumeShell` via a raw Python byte-search for the literal string `"Volume"`
+across `MADSP.x86_64` (turned up `"VolumeShell"`, a C++ typeinfo-name string, among plain UI-label hits), then
+`nm -arch x86_64 … | c++filt | grep CVolumeShell` for its real method addresses, then
+`mcp__rea__procedure_pseudo_code` directly on `CVolumeShell::OnSetup` (`0x302330`) — the same direct-by-address
+REA call used for the sidechain-filter closure above, bypassing `madsp_disasm.txt`'s gap at this address.
+`CCTRLLinear::MapFaderPosToValue` (`0x20f030`) was then hand-disassembled from the saved dump to confirm the
+formula matches plain linear interpolation.

@@ -1,7 +1,7 @@
 # Handoff: where the work stands
 
 Updated at every commit so that another session (or another AI) can resume. The detailed list is `docs/roadmap-autonomous.md` (sections E and F); this file is the short version.
-Last update: 2026-10-20, after the commit "mastering: Analog Model".
+Last update: 2026-10-21, after the UI build and tests.
 
 ## Rules from the owner (Luigi, Italian-speaking)
 - Use ALL the reverse-engineering knowledge (Logic Pro 11.2) and `jad-daw-private` (nested git repo, ignored): do not skip anything.
@@ -13,18 +13,16 @@ Last update: 2026-10-20, after the commit "mastering: Analog Model".
 ## Done (committed)
 F0, F0b converters and icon tracer; F1 presets (324) and Match EQ curves (75); F2 pan law, Channel EQ, compressor circuits, gate/limiter, Match EQ; F3 Mastering macro and limiter fit like `AutoAdjustLimiter`; F4 Klopfgeist click; F5a-e onnxruntime, Smart Tempo and Flex Pitch networks, Neural Saturation insert; F5f models and DLLs shipped with the app (`lpc_copy_models`); E1, E2, E3, E4, E5, E6, E8, E10, E13, E14.
 
-## Not built yet (important)
-The UI changes of F2, F3, E2, E4, E5, E6, E8, E10, E13 and F5f are written but `build-ui` has not been compiled and the QML/bridge tests (`jad_bridge_tests`, `tst_actions`, QML tests) have not been run. Core (`build-core`, `lpc_tests`) is built and green: 409 passed, 1 skipped.
+## Build state (2026-10-21)
+Everything is built and tested: core (`build-core`) 417 test cases, 1 skipped; UI (`build-ui`) ctest 430, all green (bridge 173, QML 212). The UI had never been compiled before this day: only missing includes showed up.
 
 ## What is missing, in order
-1. Engine behaviour for the Project Settings choices that are only saved (see E8 in the roadmap): tempo mode Keep/Adapt/Automatic, colorize takes, region automation priority, etc.
-2. Engine behaviour for the metronome Options (click while recording / only during count-in / while playing / polyphonic) and the MIDI click output to a port.
-3. E11 48-colour palette (16 x 3) for Assign Track Color. E12 I/O Labels for inputs, outputs and buses. E15 Create New Track dialog (4 categories). E16 Chord global track and Arrangement global track.
-4. E10b MP3/M4A bounce destinations and CAF. E1 sub-items: Trim, Relative, Record Automation with Audio Regions.
-5. F5e Analog Model is in (Valve/Punch/Transparent = TSO/G_SO/S_SO in the Mastering insert; all six networks output audio, not a scalar). Open, asked of the Mac in a second prompt: the real input level and scaling, the order inside ProcessAllDynamicCBs, the meaning of the +0x164 gain, a CoreML reference (rename the .mil to model.mil in a copy of the bundle). When the answer lands in analog-model-chain.md, replace the -12 dB / +12 dB guess in `MasteringProcessor`.
-6. F7 simplify and recolour the traced SVGs (`assets/icons/logic-derived`, 91 files) and wire them into QML.
-7. Build the UI (`build-ui`), run all UI tests, fix. Run the Mac harness `tools/ml/coreml_reference.swift` vs ONNX when a Mac is available.
-8. F8 (later): GitHub macOS CI fails ctest 364 "undo: random command sequences undo and redo exactly".
+1. G (the owner, 2026-10-21): graphical windows for the stock effects (today only parameter lists). Needs the Mac's screenshots first: `docs/logic-reference/mac-pass-4-request.md` is the prompt for the Mac session.
+2. E15b Pattern tracks (Step Sequencer): `ui/qml/StepSequencer.qml` exists, the Pattern card of Create New Track is disabled until a pattern region exists.
+3. E1 sub-items: Trim and Relative automation (T-Touch, T-Latch, R-Touch, R-Latch, R-Write: a secondary relative curve summed in `graph_builder`), Record Automation with Audio Regions.
+4. Engine behaviour still only saved for: region automation priority, preset value for regions, balancer pan law, colorize takes, loadOnlyNeeded, resetRecordEnable, midi send/thru, assets copy flags, trim start of new regions; metronome Options and MIDI click output; CAF bounce.
+5. F7 simplify and recolour the traced SVGs and wire them into QML. F8 macOS CI ctest 364.
+6. The replacement of the -12/+12 dB guess in `MasteringProcessor`: the Mac could not say what level the Analog Model networks expect (see mac-pass-3.md 2b/2e).
 
 ## How to build and test
 - Core: `cmake build-core` (needed when files are added), then `cmake --build build-core --config Release --target lpc_tests -- -m` (about 5 minutes), run `./build-core/tests/Release/lpc_tests.exe`. Models for the tests: `LPC_ONNX_MODELS_DIR=jad-daw-private/onnx`.

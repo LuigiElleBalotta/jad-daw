@@ -29,6 +29,7 @@
 #endif
 #include "lpc/model_json.h"
 #include "lpc/session_player.h"
+#include "lpc/compressed_audio.h"
 #include "lpc/media_store.h"
 #include "lpc/wav.h"
 #include "lpc/offline_render.h"
@@ -884,6 +885,10 @@ void ProjectController::importAudioFilesHere(const QList<QUrl>& files) {
     importAudioFilesAt(files, target, positionBeats_);  // no audio track selected: new tracks named after the files
 }
 
+bool ProjectController::compressedBounceAvailable(const QString& format) const {
+    return lpc::compressedEncoderAvailable(format == QLatin1String("mp3") ? lpc::CompressedFormat::Mp3 : lpc::CompressedFormat::M4aAac);
+}
+
 void ProjectController::bounceProject(const QUrl& file) { bounceProjectAs(file, {}); }
 
 void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& options) {
@@ -896,12 +901,22 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     const int targetRate = std::clamp(options.value("sampleRate", 0).toInt(), 0, 192000);
     const bool secondPass = options.value("secondPass", false).toBool() && range != "project";
     const bool addToProject = options.value("addToProject", false).toBool();
+    // Destination: Uncompressed (the File Type), MP3 and M4A (AAC) beside the same name, any of them together
+    const QStringList destinations = options.contains("destinations") ? options.value("destinations").toStringList() : QStringList{"uncompressed"};
+    const bool wantMp3 = destinations.contains("mp3"), wantM4a = destinations.contains("m4a"), wantPcm = destinations.contains("uncompressed") || (!wantMp3 && !wantM4a);
+    if ((wantMp3 && !lpc::compressedEncoderAvailable(lpc::CompressedFormat::Mp3)) || (wantM4a && !lpc::compressedEncoderAvailable(lpc::CompressedFormat::M4aAac))) {
+        setError("This system has no encoder for the chosen MP3 or M4A destination");
+        return;
+    }
     const bool aiff = format.startsWith("aiff");
     const bool flac = format.startsWith("flac");
     const int bits = format.endsWith("16") ? 16 : (format.endsWith("32") ? 32 : 24);
     const bool dither = options.value("dither", bits == 16).toBool() && bits == 16;
     std::filesystem::path out = file.toLocalFile().toStdWString();
-    if (out.extension().empty()) out += aiff ? ".aif" : (flac ? ".flac" : ".wav");
+    if (out.extension().empty() || (!wantPcm && (out.extension() == ".wav" || out.extension() == ".aif" || out.extension() == ".flac"))) {
+        if (wantPcm) out += aiff ? ".aif" : (flac ? ".flac" : ".wav");
+        else out.replace_extension(wantMp3 ? ".mp3" : ".m4a");
+    }
     if (!saveProject()) return;
     const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
     if (lpc::projectEndFrame(project) == 0) {
@@ -938,7 +953,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
     const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
-    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, flac, bits, normalizeOn, dither, targetRate, secondPass, rangeFrames, addToProject] {
+    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, flac, bits, normalizeOn, dither, targetRate, secondPass, rangeFrames, addToProject, wantPcm, wantMp3, wantM4a] {
         QString message;
         try {
             lpc::MediaStore media(root, /*streaming=*/false);
@@ -956,10 +971,21 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
             if (targetRate > 0 && targetRate != r.sampleRate) data = lpc::convertForProject(data, targetRate);
             const int fileRate = data.sampleRate > 0 ? data.sampleRate : r.sampleRate;
             if (normalizeOn) lpc::normalize(data, -0.3);
-            if (dither) lpc::ditherTpdf(data, bits);
-            if (aiff) lpc::writeAiff(out, fileRate, 2, data.samples, bits);
-            else if (flac) lpc::writeFlac(out, fileRate, 2, data.samples, bits);
-            else lpc::writeWav(out, fileRate, 2, data.samples, bits == 16 ? lpc::WavFormat::Pcm16 : (bits == 32 ? lpc::WavFormat::Float32 : lpc::WavFormat::Pcm24));
+            if (wantMp3 || wantM4a) {  // the encoders take 44.1 and 48 kHz: the mix is converted first when it has another rate
+                lpc::WavData coded = data;
+                const int codedRate = lpc::compressedTargetRate(fileRate);
+                if (codedRate != fileRate) coded = lpc::convertForProject(data, codedRate);
+                std::filesystem::path base = out;
+                base.replace_extension();
+                if (wantMp3) lpc::writeCompressed(base.wstring() + L".mp3", lpc::CompressedFormat::Mp3, codedRate, 2, coded.samples);
+                if (wantM4a) lpc::writeCompressed(base.wstring() + L".m4a", lpc::CompressedFormat::M4aAac, codedRate, 2, coded.samples);
+            }
+            if (wantPcm) {
+                if (dither) lpc::ditherTpdf(data, bits);
+                if (aiff) lpc::writeAiff(out, fileRate, 2, data.samples, bits);
+                else if (flac) lpc::writeFlac(out, fileRate, 2, data.samples, bits);
+                else lpc::writeWav(out, fileRate, 2, data.samples, bits == 16 ? lpc::WavFormat::Pcm16 : (bits == 32 ? lpc::WavFormat::Float32 : lpc::WavFormat::Pcm24));
+            }
             message = QString("Bounced %1 s to %2").arg(static_cast<double>(r.frames) / r.sampleRate, 0, 'f', 1).arg(QString::fromStdWString(out.filename().wstring()));
         } catch (const std::exception& e) {
             message = QString("Bounce failed: ") + QString::fromUtf8(e.what());
@@ -968,7 +994,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
         if (self) QMetaObject::invokeMethod(self, [self, message, addToProject, out] {
             if (!self) return;
             emit self->notice(message);
-            if (addToProject && message.startsWith("Bounced")) self->importAudioFilesAt({QUrl::fromLocalFile(QString::fromStdWString(out.wstring()))}, QString(), 0.0);
+            if (addToProject && message.startsWith("Bounced") && std::filesystem::exists(out)) self->importAudioFilesAt({QUrl::fromLocalFile(QString::fromStdWString(out.wstring()))}, QString(), 0.0);
         }, Qt::QueuedConnection);
     });
 }

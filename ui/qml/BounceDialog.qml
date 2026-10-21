@@ -21,6 +21,12 @@ Dialog {
     property int sampleRate: 0               // 0: the project's
     property bool secondPass: false
     property bool addToProject: false
+    property bool destPcm: true
+    property bool destMp3: false
+    property bool destM4a: false
+    readonly property bool mp3Available: project.compressedBounceAvailable("mp3")
+    readonly property bool m4aAvailable: project.compressedBounceAvailable("m4a")
+    readonly property var destinations: { const d = []; if (destPcm) d.push("uncompressed"); if (destMp3) d.push("mp3"); if (destM4a) d.push("m4a"); return d }
     readonly property var formats: [{ id: "wav16", label: "WAVE 16 bit" }, { id: "wav24", label: "WAVE 24 bit" }, { id: "wav32", label: "WAVE 32 bit float" },
                                     { id: "aiff16", label: "AIFF 16 bit" }, { id: "aiff24", label: "AIFF 24 bit" },
                                     { id: "flac16", label: "FLAC 16 bit" }, { id: "flac24", label: "FLAC 24 bit" }]
@@ -43,11 +49,11 @@ Dialog {
         id: fileDialog
         title: qsTr("Bounce the project")
         fileMode: FileDialog.SaveFile
-        defaultSuffix: root.format.startsWith("aiff") ? "aif" : (root.format.startsWith("flac") ? "flac" : "wav")
-        nameFilters: [root.format.startsWith("aiff") ? qsTr("AIFF audio (*.aif *.aiff)") : (root.format.startsWith("flac") ? qsTr("FLAC audio (*.flac)") : qsTr("WAVE audio (*.wav)"))]
+        defaultSuffix: !root.destPcm ? (root.destMp3 ? "mp3" : "m4a") : (root.format.startsWith("aiff") ? "aif" : (root.format.startsWith("flac") ? "flac" : "wav"))
+        nameFilters: [!root.destPcm ? (root.destMp3 ? qsTr("MP3 audio (*.mp3)") : qsTr("M4A audio (*.m4a)")) : (root.format.startsWith("aiff") ? qsTr("AIFF audio (*.aif *.aiff)") : (root.format.startsWith("flac") ? qsTr("FLAC audio (*.flac)") : qsTr("WAVE audio (*.wav)")))]
         onAccepted: {
             const o = { format: root.format, normalize: root.normalizeMode, tail: root.tail, sampleRate: root.sampleRate,
-                        secondPass: root.secondPass && root.rangeKind !== "project", addToProject: root.addToProject }
+                        secondPass: root.secondPass && root.rangeKind !== "project", addToProject: root.addToProject, destinations: root.destinations }
             if (root.rangeKind === "project") o.range = "project"
             else if (root.rangeKind === "cycle") o.range = "cycle"
             else { o.range = "custom"; o.startBeats = root.project.barToBeats(root.startBar); o.endBeats = root.project.barToBeats(root.endBar) }
@@ -69,19 +75,32 @@ Dialog {
                 spacing: 2
                 CheckBox {
                     objectName: "destUncompressed"
-                    checked: true
-                    enabled: false   // the one destination made here; it stays on
+                    checked: root.destPcm
+                    enabled: root.destMp3 || root.destM4a   // at least one destination stays on
                     text: qsTr("Uncompressed")
+                    onToggled: root.destPcm = checked
                     contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
                 }
-                Repeater {
-                    model: [qsTr("MP3"), qsTr("M4A: AAC"), qsTr("Burn to CD/DVD")]
-                    delegate: CheckBox {
-                        required property string modelData
-                        enabled: false
-                        text: modelData + qsTr(" (not available yet)")
-                        contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
-                    }
+                CheckBox {
+                    objectName: "destMp3"
+                    checked: root.destMp3
+                    enabled: root.mp3Available && (root.destPcm || root.destM4a || !root.destMp3)
+                    text: root.mp3Available ? qsTr("MP3 (256 kbit/s)") : qsTr("MP3 (no encoder on this system)")
+                    onToggled: root.destMp3 = checked
+                    contentItem: Text { leftPadding: 24; text: parent.text; color: parent.enabled ? Theme.textPrimary : Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
+                }
+                CheckBox {
+                    objectName: "destM4a"
+                    checked: root.destM4a
+                    enabled: root.m4aAvailable && (root.destPcm || root.destMp3 || !root.destM4a)
+                    text: root.m4aAvailable ? qsTr("M4A: AAC (192 kbit/s)") : qsTr("M4A: AAC (no encoder on this system)")
+                    onToggled: root.destM4a = checked
+                    contentItem: Text { leftPadding: 24; text: parent.text; color: parent.enabled ? Theme.textPrimary : Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
+                }
+                CheckBox {
+                    enabled: false
+                    text: qsTr("Burn to CD/DVD (not offered)")
+                    contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
                 }
             }
             Label { text: qsTr("File type") }

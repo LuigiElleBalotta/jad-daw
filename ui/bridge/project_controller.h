@@ -531,6 +531,7 @@ public:
     Q_INVOKABLE void bounceProject(const QUrl& file);
     // options: format "wav16" | "wav24" | "wav32" (float) | "aiff16" | "aiff24"; range "project" | "cycle"; normalize (bool, to -0.3 dBFS);
     // tail (seconds of tail after the last region, 0..30); dither (bool, for 16-bit)
+    Q_INVOKABLE bool compressedBounceAvailable(const QString& format) const;  // "mp3" or "m4a": the system has an encoder
     Q_INVOKABLE void bounceProjectAs(const QUrl& file, const QVariantMap& options);
     // options: format (wav16|wav24|wav32|aiff16|aiff24|flac16|flac24), range (project|cycle|custom with startBeats/endBeats), sampleRate (0: the project's),
     // normalize (bool, or "off"/"overall"), tail (s), secondPass (cycle area: the tail of the end is folded onto the start, as a loop that plays twice),

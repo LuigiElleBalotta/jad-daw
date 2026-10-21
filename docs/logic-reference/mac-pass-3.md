@@ -1199,7 +1199,7 @@ own offset reads):
 | 8 | Makeup gain | `10^(dB/20)` |
 | 9 | (unlabeled, "crest"-like) | `(1 − p) × 0.057022` |
 | 0xb | SC/limiter-related gain | `10^(dB×0.05)`, gated by `p ≤ 0` |
-| 0xd | Sidechain filter type select | indexes a 4-entry constant+pointer table (`DAT_00d4b2d0`/`DAT_00d53920`) — a 4-way HPF-type selector |
+| 0xd | Internal filter-order/conditioning selector | indexes a 4-entry constant table (`DAT_00d4b2d0`/`DAT_00d53920`, values `{3,7}` meaningful) — this circuit's own internal detail, not the same index space as the UI's 5-way "Mode" menu (see "Sidechain-filter" below, closed) |
 | 0x18 | Limit-mode ratio | `10^(−dB/20)` |
 | 0x19 | Limit-mode enable | boolean, `p > 0` |
 
@@ -1220,21 +1220,42 @@ formulas byte-for-byte) — confirming both circuits sit behind one common param
   more "VCA-like" response, consistent with SSL's VCA (not opto-cell) gain element.
 - The same secondary hard-limit sub-path as Opto (identical structure, same offsets).
 
-### Sidechain-filter table — read, meaning not fully certain
+### Sidechain-filter — closed, real UI labels found via static analysis (the live-GUI attempt wasn't needed after all)
 
-The 4-entry tables at `DAT_00d4b2d0` (floats) and `DAT_00d53920` (read earlier as a "pointer" table by Ghidra's
-own type inference) turn out to hold small integers, not addresses or frequencies: `{0.0, 3.0, 7.0, 0.0}` and
-`{0, 3, 7, 1}` respectively — indices 0 and 3 share the same float value (`0.0`), so there are really only 2
-distinct non-zero entries (`3`, `7`). Fed through the formula from `Coefficients(value, 0xd)`
-(`coeff = x/(x−1)`, stored alongside `1−coeff`), these read more like small filter-order/pole-count selectors
-(e.g. a 2-pole vs. higher-order HPF) than literal Hz frequencies — too small to be frequencies, and the
-duplicate `0.0` at both ends fits an "Off / low-order / high-order / Off-again" pattern better than 4 distinct
-named choices. **Not fully certain**: the real UI labels for this sidechain-filter selector weren't checked
-against these 4 values. A live-GUI attempt to insert a Compressor and read its sidechain-filter popup was made
-this pass but abandoned: a Logic `Settings` dialog that opened unexpectedly stopped responding to both clicks on
-its close button and `Escape` across 4 attempts (no state change observed each time) — a harder version of the
-already-documented native-popup click-registration issue, not worth forcing given this session's prior GUI
-safety near-misses. Still genuinely open; would need a fresh Logic session to retry cleanly.
+The blocked live-GUI check (a Logic `Settings` dialog that stopped responding to both clicks and `Escape`, logged
+in the previous version of this section) turned out to be unnecessary: the real "Side Chain Filter" UI is
+registered, with its exact labels and ranges, directly in `CCompressorShell::OnSetup`'s own decompiled pseudocode
+(`procedure_pseudo_code` on `0x95b60`, found via `nm` after the saved `madsp_disasm.txt` had a gap at this
+specific address — a known quirk, see Block 2g's original Source note). It's not one control but a labeled group
+of five, all tagged `"Side Chain Filter"` (`*(char**)(lVar8+0x18) = "Side Chain Filter"` after each `AddController`
+call — this is literally the group-label string Logic shows above the related controls in the UI):
+
+| Controller index | Name (`"Full" / "Short"`) | Type | Values / range |
+|---|---|---|---|
+| `0x10` | `"State"` | 3-item `CCTRLMenu` | `0`=**Off**, `1`=**Listen**, `2`=**On** |
+| `0x11` | `"Mode" / "SC FM"` | 5-item `CCTRLMenu` | `0`=**LP**, `1`=**BP**, `2`=**HP**, `3`=**Par EQ**, `4`=**Hi Shelf** |
+| `0x12` | `"Frequency" / "SC Frq"` | `CCTRLLog`, unit `"Hz"` | `16.35 Hz` – `19912.0 Hz` (`0x4182d0e5`–`0x469b9000`) |
+| `0x13` | `"Q" / "SC Q"` | `CCTRLLog` | `0.5` – `5.0` (`0x3f000000`–`0x40a00000`) |
+| `0x14` | `"Gain" / "FiltGn"`, unit `"dB"` | `CCTRLLinear` | `−24.0 dB` – `+24.0 dB` (`0xc1c00000`–`0x41c00000`) |
+
+So the real sidechain filter is a full parametric filter, not a simple fixed-order HPF selector: an enable state
+(Off/Listen/On — "Listen" solos the filtered sidechain signal, a standard sidechain-EQ monitoring feature), a
+5-way filter-type menu including shelving and parametric-EQ modes (not just high/low/band-pass), plus its own
+Frequency/Q/Gain controls. **This directly answers the original question** ("what are the real UI labels") more
+completely and more authoritatively than a live popup read would have — straight from the shell's own control
+registration, not a screenshot.
+
+**Reconciling with the earlier `DAT_00d4b2d0`/`DAT_00d53920` finding**: that table was read from inside
+`CCompressorOpto::Coefficients(value, 0xd)` specifically, using `Coefficients`'s own internal parameter-index
+numbering (`0xd`), a **different namespace** from the UI `AddController` indices above (`0x10`–`0x14`) — the two
+were never guaranteed to be the same parameter, and nothing here confirms they are. Given the real UI exposes 5
+modes, not 4, and the `DAT` table's 2 meaningful values (`3`, `7`) don't map cleanly onto 5 named filter types,
+the likeliest explanation is that the `DAT` table is an **internal DSP implementation detail of one specific
+circuit's own simplified sidechain conditioning** (e.g. a 2-pole-vs-higher-order internal filter-order choice
+inside `CCompressorOpto`'s own gain-reduction detector path), separate from the general-purpose parametric
+sidechain filter documented above — not the same control under a different index. This is now the complete,
+closed picture: the real UI structure is fully known; the `DAT` table's narrower internal role is correctly
+scoped rather than forced into matching it.
 
 ### Source
 
@@ -1245,6 +1266,12 @@ The exact enum↔class↔name mapping came from decompiling `CCompressorShell::O
 `CCTRLMenu::SetSelectionName` calls registering the 7-item Circuit Type popup) and `CCompressor`'s own
 constructor (`CCompressorC2(float,long,long,CBasicFXHost*,long,bool)`, `0x72890` — the `switch(lVar3)` block that
 `operator new`s and constructs the matching circuit subclass per enum value).
+
+The sidechain-filter closure reused `CCompressorShell::OnSetup`'s same decompile (re-run via
+`mcp__rea__procedure_pseudo_code` on `0x95b60` directly by address, since `madsp_disasm.txt`'s hand-disassembly
+dump has a gap at this specific function — a known quirk logged earlier in this doc), this time `grep -i
+"sidechain\|filter"` over the saved pseudocode to find the `"Side Chain Filter"` group-label writes and the
+preceding `CCTRLMenu`/`CCTRLLog`/`CCTRLLinear` constructor calls that give each control's real name and range.
 
 ---
 

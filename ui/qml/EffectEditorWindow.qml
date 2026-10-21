@@ -22,7 +22,7 @@ Window {
     property bool showList: false       // the parameter list instead of the graphical window
     // the graphical window: a layout of its own for the Channel EQ and the Compressor, knobs for every other effect and instrument; the Mastering
     // Assistant and Match EQ keep their panels above the list
-    readonly property bool hasGraphic: spec !== null && !isMastering && !isMatchEq
+    readonly property bool hasGraphic: spec !== null && !isMatchEq
     readonly property bool graphical: hasGraphic && !showList
     readonly property string kind: spec ? spec.id : ""
     // the header of the graphical windows (FxShell): power, presets, Compare, Copy and Paste, View
@@ -183,10 +183,11 @@ Window {
         anchors.fill: parent
         visible: root.graphical
         active: root.graphical
-        sourceComponent: root.kind === "builtin.eq" ? eqView : (root.kind === "builtin.compressor" ? compressorView : (root.kind === "builtin.limiter" || root.kind === "builtin.adaptivelimiter" ? limiterView : (root.kind === "builtin.gate" ? gateView : gridView)))
+        sourceComponent: root.kind === "builtin.eq" ? eqView : (root.kind === "builtin.compressor" ? compressorView : (root.kind === "builtin.limiter" || root.kind === "builtin.adaptivelimiter" ? limiterView : (root.kind === "builtin.gate" ? gateView : (root.kind === "builtin.mastering" ? masteringView : gridView))))
     }
     Component { id: eqView; FxChannelEqView { editor: root } }
     Component { id: compressorView; FxCompressorView { editor: root } }
+    Component { id: masteringView; FxMasteringView { editor: root } }
     Component { id: gateView; FxGateView { editor: root } }
     Component { id: limiterView; FxLimiterView { editor: root } }
     Component { id: gridView; FxGenericView { editor: root } }
@@ -348,7 +349,7 @@ Window {
         Rectangle {  // Mastering Assistant: what the analysis found, and Reanalyze
             id: masterBox
             objectName: "masteringBox"
-            visible: root.isMastering
+            visible: root.isMastering && !root.graphical
             Layout.fillWidth: true
             Layout.preferredHeight: 86
             color: Theme.surfaceCanvas

@@ -94,7 +94,7 @@ FxShell {
         Rectangle { x: 15; y: 40; width: 1; height: 26; color: "#32485f" }
         Rectangle { x: 15; y: 88; width: 1; height: 50; color: "#32485f" }
         FxHSlider {
-            x: 40; y: 0; width: 202
+            x: 40; y: 0; width: 240
             property var p: root.editor.param("keyHighCut")
             label: qsTr("High Cutoff"); unit: "Hz"; decimals: 0; logarithmic: true; from: p.min; to: p.max; defaultValue: p.def
             value: root.val("keyHighCut"); dimmed: root.val("keyFilter") < 0.5
@@ -102,7 +102,7 @@ FxShell {
             onReleased: (v) => root.editor.commit("keyHighCut", v)
         }
         FxHSlider {
-            x: 40; y: 84; width: 202
+            x: 40; y: 84; width: 240
             property var p: root.editor.param("keyLowCut")
             label: qsTr("Low Cutoff"); unit: "Hz"; decimals: 0; logarithmic: true; from: p.min; to: p.max; defaultValue: p.def
             value: root.val("keyLowCut"); dimmed: root.val("keyFilter") < 0.5

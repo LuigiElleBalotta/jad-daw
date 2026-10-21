@@ -82,7 +82,7 @@ std::vector<EffectSpec> build() {
                   p("mix", "Mix", "%", 0, 100, 100)}});
     // Mastering Assistant: the parameters eq1..eq8 and gain are what the analysis found (the Reanalyze button writes them)
     {
-        std::vector<EffectParam> m{p("loudness", "Loudness", "%", -100, 100, 0), p("autoEq", "Auto EQ", "%", 0, 100, 100), p("excite", "Excite", "", 0, 1, 0),
+        std::vector<EffectParam> m{p("loudness", "Loudness", "%", -100, 100, 0), p("autoEq", "Auto EQ", "%", 0, 150, 100), p("excite", "Excite", "", 0, 1, 0),
                                    p("character", "Character (0-3)", "", 0, 3, 0), p("bypass", "Bypass", "", 0, 1, 0),
                                    p("compensate", "Loudness Compensation", "", 0, 1, 0), p("gain", "Analysed Gain", "dB", -24, 36, 0), p("compTrim", "Compensation Trim", "dB", -12, 12, 0)};
         for (int i = 1; i <= 8; ++i) m.push_back(p(("eq" + std::to_string(i)).c_str(), ("Analysed EQ " + std::to_string(i)).c_str(), "dB", -12, 12, 0));

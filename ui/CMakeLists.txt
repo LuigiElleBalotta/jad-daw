@@ -54,6 +54,7 @@ qt_add_qml_module(jad_ui_lib
         qml/FxMatchEqView.qml
         qml/FxReverbView.qml
         qml/FxDelayView.qml
+        qml/FxSaturationView.qml
         qml/FxGenericView.qml
         qml/IconButton.qml
         qml/Panel.qml

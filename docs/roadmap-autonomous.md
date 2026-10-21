@@ -436,11 +436,11 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
       cycle choice, a **Mode: Offline/(Realtime?)** dropdown, **Bounce 2nd Cycle Pass**, **Add to Project**, **Add to Music**, and **Normalize as a
       dropdown** not a single flag. See `behavior-check-2026-10-14.md` for the full breakdown before touching the Bounce dialog code.
       DONE: `BounceDialog` now has Destination (Uncompressed on; MP3, M4A and Burn listed but off), File Type WAVE/AIFF (+FLAC), bit depth, Sample Rate (project, 44.1 to 192 kHz, cubic conversion of the finished mix), Mode (Offline), Start/End in bars (`barToBeats`, `beatsToBar` follow signature changes), Normalize Off/Overall, Tail, Bounce 2nd Cycle Pass (the tail folded onto the start), Add to Project (imported on a new track). CAF is not written.
-- [ ] E10b. Compressed bounce destinations: MP3 and M4A (AAC) through an encoder (Windows Media Foundation sink writer on Windows), Burn to CD/DVD stays out; CAF file type.
-- [ ] E11. `View > Colors` is a real **16×3 = 48-swatch palette** (16 hues × 3 lightness variants) for `Track > Assign Track Color…`; jad-daw has no
+- [x] E10b. Compressed bounce destinations: MP3 (256 kbit/s) and M4A (AAC, 192 kbit/s) through the Windows Media Foundation sink writer (`core/src/compressed_audio.cpp`), several destinations together; 44.1/48 kHz only (other rates are converted first). Burn to CD/DVD stays out. CAF file type is still not written.
+- [x] E11. DONE 2026-10-21: the Mac's pass 3 corrected the structure: the palette is **24 hues x 4 shades = 96 swatches** (not 16 x 3). The colours were sampled from the live screenshot (`jad-daw-private/color-tokens/track-color-palette-screenshot.json`), `ui/qml/TrackColors.qml` holds them, a track colour is a name or `#rrggbb`, the arrow resets. Old note: `View > Colors` is a palette (16×3 was a wrong count) for `Track > Assign Track Color…`; jad-daw has no
       colour-picker component for that command yet (searched `ui/qml`, found none) — this is new work, not a correction. Exact hex values need a
       cleaner re-extraction (screenshot pixel-sampling wasn't reliable); the 16×3 structure itself is confirmed.
-- [ ] E12. `Mix > I/O Labels…` names **inputs, outputs and buses** (table: Channel/Provided by Driver/User-toggle/Long/Short), not just inputs as the
+- [x] E12. DONE 2026-10-21: the table has Channel / Provided by Driver / User / Long / Short for inputs, outputs, pairs and 256 buses, saved with the project (`io.<key>` settings), Reset, used by the Input menu and the Output menu. Old note: `Mix > I/O Labels…` names **inputs, outputs and buses** (table: Channel/Provided by Driver/User-toggle/Long/Short), not just inputs as the
       README says. Output 1-2 is already labelled "Stereo Output" in Logic itself, confirming jad-daw's "Stereo Out" naming direction. Extend jad-daw's
       I/O Labels feature to cover outputs/buses and the driver-name-vs-custom-name toggle.
 - [x] E8 (continued, 2026-10-16). Read 6 of Project Settings' 11 tabs: Audio (Pan Law `-3 dB Compensated` — check jad-daw's pan law against this),
@@ -458,13 +458,13 @@ Found with a disposable test project and the AppleScript-menu-enumeration + Quar
 - [x] E14. LCD doc correction: Smart Tempo's project tempo states are **Keep / Adapt / Automatic** (confirmed in Project Settings), not "Keep and Off"
       as `lcd.md` currently says — "Automatic" is the real third state.
       DONE: `lcd.md` now says Keep / Adapt / Automatic.
-- [ ] E15. Create New Track dialog's full structure confirmed (4 categories x 2-3 sub-options each, a Details panel that changes per category, Number
+- [x] E15. DONE 2026-10-21 (Pattern is shown but disabled until a Step Sequencer exists): Create New Track window with the 4 cards, Details and number of tracks (`createTracks`). Old note: Create New Track dialog's full structure confirmed (4 categories x 2-3 sub-options each, a Details panel that changes per category, Number
       of tracks to create) — see `behavior-check-2026-10-14.md` for the complete breakdown and reference screenshots.
 - [x] E8 (closed, 2026-10-16). All 11 Project Settings tabs now read at least once. Score (7 sub-tabs of notation engraving, confirms jad-daw's
       view-only Score is the right scope unless real engraving is ever committed to), Movie (confirms "left out for good" is right), Synchronization
       (external-hardware-sync, low priority), Assets (Project Package copy-on-import checkboxes — distinct from jad-daw's unused-audio cleanup, a real
       but minor gap). Full breakdown and screenshots in `behavior-check-2026-10-14.md`.
-- [ ] E16. **Logic Pro 11.2 has a real Chord global track** (confirmed via Global Tracks add-list: Arrangement, Marker, Tempo, Signature, **Chord**),
+- [x] E16. DONE 2026-10-21: Arrangement and Chord lanes in the global tracks (Arrangement, Marker, Tempo, Signature, Chord), `Project::arrangement` and `Project::chords`, commands `set_arrangement` / `set_chords`; Session Players read the Chord track first. Old note: **Logic Pro 11.2 has a real Chord global track** (confirmed via Global Tracks add-list: Arrangement, Marker, Tempo, Signature, **Chord**),
       contradicting jad-daw's own README ("no following of a Chord Track (there is none)"). jad-daw's Session Players currently fake a chord source by
       reading marker names; a real Chord global track would be the faithful way to do it. Its own editing UI wasn't opened (didn't want to touch
       Apple's demo content) — needs a follow-up to see how it's populated/edited before building against it. Also: Logic has an **Arrangement** global

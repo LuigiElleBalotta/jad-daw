@@ -167,3 +167,92 @@ Compressor` entry (the browser opened fine on click — see the tooling note abo
 with Snapshot that failed, not opening it). All 7 circuit buttons and the Limiter toggle clicked via
 `mcp__macos-mcp__Click`; Threshold/Ratio knobs adjusted via `mcp__macos-mcp__Move`'s position-then-drag pattern.
 Every capture via `screencapture -x -R` against the window's `osascript`-read bounds.
+
+## Limiter
+
+`plugin-limiter-default.png` / `plugin-limiter-moved.png`. Window 729x378 pt, shown at `View: 75%` (the default zoom for
+the small dynamics plug-ins, unlike Channel EQ/Compressor at 99-100%).
+
+**1. Layout.** Same standard header as every stock plug-in (power button top-left, preset menu with prev/next, Compare/
+Copy/Paste, Undo/Redo, `View` stepper, link icon). Body split in two: a left **meter block** (~290 pt wide: three
+vertical meters `INPUT` / `REDUCTION` / `OUTPUT` with their dB scales) on a slightly darker navy panel, and a right
+**control block** with 4 knobs in one row (`Gain`, `Release`, `Output Level`, `Lookahead`) and, under them, a `Mode`
+menu and a `True Peak Detection` toggle. Identity bar `Limiter` at the bottom.
+
+**2. Controls.** Gain `-20…+20 dB` (default 0.0), Release `2…2000 ms` (default 250 ms), Output Level `-10…+1 dB`
+(default 0.0), Lookahead `0…10 ms` (default 5.0 ms): all small rotary knobs drawn as a thin arc that fills from the
+minimum (Release/Lookahead) or from the center (Gain) up to the value; a big numeric readout with unit sits *above* each
+knob, the label above that, and the min/max numbers *below* the knob ends. `Mode: Precision` (menu with up/down
+chevrons, default `Precision`), `True Peak Detection` (text toggle, `ON` by default, turns `OFF` on click — the toggle
+is a plain word, not a button shape). Confirmed live: dragging Gain up showed `+5.3 dB` and the arc re-filled,
+Release dragged down to `110.0 ms`, True Peak clicked to `OFF`.
+
+**3. Displays.** Three vertical bar meters, scales `20…-60 dB` (Input and Output) and `0…-60 dB` (Reduction, hanging
+downward from 0); no curve display. Meters were empty (no audio playing), so colour of the lit segments wasn't
+observed.
+
+**4. Chrome.** Dark navy panel (~`#14263d` by eye, not pixel-sampled) with lighter blue knob arcs and white value text;
+labels in a muted gray-blue, small. After any change the header `Compare` button turns blue (it is the "differs from the
+saved preset" indicator, not a toggle you pressed).
+
+**5. Animation.** Not observed (needs audio).
+
+## Adaptive Limiter
+
+`plugin-adaptive-limiter-default.png` / `-moved.png`. 654x378 pt, `View: 75%`. Same skeleton as Limiter (meters on the
+left, 3 knobs on the right) but the lower half has a different set of switches.
+
+**Controls.** `Gain` `0…12 dB` (default 3.0 dB), `Out Ceiling` `-2…0 dB` (default 0.0), `Lookahead` `20…200 ms`
+(default 50 ms); below them `Remove DC Offset` (toggle, default `ON`), `True Peak Detection` (toggle, default `OFF`),
+`Optimal Lookahead` with a live readout `20 ms` and an `Apply` button (copies the suggested value into Lookahead — the
+"optimal" number comes from the plug-in's own analysis). Moved: Gain `4.6 dB`, Lookahead `71 ms`, DC Offset `OFF`.
+The header has no Side Chain menu. Everything else (meters `INPUT`/`REDUCTION`/`OUTPUT`, colors, fonts) as Limiter.
+
+## Noise Gate
+
+`plugin-noise-gate-default.png` / `-moved.png`. 772x378 pt, `View: 75%`. The header adds a `Side Chain: None` menu.
+
+**1. Layout.** Three vertical groups separated by thin lines: left **Threshold group** (a `Gate | Ducker` 2-way tab at the
+top, then two large knobs `Threshold` and `Reduction`, then a `Hysteresis` slider under them); middle **Timing group**
+(an `Open ●  Close ●` pair of status LEDs on top, three knobs `Attack`, `Hold`, `Release`, and a `Lookahead` slider
+below); right **Filter group** (`Characteristics` menu, `Monitor` toggle, `High Cutoff` and `Low Cutoff` horizontal
+sliders with a small power icon at their left edge that enables the sidechain filter).
+
+**2. Controls.** Threshold `-100…0 dB` (default -50), Reduction `-100…0 dB` (default -100), Attack `0…100 ms` (3), Hold
+`0…1 k ms` (40), Release `0…10 k ms` (10.0), Hysteresis slider (default -3.0 dB), Lookahead slider (0.0 ms),
+Characteristics `Bandpass`, High Cutoff `20000 Hz`, Low Cutoff `20 Hz`, Monitor `OFF`. **Gate | Ducker tab**: clicking
+`Ducker` relabels the second knob from `Reduction` to `Ducking` (same parameter slot, different meaning) — confirmed
+live. Moved: Threshold `-63 dB`, Ducking `-20 dB`, Attack `14 ms`, Ducker tab selected. The Open LED lights green when
+the gate opens; in the Ducker shot it was lit (no signal → ducking state), Close LED dim.
+
+**3-5.** No curve; the two LEDs are the only live displays. Knobs here are the same thin-arc style as Limiter but
+larger (~40 pt) and the Threshold arc is bright green (the gate-open color), unlike the blue arcs elsewhere.
+Sliders are thin tracks with a small round thumb and a centered readout (`-3.0 dB`) to the right of the label.
+
+## Match EQ
+
+`plugin-match-eq-default.png` / `-moved.png`. 1028x535 pt, `View: 100%`, header with `Side Chain: None`.
+
+**1. Layout.** Header, then a **graph area** (~420 pt tall) occupying most of the window, then a **3-stage pipeline
+bar** (`Current` → `Reference` → `EQ Curve`, each a chevron-shaped segment with its own small red button `Learn`,
+`Learn`, `Match`), and a bottom control row. A thin vertical **Apply** slider with `+100 %` readout sits at the far
+right of the graph. A `Fade Extremes` checkbox at the top-left of the graph area.
+
+**2. Controls.** Bottom row: `Analyzer` toggle with `PRE` tag, `Smoothing` slider (`1…?`, default 4.0, moved to 24.0),
+`Channel: L&R` menu + `Hide Others` checkbox (disabled when L&R), `Channel Link` slider (`100 %`), `Phase: Linear` menu.
+The three pipeline segments each have a gear icon at the left edge (the Action menu mentioned in the on-screen hint:
+load/save/clear the spectrum) and a red `Learn`/`Match` button that arms capture. The text overlay in the graph area
+explains how to start (click Learn, or drag an audio file onto Current/Reference).
+
+**3. Displays.** Left axis `0…-60 dB` for the spectra, right axis (very dim until a curve exists) for the EQ curve,
+X axis log `20…20k` with grid at 50/100/200/500/1k/2k/5k/10k/20k. With nothing learned the graph is empty except a
+flat `0` line. The `Current` segment is teal (active) while `Reference` and `EQ Curve` are the dim blue of inactive
+steps. Live behaviour (spectra filling in, the matched curve) needs audio and was not captured.
+
+**4-5.** Standard header; the large dark-navy graph is darker than the control panel below it. Moved shot differs only
+in the Smoothing thumb (4.0 → 24.0).
+
+### Source (these four)
+Opened on the same `Audio 1` insert chain by the owner (the plug-in browser is awkward to drive from automation); all
+captures via `screencapture -x -R` on the windows' `osascript`-read bounds. The four windows do not overlap each other,
+so no crop contains another plug-in. Knobs dragged vertically and toggles clicked via `mcp__macos-mcp__Move`/`Click`.

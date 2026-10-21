@@ -1424,6 +1424,7 @@ void ProjectController::addTracks(const QString& kind, int count, const QString&
 }
 
 int ProjectController::inputChannels() const { return device_ ? device_->inputChannels() : 0; }
+int ProjectController::outputChannels() const { return device_ ? device_->outputChannels() : 0; }
 double ProjectController::deviceRate() const { return device_ ? device_->sampleRate() : 0.0; }
 
 QVariantMap ProjectController::audioDevices(const QString& output, const QString& input) const {
@@ -2213,20 +2214,58 @@ void ProjectController::finishAutomationCapture(const QString& trackId) {
     merge(c.pan, t->panAuto, "pan", 0.01);
 }
 
+namespace {
+// "io.<key>" = "<user 0|1>	<long>	<short>"
+struct IoRow { bool user = false; QString longName, shortName; };
+QString ioSettingKey(QString key) { return QStringLiteral("io.") + key.replace(QLatin1Char(' '), QLatin1Char('_')); }
+IoRow parseIoRow(const QString& v) {
+    IoRow r;
+    const QStringList f = v.split(QLatin1Char('	'));
+    if (f.size() == 3) { r.user = f[0] == QLatin1String("1"); r.longName = f[1]; r.shortName = f[2]; }
+    return r;
+}
+}  // namespace
+
+QVariantMap ProjectController::ioLabel(const QString& key) const {
+    IoRow r = parseIoRow(projectSettings_.value(ioSettingKey(key)).toString());
+    if (!projectSettings_.contains(ioSettingKey(key)) && key == QLatin1String("Output 1-2")) r = {true, QStringLiteral("Stereo Output"), QStringLiteral("Stereo Output")};  // Logic's own default row
+    return {{"user", r.user}, {"longName", r.longName}, {"shortName", r.shortName}};
+}
+
+void ProjectController::setIoLabel(const QString& key, bool user, const QString& longName, const QString& shortName) {
+    if (key.isEmpty() || key.size() > 40) return;
+    const QString l = longName.trimmed().left(32).remove(QLatin1Char('	')), s = shortName.trimmed().left(16).remove(QLatin1Char('	'));
+    const bool plain = !user && l.isEmpty() && s.isEmpty();
+    setProjectSetting(ioSettingKey(key), plain ? QString() : QStringLiteral("%1	%2	%3").arg(user ? 1 : 0).arg(l, s));
+}
+
+void ProjectController::resetIoLabels() {
+    QStringList keys;
+    for (auto it = projectSettings_.cbegin(); it != projectSettings_.cend(); ++it)
+        if (it.key().startsWith(QLatin1String("io."))) keys << it.key();
+    if (keys.isEmpty()) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (const QString& k : keys) commands.push_back({{"type", "set_project_setting"}, {"key", k.toStdString()}, {"value", ""}});
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+QString ProjectController::ioShownName(const QString& key, const QString& fallback) const {
+    const QVariantMap r = ioLabel(key);
+    const QString name = r.value("longName").toString();
+    return r.value("user").toBool() && !name.isEmpty() ? name : fallback;
+}
+
 QString ProjectController::inputLabel(int input) const {
-    const QString label = input >= 1 && input <= inputLabels_.size() ? inputLabels_.at(input - 1).trimmed() : QString();
-    return label.isEmpty() ? QStringLiteral("Input %1").arg(input) : label;
+    const QString fallback = input >= 1 && input <= inputLabels_.size() && !inputLabels_.at(input - 1).trimmed().isEmpty() ? inputLabels_.at(input - 1).trimmed()  // older versions kept the names per machine
+                                                                                                                              : QStringLiteral("Input %1").arg(input);
+    return ioShownName(QStringLiteral("Input %1").arg(input), fallback);
 }
 
 void ProjectController::setInputLabel(int input, const QString& label) {
     if (input < 1 || input > 64) return;
-    while (inputLabels_.size() < input) inputLabels_ << QString();
-    const QString clean = label.trimmed().left(32);
-    if (inputLabels_[input - 1] == clean) return;
-    inputLabels_[input - 1] = clean;
-    ++inputLabelsRevision_;
-    emit inputLabelsChanged();
-    emit audioSettingsChanged();  // the Input menus list the labels
+    const QString key = QStringLiteral("Input %1").arg(input);
+    const QVariantMap now = ioLabel(key);
+    setIoLabel(key, !label.trimmed().isEmpty(), label, now.value("shortName").toString());
 }
 
 void ProjectController::loadIoSettings(QSettings& s) {

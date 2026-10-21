@@ -331,6 +331,8 @@ public:
     QString audioInput() const { return audioInput_; }
     int audioBufferSize() const { return audioBuffer_; }
     int inputChannels() const;
+    Q_PROPERTY(int outputChannels READ outputChannels NOTIFY audioSettingsChanged)  // of the open device
+    int outputChannels() const;
     double deviceRate() const;
     // Preferences > Audio: the devices of the system and what the output offers: {outputs, inputs, rates, buffers, currentOutput, currentInput, ...}
     Q_INVOKABLE QVariantMap audioDevices(const QString& output, const QString& input) const;
@@ -753,6 +755,11 @@ public:
     // Track > Create Track Stack: a new aux track that sums the selected tracks (their output goes to it), one undo step
     Q_INVOKABLE void createSummingStack(const QString& name = QString());
     // Mix > I/O Labels: your own names for the inputs of the interface ("Vocal mic" instead of "Input 3")
+    // I/O Labels window: one row per channel key ("Input 1", "Output 1-2", "Bus 3"), saved with the project as the setting "io.<key>"
+    Q_INVOKABLE QVariantMap ioLabel(const QString& key) const;  // {user: bool, longName, shortName, driver}
+    Q_INVOKABLE void setIoLabel(const QString& key, bool user, const QString& longName, const QString& shortName);
+    Q_INVOKABLE void resetIoLabels();
+    Q_INVOKABLE QString ioShownName(const QString& key, const QString& fallback) const;  // the long name when the User name is on and set
     Q_INVOKABLE QString inputLabel(int input) const;                 // input 1..; the name, or "Input n"
     Q_INVOKABLE void setInputLabel(int input, const QString& label);
     Q_PROPERTY(int inputLabelsRevision READ inputLabelsRevision NOTIFY inputLabelsChanged)

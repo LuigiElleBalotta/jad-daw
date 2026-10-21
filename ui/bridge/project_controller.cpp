@@ -389,6 +389,9 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     masterGain_ = s.masterVolumeDb;
     panLaw_ = s.panLaw;
     projectSettings_ = s.settings;
+    ++inputLabelsRevision_;
+    emit inputLabelsChanged();
+    emit audioSettingsChanged();  // the Input and Output menus list the labels
     applyKlopfgeistSettings();
     for (const TrackRow& t : s.tracks)
         if (t.master) masterId_ = t.id;
@@ -2152,7 +2155,7 @@ QVariantList ProjectController::targetsFor(const QString& trackId) const {
         const int pairs = std::min((device_ ? device_->outputChannels() : 2) - 2, 2 * lpc::kMaxOutputPairs) / 2;
         for (int k = 1; k <= pairs; ++k) {
             const bool exists = std::any_of(allRows_.begin(), allRows_.end(), [k](const TrackRow& t) { return t.kind == "output" && t.outputPair == k; });
-            if (!exists) out.append(QVariantMap{{"id", QStringLiteral("newOutput:%1").arg(k)}, {"name", outputPairName(k)}});
+            if (!exists) out.append(QVariantMap{{"id", QStringLiteral("newOutput:%1").arg(k)}, {"name", ioShownName(QStringLiteral("Output %1-%2").arg(2 * k + 1).arg(2 * k + 2), outputPairName(k))}});
         }
     }
     return out;

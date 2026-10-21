@@ -65,7 +65,7 @@ Column {
                     anchors.centerIn: parent
                     kind: root.track.kind ?? "audio"
                     icon: root.track.icon ?? ""
-                    tint: Theme["track" + root.colorName.charAt(0).toUpperCase() + root.colorName.slice(1) + "Solid"]
+                    tint: TrackColors.solid(root.colorName)
                 }
             }
         }
@@ -84,7 +84,7 @@ Column {
                         width: 11
                         height: 11
                         radius: 3
-                        color: Theme["track" + modelData.charAt(0).toUpperCase() + modelData.slice(1) + "Solid"]
+                        color: TrackColors.solid(modelData)
                         border.width: root.colorName === modelData ? 2 : 0
                         border.color: Theme.textPrimary
                         onClicked: root.project.setTrackColor(root.track.trackId, modelData)

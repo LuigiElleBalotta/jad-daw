@@ -43,7 +43,6 @@ Panel {
     readonly property bool slotsVisible: showSlots && !master
     property bool volumeOnly: false  // the Master strip: only the fader, the meter and the name (it scales every output)
     readonly property bool fxVisible: showSlots  // the audio effects are on the master strip too (Mastering Assistant lives there)
-    readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
 
     readonly property alias fader: fader
     readonly property alias panKnob: panKnob

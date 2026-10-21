@@ -35,6 +35,22 @@ TEST_CASE("set_track_props: renames and recolours, undo restores", "[commands][p
     REQUIRE(p == before);
 }
 
+TEST_CASE("set_track_props: a swatch of the Colors window (#rrggbb) is a colour, a malformed one is not", "[commands][props]") {
+    Project p{Uuid::random(gRng)};
+    const Track a = track(TrackKind::Audio, "Audio");
+    REQUIRE(makeAddTrack(a)->apply(p).ok());
+    TrackPatch patch;
+    patch.color = "#c93b10";
+    REQUIRE(makeSetTrackProps(a.id, patch)->apply(p).ok());
+    REQUIRE(p.findTrack(a.id)->color == "#c93b10");
+    for (const char* bad : {"#c93b1", "#c93b10f", "c93b100", "#c93b1g"}) {
+        patch.color = bad;
+        REQUIRE_FALSE(makeSetTrackProps(a.id, patch)->apply(p).ok());
+    }
+    patch.color = "";  // the arrow of the Colors window: back to the default colour
+    REQUIRE(makeSetTrackProps(a.id, patch)->apply(p).ok());
+}
+
 TEST_CASE("set_track_props: a patch changes only the fields it carries", "[commands][props]") {
     Project p{Uuid::random(gRng)};
     Track a = track(TrackKind::Audio, "Audio");

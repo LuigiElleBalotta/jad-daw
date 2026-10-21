@@ -88,7 +88,6 @@ Item {
                                       { id: "tempophone", label: qsTr("Tempophone") }, { id: "speed", label: qsTr("Speed") },
                                       { id: "automatic", label: qsTr("Automatic") }, { id: "pitch", label: qsTr("Flex Pitch") }]
 
-    readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
     readonly property string kindLabel: (({ "audio": "Au", "instrument": "Inst", "midi": "MIDI", "bus": "Bus", "aux": "Aux" })[kind] ?? kind) + (frozen ? " ❄" : "")  // a snowflake: frozen
 
     function modeFor(modifiers) {
@@ -121,7 +120,7 @@ Item {
         width: 4
         height: parent.height - 16
         radius: 2
-        color: Theme["track" + root.capitalColor + "Solid"]
+        color: TrackColors.solid(root.trackColor)
     }
 
     Item {
@@ -153,7 +152,7 @@ Item {
             height: 20
             anchors.verticalCenter: parent.verticalCenter
             Image { id: iconImage; anchors.fill: parent; source: root.iconSource; sourceSize: Qt.size(20, 20); visible: false }
-            MultiEffect { anchors.fill: iconImage; source: iconImage; brightness: 1.0; colorization: 1.0; colorizationColor: Theme["track" + root.capitalColor + "Solid"] }
+            MultiEffect { anchors.fill: iconImage; source: iconImage; brightness: 1.0; colorization: 1.0; colorizationColor: TrackColors.solid(root.trackColor) }
         }
         Text {
             id: kindText

@@ -55,7 +55,7 @@ Rectangle {
                 y: Theme.spacing[3]
                 size: 36
                 kind: root.project.inspector.track.kind ?? "audio"
-                tint: Theme["track" + root.colorName.charAt(0).toUpperCase() + root.colorName.slice(1) + "Solid"]
+                tint: TrackColors.solid(root.colorName)
             }
             Text {
                 anchors.bottom: parent.bottom

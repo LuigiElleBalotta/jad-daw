@@ -98,9 +98,8 @@ Item {
         resized(regionId, s, l)
     }
 
-    readonly property string capitalColor: trackColor.charAt(0).toUpperCase() + trackColor.slice(1)
-    readonly property color solid: Theme["track" + capitalColor + "Solid"]
-    readonly property color fill: Theme["track" + capitalColor + "Fill"]
+    readonly property color solid: TrackColors.solid(trackColor)
+    readonly property color fill: TrackColors.fill(trackColor)
     property var peaks: []
     readonly property int buckets: Math.min(4096, Math.ceil(width / 2 / 32) * 32)
 

@@ -149,6 +149,11 @@ MaybeError checkMidiShaping(const MidiShaping& m) {
 bool isKnownTrackColor(const std::string& color) {
     static const char* const names[] = {"purple", "indigo", "blue", "teal", "green", "yellow", "orange", "red", "pink", "magenta"};
     if (color.empty()) return true;
+    if (color.size() == 7 && color[0] == '#') {  // a swatch of the Colors window: #rrggbb
+        for (std::size_t i = 1; i < 7; ++i)
+            if (!std::isxdigit(static_cast<unsigned char>(color[i]))) return false;
+        return true;
+    }
     for (const char* n : names)
         if (color == n) return true;
     return false;

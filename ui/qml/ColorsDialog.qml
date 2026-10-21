@@ -3,50 +3,68 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Jad
 
-// Track > Assign Track Color: the colour of every selected track in one step.
+// View > Colors / Track > Assign Track Color: Logic's palette window, 24 hues across and 4 shades down. The arrow at the left puts the default colour back.
 Dialog {
     id: root
     required property ProjectController project
-    readonly property var palette: ["purple", "indigo", "blue", "teal", "green", "yellow", "orange", "red", "pink", "magenta"]
-    modal: true
+    readonly property string current: project.inspector.track.color ?? ""
+    readonly property bool hasSelection: project.selectedTrackIds.length > 0
+    modal: false
     anchors.centerIn: parent
-    width: 360
+    padding: 12
     background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
-    header: Item { height: 0 }
-    contentItem: ColumnLayout {
-        spacing: Theme.spacing[3]
-        Text { text: qsTr("Colors"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeTitleSize; font.weight: Theme.fontTypeTitleWeight }
+    header: Item {
+        implicitHeight: 28
         Text {
-            text: root.project.selectedTrackIds.length === 0 ? qsTr("Select the tracks to colour first.") : qsTr("%n track(s) selected", "", root.project.selectedTrackIds.length)
-            color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize
+            anchors.centerIn: parent
+            text: qsTr("Color")
+            color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; font.weight: 600
         }
-        Flow {
-            Layout.fillWidth: true
-            spacing: Theme.spacing[2]
+        MouseArea { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; width: 16; height: 16; onClicked: root.close()
+            Text { anchors.centerIn: parent; text: "×"; color: Theme.textSecondary; font.pixelSize: 16 } }
+    }
+    contentItem: RowLayout {
+        spacing: 10
+        Rectangle {
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: 4
+            width: 24; height: 20; radius: 4
+            color: resetArea.containsMouse ? Theme.surfaceRaised : "transparent"
+            border.color: Theme.borderSubtle
+            objectName: "colorReset"
+            opacity: root.hasSelection ? 1 : 0.4
+            Text { anchors.centerIn: parent; text: "↺"; color: Theme.textPrimary; font.pixelSize: 13 }
+            MouseArea {
+                id: resetArea
+                anchors.fill: parent
+                hoverEnabled: true
+                enabled: root.hasSelection
+                onClicked: root.project.setSelectedTracksColor("")
+            }
+        }
+        Grid {
+            columns: 24
+            spacing: 3
             Repeater {
-                model: root.palette
+                model: 96
                 delegate: Rectangle {
                     id: chip
-                    required property string modelData
-                    width: 28; height: 28; radius: 4
-                    color: Theme["track" + modelData.charAt(0).toUpperCase() + modelData.slice(1) + "Solid"]
-                    border.width: area.containsMouse ? 2 : 0
+                    required property int index
+                    readonly property string swatch: TrackColors.palette[Math.floor(index / 24)][index % 24]
+                    width: 24; height: 18; radius: 3
+                    color: swatch
+                    border.width: root.current === swatch ? 2 : (area.containsMouse ? 1 : 0)
                     border.color: Theme.textPrimary
-                    objectName: "colorChip_" + modelData
+                    objectName: "colorChip_" + index
                     MouseArea {
                         id: area
                         anchors.fill: parent
                         hoverEnabled: true
-                        enabled: root.project.selectedTrackIds.length > 0
-                        onClicked: root.project.setSelectedTracksColor(chip.modelData)
+                        enabled: root.hasSelection
+                        onClicked: root.project.setSelectedTracksColor(chip.swatch)
                     }
                 }
             }
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            Item { Layout.fillWidth: true }
-            IconButton { implicitHeight: 26; label: qsTr("Close"); onClicked: root.close() }
         }
     }
 }

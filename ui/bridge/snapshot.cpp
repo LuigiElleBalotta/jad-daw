@@ -31,6 +31,7 @@ QString kindName(lpc::TrackKind k) {
 }
 
 QString colorFor(const std::string& requested, int index) {
+    if (requested.size() == 7 && requested[0] == '#') return QString::fromStdString(requested);  // a swatch of the Colors window
     for (const char* c : kColors)
         if (requested == c) return c;
     return kColors[index % 10];

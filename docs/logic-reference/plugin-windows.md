@@ -349,3 +349,44 @@ Both opened by the owner. ChromaVerb extended 12 pt beyond the right screen edge
 `osascript` (`set position of window`) before capturing; the Space Designer window was raised by clicking its title bar so
 ChromaVerb's overlapping 11 pt did not cover its right edge, and `Compare` was toggled to recapture the factory-state
 (default) shot after the moved one (Compare switches between the edited and the stored settings).
+
+## Delay Designer
+
+`plugin-delay-designer-default.png` / `-moved.png`. 737x510 pt, `View: 100%`. The one **old-style skeuomorphic** window of the set:
+light-gray brushed-metal chassis with a dark-navy LCD-like graph in the middle (it is the same art style as Logic's classic
+Space Designer / EVOC generation, a bitmap skin rather than the flat vector controls of the others). The header is the usual
+dark one.
+
+**1. Layout.** Top header (power, preset, Compare/Copy/Paste/Undo/Redo, View, link). The metal body: far left a narrow panel
+`Sync` (round LED toggle), `Grid` (`1/16`) and `Swing` (`50%`) fields, below it two stacked buttons `Start` and `Last Tap`;
+center the **tap display** (blue gradient, ~510 pt wide) with a row of 5 parameter tabs along its top edge
+(`Cutoff` | `Reso` | `Transp` | `Pan` | `Level`) and an `Autozoom` button at its top-right, a time axis `0ms … 1286ms` at the
+bottom and a `4/4` marker bottom-left; far right a `Feedback` block (button, `Tap A` selector, a round knob, `-6.0dB` field) and
+a `Mix` block with two vertical sliders `dry` / `wet`. Under the display a **curved lower bar** holds the per-tap editor
+strip: left `filter` (on/off button, `HP – cutoff – LP` two fields `0Hz` / `22000Hz`, `slope` with `6 | 12 dB` buttons,
+`reso 5%`), center a round **Tap selector** (`Tap`, current tap `1. A`, delay time `1500.0ms`, label `Delay`), right `pitch`
+(on/off, `transp 0`, `0c`), `flip | pan | spread` (two small flip buttons, `center`, `+100%`), `mute | level` (`M` button,
+`0.0dB`). Bar `Delay Designer`.
+
+**2. Controls.** Fields with ▲▼ stepper arrows (`1/16`, `50%`, `0Hz`, `22000Hz`, `5%`, `0`, `0c`, `center`, `+100%`, `0.0dB`)
+are drag/typed number fields in a light-blue rounded box with dark text; on/off buttons are tiny square buttons with an icon
+(a power symbol for filter/pitch, `M` for mute, arrow shapes for flip). The 5 tabs at the top of the display choose **what the
+tap bars in the display represent**: `Level` (default, selected, label `mute` shown at the top-left of the display), `Pan`
+(`flip`, with `L`/`R` markers appearing on the vertical axis), `Cutoff`, `Reso`, `Transp`. Defaults: Feedback `-6.0 dB`
+(`Tap A`), Mix full (dry and wet thumbs both near the top), Grid `1/16`, Swing `50%`. Moved shot: Feedback `0.0 dB` (knob dragged
+up), `Sync` LED turned **off** (grey instead of red, `Grid`/`Swing` fields dim at the same time — they only apply while Sync is
+on), `Pan` tab selected (tab fill lightens, axis labels `L`/`R`, the top-left label changes `mute` → `flip`).
+
+**3. Displays.** The tap display is empty in the default (no taps yet): a dark-to-light blue vertical gradient, a thin
+rectangular band across the top (the tap-position strip, a darker rectangle at about 600-900 ms), faint horizontal grid lines. Taps
+would be drawn as vertical bars growing from the baseline; their height encodes the parameter of the active tab. Not
+tested: adding taps (clicking in the display), `Start`/`Last Tap`, the filter/pitch strips with a selected tap, `Autozoom`.
+
+**4-5.** Fonts here are small, wide-set pixel-ish labels in the metal panel (`Sync`, `Grid`, `Swing`, `Feedback`, `Mix`...) — the
+only window in this set where the label typeface is not the system sans-serif. After any change `Compare` lights blue as
+elsewhere. The two `Mix` sliders show a fine tick scale beside them (about 20 ticks).
+
+### Source (Delay Designer)
+Opened by the owner (`Delay > Delay Designer`). The first capture attempt grabbed the wrong region because the window had not
+been drawn yet; it was retaken after raising the transport state. A stray region `Untitled 13_1#01` appeared on `Audio 1`
+(from earlier playback with the project's record button lit, in the disposable `Untitled 13.logicx`); nothing was saved.

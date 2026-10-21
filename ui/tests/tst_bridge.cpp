@@ -1261,7 +1261,7 @@ private slots:
         const QVariantList curve = c.eqCurve(flat, 16, 20, 20000);
         QCOMPARE(curve.size(), 16);
         QVERIFY(std::abs(curve.first().toDouble()) < 0.01);                  // a flat EQ
-        QVariantMap boost{{"m2Freq", 1000.0}, {"m2Gain", 12.0}};
+        QVariantMap boost{{"p3Freq", 1000.0}, {"p3Gain", 12.0}};
         double peak = 0;
         for (const QVariant& v : c.eqCurve(boost, 64, 20, 20000)) peak = std::max(peak, v.toDouble());
         QVERIFY(peak > 11.0);

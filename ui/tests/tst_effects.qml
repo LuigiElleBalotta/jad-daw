@@ -36,9 +36,10 @@ TestCase {
         c.openEffectEditor(id, 0)
         tryVerify(function () { return w.spec !== null })
         compare(w.spec.name, "Channel EQ")
-        compare(w.valueOf(w.spec.params[0]), 100)               // the default of the low shelf frequency
-        c.setInsertParam(id, 0, "lowGain", 6)
-        tryVerify(function () { return w.valueOf(w.spec.params[1]) === 6 })
+        const named = (n) => w.spec.params.find(q => q.name === n)
+        compare(w.valueOf(named("lsFreq")), 75)                 // the default of the low shelf frequency
+        c.setInsertParam(id, 0, "lsGain", 6)
+        tryVerify(function () { return w.valueOf(named("lsGain")) === 6 })
         verify(w.curve.length > 10)
         c.closeEffectEditor()
     }

@@ -1144,9 +1144,14 @@ private slots:
         // MIDI, External MIDI: a track whose instrument is the MIDI port sender
         c.createTracks({{"category", "midi"}, {"sub", "external"}, {"name", "Hardware"}});
         QTRY_COMPARE(c.tracks()->rowCount(), before + 1);
-        // Pattern (no Step Sequencer yet) and unknown categories make nothing
-        c.createTracks({{"category", "pattern"}});
-        QCOMPARE(c.tracks()->rowCount(), before + 1);
+        // Pattern: an instrument track with a one-bar pattern region that repeats over four bars, selected for the Step Sequencer
+        const int regions = c.regions()->rowCount();
+        c.createTracks({{"category", "pattern"}, {"sub", "software"}, {"instrument", "builtin.drums"}, {"name", "Beat"}});
+        QTRY_COMPARE(c.tracks()->rowCount(), before + 2);
+        QTRY_COMPARE(c.regions()->rowCount(), regions + 1);
+        // an unknown category makes nothing
+        c.createTracks({{"category", "nonsense"}});
+        QCOMPARE(c.tracks()->rowCount(), before + 2);
     }
     void droppedAudioOutsideAnAudioTrackMakesATrackNamedAfterTheFile() {
         TempDir dir;

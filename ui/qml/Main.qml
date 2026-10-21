@@ -110,7 +110,7 @@ ApplicationWindow {
         onAccepted: controller.exportMidiFile(selectedFile)
     }
 
-    NewTracksDialog { id: newTracksDialog; project: controller }
+    NewTracksDialog { id: newTracksDialog; project: controller; onOpenEditorRequested: { root.showLowerPane("editors"); editorArea.tab = 2 } }
     ConfirmDialog { id: confirm }
     KeyCommandsWindow { id: keyCommands; registry: actionRegistry; visible: false }
     UndoHistoryDialog { id: undoHistoryDialog; project: controller }

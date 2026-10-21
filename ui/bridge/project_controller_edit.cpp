@@ -1529,11 +1529,12 @@ void ProjectController::addTracks(const QString& kind, int count, const QString&
 void ProjectController::createTracks(const QVariantMap& o) {
     if (!host_) return;
     const QString category = o.value("category", "audio").toString(), sub = o.value("sub").toString();
-    const bool audio = category == QLatin1String("audio"), external = category == QLatin1String("midi") && sub == QLatin1String("external");
-    if (!audio && category != QLatin1String("midi")) return;
+    const bool pattern = category == QLatin1String("pattern");
+    const bool audio = category == QLatin1String("audio"), external = (category == QLatin1String("midi") || pattern) && sub == QLatin1String("external");
+    if (!audio && category != QLatin1String("midi") && !pattern) return;
     const int count = std::clamp(o.value("count", 1).toInt(), 1, 64);
     const QString name = o.value("name").toString().trimmed().left(60);
-    const QString base = name.isEmpty() ? (audio ? QStringLiteral("Audio") : (external ? QStringLiteral("External MIDI") : QStringLiteral("Instrument"))) : name;
+    const QString base = name.isEmpty() ? (audio ? QStringLiteral("Audio") : (external ? QStringLiteral("External MIDI") : (pattern ? QStringLiteral("Pattern") : QStringLiteral("Instrument")))) : name;
     const std::string nullId = "00000000-0000-0000-0000-000000000000";
     const std::string output = o.value("output").toString().isEmpty() ? nullId : o.value("output").toString().toStdString();
     const int firstInput = std::clamp(o.value("input", audio && sub == QLatin1String("mic") ? 3 : 1).toInt(), 0, 64);
@@ -1562,6 +1563,17 @@ void ProjectController::createTracks(const QVariantMap& o) {
         commands.push_back({{"type", "add_track"}, {"index", -1},
                             {"track", {{"id", id.toStdString()}, {"kind", audio ? "audio" : "instrument"}, {"name", full.toStdString()}, {"color", ""}, {"strip", strip},
                                        {"regions", nlohmann::json::array()}, {"automation", nlohmann::json::array()}, {"instrument", instrument}}}});
+        if (pattern) {
+            // a Pattern track plays a pattern region: one bar of steps (the Step Sequencer fills it) that repeats over four bars, from the bar of the playhead
+            const double barBeatsNow = barBeats();
+            const std::int64_t barTicks = static_cast<std::int64_t>(std::llround(barBeatsNow * lpc::kPPQ));
+            const std::int64_t start = static_cast<std::int64_t>(std::llround(std::floor(std::max(0.0, positionBeats_) / barBeatsNow) * barBeatsNow * lpc::kPPQ));
+            const QString regionId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            commands.push_back({{"type", "add_region"}, {"trackId", id.toStdString()}, {"index", -1},
+                                {"region", {{"id", regionId.toStdString()}, {"timeBase", "musical"}, {"start", start}, {"length", barTicks * 4}, {"loopLength", barTicks},
+                                            {"mediaId", nullId}, {"sourceOffsetFrames", 0}, {"gainDb", 0}, {"notes", nlohmann::json::array()}, {"name", "Pattern"}}}});
+            pendingRegionSelection_ = QStringList{regionId};
+        }
         if (audio) {
             if (o.value("monitoring").toBool()) trackToggles_[QStringLiteral("track.inputMonitor")].insert(id);
             if (o.value("recordEnable").toBool()) trackToggles_[QStringLiteral("track.recordArm")].insert(id);

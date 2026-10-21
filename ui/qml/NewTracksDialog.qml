@@ -17,10 +17,12 @@ Dialog {
     property int count: 1
     // Details
     property string instrument: "builtin.sine"
+    signal openEditorRequested()
     property int audioInput: 3            // 0 = stereo 1+2, n = input n
     property bool ascending: false
     property bool loadDefaultPatch: false
     property bool openLibrary: false
+    property bool openEditor: true
     property bool inputMonitoring: true
     property bool recordEnable: true
     property string output: ""            // "" = Stereo Output
@@ -61,6 +63,8 @@ Dialog {
             recordEnable = subId === "mic"
         } else if (cardId === "session") {
             style = styles[subId][0]
+        } else if (cardId === "pattern" && instrument === "builtin.sine") {
+            instrument = "builtin.drums"          // a pattern plays drums unless another instrument is chosen
         }
     }
     function create() {
@@ -69,10 +73,11 @@ Dialog {
             if (openLibrary) project.libraryVisible = true
         } else {
             project.createTracks({
-                category: category === "audio" ? "audio" : "midi", sub: sub, count: count, instrument: instrument, input: audioInput, ascending: ascending,
+                category: category, sub: sub, count: count, instrument: instrument, input: audioInput, ascending: ascending,
                 output: output, monitoring: inputMonitoring, recordEnable: recordEnable, loadDefaultPatch: loadDefaultPatch, openLibrary: openLibrary, midiDevice: midiDevice
             })
         }
+        if (category === "pattern" && openEditor) openEditorRequested()
         close()
     }
     onOpened: { count = 1; countField.text = "1"; choose(category, subs[category]) }
@@ -171,12 +176,7 @@ Dialog {
                     Check { visible: root.isAudio; label: qsTr("Load Default Patch"); on: root.loadDefaultPatch; onFlipped: root.loadDefaultPatch = !root.loadDefaultPatch }
                     Check { visible: !root.isExternal && !root.isAudio && !root.isSession; label: qsTr("Load Default Patch"); on: root.loadDefaultPatch; onFlipped: root.loadDefaultPatch = !root.loadDefaultPatch }
                     Check { visible: !root.isExternal; label: qsTr("Open Library"); on: root.openLibrary; onFlipped: root.openLibrary = !root.openLibrary }
-                }
-                Caption {
-                    visible: root.category === "pattern"
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    text: qsTr("Pattern tracks play a Step Sequencer region, which jad-daw does not have yet.")
+                    Check { visible: root.category === "pattern"; label: qsTr("Open Editor"); on: root.openEditor; onFlipped: root.openEditor = !root.openEditor }
                 }
                 ColumnLayout {  // right: where it goes
                     Layout.fillWidth: true
@@ -221,7 +221,7 @@ Dialog {
             }
             Item { Layout.fillWidth: true }
             IconButton { implicitHeight: 26; label: qsTr("Cancel"); onClicked: root.close() }
-            IconButton { objectName: "newTrackCreate"; implicitHeight: 26; label: qsTr("Create"); active: true; fillActive: true; fillText: Theme.textPrimary; enabled: root.category !== "pattern"; onClicked: root.create() }
+            IconButton { objectName: "newTrackCreate"; implicitHeight: 26; label: qsTr("Create"); active: true; fillActive: true; fillText: Theme.textPrimary; onClicked: root.create() }
         }
     }
 }

@@ -50,7 +50,10 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             return makeSetStrip(nonMaster[pick(nonMaster.size())]->id, patch);
         }
         case 3:
-            return makeSetTempo(static_cast<Ticks>(pick(8)) * kPPQ * 4, 60.0 + static_cast<double>(pick(120)));
+        {
+            const Ticks at = static_cast<Ticks>(pick(8)) * kPPQ * 4;
+            return makeSetTempo(at, 60.0 + static_cast<double>(pick(120)));
+        }
         case 4:
             return makeRemoveTempo(static_cast<Ticks>(pick(8)) * kPPQ * 4);
         case 5:
@@ -90,7 +93,8 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             if (withRegions.empty()) return nullptr;
             {
                 const Track& t = *withRegions[pick(withRegions.size())];
-                return makeMoveRegion(t.regions[pick(t.regions.size())].id, static_cast<Ticks>(pick(32)) * kPPQ);
+                const Uuid id = t.regions[pick(t.regions.size())].id;
+                return makeMoveRegion(id, static_cast<Ticks>(pick(32)) * kPPQ);
             }
         case 10: {  // add send (cycles and self-sends are rejected naturally)
             if (senders.empty() || busLike.empty()) return nullptr;
@@ -122,22 +126,26 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             if (withRegions.empty()) return nullptr;
             {
                 const Track& t = *withRegions[pick(withRegions.size())];
-                return makeResizeRegion(t.regions[pick(t.regions.size())].id, static_cast<Ticks>(pick(32)) * kPPQ / 2,
-                                        static_cast<Ticks>(1 + pick(8)) * kPPQ);
+                const Uuid id = t.regions[pick(t.regions.size())].id;
+                const Ticks start = static_cast<Ticks>(pick(32)) * kPPQ / 2;
+                return makeResizeRegion(id, start, static_cast<Ticks>(1 + pick(8)) * kPPQ);
             }
         case 15:  // split (often inside the region, sometimes not)
             if (withRegions.empty()) return nullptr;
             {
                 const Track& t = *withRegions[pick(withRegions.size())];
                 const Region& r = t.regions[pick(t.regions.size())];
-                return makeSplitRegion(r.id, r.start + static_cast<Ticks>(1 + pick(7)) * kPPQ / 2, Uuid::random(rng));
+                const Ticks at = r.start + static_cast<Ticks>(1 + pick(7)) * kPPQ / 2;
+                return makeSplitRegion(r.id, at, Uuid::random(rng));
             }
         case 16:  // join two regions of one track
             if (withRegions.empty()) return nullptr;
             {
                 const Track& t = *withRegions[pick(withRegions.size())];
                 if (t.regions.size() < 2) return nullptr;
-                return makeJoinRegions({t.regions[pick(t.regions.size())].id, t.regions[pick(t.regions.size())].id});
+                const Uuid first = t.regions[pick(t.regions.size())].id;
+                const Uuid second = t.regions[pick(t.regions.size())].id;
+                return makeJoinRegions({first, second});
             }
         case 17: {  // rename / recolour
             if (nonMaster.empty()) return nullptr;
@@ -148,17 +156,25 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             return makeSetTrackProps(nonMaster[pick(nonMaster.size())]->id, patch);
         }
         case 18:
-            return makeSetSignature(static_cast<Ticks>(pick(6)) * kPPQ * 4, static_cast<int>(1 + pick(8)), chance(90) ? 4 : 8);
+        {
+            const Ticks at = static_cast<Ticks>(pick(6)) * kPPQ * 4;
+            const int beats = static_cast<int>(1 + pick(8));
+            return makeSetSignature(at, beats, chance(90) ? 4 : 8);
+        }
         case 19:
             return makeRemoveSignature(static_cast<Ticks>(pick(6)) * kPPQ * 4);
         case 20:  // patch id (sometimes invalid)
             if (nonMaster.empty()) return nullptr;
-            return makeSetPatchId(nonMaster[pick(nonMaster.size())]->id,
-                                  chance(80) ? "patch." + std::to_string(pick(50)) : (chance(50) ? std::string() : std::string("bad id")));
+        {
+            const Uuid id = nonMaster[pick(nonMaster.size())]->id;
+            return makeSetPatchId(id, chance(80) ? "patch." + std::to_string(pick(50)) : (chance(50) ? std::string() : std::string("bad id")));
+        }
         case 21:  // instrument on any track (rejected unless it is an instrument track)
             if (nonMaster.empty()) return nullptr;
-            return makeSetInstrument(nonMaster[pick(nonMaster.size())]->id,
-                                     ProcessorRef{chance(90) ? kProcSine : "vendor.unknown", {}, chance(50) ? "" : "s"});
+        {
+            const Uuid id = nonMaster[pick(nonMaster.size())]->id;
+            return makeSetInstrument(id, ProcessorRef{chance(90) ? kProcSine : "vendor.unknown", {}, chance(50) ? "" : "s"});
+        }
         case 22: {  // output: a bus, master, or something that cannot be one (cycles and self are rejected naturally)
             if (nonMaster.empty()) return nullptr;
             const Uuid to = chance(30) || busLike.empty() ? Uuid{} : busLike[pick(busLike.size())]->id;
@@ -177,12 +193,14 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
             if (withRegions.empty()) return nullptr;
             {
                 const Track& t = *withRegions[pick(withRegions.size())];
-                return makeSetRegionGain(t.regions[pick(t.regions.size())].id, static_cast<float>(static_cast<int>(pick(40)) - 30));
+                const Uuid id = t.regions[pick(t.regions.size())].id;
+                return makeSetRegionGain(id, static_cast<float>(static_cast<int>(pick(40)) - 30));
             }
         case 25: {  // add insert (sometimes with a bad parameter)
             ProcessorRef ins{kProcGain, {}, ""};
             if (chance(80)) ins.params["gainDb"] = static_cast<double>(pick(40)) - 20.0;
-            return makeAddInsert(p.tracks[pick(p.tracks.size())].id, std::move(ins), chance(30) ? static_cast<int>(pick(3)) : -1);
+            const Uuid id = p.tracks[pick(p.tracks.size())].id;
+            return makeAddInsert(id, std::move(ins), chance(30) ? static_cast<int>(pick(3)) : -1);
         }
         case 26: {  // remove insert
             const Track& t = p.tracks[pick(p.tracks.size())];
@@ -190,17 +208,20 @@ inline CommandPtr randomCommand(const Project& p, std::mt19937_64& rng) {
         }
         case 27: {  // insert parameter (sometimes removed, sometimes out of range)
             const Track& t = p.tracks[pick(p.tracks.size())];
-            return makeSetInsertParam(t.id, static_cast<int>(pick(3)), chance(90) ? "gainDb" : "cutoff",
-                                      chance(20) ? std::optional<double>() : std::optional<double>(static_cast<double>(pick(40)) - 20.0));
+            const int index = static_cast<int>(pick(3));
+            const char* name = chance(90) ? "gainDb" : "cutoff";
+            return makeSetInsertParam(t.id, index, name, chance(20) ? std::optional<double>() : std::optional<double>(static_cast<double>(pick(40)) - 20.0));
         }
         case 28: {  // move an insert (inside a track or to another one; sometimes out of range)
             const Track& t = p.tracks[pick(p.tracks.size())];
             const Uuid to = chance(50) ? p.tracks[pick(p.tracks.size())].id : Uuid{};
-            return makeMoveInsert(t.id, static_cast<int>(pick(4)), static_cast<int>(pick(4)), to);
+            const int from = static_cast<int>(pick(4));
+            return makeMoveInsert(t.id, from, static_cast<int>(pick(4)), to);
         }
         case 29: {  // insert bypass (sometimes out of range)
             const Track& t = p.tracks[pick(p.tracks.size())];
-            return makeSetInsertBypass(t.id, static_cast<int>(pick(3)), chance(50));
+            const int index = static_cast<int>(pick(3));
+            return makeSetInsertBypass(t.id, index, chance(50));
         }
         default:
             return nullptr;

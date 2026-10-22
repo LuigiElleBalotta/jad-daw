@@ -15,6 +15,10 @@ on:
       - "design/**"
       - "CMakeLists.txt"
       - ".github/workflows/ci.yml"
+# "--parallel" without a number lets make start every compile at once: on a macOS runner (3-4 cores, 7 GB) that swapped for hours and the UI job never ended
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
+
 jobs:
   build:
     strategy:
@@ -26,6 +30,7 @@ jobs:
           - os: macos-latest   # Apple Silicon: also covers weakly ordered memory and CoreAudio via JUCE
             configure: -DCMAKE_BUILD_TYPE=Release
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -44,6 +49,7 @@ jobs:
           - os: macos-15   # Qt 6.8 links the AGL framework, which the macOS 26 SDK (macos-latest) no longer has
             configure: -DCMAKE_BUILD_TYPE=Release
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4

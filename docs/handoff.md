@@ -21,7 +21,7 @@ Everything is built and tested: core (`build-core`) 434 test cases, 1 skipped; U
 2. (done) Pattern tracks: the Pattern card of Create New Track makes a drum instrument track and opens the Step Sequencer.
 3. E1 sub-item: Record Automation with Audio Regions (Trim and Relative are done).
 4. Engine behaviour still only saved for: region automation priority and preset value for regions (there is no region automation in the model: it would need lanes per region, edits on split/trim/glue and an editing view), loadOnlyNeeded, resetRecordEnable, midiSendAfterLoad, assets copy flags (the project always keeps its own copy of the audio), trim start of new regions, allow tempo change recording. Done: balancer pan law, colorize takes, MIDI thru, erase duplicates, data reduction, metronome options and MIDI click, CAF bounce (`writeCaf`).
-5. F7 done (ten glyphs wired, see roadmap). F8 macOS CI ctest 364: a likely cause fixed, CI not re-run.
+5. F7 done (ten glyphs wired, see roadmap). F8 macOS CI: both causes found and fixed (see roadmap), waiting for a run after the push.
 6. The replacement of the -12/+12 dB guess in `MasteringProcessor`: the Mac could not say what level the Analog Model networks expect (see mac-pass-3.md 2b/2e).
 
 ## How to build and test

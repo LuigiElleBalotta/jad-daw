@@ -349,6 +349,7 @@ public:
         Track* dst = p.findTrack(toTrackId_);
         if (!dst) return fail("not_found", "no such target track");
         if (dst->kind == TrackKind::Master) return fail("bad_target", "the master track cannot hold inserts");
+        if (src->kind == TrackKind::Master) return fail("bad_target", "an insert of the master stays on it");  // else the undo (back to the master) would be refused
         auto& into = dst->strip.inserts;
         if (to_ < 0 || to_ > static_cast<int>(into.size())) return fail("bad_index", "insert index out of range");
         ProcessorRef moved = std::move(from[static_cast<std::size_t>(from_)]);

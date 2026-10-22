@@ -6,8 +6,9 @@
 
 using namespace lpc;
 
-TEST_CASE("undo: random command sequences undo and redo exactly", "[undo][property]") {
-    for (std::uint64_t seed = 1; seed <= 25; ++seed) {
+namespace {
+void checkSeeds(std::uint64_t first, std::uint64_t last) {
+    for (std::uint64_t seed = first; seed <= last; ++seed) {
         CAPTURE(seed);
         std::mt19937_64 rng(seed);
         Project p(Uuid::random(rng));
@@ -36,7 +37,9 @@ TEST_CASE("undo: random command sequences undo and redo exactly", "[undo][proper
         // undo step by step: every intermediate state matches the recorded snapshot
         for (std::size_t i = snapshots.size() - 1; i > 0; --i) {
             CAPTURE(i, log[i - 1].dump());  // the command being undone
-            REQUIRE_FALSE(stack.undo(p).has_value());
+            const auto undone = stack.undo(p);
+            CAPTURE(undone ? undone->code : std::string(), undone ? undone->message : std::string());
+            REQUIRE_FALSE(undone.has_value());
             CAPTURE(toJson(p).dump(), toJson(snapshots[i - 1]).dump());
             REQUIRE(p == snapshots[i - 1]);
         }
@@ -54,3 +57,9 @@ TEST_CASE("undo: random command sequences undo and redo exactly", "[undo][proper
         REQUIRE(replay == finalState);
     }
 }
+}  // namespace
+
+TEST_CASE("undo: random command sequences undo and redo exactly", "[undo][property]") { checkSeeds(1, 25); }
+
+// many more seeds, to hunt for a command whose undo does not restore the project (the macOS build failed on its own random sequence): run it by name
+TEST_CASE("undo: random command sequences, many seeds", "[.undo-long]") { checkSeeds(26, 3000); }

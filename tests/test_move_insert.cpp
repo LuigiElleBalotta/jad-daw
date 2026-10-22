@@ -133,3 +133,13 @@ TEST_CASE("move_insert: JSON round trip with and without toTrackId", "[commands]
     REQUIRE(commandFromJson(cross)->apply(f.p).ok());
     REQUIRE(f.gains(f.b) == std::vector<double>{10, 1});
 }
+
+TEST_CASE("move_insert: an insert of the master stays on it", "[commands][insert][move]") {
+    Fixture f;
+    f.p.findTrack(f.p.master()->id)->strip.inserts.push_back(ProcessorRef{"builtin.gain", {}, "", "", false});  // the Mastering Assistant lives there
+    const Project before = f.p;
+    auto r = makeMoveInsert(f.p.master()->id, 0, 0, f.a)->apply(f.p);  // else the undo, back to the master, would be refused
+    REQUIRE_FALSE(r.ok());
+    REQUIRE(r.error->code == "bad_target");
+    REQUIRE(f.p == before);
+}

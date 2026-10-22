@@ -1,6 +1,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <map>
+#include <random>
 #include <vector>
 #include "lpc/audio/effects.h"
 #include "lpc/graph_builder.h"
@@ -55,6 +57,45 @@ TEST_CASE("effects: every spec has a default inside its range and the factory bu
         if (s.id != kProcGain) REQUIRE(makeBuiltinEffect(ref(s.id.c_str()), kSr) != nullptr);
     }
     REQUIRE_FALSE(isKnownEffect("builtin.nope"));
+}
+
+TEST_CASE("effects: every built-in effect stays finite and bounded for random parameters, at any block size", "[effects][fuzz]") {
+    std::mt19937_64 rng(77);
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+    for (const EffectSpec& s : effectSpecs()) {
+        if (s.id == kProcGain) continue;
+        CAPTURE(s.id);
+        for (int round = 0; round < 12; ++round) {
+            std::map<std::string, double> params;
+            for (const EffectParam& p : s.params) {
+                const double u = unit(rng);
+                // every few rounds an extreme of the range, which is where filters and followers go wrong
+                const double pick = round % 4 == 0 ? (u < 0.5 ? 0.0 : 1.0) : u;
+                params[p.name] = p.logarithmic && p.min > 0 ? p.min * std::pow(p.max / p.min, pick) : p.min + (p.max - p.min) * pick;
+                if (p.max - p.min <= 1.0001 && p.min == 0.0 && p.max == 1.0 && p.name.find("On") == std::string::npos) params[p.name] = pick < 0.5 ? 0.0 : 1.0;
+            }
+            CAPTURE(round);
+            auto fx = makeBuiltinEffect(ref(s.id.c_str(), params), kSr);
+            REQUIRE(fx != nullptr);
+            std::vector<float> l(4800), r(4800);
+            for (std::size_t i = 0; i < l.size(); ++i) {
+                const double t = static_cast<double>(i) / kSr;
+                l[i] = static_cast<float>(0.5 * std::sin(2 * kPi * 220 * t) + 0.3 * (unit(rng) - 0.5));
+                r[i] = static_cast<float>(0.5 * std::sin(2 * kPi * 330 * t) + 0.3 * (unit(rng) - 0.5));
+            }
+            for (int block : {64, 480, 4800}) {
+                std::vector<float> a = l, b = r;
+                for (std::size_t at = 0; at < a.size(); at += static_cast<std::size_t>(block)) fx->process(a.data() + at, b.data() + at, block);
+                for (std::size_t i = 0; i < a.size(); ++i) {
+                    REQUIRE(std::isfinite(a[i]));
+                    REQUIRE(std::isfinite(b[i]));
+                    if (s.id == kProcMatchEq) continue;  // thirty-one bands at +30 dB legitimately add up to an enormous gain
+                    REQUIRE(std::abs(a[i]) < 1000.0f);
+                    REQUIRE(std::abs(b[i]) < 1000.0f);
+                }
+            }
+        }
+    }
 }
 
 TEST_CASE("effects: validation checks every parameter against its spec", "[effects][validation]") {

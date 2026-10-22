@@ -13,6 +13,8 @@ FxShell {
     withSideChain: true
     chassis: "#06101c"
     property string curveName: ""
+    property bool analyzerOn: false
+    onAnalyzerOnChanged: editor.project.setEditorAnalyzer(analyzerOn, false)  // before the insert: what Learn would measure
     readonly property bool busy: editor.project.masteringBusy
     readonly property var curves: editor.project.matchEqCurveNames()
     readonly property bool matched: { editor.insert; editor.pending; let any = false; for (let i = 0; i < 31; ++i) if (Math.abs(val("b" + i)) > 0.01) any = true; return any }
@@ -46,6 +48,41 @@ FxShell {
                 Rectangle { width: graph.width; height: 1; color: "#0f2236" }
                 Text { x: -30; y: -height / 2; width: 24; horizontalAlignment: Text.AlignRight; text: -index * 5; color: "#6c8196"; font.family: Theme.fontFamily; font.pixelSize: 13 }
                 Text { x: graph.width + 10; y: -height / 2; text: 30 - index * 5; color: "#3b5268"; font.family: Theme.fontFamily; font.pixelSize: 13 }
+            }
+        }
+        // the analyzer: the live spectrum of what reaches the insert (0 dB at the top, -60 dB at the bottom), behind the correction curve
+        Canvas {
+            id: spectrum
+            objectName: "matchSpectrum"
+            anchors.fill: parent
+            visible: root.analyzerOn
+            property var shown: []
+            Timer {
+                interval: 40; repeat: true; running: root.analyzerOn
+                onTriggered: {
+                    const now = root.editor.project.editorSpectrum(120)
+                    if (now.length === 0) return
+                    const prev = spectrum.shown
+                    const out = []
+                    for (let i = 0; i < now.length; ++i) out.push(prev.length === now.length ? Math.max(now[i], prev[i] - 1.5) : now[i])
+                    spectrum.shown = out
+                    spectrum.requestPaint()
+                }
+            }
+            onPaint: {
+                const c = getContext("2d")
+                c.reset()
+                const v = shown
+                if (v.length < 2) return
+                const y = (db) => Math.min(60, Math.max(0, -db)) / 60 * height
+                const x = (i) => i / (v.length - 1) * width
+                c.beginPath(); c.moveTo(x(0), height)
+                for (let i = 0; i < v.length; ++i) c.lineTo(x(i), y(v[i]))
+                c.lineTo(x(v.length - 1), height); c.closePath()
+                c.fillStyle = "rgba(120,190,255,0.20)"; c.fill()
+                c.beginPath()
+                for (let i = 0; i < v.length; ++i) { if (i === 0) c.moveTo(x(i), y(v[i])); else c.lineTo(x(i), y(v[i])) }
+                c.strokeStyle = "rgba(170,215,255,0.6)"; c.lineWidth = 1; c.stroke()
             }
         }
         Canvas {
@@ -147,6 +184,7 @@ FxShell {
         }
     }
 
+    FxPlainKey { objectName: "matchAnalyzer"; x: 760; y: 335; label: qsTr("Analyzer"); sup: "PRE"; on: root.analyzerOn; onToggled: (v) => root.analyzerOn = v }
     // the controls
     FxHSlider {
         x: 37; y: 335; width: 310

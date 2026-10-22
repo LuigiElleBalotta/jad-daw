@@ -118,6 +118,19 @@ TestCase {
         compare(Object.keys(view.item.live).length, 0)   // nothing is heard without the audio thread
     }
 
+    function test_the_match_eq_analyzer_key_shows_the_spectrum() {
+        const o = openInsert("builtin.matcheq")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        const key = findChild(view.item, "matchAnalyzer")
+        const spectrum = findChild(view.item, "matchSpectrum")
+        verify(!spectrum.visible)
+        key.toggled(true)
+        verify(spectrum.visible)
+        key.toggled(false)
+        verify(!spectrum.visible)
+    }
+
     function test_the_compressor_side_chain_panel_sets_the_filter() {
         const o = openInsert("builtin.compressor")
         const view = findChild(o.w.contentItem, "graphicView")

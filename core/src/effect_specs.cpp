@@ -34,6 +34,7 @@ std::vector<EffectParam> channelEqParams() {
         v.push_back(p((k + "Q").c_str(), (l + " Q").c_str(), "", 0.1, b.cut ? 12 : 20, b.q, true));
     }
     v.push_back(p("masterGain", "Master Gain", "dB", -24, 24, 0));
+    v.push_back(p("processing", "Processing (0 stereo, 1 left, 2 right, 3 mid, 4 side)", "", 0, 4, 0));
     return v;
 }
 

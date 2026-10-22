@@ -102,18 +102,26 @@ std::vector<BiquadCoeffs> eqSections(const ProcessorRef& ref, double sr) {
 
 class EqProcessor final : public IProcessor {
 public:
-    EqProcessor(const ProcessorRef& ref, double sr) : out_(static_cast<float>(dbToLin(param(ref, "masterGain")))) {
+    EqProcessor(const ProcessorRef& ref, double sr)
+        : out_(static_cast<float>(dbToLin(param(ref, "masterGain")))), mode_(static_cast<int>(std::lround(param(ref, "processing")))) {
         for (const BiquadCoeffs& c : eqSections(ref, sr)) sections_.push_back(Section{c});
     }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
-            double xl = l[i], xr = r[i];
+            // Processing: the EQ (and the master gain) works on one channel, or on the mid or the side of the pair; what it leaves goes through untouched.
+            // The filters are linear, so the two paths of Section (l and r state) serve the two signals being filtered: a (left or mid) and b (right or side).
+            double a = l[i], b = r[i];
+            if (mode_ >= 3) { const double m = 0.5 * (a + b), s = 0.5 * (a - b); a = m; b = s; }
+            const bool doA = mode_ == 0 || mode_ == 1 || mode_ == 3, doB = mode_ == 0 || mode_ == 2 || mode_ == 4;
+            double ya = a, yb = b;
             for (Section& s : sections_) {
-                xl = s.l(xl);
-                xr = s.r(xr);
+                if (doA) ya = s.l(ya);
+                if (doB) yb = s.r(yb);
             }
-            l[i] = static_cast<float>(xl) * out_;
-            r[i] = static_cast<float>(xr) * out_;
+            if (doA) ya *= out_;
+            if (doB) yb *= out_;
+            if (mode_ >= 3) { l[i] = static_cast<float>(ya + yb); r[i] = static_cast<float>(ya - yb); }
+            else { l[i] = static_cast<float>(ya); r[i] = static_cast<float>(yb); }
         }
     }
     nlohmann::json describe() const override { return {{"id", kProcEq}}; }
@@ -121,6 +129,7 @@ public:
 private:
     std::vector<Section> sections_;
     float out_;
+    int mode_;  // 0 stereo, 1 left, 2 right, 3 mid, 4 side
 };
 
 // ---------------------------------------------------------------- Match EQ (a bank of third-octave peaking filters)

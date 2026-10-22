@@ -81,6 +81,35 @@ TEST_CASE("eq: a flat EQ changes nothing and a band boosts around its frequency 
     REQUIRE(20 * std::log10(peakOf(out, 2000) / 0.1) == Catch::Approx(12.0).margin(0.3));
 }
 
+TEST_CASE("eq: Processing makes the EQ work on one channel, or on the mid or the side, and leaves the rest alone", "[effects][eq]") {
+    // a gain of -6 dB on a band that is flat otherwise: the master gain is the whole effect
+    auto through = [](int mode, double lAmp, double rAmp) {
+        auto eq = makeBuiltinEffect(ref(kProcEq, {{"masterGain", -6}, {"processing", static_cast<double>(mode)}}), kSr);
+        std::vector<float> l = sine(1000, lAmp, 9600), r = sine(1000, rAmp, 9600);
+        eq->process(l.data(), r.data(), 9600);
+        return std::pair{peakOf(l, 2000), peakOf(r, 2000)};
+    };
+    const double half = std::pow(10.0, -6.0 / 20.0);
+    auto st = through(0, 0.5, 0.5);
+    REQUIRE(st.first == Catch::Approx(0.5 * half).margin(0.01));
+    REQUIRE(st.second == Catch::Approx(0.5 * half).margin(0.01));
+    auto left = through(1, 0.5, 0.5);
+    REQUIRE(left.first == Catch::Approx(0.5 * half).margin(0.01));
+    REQUIRE(left.second == Catch::Approx(0.5).margin(0.01));
+    auto right = through(2, 0.5, 0.5);
+    REQUIRE(right.first == Catch::Approx(0.5).margin(0.01));
+    REQUIRE(right.second == Catch::Approx(0.5 * half).margin(0.01));
+    // mid: in-phase content is all mid, so both channels drop; out-of-phase content is all side and stays
+    auto mid = through(3, 0.5, 0.5);
+    REQUIRE(mid.first == Catch::Approx(0.5 * half).margin(0.01));
+    auto side = through(4, 0.5, 0.5);
+    REQUIRE(side.first == Catch::Approx(0.5).margin(0.01));
+    auto sideOnly = through(4, 0.5, -0.5);
+    REQUIRE(sideOnly.first == Catch::Approx(0.5 * half).margin(0.01));
+    auto midKeepsSide = through(3, 0.5, -0.5);
+    REQUIRE(midKeepsSide.first == Catch::Approx(0.5).margin(0.01));
+}
+
 TEST_CASE("eq: the cuts are Butterworth filters of the chosen slope, a band that is off does nothing, the master gain scales everything", "[effects][eq]") {
     ProcessorRef low = ref(kProcEq, {{"lcOn", 1}, {"lcFreq", 1000}, {"lcSlope", 4}});  // 4 x 6 = 24 dB per octave
     REQUIRE(eqResponseDb(low, kSr, 1000) == Catch::Approx(-3.01).margin(0.2));     // the corner of a Butterworth

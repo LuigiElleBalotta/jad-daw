@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import Jad
 
 // Channel EQ of Logic Pro 11.2 as its window looks: the eight filter-type icons above the graph, the graph (log frequency 20 Hz to 20 kHz, the EQ curve in a +15 to
@@ -35,6 +36,7 @@ FxShell {
     readonly property real colW: 115                               // the columns of the bands
     readonly property real colX0: 14
 
+    readonly property var processingNames: [qsTr("Stereo"), qsTr("Left"), qsTr("Right"), qsTr("Mid"), qsTr("Side")]
     function val(name) { return editor.valueOf(editor.param(name)) }
     function xOfFreq(f) { return plotX + Math.log(Math.max(20, f) / 20) / Math.log(1000) * plotW }
     function freqOfX(x) { return 20 * Math.pow(1000, Math.max(0, Math.min(1, (x - plotX) / plotW))) }
@@ -371,10 +373,26 @@ FxShell {
         Item { width: 14; height: 1 }
         Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Processing:"); color: "#a8b6c6"; font.family: Theme.fontFamily; font.pixelSize: 17 }
         Rectangle {
+            objectName: "eqProcessing"
             width: 105; height: 28; radius: 3; color: "#142537"
             anchors.verticalCenter: parent.verticalCenter
-            Text { x: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Stereo"); color: "#c6d2df"; font.family: Theme.fontFamily; font.pixelSize: 17 }
+            Text { x: 8; anchors.verticalCenter: parent.verticalCenter; text: root.processingNames[Math.round(root.val("processing"))]; color: "#c6d2df"; font.family: Theme.fontFamily; font.pixelSize: 17 }
             Text { anchors.right: parent.right; anchors.rightMargin: 7; anchors.verticalCenter: parent.verticalCenter; text: "↕"; color: "#7f90a3"; font.pixelSize: 13 }
+            MouseArea { anchors.fill: parent; onClicked: processingMenu.popup(parent, 0, parent.height) }
+            Menu {
+                id: processingMenu
+                Repeater {
+                    model: root.processingNames
+                    delegate: MenuItem {
+                        required property string modelData
+                        required property int index
+                        text: modelData
+                        checkable: true
+                        checked: Math.round(root.val("processing")) === index
+                        onTriggered: root.editor.setNow("processing", index)
+                    }
+                }
+            }
         }
     }
 }

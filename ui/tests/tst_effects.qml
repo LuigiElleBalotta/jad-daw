@@ -88,6 +88,16 @@ TestCase {
         compare(o.c.editorSpectrum(32).length, 0)   // nothing is heard without the audio thread
     }
 
+    function test_the_eq_processing_menu_picks_the_channel() {
+        const o = openInsert("builtin.eq")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        verify(findChild(view.item, "eqProcessing") !== null)
+        compare(view.item.processingNames.length, 5)
+        o.w.setNow("processing", 3)
+        tryVerify(function () { return o.c.trackInserts(o.id)[0].params.processing === 3 })
+    }
+
     function test_the_compressor_side_chain_panel_sets_the_filter() {
         const o = openInsert("builtin.compressor")
         const view = findChild(o.w.contentItem, "graphicView")

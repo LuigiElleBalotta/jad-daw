@@ -29,6 +29,7 @@ Dialog {
     readonly property var destinations: { const d = []; if (destPcm) d.push("uncompressed"); if (destMp3) d.push("mp3"); if (destM4a) d.push("m4a"); return d }
     readonly property var formats: [{ id: "wav16", label: "WAVE 16 bit" }, { id: "wav24", label: "WAVE 24 bit" }, { id: "wav32", label: "WAVE 32 bit float" },
                                     { id: "aiff16", label: "AIFF 16 bit" }, { id: "aiff24", label: "AIFF 24 bit" },
+                                    { id: "caf16", label: "CAF 16 bit" }, { id: "caf24", label: "CAF 24 bit" }, { id: "caf32", label: "CAF 32 bit float" },
                                     { id: "flac16", label: "FLAC 16 bit" }, { id: "flac24", label: "FLAC 24 bit" }]
     readonly property var rates: [0, 44100, 48000, 88200, 96000, 176400, 192000]
     // what the dialog proposes: the whole project, or the cycle area, as bars
@@ -49,8 +50,8 @@ Dialog {
         id: fileDialog
         title: qsTr("Bounce the project")
         fileMode: FileDialog.SaveFile
-        defaultSuffix: !root.destPcm ? (root.destMp3 ? "mp3" : "m4a") : (root.format.startsWith("aiff") ? "aif" : (root.format.startsWith("flac") ? "flac" : "wav"))
-        nameFilters: [!root.destPcm ? (root.destMp3 ? qsTr("MP3 audio (*.mp3)") : qsTr("M4A audio (*.m4a)")) : (root.format.startsWith("aiff") ? qsTr("AIFF audio (*.aif *.aiff)") : (root.format.startsWith("flac") ? qsTr("FLAC audio (*.flac)") : qsTr("WAVE audio (*.wav)")))]
+        defaultSuffix: !root.destPcm ? (root.destMp3 ? "mp3" : "m4a") : (root.format.startsWith("aiff") ? "aif" : (root.format.startsWith("caf") ? "caf" : (root.format.startsWith("flac") ? "flac" : "wav")))
+        nameFilters: [!root.destPcm ? (root.destMp3 ? qsTr("MP3 audio (*.mp3)") : qsTr("M4A audio (*.m4a)")) : (root.format.startsWith("aiff") ? qsTr("AIFF audio (*.aif *.aiff)") : (root.format.startsWith("caf") ? qsTr("CAF audio (*.caf)") : (root.format.startsWith("flac") ? qsTr("FLAC audio (*.flac)") : qsTr("WAVE audio (*.wav)"))))]
         onAccepted: {
             const o = { format: root.format, normalize: root.normalizeMode, tail: root.tail, sampleRate: root.sampleRate,
                         secondPass: root.secondPass && root.rangeKind !== "project", addToProject: root.addToProject, destinations: root.destinations }

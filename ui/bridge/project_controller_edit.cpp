@@ -912,12 +912,13 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
         return;
     }
     const bool aiff = format.startsWith("aiff");
+    const bool caf = format.startsWith("caf");
     const bool flac = format.startsWith("flac");
     const int bits = format.endsWith("16") ? 16 : (format.endsWith("32") ? 32 : 24);
     const bool dither = options.value("dither", bits == 16).toBool() && bits == 16;
     std::filesystem::path out = file.toLocalFile().toStdWString();
-    if (out.extension().empty() || (!wantPcm && (out.extension() == ".wav" || out.extension() == ".aif" || out.extension() == ".flac"))) {
-        if (wantPcm) out += aiff ? ".aif" : (flac ? ".flac" : ".wav");
+    if (out.extension().empty() || (!wantPcm && (out.extension() == ".wav" || out.extension() == ".aif" || out.extension() == ".caf" || out.extension() == ".flac"))) {
+        if (wantPcm) out += aiff ? ".aif" : (caf ? ".caf" : (flac ? ".flac" : ".wav"));
         else out.replace_extension(wantMp3 ? ".mp3" : ".m4a");
     }
     if (!saveProject()) return;
@@ -956,7 +957,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
     const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
-    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, flac, bits, normalizeOn, dither, targetRate, secondPass, rangeFrames, addToProject, wantPcm, wantMp3, wantM4a] {
+    (void)QtConcurrent::run([self, flag, project, root, out, render, aiff, caf, flac, bits, normalizeOn, dither, targetRate, secondPass, rangeFrames, addToProject, wantPcm, wantMp3, wantM4a] {
         QString message;
         try {
             lpc::MediaStore media(root, /*streaming=*/false);
@@ -986,6 +987,7 @@ void ProjectController::bounceProjectAs(const QUrl& file, const QVariantMap& opt
             if (wantPcm) {
                 if (dither) lpc::ditherTpdf(data, bits);
                 if (aiff) lpc::writeAiff(out, fileRate, 2, data.samples, bits);
+                else if (caf) lpc::writeCaf(out, fileRate, 2, data.samples, bits);
                 else if (flac) lpc::writeFlac(out, fileRate, 2, data.samples, bits);
                 else lpc::writeWav(out, fileRate, 2, data.samples, bits == 16 ? lpc::WavFormat::Pcm16 : (bits == 32 ? lpc::WavFormat::Float32 : lpc::WavFormat::Pcm24));
             }

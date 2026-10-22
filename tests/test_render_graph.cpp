@@ -269,6 +269,38 @@ TEST_CASE("graph: a stereo balancer follows the pan law when its compensation is
     }
 }
 
+TEST_CASE("graph: the spectrum tap hears the armed insert before or after it, and nothing else", "[graph][spectrum]") {
+    for (const bool post : {false, true}) {
+        Rig rig;
+        auto* cfg = new TrackConfig;
+        std::vector<float> data(2 * 20000, 0.8f);
+        auto src = std::make_shared<MemorySource>(48000, 2, std::move(data));
+        rig.media.push_back(src);
+        RegionPlayback region;
+        region.startFrame = 0;
+        region.endFrame = 20000;
+        region.source = src.get();
+        cfg->regions.push_back(region);
+        cfg->keepAlive.push_back(src);
+        cfg->inserts.push_back(std::make_unique<GainProcessor>(-6.0206f));  // 0.8 -> 0.4
+        rig.addNode(1, TrackKind::Audio, cfg);
+        rig.addMaster();
+        rig.g.spectrumTap().arm(id(1), 0, post);
+        rig.render(8192);
+        std::vector<float> heard;
+        REQUIRE(rig.g.spectrumTap().latest(heard));
+        REQUIRE(heard.back() == Catch::Approx(post ? 0.4f : 0.8f).margin(1e-3));
+        std::uint64_t cursor = 0;
+        std::vector<float> l, r;
+        REQUIRE(rig.g.spectrumTap().take(cursor, l, r));
+        REQUIRE(l.back() == Catch::Approx(post ? 0.4f : 0.8f).margin(1e-3));
+        REQUIRE(r.back() == Catch::Approx(post ? 0.4f : 0.8f).margin(1e-3));
+        rig.g.spectrumTap().arm(id(1), 1, post);  // another insert: nothing from this one arrives
+        rig.render(1024);
+        REQUIRE_FALSE(rig.g.spectrumTap().take(cursor, l, r));
+    }
+}
+
 TEST_CASE("graph: sine instrument plays notes with sample-accurate timing", "[graph][synth]") {
     Rig rig;
     rig.addNode(2, TrackKind::Instrument, Rig::noteConfig({NoteSpan{100, 4900, 69, 127}}));

@@ -141,6 +141,25 @@ TestCase {
         verify(!spectrum.visible)
     }
 
+    function test_the_drum_kit_window_has_a_pad_for_each_drum_and_the_level_knob() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        const id = c.tracks.trackIdAt(0)
+        c.setInstrument(id, "builtin.drums")
+        const w = createTemporaryObject(winC, this, { project: c })
+        c.openEffectEditor(id, -2)
+        tryVerify(function () { return w.spec !== null })
+        const view = findChild(w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        compare(view.item.pads.length, 12)
+        verify(findChild(view.item, "drumPad_36") !== null)
+        verify(findChild(view.item, "drumPad_38") !== null)
+        w.setNow("level", -3)
+        tryVerify(function () { return c.trackInstrument(id).params.level === -3 })
+    }
+
     function test_the_compressor_side_chain_panel_sets_the_filter() {
         const o = openInsert("builtin.compressor")
         const view = findChild(o.w.contentItem, "graphicView")

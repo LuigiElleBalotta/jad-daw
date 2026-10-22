@@ -88,6 +88,16 @@ TestCase {
         compare(o.c.editorSpectrum(32).length, 0)   // nothing is heard without the audio thread
     }
 
+    function test_the_eq_hq_key_sets_the_oversampling() {
+        const o = openInsert("builtin.eq")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        const key = findChild(view.item, "eqHq")
+        verify(!key.on)
+        key.toggled(true)
+        tryVerify(function () { return o.c.trackInserts(o.id)[0].params.hq === 1 })
+    }
+
     function test_the_eq_processing_menu_picks_the_channel() {
         const o = openInsert("builtin.eq")
         const view = findChild(o.w.contentItem, "graphicView")

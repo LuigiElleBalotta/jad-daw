@@ -369,7 +369,7 @@ FxShell {
         spacing: 6
         FxPlainKey { objectName: "eqAnalyzer"; label: qsTr("Analyzer"); sup: root.analyzerMode === 2 ? "PRE" : "POST"; on: root.analyzerMode > 0; onToggled: root.analyzerMode = (root.analyzerMode + 1) % 3 }
         FxPlainKey { objectName: "eqQCouple"; label: qsTr("Q-Couple"); on: root.qCouple; onToggled: (v) => root.qCouple = v }
-        FxPlainKey { label: qsTr("HQ"); on: false; enabledKey: false }
+        FxPlainKey { objectName: "eqHq"; label: qsTr("HQ"); on: root.val("hq") >= 0.5; onToggled: (v) => root.editor.setNow("hq", v ? 1 : 0) }
         Item { width: 14; height: 1 }
         Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Processing:"); color: "#a8b6c6"; font.family: Theme.fontFamily; font.pixelSize: 17 }
         Rectangle {

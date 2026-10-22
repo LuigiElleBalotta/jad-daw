@@ -128,6 +128,25 @@ TEST_CASE("gate: Monitor plays what the detector hears, Characteristics picks wh
     REQUIRE(peakThrough({{"threshold", -100}, {"keyMode", 1}, {"keyHighCut", 500}}, 8000) > 0.4f);
 }
 
+TEST_CASE("eq: HQ runs the filters at twice the rate, keeps the level and the alignment, and gets a high peak right", "[effects][eq]") {
+    // a peak at 18 kHz is squeezed by the bilinear transform at 48 kHz; at 96 kHz it is closer to the analog shape: its response at 21 kHz is higher
+    ProcessorRef plain = ref(kProcEq, {{"p4Freq", 18000}, {"p4Gain", 12}, {"p4Q", 2}});
+    ProcessorRef hq = ref(kProcEq, {{"p4Freq", 18000}, {"p4Gain", 12}, {"p4Q", 2}, {"hq", 1}});
+    REQUIRE(eqResponseDb(hq, kSr, 18000) == Catch::Approx(12.0).margin(0.2));
+    REQUIRE(eqResponseDb(hq, kSr, 21000) != Catch::Approx(eqResponseDb(plain, kSr, 21000)).margin(0.3));
+    // the processor: a flat HQ EQ is a pure delay of 15 samples at unity gain; a boost behaves like the response it reports
+    ProcessorRef flat = ref(kProcEq, {{"hq", 1}});
+    auto eq = makeBuiltinEffect(flat, kSr);
+    REQUIRE(eq->latencySamples() == 15);
+    std::vector<float> l = sine(1000, 0.5, 9600), r = l;
+    const std::vector<float> in = l;
+    eq->process(l.data(), r.data(), 9600);
+    for (int i = 4000; i < 4100; ++i) REQUIRE(l[static_cast<std::size_t>(i)] == Catch::Approx(in[static_cast<std::size_t>(i - 15)]).margin(2e-3));
+    auto boost = makeBuiltinEffect(ref(kProcEq, {{"p2Freq", 1000}, {"p2Gain", 12}, {"p2Q", 1}, {"hq", 1}}), kSr);
+    const auto out = run(*boost, sine(1000, 0.1, 9600));
+    REQUIRE(20 * std::log10(peakOf(out, 2000) / 0.1) == Catch::Approx(12.0).margin(0.4));
+}
+
 TEST_CASE("eq: the cuts are Butterworth filters of the chosen slope, a band that is off does nothing, the master gain scales everything", "[effects][eq]") {
     ProcessorRef low = ref(kProcEq, {{"lcOn", 1}, {"lcFreq", 1000}, {"lcSlope", 4}});  // 4 x 6 = 24 dB per octave
     REQUIRE(eqResponseDb(low, kSr, 1000) == Catch::Approx(-3.01).margin(0.2));     // the corner of a Butterworth

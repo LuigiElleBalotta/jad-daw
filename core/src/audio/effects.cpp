@@ -100,11 +100,52 @@ std::vector<BiquadCoeffs> eqSections(const ProcessorRef& ref, double sr) {
     return out;
 }
 
+// HQ: the EQ runs at twice the sample rate, so that its filters are not squeezed towards the top of the band by the bilinear transform. The signal goes up and
+// down through a 31-tap Blackman-windowed sinc low pass (cut at the original Nyquist), which costs 15 samples of latency in all.
+struct HalfBandPath {
+    static constexpr int kTaps = 31;
+    static const std::array<double, kTaps>& taps() {
+        static const std::array<double, kTaps> h = [] {
+            std::array<double, kTaps> t{};
+            double sum = 0.0;
+            for (int n = 0; n < kTaps; ++n) {
+                const double m = n - (kTaps - 1) / 2.0;
+                const double sinc = m == 0.0 ? 0.5 : std::sin(kPi * 0.5 * m) / (kPi * m);  // cut at a quarter of the doubled rate
+                const double w = 0.42 - 0.5 * std::cos(2 * kPi * n / (kTaps - 1)) + 0.08 * std::cos(4 * kPi * n / (kTaps - 1));
+                t[static_cast<std::size_t>(n)] = sinc * w;
+                sum += t[static_cast<std::size_t>(n)];
+            }
+            for (double& v : t) v /= sum;  // unity at DC
+            return t;
+        }();
+        return h;
+    }
+    std::array<double, kTaps> up{}, down{};  // the last samples of the stuffed signal and of the filtered one
+    void push(std::array<double, kTaps>& h, double x) { for (int i = kTaps - 1; i > 0; --i) h[static_cast<std::size_t>(i)] = h[static_cast<std::size_t>(i - 1)]; h[0] = x; }
+    static double fir(const std::array<double, kTaps>& h) { double y = 0.0; const auto& t = taps(); for (int i = 0; i < kTaps; ++i) y += t[static_cast<std::size_t>(i)] * h[static_cast<std::size_t>(i)]; return y; }
+};
+
 class EqProcessor final : public IProcessor {
 public:
     EqProcessor(const ProcessorRef& ref, double sr)
-        : out_(static_cast<float>(dbToLin(param(ref, "masterGain")))), mode_(static_cast<int>(std::lround(param(ref, "processing")))) {
-        for (const BiquadCoeffs& c : eqSections(ref, sr)) sections_.push_back(Section{c});
+        : out_(static_cast<float>(dbToLin(param(ref, "masterGain")))), mode_(static_cast<int>(std::lround(param(ref, "processing")))), hq_(param(ref, "hq") >= 0.5) {
+        for (const BiquadCoeffs& c : eqSections(ref, hq_ ? sr * 2.0 : sr)) sections_.push_back(Section{c});
+    }
+    int latencySamples() const override { return hq_ ? HalfBandPath::kTaps / 2 : 0; }
+    // one sample of one path through the sections at twice the rate (sections `a` is the l state, `!a` the r state)
+    double hqSample(HalfBandPath& p, bool useL, double x) noexcept {
+        p.push(p.up, 2.0 * x);
+        double y0 = HalfBandPath::fir(p.up);
+        p.push(p.up, 0.0);
+        double y1 = HalfBandPath::fir(p.up);
+        for (Section& s : sections_) {
+            y0 = useL ? s.l(y0) : s.r(y0);
+            y1 = useL ? s.l(y1) : s.r(y1);
+        }
+        p.push(p.down, y0);
+        const double out = HalfBandPath::fir(p.down);  // the even phase: the samples the input had
+        p.push(p.down, y1);
+        return out;
     }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
@@ -114,9 +155,15 @@ public:
             if (mode_ >= 3) { const double m = 0.5 * (a + b), s = 0.5 * (a - b); a = m; b = s; }
             const bool doA = mode_ == 0 || mode_ == 1 || mode_ == 3, doB = mode_ == 0 || mode_ == 2 || mode_ == 4;
             double ya = a, yb = b;
-            for (Section& s : sections_) {
-                if (doA) ya = s.l(ya);
-                if (doB) yb = s.r(yb);
+            if (hq_) {
+                // what the EQ leaves alone is delayed like the rest, so that the channels stay aligned
+                ya = doA ? hqSample(pathA_, true, a) : hqDelay(delayA_, a);
+                yb = doB ? hqSample(pathB_, false, b) : hqDelay(delayB_, b);
+            } else {
+                for (Section& s : sections_) {
+                    if (doA) ya = s.l(ya);
+                    if (doB) yb = s.r(yb);
+                }
             }
             if (doA) ya *= out_;
             if (doB) yb *= out_;
@@ -127,9 +174,18 @@ public:
     nlohmann::json describe() const override { return {{"id", kProcEq}}; }
 
 private:
+    static double hqDelay(std::array<double, HalfBandPath::kTaps / 2>& line, double x) noexcept {
+        const double y = line.back();
+        for (std::size_t i = line.size() - 1; i > 0; --i) line[i] = line[i - 1];
+        line[0] = x;
+        return y;
+    }
     std::vector<Section> sections_;
     float out_;
     int mode_;  // 0 stereo, 1 left, 2 right, 3 mid, 4 side
+    bool hq_;
+    HalfBandPath pathA_, pathB_;
+    std::array<double, HalfBandPath::kTaps / 2> delayA_{}, delayB_{};
 };
 
 // ---------------------------------------------------------------- Match EQ (a bank of third-octave peaking filters)
@@ -839,6 +895,7 @@ std::unique_ptr<IProcessor> makeBuiltinEffect(const ProcessorRef& ref, double sa
 }
 
 double eqResponseDb(const ProcessorRef& ref, double sampleRate, double freq) {
+    if (param(ref, "hq") >= 0.5) sampleRate *= 2.0;  // HQ: the filters run at twice the rate
     const double w = 2 * kPi * freq / sampleRate;
     double db = param(ref, "masterGain");
     for (const BiquadCoeffs& c : eqSections(ref, sampleRate)) db += 20.0 * std::log10(std::max(std::abs(biquadResponse(c, w)), 1e-12));

@@ -15,7 +15,7 @@ target_compile_definitions(jad_shortcuts_tests PRIVATE JAD_ACTIONS_JSON="${CMAKE
 qt_add_executable(jad_ui_qmltests qmltests.cpp)
 target_link_libraries(jad_ui_qmltests PRIVATE Qt6::QuickTest jad_ui_libplugin jad_ui_lib)
 target_compile_definitions(jad_ui_qmltests PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME jad_ui_qmltests COMMAND jad_ui_qmltests -input ${CMAKE_CURRENT_SOURCE_DIR} -import ${CMAKE_BINARY_DIR}/ui)
+add_test(NAME jad_ui_qmltests COMMAND jad_ui_qmltests -input ${CMAKE_CURRENT_SOURCE_DIR} -import ${CMAKE_BINARY_DIR}/ui -o ${CMAKE_BINARY_DIR}/qmltests.txt,txt)
 set_tests_properties(jad_ui_qmltests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 jad_add_qt_test(jad_actions_tests tst_actions.cpp)

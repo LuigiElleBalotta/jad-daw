@@ -15,9 +15,8 @@ on:
       - "design/**"
       - "CMakeLists.txt"
       - ".github/workflows/ci.yml"
-# "--parallel" without a number lets make start every compile at once: on a macOS runner (3-4 cores, 7 GB) that swapped for hours and the UI job never ended
-env:
-  CMAKE_BUILD_PARALLEL_LEVEL: 4
+# a bare "--parallel" makes make start every compile at once (the env variable is ignored then): on a macOS runner (3-4 cores, 7 GB) that swapped for hours,
+# so the number is always given
 
 jobs:
   build:
@@ -36,7 +35,7 @@ jobs:
       - name: Configure
         run: cmake -S . -B build ${{ matrix.configure }}
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel 4
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
   ui:
@@ -60,8 +59,12 @@ jobs:
       - name: Configure
         run: cmake -S . -B build ${{ matrix.configure }} -DLPC_BUILD_UI=ON
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel 4
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
         env:
           QT_QPA_PLATFORM: offscreen
+      - name: QML test report
+        if: failure()
+        shell: bash
+        run: cat build/qmltests.txt || true

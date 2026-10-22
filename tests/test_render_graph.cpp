@@ -227,6 +227,32 @@ TEST_CASE("graph: insert processors run before the strip", "[graph]") {
     for (std::size_t i = 0; i < 300; ++i) REQUIRE(s.l[i] == Catch::Approx(0.25f).margin(1e-4));
 }
 
+TEST_CASE("graph: an insert reports the peaks of its left and right channel going in and coming out", "[graph][meter]") {
+    Rig rig;
+    auto* cfg = new TrackConfig;
+    std::vector<float> data(2 * 2000);
+    for (std::size_t i = 0; i < 2000; ++i) { data[2 * i] = 0.8f; data[2 * i + 1] = 0.2f; }
+    auto src = std::make_shared<MemorySource>(48000, 2, std::move(data));
+    rig.media.push_back(src);
+    RegionPlayback region;
+    region.startFrame = 0;
+    region.endFrame = 1000;
+    region.source = src.get();
+    cfg->regions.push_back(region);
+    cfg->keepAlive.push_back(src);
+    cfg->inserts.push_back(std::make_unique<GainProcessor>(-6.0206f));
+    rig.addNode(1, TrackKind::Audio, cfg);
+    rig.addMaster();
+    rig.render(512);
+    float peaks[4] = {};
+    REQUIRE(rig.g.takeInsertChannelMeters(id(1), 0, peaks));
+    REQUIRE(peaks[0] == Catch::Approx(0.8f).margin(1e-4));
+    REQUIRE(peaks[1] == Catch::Approx(0.2f).margin(1e-4));
+    REQUIRE(peaks[2] == Catch::Approx(0.4f).margin(1e-4));
+    REQUIRE(peaks[3] == Catch::Approx(0.1f).margin(1e-4));
+    REQUIRE_FALSE(rig.g.takeInsertChannelMeters(id(1), 99, peaks));
+}
+
 TEST_CASE("graph: sine instrument plays notes with sample-accurate timing", "[graph][synth]") {
     Rig rig;
     rig.addNode(2, TrackKind::Instrument, Rig::noteConfig({NoteSpan{100, 4900, 69, 127}}));

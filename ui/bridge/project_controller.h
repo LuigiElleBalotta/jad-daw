@@ -1047,6 +1047,7 @@ private:
     QVariantMap effectClipboard_;
     QVariantMap editorMeters_;
     double editorIn_ = -120.0, editorOut_ = -120.0, editorRed_ = 0.0;
+    double editorCh_[4] = {-120.0, -120.0, -120.0, -120.0};  // left and right going in, then left and right coming out
     QStringList pendingSmartFollow_, pendingSmartTempo_;  // new audio regions the Smart Tempo project settings act on, when the next snapshot lists them
     QStringList pendingRegionSelection_;  // ids of regions just pasted: selected when the next snapshot has them
     double nudgeBeats_ = 0.25;

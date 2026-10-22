@@ -425,6 +425,7 @@ FxShell {
         id: lm
         property real levelDb: -120
         property real holdDb: -120
+        property var channelDb: [-120, -120]  // the left and the right bar
         property real centerX
         property bool rightScale: false
         readonly property var labels: [3, 0, -3, -6, -9, -12, -18, -24, -30, -40, -60]
@@ -463,7 +464,7 @@ FxShell {
                 Rectangle { anchors.fill: parent; color: "#0a0a0a"; border.color: "#2a2a2a" }
                 Rectangle {
                     width: parent.width - 2; x: 1
-                    height: Math.max(0, lm.frac(lm.levelDb) * parent.height)
+                    height: Math.max(0, lm.frac(lm.channelDb[index]) * parent.height)
                     y: parent.height - height
                     gradient: Gradient {
                         GradientStop { position: 0.0; color: "#ff3a2a" }
@@ -475,6 +476,6 @@ FxShell {
             }
         }
     }
-    LevelMeter { levelDb: root.meters.inDb ?? -120; holdDb: root.meters.inDb ?? -120; centerX: 66 }
-    LevelMeter { levelDb: root.meters.outDb ?? -120; holdDb: root.meters.outDb ?? -120; centerX: 923; rightScale: true }
+    LevelMeter { levelDb: root.meters.inDb ?? -120; holdDb: root.meters.inDb ?? -120; channelDb: [root.meters.inLDb ?? -120, root.meters.inRDb ?? -120]; centerX: 66 }
+    LevelMeter { levelDb: root.meters.outDb ?? -120; holdDb: root.meters.outDb ?? -120; channelDb: [root.meters.outLDb ?? -120, root.meters.outRDb ?? -120]; centerX: 923; rightScale: true }
 }

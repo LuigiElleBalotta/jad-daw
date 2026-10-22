@@ -296,6 +296,7 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
             }
         }
         t.blockReduction = 0.0f;
+        t.insCh.fill(0.0f);
         t.insIn.fill(0.0f);
         t.insOut.fill(0.0f);
         t.insRed.fill(0.0f);
@@ -304,13 +305,15 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
             const int at = slot++;
             // Low Latency Monitoring Mode: what is played through is not made to wait for a plug-in with a long latency
             if (lowLatencyLimit_ > 0 && t.monitorL >= 0 && insert->latencySamples() > lowLatencyLimit_) continue;
-            float peakIn = 0.0f;
-            for (int i = 0; i < n; ++i) peakIn = std::max({peakIn, std::abs(l[i]), std::abs(r[i])});
+            float peakIn = 0.0f, inL = 0.0f, inR = 0.0f;
+            for (int i = 0; i < n; ++i) { inL = std::max(inL, std::abs(l[i])); inR = std::max(inR, std::abs(r[i])); }
+            peakIn = std::max(inL, inR);
             if (tap_.wants(t.id, at, false)) tap_.push(l, r, n);
             insert->process(l, r, n);
             if (tap_.wants(t.id, at, true)) tap_.push(l, r, n);
-            float peakOut = 0.0f;
-            for (int i = 0; i < n; ++i) peakOut = std::max({peakOut, std::abs(l[i]), std::abs(r[i])});
+            float peakOut = 0.0f, outL = 0.0f, outR = 0.0f;
+            for (int i = 0; i < n; ++i) { outL = std::max(outL, std::abs(l[i])); outR = std::max(outR, std::abs(r[i])); }
+            peakOut = std::max(outL, outR);
             const float reduction = insert->reductionDb();
             t.blockReduction = std::max(t.blockReduction, reduction);
             if (at < kMeterInserts) {
@@ -318,6 +321,10 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
                 t.insIn[a] = std::max(t.insIn[a], peakIn);
                 t.insOut[a] = std::max(t.insOut[a], peakOut);
                 t.insRed[a] = std::max(t.insRed[a], reduction);
+                t.insCh[a * 4] = std::max(t.insCh[a * 4], inL);
+                t.insCh[a * 4 + 1] = std::max(t.insCh[a * 4 + 1], inR);
+                t.insCh[a * 4 + 2] = std::max(t.insCh[a * 4 + 2], outL);
+                t.insCh[a * 4 + 3] = std::max(t.insCh[a * 4 + 3], outR);
             }
         }
     }
@@ -472,6 +479,7 @@ void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float
             insIn_[m].store(std::max(insIn_[m].load(std::memory_order_relaxed), t.insIn[a]), std::memory_order_relaxed);
             insOut_[m].store(std::max(insOut_[m].load(std::memory_order_relaxed), t.insOut[a]), std::memory_order_relaxed);
             insRed_[m].store(std::max(insRed_[m].load(std::memory_order_relaxed), t.insRed[a]), std::memory_order_relaxed);
+            for (std::size_t c = 0; c < 4; ++c) insCh_[m * 4 + c].store(std::max(insCh_[m * 4 + c].load(std::memory_order_relaxed), t.insCh[a * 4 + c]), std::memory_order_relaxed);
         }
         peakValPre_[k].store(std::max(peakValPre_[k].load(std::memory_order_relaxed), t.blockPeakPre), std::memory_order_relaxed);
     }
@@ -500,6 +508,19 @@ bool RenderGraph::takeInsertMeters(const Uuid& track, int insert, float& in, flo
         in = insIn_[m].exchange(0.0f, std::memory_order_relaxed);
         out = insOut_[m].exchange(0.0f, std::memory_order_relaxed);
         reduction = insRed_[m].exchange(0.0f, std::memory_order_relaxed);
+        return true;
+    }
+    return false;
+}
+
+bool RenderGraph::takeInsertChannelMeters(const Uuid& track, int insert, float (&peaks)[4]) noexcept {
+    if (insert < 0 || insert >= kMeterInserts) return false;
+    const int n = peakCount_.load(std::memory_order_acquire);
+    for (int i = 0; i < n; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        if (peakHi_[k].load(std::memory_order_relaxed) != track.hi || peakLo_[k].load(std::memory_order_relaxed) != track.lo) continue;
+        const auto m = k * kMeterInserts + static_cast<std::size_t>(insert);
+        for (std::size_t c = 0; c < 4; ++c) peaks[c] = insCh_[m * 4 + c].exchange(0.0f, std::memory_order_relaxed);
         return true;
     }
     return false;

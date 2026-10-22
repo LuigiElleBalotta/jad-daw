@@ -37,6 +37,7 @@ public:
     void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackReductions(out); }
     void takeTrackPeaksPre(std::vector<std::pair<Uuid, float>>& out) { graph_.takeTrackPeaksPre(out); }
     bool takeInsertMeters(const Uuid& track, int insert, float& in, float& out, float& reduction) { return graph_.takeInsertMeters(track, insert, in, out, reduction); }
+    bool takeInsertChannelMeters(const Uuid& track, int insert, float (&peaks)[4]) { return graph_.takeInsertChannelMeters(track, insert, peaks); }
     // the spectrum of one insert (before or after it) for the Analyzer of its window; disarm when the window closes
     void armSpectrum(const Uuid& track, int insert, bool post) { graph_.spectrumTap().arm(track, insert, post); }
     void disarmSpectrum() { graph_.spectrumTap().disarm(); }

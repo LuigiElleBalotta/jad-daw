@@ -146,6 +146,7 @@ struct TrackNode {
     float blockPeak = 0.0f;  // after the fader, this block
     float blockPeakPre = 0.0f;  // before the fader (after the inserts), this block
     float blockReduction = 0.0f;  // the deepest gain reduction of the inserts, this block (dB)
+    std::array<float, kMeterInserts * 4> insCh{};  // per insert the peaks of the left and right going in, then of the left and right coming out, this block
     std::array<float, kMeterInserts> insIn{}, insOut{}, insRed{};  // the peaks (linear) going into and out of each insert and its gain reduction (dB), this block
     float smoothR = 1.0f;
     bool smoothInit = false;
@@ -186,6 +187,8 @@ public:
     void takeTrackReductions(std::vector<std::pair<Uuid, float>>& out) noexcept;
     // The peak going into and out of one insert (linear) and its gain reduction (dB) since the last call for it; reading resets them. False when the track or the insert is not there.
     bool takeInsertMeters(const Uuid& track, int insert, float& in, float& out, float& reduction) noexcept;
+    // the peaks (linear) of the left and right channel going into (0, 1) and coming out of (2, 3) the insert since the last call
+    bool takeInsertChannelMeters(const Uuid& track, int insert, float (&peaks)[4]) noexcept;
     SpectrumTap& spectrumTap() noexcept { return tap_; }
     int trackCount() const noexcept { return count_; }
     nlohmann::json describe() const;  // not real-time; tracks in processing order
@@ -215,6 +218,7 @@ private:
     std::array<std::atomic<float>, kMaxTracks> reductionVal_{};
     std::array<std::atomic<float>, kMaxTracks> peakValPre_{};
     std::array<std::atomic<float>, kMaxTracks * kMeterInserts> insIn_{}, insOut_{}, insRed_{};
+    std::unique_ptr<std::atomic<float>[]> insCh_{new std::atomic<float>[kMaxTracks * kMeterInserts * 4]()};  // on the heap: a RenderGraph lives on the stack in tests
     SpectrumTap tap_;
     std::atomic<int> peakCount_{0};
 };

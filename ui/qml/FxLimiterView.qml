@@ -26,6 +26,7 @@ FxShell {
         property real centerX
         property var labels: []
         property real levelDb: -120
+        property var channelDb: []           // the levels of the left and the right channel; empty draws levelDb as one bar
         property bool hang: false            // the reduction hangs from the top
         property real scaleTop: 20           // the dB at the first label
         property real scaleBottom: -60
@@ -64,21 +65,26 @@ FxShell {
             y: m.barTop + 17
             height: (m.labels.length - 1) * m.step
             color: "transparent"
-            Rectangle {
-                width: parent.width
-                height: Math.max(0, m.frac(m.levelDb) * parent.height)
-                y: m.hang ? 0 : parent.height - height
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: m.hang ? "#2fb04a" : "#ff3a2a" }
-                    GradientStop { position: 0.35; color: "#ffd21a" }
-                    GradientStop { position: 1.0; color: m.hang ? "#ff3a2a" : "#2fb04a" }
+            Repeater {
+                model: m.channelDb.length > 0 ? m.channelDb.length : 1   // one bar, or the left and the right channel side by side
+                delegate: Rectangle {
+                    required property int index
+                    x: index * parent.width / (m.channelDb.length > 0 ? m.channelDb.length : 1)
+                    width: parent.width / (m.channelDb.length > 0 ? m.channelDb.length : 1) - (m.channelDb.length > 1 ? 1 : 0)
+                    height: Math.max(0, m.frac(m.channelDb.length > 0 ? m.channelDb[index] : m.levelDb) * parent.height)
+                    y: m.hang ? 0 : parent.height - height
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: m.hang ? "#2fb04a" : "#ff3a2a" }
+                        GradientStop { position: 0.35; color: "#ffd21a" }
+                        GradientStop { position: 1.0; color: m.hang ? "#ff3a2a" : "#2fb04a" }
+                    }
                 }
             }
         }
     }
-    Meter { title: qsTr("INPUT"); centerX: 107; labels: [20, 12, 9, 6, 3, 0, -3, -6, -9, -12, -15, -20, -30, -60]; levelDb: root.meters.inDb ?? -120 }
+    Meter { title: qsTr("INPUT"); centerX: 107; labels: [20, 12, 9, 6, 3, 0, -3, -6, -9, -12, -15, -20, -30, -60]; levelDb: root.meters.inDb ?? -120; channelDb: [root.meters.inLDb ?? -120, root.meters.inRDb ?? -120] }
     Meter { title: qsTr("REDUCTION"); centerX: 211; labels: [0, 1.5, 3, 6, 9, 12, 15, 20, 25, 30, 35, 40, 50, 60]; levelDb: -(root.meters.reductionDb ?? 0); hang: true }
-    Meter { title: qsTr("OUTPUT"); centerX: 321; labels: [0, -1.5, -3, -6, -9, -12, -15, -20, -25, -30, -35, -40, -50, -60]; levelDb: root.meters.outDb ?? -120 }
+    Meter { title: qsTr("OUTPUT"); centerX: 321; labels: [0, -1.5, -3, -6, -9, -12, -15, -20, -25, -30, -35, -40, -50, -60]; levelDb: root.meters.outDb ?? -120; channelDb: [root.meters.outLDb ?? -120, root.meters.outRDb ?? -120] }
 
     // the knobs
     component Knob: FxArcKnob {

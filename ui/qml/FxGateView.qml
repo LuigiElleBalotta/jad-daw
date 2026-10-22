@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import Jad
 
 // Noise Gate of Logic Pro 11.2: the Gate and Ducker tabs, Threshold and Reduction knobs and the Hysteresis slider on the left; the Open and Close lights, the Attack, Hold
@@ -13,6 +14,7 @@ FxShell {
     readonly property var meters: editor.project.editorMeters
     readonly property bool closed: (meters.reductionDb ?? 0) > 3
     readonly property bool ducker: val("ducker") >= 0.5
+    readonly property var keyModes: [qsTr("Bandpass"), qsTr("Lowpass"), qsTr("Highpass")]
     function val(name) { return editor.valueOf(editor.param(name)) }
 
     Rectangle {
@@ -78,11 +80,32 @@ FxShell {
     }
     // the side chain filter
     Text { x: 837 - width / 2; y: 66; text: qsTr("Characteristics"); color: "#9db2c8"; font.family: Theme.fontFamily; font.pixelSize: 19 }
-    Text { x: 837 - width / 2; y: 88; text: qsTr("Bandpass"); color: "#8dffa0"; font.family: Theme.fontFamily; font.pixelSize: 27 }
+    Text {
+        objectName: "gateCharacteristics"
+        x: 837 - width / 2; y: 88; text: root.keyModes[Math.round(root.val("keyMode"))]; color: "#8dffa0"; font.family: Theme.fontFamily; font.pixelSize: 27
+        MouseArea { anchors.fill: parent; anchors.margins: -6; onClicked: keyModeMenu.popup(parent, 0, parent.height) }
+        Menu {
+            id: keyModeMenu
+            Repeater {
+                model: root.keyModes
+                delegate: MenuItem {
+                    required property string modelData
+                    required property int index
+                    text: modelData
+                    checkable: true
+                    checked: Math.round(root.val("keyMode")) === index
+                    onTriggered: root.editor.setNow("keyMode", index)
+                }
+            }
+        }
+    }
     Text { x: 970 - width / 2; y: 66; text: qsTr("Monitor"); color: "#9db2c8"; font.family: Theme.fontFamily; font.pixelSize: 19 }
     Rectangle {
-        x: 944; y: 91; width: 48; height: 30; radius: 4; color: "#12202e"; opacity: 0.6
-        Text { anchors.centerIn: parent; text: qsTr("OFF"); color: "#6c8196"; font.family: Theme.fontFamily; font.pixelSize: 20 }
+        objectName: "gateMonitor"
+        readonly property bool lit: root.val("keyMonitor") >= 0.5
+        x: 944; y: 91; width: 48; height: 30; radius: 4; color: lit ? "#1f6b3c" : "#12202e"; opacity: root.val("keyFilter") >= 0.5 ? 1 : 0.6
+        Text { anchors.centerIn: parent; text: parent.lit ? qsTr("ON") : qsTr("OFF"); color: parent.lit ? "#d8ffe4" : "#6c8196"; font.family: Theme.fontFamily; font.pixelSize: 20 }
+        MouseArea { anchors.fill: parent; onClicked: root.editor.setNow("keyMonitor", parent.lit ? 0 : 1) }
     }
     Item {  // the power key of the filter and the two cutoffs
         x: 747; y: 165; width: 260; height: 140

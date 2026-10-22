@@ -424,9 +424,12 @@ public:
           hold_(static_cast<int>(param(ref, "hold") * 0.001 * sr)), attack_(smoothing(param(ref, "attack"), sr)), release_(smoothing(param(ref, "release"), sr)),
           decay_(smoothing(5.0, sr)), look_(static_cast<int>(std::lround(param(ref, "lookahead") * 0.001 * sr))),
           keyFilter_(param(ref, "keyFilter") >= 0.5), ducker_(param(ref, "ducker") >= 0.5), delayL_(static_cast<std::size_t>(std::max(1, look_)), 0.0f), delayR_(static_cast<std::size_t>(std::max(1, look_)), 0.0f) {
+        monitor_ = keyFilter_ && param(ref, "keyMonitor") >= 0.5;
         if (keyFilter_) {
-            key_[0].c = secondOrderPass(sr, param(ref, "keyLowCut"), 0.7071, true);
-            key_[1].c = secondOrderPass(sr, param(ref, "keyHighCut"), 0.7071, false);
+            // Characteristics: the band pass uses both cutoffs, the low pass only the High Cutoff, the high pass only the Low Cutoff
+            const int mode = static_cast<int>(std::lround(param(ref, "keyMode")));
+            key_[0].c = secondOrderPass(sr, mode == 1 ? 20.0 : param(ref, "keyLowCut"), 0.7071, true);
+            key_[1].c = secondOrderPass(sr, mode == 2 ? 20000.0 : param(ref, "keyHighCut"), 0.7071, false);
         }
     }
     int latencySamples() const override { return look_; }
@@ -457,6 +460,11 @@ public:
                 delayR_[d] = r[i];
                 ++pos_;
             }
+            if (monitor_) {  // Monitor: what the detector hears
+                l[i] = static_cast<float>(kl);
+                r[i] = static_cast<float>(kr);
+                continue;
+            }
             l[i] = static_cast<float>(outL * gain_);
             r[i] = static_cast<float>(outR * gain_);
         }
@@ -470,6 +478,7 @@ private:
     double attack_, release_, decay_;
     int look_;
     bool keyFilter_;
+    bool monitor_ = false;
     bool ducker_;
     Section key_[2];
     std::vector<float> delayL_, delayR_;

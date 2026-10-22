@@ -62,7 +62,8 @@ std::vector<EffectSpec> build() {
                  {p("threshold", "Threshold", "dB", -100, 0, -50), p("hysteresis", "Hysteresis", "dB", -20, 0, -3), p("range", "Reduction", "dB", -100, 0, -100),
                   p("attack", "Attack", "ms", 0, 500, 3), p("hold", "Hold", "ms", 0, 5000, 40), p("release", "Release", "ms", 1, 5000, 10, true),
                   p("lookahead", "Lookahead", "ms", 0, 10, 0), p("keyFilter", "Side Chain Filter", "", 0, 1, 0), p("keyLowCut", "Low Cut", "Hz", 20, 20000, 20, true),
-                  p("keyHighCut", "High Cut", "Hz", 20, 20000, 20000, true), p("ducker", "Ducker (0 gate, 1 ducker)", "", 0, 1, 0)}});
+                  p("keyHighCut", "High Cut", "Hz", 20, 20000, 20000, true), p("ducker", "Ducker (0 gate, 1 ducker)", "", 0, 1, 0),
+                  p("keyMode", "Characteristics (0 bandpass, 1 lowpass, 2 highpass)", "", 0, 2, 0), p("keyMonitor", "Monitor", "", 0, 1, 0)}});
     v.push_back({kProcDelay, "Delay", "Delay & Reverb",
                  {p("time", "Time", "ms", 1, 2000, 250, true), p("feedback", "Feedback", "%", 0, 95, 35), p("mix", "Mix", "%", 0, 100, 30),
                   p("pingPong", "Ping-Pong", "", 0, 1, 0)}});

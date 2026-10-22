@@ -98,6 +98,17 @@ TestCase {
         tryVerify(function () { return o.c.trackInserts(o.id)[0].params.processing === 3 })
     }
 
+    function test_the_gate_monitor_and_characteristics_set_the_filter() {
+        const o = openInsert("builtin.gate")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        compare(view.item.keyModes.length, 3)
+        verify(findChild(view.item, "gateCharacteristics") !== null)
+        verify(findChild(view.item, "gateMonitor") !== null)
+        o.w.setNow("keyMonitor", 1)
+        tryVerify(function () { return o.c.trackInserts(o.id)[0].params.keyMonitor === 1 })
+    }
+
     function test_the_compressor_side_chain_panel_sets_the_filter() {
         const o = openInsert("builtin.compressor")
         const view = findChild(o.w.contentItem, "graphicView")

@@ -110,6 +110,24 @@ TEST_CASE("eq: Processing makes the EQ work on one channel, or on the mid or the
     REQUIRE(midKeepsSide.first == Catch::Approx(0.5).margin(0.01));
 }
 
+TEST_CASE("gate: Monitor plays what the detector hears, Characteristics picks which cutoffs filter it", "[effects][gate]") {
+    auto peakThrough = [](std::map<std::string, double> p, double freq) {
+        p["keyFilter"] = 1;
+        auto g = makeBuiltinEffect(ref(kProcGate, std::move(p)), kSr);
+        std::vector<float> l = sine(freq, 0.5, 9600), r = l;
+        g->process(l.data(), r.data(), 9600);
+        return peakOf(l, 2000);
+    };
+    // Monitor on: the output is the filtered key, so a tone far above a low pass at 500 Hz is gone, one below it stays
+    REQUIRE(peakThrough({{"keyMonitor", 1}, {"keyMode", 1}, {"keyHighCut", 500}}, 8000) < 0.01f);
+    REQUIRE(peakThrough({{"keyMonitor", 1}, {"keyMode", 1}, {"keyHighCut", 500}}, 100) > 0.45f);
+    // a high pass leaves the High Cutoff alone even when it is set low, and cuts below the Low Cutoff
+    REQUIRE(peakThrough({{"keyMonitor", 1}, {"keyMode", 2}, {"keyHighCut", 100}, {"keyLowCut", 2000}}, 8000) > 0.4f);
+    REQUIRE(peakThrough({{"keyMonitor", 1}, {"keyMode", 2}, {"keyLowCut", 2000}}, 100) < 0.01f);
+    // Monitor off: the gate is open (threshold -100) and the audio passes whole
+    REQUIRE(peakThrough({{"threshold", -100}, {"keyMode", 1}, {"keyHighCut", 500}}, 8000) > 0.4f);
+}
+
 TEST_CASE("eq: the cuts are Butterworth filters of the chosen slope, a band that is off does nothing, the master gain scales everything", "[effects][eq]") {
     ProcessorRef low = ref(kProcEq, {{"lcOn", 1}, {"lcFreq", 1000}, {"lcSlope", 4}});  // 4 x 6 = 24 dB per octave
     REQUIRE(eqResponseDb(low, kSr, 1000) == Catch::Approx(-3.01).margin(0.2));     // the corner of a Butterworth

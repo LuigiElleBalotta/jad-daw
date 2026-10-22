@@ -909,7 +909,8 @@ private slots:
         QTRY_VERIFY(std::abs(c.positionBeats() - 8.0) < 0.01);
         c.startRecording();
         QVERIFY(c.recording());
-        QTest::qWait(600);  // the engine driver of a project without a device pumps the engine in real time: silence is captured
+        // the engine driver of a project without a device pumps the engine in real time, and a loaded machine falls behind: wait for the position, not the clock
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 9.4, 30000);
         c.stop();
         QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 15000);
         QVERIFY(!c.recording());
@@ -992,15 +993,17 @@ private slots:
             QTRY_VERIFY(std::abs(c.positionBeats() - 16.0) < 0.05);
             c.startRecording();
             QVERIFY(c.recording());
-            QTest::qWait(100);
+            QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.1, 30000);   // the transport is waited for, not the clock: a loaded machine falls behind
             c.playNote(62, 100, true);
-            QTest::qWait(100);
+            QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.3, 30000);
             c.playNote(62, 0, false);
-            QTest::qWait(550);                                        // the cycle wraps
+            QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.7, 30000);
+            QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() < 16.5, 30000);   // the cycle wraps
+            QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.1, 30000);
             c.playNote(64, 100, true);
-            QTest::qWait(100);
+            QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.3, 30000);
             c.playNote(64, 0, false);
-            QTest::qWait(100);
+            QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.5, 30000);
             c.stop();
             QTRY_VERIFY_WITH_TIMEOUT(!c.recording(), 15000);
         };
@@ -1052,7 +1055,11 @@ private slots:
         QTRY_VERIFY(std::abs(c.positionBeats() - 16.0) < 0.05);
         c.startRecording();
         QVERIFY(c.recording());
-        QTest::qWait(1400);                                           // two passes and a bit
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.7, 30000);    // two passes and a bit, by the transport: a loaded machine falls behind the clock
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() < 16.5, 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.7, 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() < 16.5, 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.2, 30000);
         c.stop();
         QTRY_VERIFY_WITH_TIMEOUT(!c.recording(), 15000);
         QTRY_VERIFY_WITH_TIMEOUT(c.tracks()->rowCount() > tracksBefore, 20000);       // a pass on a new track
@@ -1287,11 +1294,11 @@ private slots:
         QTRY_VERIFY(std::abs(c.positionBeats() - 16.0) < 0.01);
         c.startRecording();
         QVERIFY(c.recording());
-        QTest::qWait(150);
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.3, 30000);   // by the transport: a loaded machine falls behind the clock
         c.playNote(62, 100, true);
-        QTest::qWait(200);
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 16.9, 30000);
         c.playNote(62, 0, false);
-        QTest::qWait(100);
+        QTRY_VERIFY_WITH_TIMEOUT(c.positionBeats() > 17.1, 30000);
         c.stop();
         QTRY_COMPARE_WITH_TIMEOUT(c.regions()->rowCount(), before + 1, 15000);
         const jad::RegionRow* made = nullptr;

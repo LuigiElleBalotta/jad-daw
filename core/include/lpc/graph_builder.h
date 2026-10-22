@@ -27,7 +27,7 @@ struct PdcPlan {
 PdcPlan computePdc(const Project& project, IPluginHost* plugins);
 
 std::vector<Uuid> processingOrder(const Project& project);
-audio::StripParams stripParamsOf(const Strip& strip, PanLaw panLaw = PanLaw::Minus3Comp);
+audio::StripParams stripParamsOf(const Strip& strip, PanLaw panLaw = PanLaw::Minus3Comp, bool balancerComp = false);
 
 std::unique_ptr<audio::TrackConfig> buildConfig(const Project& project, const Track& track, MediaStore& media,
                                                 IPluginHost* plugins = nullptr, const PdcPlan* pdc = nullptr);

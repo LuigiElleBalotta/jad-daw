@@ -15,6 +15,7 @@ struct StripParams {
     bool solo = false;
     bool mono = false;  // a mono channel strip: the signal is folded to mono and panned with the project's pan law; a stereo strip uses the balancer
     PanLaw panLaw = PanLaw::Minus3Comp;
+    bool balancerComp = false;  // Project Settings > Audio > "Apply Pan Law compensation to stereo balancers": a stereo strip follows the pan law instead of the plain balancer
 };
 
 // A heap object handed between threads. Whoever receives it last (always the project thread)

@@ -139,7 +139,7 @@ Dialog {
                         onChosen: (c) => root.project.panLaw = c
                     }
                 }
-                Flag { key: "balancerPanLaw"; fallback: true; label: qsTr("Apply Pan Law compensation to stereo balancers") }
+                Flag { key: "balancerPanLaw"; label: qsTr("Apply Pan Law compensation to stereo balancers") }
                 Note { text: qsTr("The pan law sets how much quieter a source is at the centre than at one side. A Compensated law raises the whole mix so that a source panned to a side keeps its level.") }
                 Group { text: qsTr("Spatial Audio and Surround") }
                 Note { text: qsTr("The mix is stereo: Spatial Audio and surround formats are not part of this app.") }

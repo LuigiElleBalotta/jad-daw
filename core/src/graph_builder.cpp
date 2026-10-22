@@ -42,11 +42,16 @@ AudioMsg removeMsg(const Uuid& id) {
     return m;
 }
 
+bool balancerCompOf(const Project& p) {
+    const auto it = p.settings.find("balancerPanLaw");
+    return it != p.settings.end() && it->second == "1";
+}
+
 AudioMsg stripMsg(const Project& p, const Track& t) {
     AudioMsg m;
     m.kind = MsgKind::SetStrip;
     m.track = t.id;
-    m.strip = stripParamsOf(t.strip, p.panLaw);
+    m.strip = stripParamsOf(t.strip, p.panLaw, balancerCompOf(p));
     return m;
 }
 
@@ -126,7 +131,7 @@ audio::SynthParams synthParamsOf(const ProcessorRef& ref) {
     return sp;
 }
 
-StripParams stripParamsOf(const Strip& s, PanLaw panLaw) { return StripParams{dbToLinear(s.gainDb), s.pan, s.mute, s.solo, s.mono, panLaw}; }
+StripParams stripParamsOf(const Strip& s, PanLaw panLaw, bool balancerComp) { return StripParams{dbToLinear(s.gainDb), s.pan, s.mute, s.solo, s.mono, panLaw, balancerComp}; }
 
 std::vector<Uuid> processingOrder(const Project& p) {
     std::vector<const Track*> pending;
@@ -428,7 +433,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
 }
 
 std::unique_ptr<TrackNode> buildNode(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
-    return std::make_unique<TrackNode>(t.id, t.kind, stripParamsOf(t.strip, p.panLaw), buildConfig(p, t, media, plugins, pdc).release(),
+    return std::make_unique<TrackNode>(t.id, t.kind, stripParamsOf(t.strip, p.panLaw, balancerCompOf(p)), buildConfig(p, t, media, plugins, pdc).release(),
                                        static_cast<double>(p.sampleRate));
 }
 
@@ -466,7 +471,7 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
     for (const Track& a : after.tracks) {
         const Track* b = before.findTrack(a.id);
         if (!b) continue;
-        if (stripChanged(*b, a) || before.panLaw != after.panLaw) out.push_back(stripMsg(after, a));
+        if (stripChanged(*b, a) || before.panLaw != after.panLaw || balancerCompOf(before) != balancerCompOf(after)) out.push_back(stripMsg(after, a));
         const auto eb = planBefore.edges.find(a.id);
         const auto ea = planAfter.edges.find(a.id);
         const bool delaysChanged = (eb == planBefore.edges.end()) != (ea == planAfter.edges.end()) ||

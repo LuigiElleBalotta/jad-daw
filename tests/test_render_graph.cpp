@@ -253,6 +253,22 @@ TEST_CASE("graph: an insert reports the peaks of its left and right channel goin
     REQUIRE_FALSE(rig.g.takeInsertChannelMeters(id(1), 99, peaks));
 }
 
+TEST_CASE("graph: a stereo balancer follows the pan law when its compensation is on", "[graph][pan]") {
+    for (const bool comp : {false, true}) {
+        Rig rig;
+        StripParams sp;
+        sp.pan = 0.5f;
+        sp.panLaw = PanLaw::Minus3Comp;
+        sp.balancerComp = comp;
+        rig.addNode(1, TrackKind::Audio, rig.dcConfig(0.5f, 0, 2000), sp);
+        rig.addMaster();
+        const Stereo out = rig.render(1900);
+        // plain balancer: the near side stays, the far side drops by the pan; with the law: 4/3 (1 - t^2) and 4/3 (1 - (1-t)^2), t = 0.75
+        REQUIRE(out.l[1899] == Catch::Approx(comp ? 0.5f * 0.58333f : 0.5f * 0.5f).margin(1e-3));
+        REQUIRE(out.r[1899] == Catch::Approx(comp ? 0.5f * 1.25f : 0.5f).margin(1e-3));
+    }
+}
+
 TEST_CASE("graph: sine instrument plays notes with sample-accurate timing", "[graph][synth]") {
     Rig rig;
     rig.addNode(2, TrackKind::Instrument, Rig::noteConfig({NoteSpan{100, 4900, 69, 127}}));

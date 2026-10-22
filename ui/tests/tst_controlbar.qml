@@ -52,6 +52,40 @@ TestCase {
         enter(l.positionCell, "x")
         compare(msgs.length, 3)
     }
+    function test_the_signature_and_key_cells_open_lists_to_choose_from() {
+        var l = createTemporaryObject(lcdC, this)
+        verify(l.project.newProjectInTempForTest())
+        const sigMenu = findChild(l, "signatureMenu")
+        const keyMenu = findChild(l, "keyMenu")
+        verify(sigMenu !== null && keyMenu !== null)
+        compare(sigMenu.count, 6 + 1 + 7 + 1 + 1)   // common, separator, other, separator, Custom…
+        compare(keyMenu.count, 12 + 1 + 12)
+        // a key from the list is the project key; the one that is current is checked
+        keyMenu.itemAt(5).triggered()   // C major
+        tryCompare(l.project, "projectKey", "C maj")
+        keyMenu.itemAt(13 + 5).triggered()   // A minor
+        tryCompare(l.project, "projectKey", "A min")
+    }
+    function test_a_signature_from_the_list_asks_whether_to_change_or_insert() {
+        var l = createTemporaryObject(lcdC, this)
+        verify(l.project.newProjectInTempForTest())
+        const sigMenu = findChild(l, "signatureMenu")
+        const ask = findChild(l, "signatureAsk")
+        sigMenu.itemAt(0).triggered()   // 3/4
+        tryVerify(function () { return ask.opened })
+        findChild(ask.contentItem, "signatureChange").clicked()
+        tryVerify(function () { return !ask.opened })
+        tryCompare(l.project, "signatureText", "3/4")
+        // "Don't ask again" goes straight to changing the project signature
+        sigMenu.itemAt(2).triggered()   // 5/4
+        tryVerify(function () { return ask.opened })
+        ask.dontAsk = true
+        findChild(ask.contentItem, "signatureChange").clicked()
+        tryCompare(l.project, "signatureText", "5/4")
+        sigMenu.itemAt(1).triggered()   // 4/4: no question now
+        tryCompare(l.project, "signatureText", "4/4")
+        verify(!ask.opened)
+    }
     function test_escape_cancels_the_edit() {
         var l = createTemporaryObject(lcdC, this)
         var msgs = []

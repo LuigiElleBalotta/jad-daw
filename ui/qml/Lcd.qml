@@ -1,10 +1,11 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Jad
 
 // The LCD: position (bars or time), tempo, time signature and key. Double click a cell to type a value; Enter applies it
 // (an invalid value restores the old one and emits `message`), Escape cancels. A single click on the position switches
-// between bars and time.
+// between bars and time; a single click on the signature or the key opens a list to choose from, as in Logic (Custom… types a signature).
 Rectangle {
     id: root
     required property ProjectController project
@@ -17,6 +18,22 @@ Rectangle {
 
     function editPosition() { posCell.begin() }
     function editKey() { keyCell.begin() }
+
+    // the lists of Logic's LCD: common signatures, and the keys in the order of the circle of fifths (majors, then minors)
+    readonly property var commonSignatures: [[3, 4], [4, 4], [5, 4], [6, 8], [7, 8], [12, 8]]
+    readonly property var otherSignatures: [[2, 4], [6, 4], [1, 4], [22, 1], [20, 1], [8, 1], [9, 1]]
+    readonly property var majorKeys: [["B", "B"], ["E", "E"], ["A", "A"], ["D", "D"], ["G", "G"], ["C", "C"], ["F", "F"], ["B♭", "A#"], ["E♭", "D#"], ["A♭", "G#"], ["D♭", "C#"], ["G♭", "F#"]]
+    readonly property var minorKeys: [["G♯m", "G#"], ["C♯m", "C#"], ["F♯m", "F#"], ["Bm", "B"], ["Em", "E"], ["Am", "A"], ["Dm", "D"], ["Gm", "G"], ["Cm", "C"], ["Fm", "F"], ["B♭m", "A#"], ["E♭m", "D#"]]
+    // sharps are how the project stores a key, so its text is compared with `<sharp name> maj` or `min`
+    function isCurrentKey(name, minor) { return root.project.projectKey === name + (minor ? " min" : " maj") }
+    function isCurrentSignature(n, d) { return root.project.signatureText === n + "/" + d }
+    // a signature picked from the list: Logic asks whether it replaces the project's signature or starts a new one at the playhead
+    property var pendingSignature: null
+    function chooseSignature(n, d) {
+        if (root.project.projectSetting("lcd.signatureAsk", "1") === "0") { root.project.setSignature(n, d); return }
+        pendingSignature = { numerator: n, denominator: d }
+        signatureAsk.open()
+    }
 
     implicitWidth: row.implicitWidth + Theme.spacing[6] * 2
     implicitHeight: Theme.sizeControlLarge
@@ -136,6 +153,7 @@ Rectangle {
             minWidth: 40
             shown: root.project.signatureText
             caption: qsTr("SIGNATURE")
+            onSingleClicked: signatureMenu.popup(sigCell, 0, sigCell.height)
             onCommit: (text) => {
                 const s = LcdParser.signature(text)
                 if (s.numerator === undefined) { root.message(qsTr("Invalid time signature")); return }
@@ -147,7 +165,79 @@ Rectangle {
             id: keyCell
             shown: root.project.projectKey
             caption: qsTr("KEY")
+            onSingleClicked: keyMenu.popup(keyCell, 0, keyCell.height)
             onCommit: (text) => { if (!root.project.setProjectKey(text)) root.message(qsTr("Invalid key (for example C, F# min, Bb maj)")) }
+        }
+    }
+
+    component SignatureItems: Repeater {
+        delegate: ThemedMenuItem {
+            required property var modelData
+            text: modelData[0] + "/" + modelData[1]
+            checkable: true
+            checked: root.isCurrentSignature(modelData[0], modelData[1])
+            onTriggered: root.chooseSignature(modelData[0], modelData[1])
+        }
+    }
+    ThemedMenu {
+        id: signatureMenu
+        objectName: "signatureMenu"
+        SignatureItems { model: root.commonSignatures }
+        MenuSeparator { }
+        SignatureItems { model: root.otherSignatures }
+        MenuSeparator { }
+        ThemedMenuItem { text: qsTr("Custom…"); onTriggered: sigCell.begin() }
+    }
+    component KeyItems: Repeater {
+        property bool minor: false
+        delegate: ThemedMenuItem {
+            required property var modelData
+            text: modelData[0]
+            checkable: true
+            checked: root.isCurrentKey(modelData[1], minor)
+            onTriggered: root.project.setProjectKey(modelData[1] + (minor ? " min" : " maj"))
+        }
+    }
+    ThemedMenu {
+        id: keyMenu
+        objectName: "keyMenu"
+        KeyItems { minor: false; model: root.majorKeys }
+        MenuSeparator { }
+        KeyItems { minor: true; model: root.minorKeys }
+    }
+    Dialog {
+        id: signatureAsk
+        objectName: "signatureAsk"
+        modal: true
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: 460
+        padding: 16
+        background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
+        header: Item { height: 0 }
+        property bool dontAsk: false
+        function answer(insert) {
+            const sig = root.pendingSignature
+            if (dontAsk) root.project.setProjectSetting("lcd.signatureAsk", "0")
+            if (sig) {
+                if (insert) root.project.setSignatureAt(root.project.barToBeats(1 + Math.floor(root.project.positionBeats / root.project.barBeats)), sig.numerator, sig.denominator)
+                else root.project.setSignature(sig.numerator, sig.denominator)
+            }
+            root.pendingSignature = null
+            close()
+        }
+        contentItem: ColumnLayout {
+            spacing: Theme.spacing[3]
+            Text { text: qsTr("Do you want to change the project time signature?"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeTitleSize; font.weight: Theme.fontTypeTitleWeight; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text { text: qsTr("You can change the signature of the whole project, or insert a new signature change at the playhead."); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            ThemedCheckBox { objectName: "signatureDontAsk"; text: qsTr("Don't ask again"); checked: signatureAsk.dontAsk; onToggled: signatureAsk.dontAsk = checked }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: Theme.spacing[2]
+                IconButton { objectName: "signatureCancel"; implicitHeight: 26; label: qsTr("Cancel"); onClicked: { root.pendingSignature = null; signatureAsk.close() } }
+                IconButton { objectName: "signatureInsert"; implicitHeight: 26; label: qsTr("Insert new signature"); onClicked: signatureAsk.answer(true) }
+                IconButton { objectName: "signatureChange"; implicitHeight: 26; label: qsTr("Change project signature"); active: true; fillActive: true; fillText: Theme.textPrimary; onClicked: signatureAsk.answer(false) }
+            }
         }
     }
 }

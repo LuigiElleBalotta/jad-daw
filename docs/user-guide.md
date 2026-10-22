@@ -46,8 +46,8 @@ From the top:
 1. **Menu bar**: File, Edit, Track, Navigate, Record, Mix, View, Window, Help. Every command in every menu comes from one table, so the
    same commands, with the same shortcuts, are available in the Key Commands window.
 2. **Control bar**: the transport (rewind, back, forward, stop, play, record), the **LCD** with the position (bars, beats, divisions, ticks),
-   the tempo, the time signature and the key, then Metronome (`Met`), Count-in (`1 2 3`), Cycle, and the Master volume. Double click the LCD
-   values to type a new tempo or signature. The red pill says when the audio device is not running.
+   the tempo, the time signature and the key, then Metronome (`Met`), Count-in (`1 2 3`), Cycle, and the Master volume. Click the signature or the key to choose one from a list
+   (the signature list has `Custom…` to type one); double click any value to type it, the tempo included. Picking a signature asks whether to change the project's signature or insert a new one at the playhead. The red pill says when the audio device is not running.
    On the left the panel buttons: `Lib` Library, `Insp` Inspector, `?` help, `SC` Smart Controls, the Mixer, `Ed` Editors, `Lp` Loop browser.
 3. **Local toolbar**: Edit and Functions menus, the tool buttons, Snap and Drag mode, the track filters, zoom, `Catch` (the view follows the playhead), Undo and Redo.
 4. **Track list and timeline** with the ruler on top. The **Inspector** on the left shows the selected region and track.

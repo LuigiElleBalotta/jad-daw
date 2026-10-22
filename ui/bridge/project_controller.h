@@ -27,6 +27,7 @@
 
 #include "lpc/audio/click.h"
 #include "lpc/audio/engine.h"
+#include "lpc/audio/live_meter.h"
 #include "lpc/device.h"
 #include "lpc/input_stats.h"
 #include "bridge/inspector_model.h"
@@ -307,6 +308,7 @@ public:
     Q_INVOKABLE void openEffectEditor(const QString& trackId, int index);
     Q_INVOKABLE void closeEffectEditor();
     Q_INVOKABLE void setEditorAnalyzer(bool on, bool post);   // the spectrum of the open insert (before or after it), read by editorSpectrum
+    Q_INVOKABLE QVariantMap editorLoudness();                  // {momentary, shortTerm, integrated (LUFS), truePeakDb, correlation} of what the analyzer tap hears; empty until it has heard 400 ms
     Q_INVOKABLE QVariantList editorSpectrum(int bands) const; // the band levels in dB, log-spaced 20 Hz to 20 kHz; empty while nothing has been heard
     Q_INVOKABLE QVariantList effectSpecs() const;                    // the built-in effects and their parameters (effect_specs.h)
     Q_INVOKABLE QVariantList instrumentSpecs() const;                // the built-in instruments and their parameters
@@ -1047,6 +1049,8 @@ private:
     QVariantMap effectClipboard_;
     QVariantMap editorMeters_;
     double editorIn_ = -120.0, editorOut_ = -120.0, editorRed_ = 0.0;
+    std::unique_ptr<lpc::audio::LiveMeter> liveMeter_;  // fed from the analyzer tap by editorLoudness
+    std::uint64_t liveCursor_ = 0;
     double editorCh_[4] = {-120.0, -120.0, -120.0, -120.0};  // left and right going in, then left and right coming out
     QStringList pendingSmartFollow_, pendingSmartTempo_;  // new audio regions the Smart Tempo project settings act on, when the next snapshot lists them
     QStringList pendingRegionSelection_;  // ids of regions just pasted: selected when the next snapshot has them

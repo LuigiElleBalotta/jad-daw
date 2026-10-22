@@ -15,6 +15,17 @@ struct LoudnessStats {
     double truePeakDb = -200.0;     // dBTP, 4x oversampled
 };
 
+// The two K-weighting stages of BS.1770 as a filter for one channel of a stream.
+class KWeighting {
+public:
+    explicit KWeighting(int sampleRate);
+    double run(double x) noexcept;
+
+private:
+    double c_[2][5];  // b0 b1 b2 a1 a2 of each stage
+    double z_[2][2] = {};
+};
+
 LoudnessStats measureLoudness(const float* interleaved, int channels, std::int64_t frames, int sampleRate);
 inline LoudnessStats measureLoudness(const WavData& d) { return measureLoudness(d.samples.data(), d.channels, d.frames(), d.sampleRate); }
 

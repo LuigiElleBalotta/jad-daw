@@ -27,12 +27,16 @@ public:
     void push(const float* l, const float* r, int frames) noexcept;
     // UI thread: the last kWindow samples, false until that many have come in
     bool latest(std::vector<float>& out) const;
+    // UI thread: the samples of both channels that came in since `cursor` (start at 0; it is moved on). If more than the ring holds came in, the oldest are lost.
+    // Returns false when nothing is new.
+    bool take(std::uint64_t& cursor, std::vector<float>& l, std::vector<float>& r) const;
 
 private:
     std::atomic<bool> armed_{false}, post_{true};
     std::atomic<int> insert_{-1};
     std::atomic<std::uint64_t> hi_{0}, lo_{0};
     std::unique_ptr<std::atomic<float>[]> ring_{new std::atomic<float>[kSize]()};  // on the heap: a RenderGraph lives on the stack in tests
+    std::unique_ptr<std::atomic<float>[]> ringL_{new std::atomic<float>[kSize]()}, ringR_{new std::atomic<float>[kSize]()};
     std::atomic<std::uint64_t> written_{0};
 };
 

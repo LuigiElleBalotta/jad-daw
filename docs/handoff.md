@@ -14,7 +14,7 @@ Last update: 2026-10-21, after the UI build and tests.
 F0, F0b converters and icon tracer; F1 presets (324) and Match EQ curves (75); F2 pan law, Channel EQ, compressor circuits, gate/limiter, Match EQ; F3 Mastering macro and limiter fit like `AutoAdjustLimiter`; F4 Klopfgeist click; F5a-e onnxruntime, Smart Tempo and Flex Pitch networks, Neural Saturation insert; F5f models and DLLs shipped with the app (`lpc_copy_models`); E1, E2, E3, E4, E5, E6, E8, E10, E13, E14.
 
 ## Build state (2026-10-21)
-Everything is built and tested: core (`build-core`) 426 test cases, 1 skipped; UI QML 223, bridge 172 (1 skipped), all green. The UI had never been compiled before this day: only missing includes showed up.
+Everything is built and tested: core (`build-core`) 428 test cases, 1 skipped; UI QML 224, bridge 172 (1 skipped), all green. The UI had never been compiled before this day: only missing includes showed up.
 
 ## What is missing, in order
 1. G (the owner, 2026-10-21): graphical windows for the stock effects. Done: Channel EQ, Compressor, Limiter, Adaptive Limiter, Noise Gate, Mastering Assistant, Match EQ, Reverb, Delay, Neural Saturation, Synth (files `ui/qml/Fx*View.qml`, frame `FxShell.qml`, chosen in the Loader of `EffectEditorWindow.qml`). Also done since: EQ Analyzer (SpectrumTap), Q-Couple, Processing (Stereo/Left/Right/Mid/Side, param `processing`), Gate Monitor + Characteristics (`keyMonitor`, `keyMode`), compressor side chain filter. Left: Drum Kit/External MIDI (still the knob grid), and G4 in the roadmap (what the windows draw but the engine does not do).

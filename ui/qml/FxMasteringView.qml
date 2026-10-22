@@ -214,6 +214,51 @@ FxShell {
         color: "#ff6a5a"; font.family: Theme.fontFamily; font.pixelSize: 15
     }
 
+    // the live meters: what the insert puts out right now (momentary and short-term loudness, integrated since the window opened, true peak, stereo correlation)
+    property var live: ({})
+    Component.onCompleted: root.editor.project.setEditorAnalyzer(true, true)
+    Timer {
+        interval: 100; repeat: true; running: root.visible
+        onTriggered: root.live = root.editor.project.editorLoudness()
+    }
+    Row {
+        objectName: "masteringLive"
+        x: 618; y: 420; spacing: 6
+        Repeater {
+            model: [
+                { label: "M", value: root.live.momentary, unit: "LUFS" },
+                { label: "S", value: root.live.shortTerm, unit: "LUFS" },
+                { label: "I", value: root.live.integrated, unit: "LUFS" },
+                { label: "TP", value: root.live.truePeakDb, unit: "dBTP" }
+            ]
+            delegate: Rectangle {
+                required property var modelData
+                width: 72; height: 40; radius: 3; color: "#0b2236"
+                Text { x: 6; y: 3; text: parent.modelData.label; color: "#6f89a3"; font.family: Theme.fontFamily; font.pixelSize: 12 }
+                Text { x: 6; y: 3; width: parent.width - 12; horizontalAlignment: Text.AlignRight; text: parent.modelData.unit; color: "#4d667f"; font.family: Theme.fontFamily; font.pixelSize: 11 }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter; y: 17
+                    text: parent.modelData.value === undefined || parent.modelData.value <= -199 ? "-∞" : parent.modelData.value.toFixed(1)
+                    color: parent.modelData.label === "TP" && parent.modelData.value > -1 ? "#ff6a5a" : root.accent
+                    font.family: Theme.fontFamily; font.pixelSize: 17
+                }
+            }
+        }
+        Rectangle {  // the correlation: -1 at the left, +1 at the right, the bar grows from the middle
+            objectName: "masteringCorrelation"
+            width: 72; height: 40; radius: 3; color: "#0b2236"
+            Text { x: 6; y: 3; text: qsTr("Corr"); color: "#6f89a3"; font.family: Theme.fontFamily; font.pixelSize: 12 }
+            Rectangle { x: 6; y: 24; width: parent.width - 12; height: 8; color: "#050f1a" }
+            Rectangle {
+                readonly property real c: root.live.correlation ?? 0
+                x: 6 + (parent.width - 12) / 2 + Math.min(0, c) * (parent.width - 12) / 2; y: 24; height: 8
+                width: Math.abs(c) * (parent.width - 12) / 2
+                color: c < 0 ? "#ff6a5a" : "#4fe05a"
+            }
+            Rectangle { x: parent.width / 2 - 0.5; y: 22; width: 1; height: 12; color: "#6f89a3" }
+        }
+    }
+
     // bottom row
     Key {
         objectName: "masteringReanalyze"

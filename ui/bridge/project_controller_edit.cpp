@@ -1656,8 +1656,28 @@ void ProjectController::openEffectEditor(const QString& trackId, int index) {
 void ProjectController::setEditorAnalyzer(bool on, bool post) {
     if (!engine_) return;
     const auto id = lpc::Uuid::parse(effectEditorTrack_.toStdString());
-    if (on && id && effectEditorIndex_ >= 0) engine_->armSpectrum(*id, effectEditorIndex_, post);
-    else engine_->disarmSpectrum();
+    if (on && id && effectEditorIndex_ >= 0) {
+        engine_->armSpectrum(*id, effectEditorIndex_, post);
+        liveMeter_ = std::make_unique<lpc::audio::LiveMeter>(engine_->sampleRate());
+        liveCursor_ = 0;
+    } else {
+        engine_->disarmSpectrum();
+        liveMeter_.reset();
+    }
+}
+
+QVariantMap ProjectController::editorLoudness() {
+    QVariantMap out;
+    if (!engine_ || !liveMeter_) return out;
+    std::vector<float> l, r;
+    if (engine_->takeSpectrumSamples(liveCursor_, l, r)) liveMeter_->process(l.data(), r.data(), l.size());
+    if (liveMeter_->momentary() <= -199.0) return out;
+    out.insert("momentary", liveMeter_->momentary());
+    out.insert("shortTerm", liveMeter_->shortTerm());
+    out.insert("integrated", liveMeter_->integrated());
+    out.insert("truePeakDb", liveMeter_->truePeakDb());
+    out.insert("correlation", liveMeter_->correlation());
+    return out;
 }
 
 QVariantList ProjectController::editorSpectrum(int bands) const {
@@ -1670,6 +1690,7 @@ QVariantList ProjectController::editorSpectrum(int bands) const {
 
 void ProjectController::closeEffectEditor() {
     if (engine_) engine_->disarmSpectrum();
+    liveMeter_.reset();
     if (effectEditorTrack_.isEmpty()) return;
     effectEditorTrack_.clear();
     effectEditorIndex_ = -1;

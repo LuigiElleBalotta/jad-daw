@@ -109,6 +109,15 @@ TestCase {
         tryVerify(function () { return o.c.trackInserts(o.id)[0].params.keyMonitor === 1 })
     }
 
+    function test_the_mastering_window_shows_the_live_meters() {
+        const o = openInsert("builtin.mastering")
+        const view = findChild(o.w.contentItem, "graphicView")
+        tryVerify(function () { return view.item !== null })
+        verify(findChild(view.item, "masteringLive") !== null)
+        verify(findChild(view.item, "masteringCorrelation") !== null)
+        compare(Object.keys(view.item.live).length, 0)   // nothing is heard without the audio thread
+    }
+
     function test_the_compressor_side_chain_panel_sets_the_filter() {
         const o = openInsert("builtin.compressor")
         const view = findChild(o.w.contentItem, "graphicView")

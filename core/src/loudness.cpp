@@ -63,6 +63,24 @@ double cubic(double a, double b, double c, double d, double t) {
 
 }  // namespace
 
+KWeighting::KWeighting(int sampleRate) {
+    const auto f = kFilters(sampleRate);
+    for (int s = 0; s < 2; ++s) {
+        c_[s][0] = f[static_cast<std::size_t>(s)].b0; c_[s][1] = f[static_cast<std::size_t>(s)].b1; c_[s][2] = f[static_cast<std::size_t>(s)].b2;
+        c_[s][3] = f[static_cast<std::size_t>(s)].a1; c_[s][4] = f[static_cast<std::size_t>(s)].a2;
+    }
+}
+
+double KWeighting::run(double x) noexcept {
+    for (int s = 0; s < 2; ++s) {
+        const double y = c_[s][0] * x + z_[s][0];
+        z_[s][0] = c_[s][1] * x - c_[s][3] * y + z_[s][1];
+        z_[s][1] = c_[s][2] * x - c_[s][4] * y;
+        x = y;
+    }
+    return x;
+}
+
 double blockLufs(double meanSquare) { return meanSquare > 0.0 ? -0.691 + 10.0 * std::log10(meanSquare) : -200.0; }
 
 // the energy (mean square, channels summed) of every window of `window` frames, hopping a quarter of 400 ms

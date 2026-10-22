@@ -42,6 +42,7 @@ public:
     void armSpectrum(const Uuid& track, int insert, bool post) { graph_.spectrumTap().arm(track, insert, post); }
     void disarmSpectrum() { graph_.spectrumTap().disarm(); }
     bool spectrumBands(std::vector<float>& out, int bands);
+    bool takeSpectrumSamples(std::uint64_t& cursor, std::vector<float>& l, std::vector<float>& r) { return graph_.spectrumTap().take(cursor, l, r); }  // the stereo samples since the cursor, for the live meters
     float masterPeak() const { return masterPeakPub_.load(std::memory_order_relaxed); }
     std::size_t pendingMessages() const { return messages_.sizeApprox(); }
     std::uint64_t garbageOverflow() const { return garbageOverflow_.load(std::memory_order_relaxed); }

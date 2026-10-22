@@ -18,7 +18,11 @@ void SpectrumTap::arm(const Uuid& track, int insert, bool post) noexcept {
 
 void SpectrumTap::push(const float* l, const float* r, int frames) noexcept {
     std::uint64_t w = written_.load(std::memory_order_relaxed);
-    for (int i = 0; i < frames; ++i, ++w) ring_[w & (kSize - 1)].store(0.5f * (l[i] + r[i]), std::memory_order_relaxed);
+    for (int i = 0; i < frames; ++i, ++w) {
+        ring_[w & (kSize - 1)].store(0.5f * (l[i] + r[i]), std::memory_order_relaxed);
+        ringL_[w & (kSize - 1)].store(l[i], std::memory_order_relaxed);
+        ringR_[w & (kSize - 1)].store(r[i], std::memory_order_relaxed);
+    }
     written_.store(w, std::memory_order_release);
 }
 
@@ -27,6 +31,22 @@ bool SpectrumTap::latest(std::vector<float>& out) const {
     if (w < kWindow) return false;
     out.resize(kWindow);
     for (std::size_t i = 0; i < kWindow; ++i) out[i] = ring_[(w - kWindow + i) & (kSize - 1)].load(std::memory_order_relaxed);
+    return true;
+}
+
+bool SpectrumTap::take(std::uint64_t& cursor, std::vector<float>& l, std::vector<float>& r) const {
+    const std::uint64_t w = written_.load(std::memory_order_acquire);
+    if (w < cursor) cursor = 0;                       // armed again: the count started over
+    if (w - cursor > kSize - 512) cursor = w - (kSize - 512);  // too far behind: keep what the audio thread cannot be overwriting
+    if (w == cursor) return false;
+    const std::size_t n = static_cast<std::size_t>(w - cursor);
+    l.resize(n);
+    r.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        l[i] = ringL_[(cursor + i) & (kSize - 1)].load(std::memory_order_relaxed);
+        r[i] = ringR_[(cursor + i) & (kSize - 1)].load(std::memory_order_relaxed);
+    }
+    cursor = w;
     return true;
 }
 

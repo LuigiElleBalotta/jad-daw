@@ -17,3 +17,6 @@ build-plugin/
 __pycache__/
 jad-daw-private
 third_party/onnxruntime/
+
+# San Francisco fonts: Apple licence, not redistributable (the app uses them when they are here)
+assets/fonts/sf-pro/

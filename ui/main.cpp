@@ -1,4 +1,6 @@
 #include <QCommandLineParser>
+#include <QCoreApplication>
+#include <QDir>
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QImage>
@@ -26,6 +28,18 @@ int main(int argc, char** argv) {
 #endif
     QQuickStyle::setStyle("Basic");
     QFontDatabase::addApplicationFont(":/qt/qml/Jad/fonts/InterVariable.ttf");
+    // San Francisco (SF Pro Text) is used when it is there: Apple's licence does not let it be redistributed, so it is not in the repository. Put the .otf files in
+    // `fonts/` next to the program or in `assets/fonts/sf-pro/` of the source tree (any folder above the program); Theme.fontFamily falls back to Inter without them.
+    {
+        QDir dir(QCoreApplication::applicationDirPath());
+        for (int up = 0; up < 8; ++up, dir.cdUp()) {
+            for (const QString& sub : {QStringLiteral("fonts"), QStringLiteral("assets/fonts/sf-pro")}) {
+                const QDir fonts(dir.filePath(sub));
+                for (const QString& file : fonts.entryList({QStringLiteral("SF-Pro-*.otf"), QStringLiteral("SF-Pro-*.ttf")}, QDir::Files))
+                    QFontDatabase::addApplicationFont(fonts.filePath(file));
+            }
+        }
+    }
 
     QCommandLineParser parser;
     parser.addHelpOption();

@@ -53,7 +53,8 @@ QtObject {
     readonly property color trackMagentaSolid: "#d946ef"
     readonly property color trackMagentaFill: "#5a1a63"
     readonly property real waveformStrokeOpacity: 0.7
-    readonly property string fontFamily: "Inter"
+    // San Francisco when the files are installed (see ui/main.cpp), else Inter
+    readonly property string fontFamily: Qt.fontFamilies().indexOf("SF Pro Text") >= 0 ? "SF Pro Text" : "Inter"
     readonly property var fontFallback: ["system-ui","sans-serif"]
     readonly property var fontFeatures: ["tnum"]
     readonly property real fontTypeLcdSize: 22

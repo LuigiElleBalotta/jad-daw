@@ -79,7 +79,9 @@ Same token names, different values. Not part of v0.1.
 
 ## 3. Typography
 
-- **Family:** Inter (variable). Fallback: system-ui, sans-serif.
+- **Family:** San Francisco (SF Pro Text) when its files are installed, else Inter (variable, bundled). Apple's licence does not allow SF to be redistributed, so the
+  `.otf` files stay out of the repository: put `SF-Pro-Text-*.otf` in `fonts/` next to the program or in `assets/fonts/sf-pro/` (ignored by git); `ui/main.cpp` loads them
+  and `Theme.fontFamily` picks them. Fallback: system-ui, sans-serif.
 - **Numerals:** tabular (`font-feature-settings: "tnum"`) for LCD, meters, time, BPM, parameter values.
 - Monospace for sample/tick readouts is not needed; tabular Inter is enough.
 

@@ -124,7 +124,7 @@ Dialog {
                             Layout.alignment: Qt.AlignHCenter
                             width: 44; height: 44; radius: 22
                             color: card.modelData.color
-                            Text { anchors.centerIn: parent; text: card.modelData.id === "midi" ? "♫" : (card.modelData.id === "pattern" ? "▦" : (card.modelData.id === "session" ? "♪" : "|||")); color: "white"; font.pixelSize: 20 }
+                            TrackIcon { anchors.centerIn: parent; size: 26; tint: "white"; glyphFile: ({ "midi": "icon-midi", "pattern": "icon-pattern", "session": "icon-keyboard" })[card.modelData.id] ?? "icon-waveform" }
                         }
                         Text { Layout.alignment: Qt.AlignHCenter; text: card.modelData.label; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; font.weight: 600 }
                         Repeater {

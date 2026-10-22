@@ -37,6 +37,7 @@ Window {
         spacing: Theme.spacing[2]
         RowLayout {
             spacing: Theme.spacing[2]
+            TrackIcon { size: 20; glyphFile: "icon-key-commands"; opacity: 0.6 }
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 26
                 color: Theme.surfaceRaised; radius: Theme.radiusControl - 2

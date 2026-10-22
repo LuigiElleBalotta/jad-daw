@@ -10,7 +10,19 @@ TestCase {
 
     Component { id: ctlC; ProjectController { audioEnabled: false } }
     Component { id: dlgC; PreferencesDialog { } }
+    Component { id: iconC; TrackIcon { size: 16 } }
     Component { id: selC; SelectField { width: 200; height: 24 } }
+
+    function test_every_section_has_an_icon_that_loads() {
+        const c = createTemporaryObject(ctlC, this)
+        const d = createTemporaryObject(dlgC, this, { project: c, parent: this })
+        compare(d.sectionIcons.length, d.sections.length)
+        const holder = createTemporaryObject(iconC, this)
+        for (const name of d.sectionIcons.concat(["icon-pattern", "icon-keyboard", "icon-io-labels", "icon-key-commands", "icon-sampler"])) {
+            holder.glyphFile = name
+            tryCompare(holder.children[0], "status", Image.Ready)
+        }
+    }
 
     function test_the_audio_section_lists_the_devices_and_applies_the_choice() {
         const c = createTemporaryObject(ctlC, this)

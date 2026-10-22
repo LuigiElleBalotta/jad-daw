@@ -14,14 +14,14 @@ Last update: 2026-10-21, after the UI build and tests.
 F0, F0b converters and icon tracer; F1 presets (324) and Match EQ curves (75); F2 pan law, Channel EQ, compressor circuits, gate/limiter, Match EQ; F3 Mastering macro and limiter fit like `AutoAdjustLimiter`; F4 Klopfgeist click; F5a-e onnxruntime, Smart Tempo and Flex Pitch networks, Neural Saturation insert; F5f models and DLLs shipped with the app (`lpc_copy_models`); E1, E2, E3, E4, E5, E6, E8, E10, E13, E14.
 
 ## Build state (2026-10-21)
-Everything is built and tested: core (`build-core`) 434 test cases, 1 skipped; UI QML 227, bridge 172 (1 skipped), all green. The UI had never been compiled before this day: only missing includes showed up.
+Everything is built and tested: core (`build-core`) 434 test cases, 1 skipped; UI QML 228, bridge 172 (1 skipped), all green. The UI had never been compiled before this day: only missing includes showed up.
 
 ## What is missing, in order
 1. G (the owner, 2026-10-21): graphical windows for the stock effects. Done: Channel EQ, Compressor, Limiter, Adaptive Limiter, Noise Gate, Mastering Assistant, Match EQ, Reverb, Delay, Neural Saturation, Synth (files `ui/qml/Fx*View.qml`, frame `FxShell.qml`, chosen in the Loader of `EffectEditorWindow.qml`). Also done since: EQ Analyzer (SpectrumTap), Q-Couple, Processing (Stereo/Left/Right/Mid/Side, param `processing`), Gate Monitor + Characteristics (`keyMonitor`, `keyMode`), compressor side chain filter. Drum Kit has its pad window (`FxDrumKitView`, no Logic reference exists for it). Left: External MIDI (still the knob grid; no reference), and G4 in the roadmap (what the windows draw but the engine does not do).
 2. (done) Pattern tracks: the Pattern card of Create New Track makes a drum instrument track and opens the Step Sequencer.
 3. E1 sub-item: Record Automation with Audio Regions (Trim and Relative are done).
 4. Engine behaviour still only saved for: region automation priority and preset value for regions (there is no region automation in the model: it would need lanes per region, edits on split/trim/glue and an editing view), loadOnlyNeeded, resetRecordEnable, midiSendAfterLoad, assets copy flags (the project always keeps its own copy of the audio), trim start of new regions, allow tempo change recording. Done: balancer pan law, colorize takes, MIDI thru, erase duplicates, data reduction, metronome options and MIDI click, CAF bounce (`writeCaf`).
-5. F7 simplify and recolour the traced SVGs and wire them into QML. F8 macOS CI ctest 364.
+5. F7 done (ten glyphs wired, see roadmap). F8 macOS CI ctest 364: a likely cause fixed, CI not re-run.
 6. The replacement of the -12/+12 dB guess in `MasteringProcessor`: the Mac could not say what level the Analog Model networks expect (see mac-pass-3.md 2b/2e).
 
 ## How to build and test

@@ -14,6 +14,7 @@ Dialog {
     height: 420
     property int section: 1
     readonly property var sections: [qsTr("General"), qsTr("Audio"), qsTr("MIDI"), qsTr("Display"), qsTr("Advanced")]
+    readonly property var sectionIcons: ["icon-prefs", "icon-waveform", "icon-midi", "icon-analysis", "icon-settings"]
 
     // the choices being edited (applied with the Apply button)
     property string output: ""
@@ -49,9 +50,10 @@ Dialog {
                         width: parent.width
                         height: 28
                         color: root.section === index ? Theme.accentPrimary : "transparent"
+                        TrackIcon { x: Theme.spacing[3]; anchors.verticalCenter: parent.verticalCenter; size: 16; glyphFile: root.sectionIcons[parent.index]; tint: Theme.textPrimary }
                         Text {
                             anchors.fill: parent
-                            anchors.leftMargin: Theme.spacing[3]
+                            anchors.leftMargin: Theme.spacing[3] + 24
                             verticalAlignment: Text.AlignVCenter
                             text: parent.modelData
                             color: Theme.textPrimary

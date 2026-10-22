@@ -32,6 +32,7 @@ Dialog {
         spacing: Theme.spacing[2]
         RowLayout {
             Layout.fillWidth: true
+            TrackIcon { size: 20; glyphFile: "icon-io-labels"; opacity: 0.6 }
             IconButton { implicitHeight: 24; label: qsTr("Reset"); objectName: "ioReset"; onClicked: root.project.resetIoLabels() }
             Item { Layout.fillWidth: true }
             IconButton { implicitHeight: 24; label: qsTr("Close"); onClicked: root.close() }

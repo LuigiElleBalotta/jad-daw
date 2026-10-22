@@ -166,6 +166,16 @@ qt_add_qml_module(jad_ui_lib
         qml/TrackInspector.qml
         qml/PluginManager.qml
     RESOURCES
+        qml/icons/icon-prefs.svg
+        qml/icons/icon-waveform.svg
+        qml/icons/icon-midi.svg
+        qml/icons/icon-analysis.svg
+        qml/icons/icon-settings.svg
+        qml/icons/icon-pattern.svg
+        qml/icons/icon-io-labels.svg
+        qml/icons/icon-key-commands.svg
+        qml/icons/icon-keyboard.svg
+        qml/icons/icon-sampler.svg
         qml/icons/play.svg
         qml/icons/stop.svg
         qml/icons/loop.svg

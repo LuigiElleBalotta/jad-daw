@@ -25,7 +25,7 @@ FxShell {
     Rectangle { x: 726; y: 20; width: 1; height: 296; color: "#17283a" }
 
     Row {  // Gate | Ducker
-        x: 90; y: 18
+        x: 90; y: 10
         Repeater {
             model: [qsTr("Gate"), qsTr("Ducker")]
             delegate: Rectangle {
@@ -73,7 +73,7 @@ FxShell {
         onReleased: (v) => root.editor.commit("lookahead", v)
     }
     Row {  // Open and Close
-        x: 470; y: 22
+        x: 470; y: 12
         spacing: 38
         Row { spacing: 8; Text { text: qsTr("Open"); color: "#7f93a8"; font.family: Theme.fontFamily; font.pixelSize: 19 } Rectangle { y: 7; width: 10; height: 10; radius: 5; color: !root.closed ? "#8dffa0" : "#0f1a26" } }
         Row { spacing: 8; Text { text: qsTr("Close"); color: "#7f93a8"; font.family: Theme.fontFamily; font.pixelSize: 19 } Rectangle { y: 7; width: 10; height: 10; radius: 5; color: root.closed ? "#8dffa0" : "#0f1a26" } }

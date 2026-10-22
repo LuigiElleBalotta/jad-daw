@@ -74,34 +74,30 @@ Dialog {
             Label { text: qsTr("Destination") }
             ColumnLayout {
                 spacing: 2
-                CheckBox {
+                ThemedCheckBox {
                     objectName: "destUncompressed"
                     checked: root.destPcm
                     enabled: root.destMp3 || root.destM4a   // at least one destination stays on
                     text: qsTr("Uncompressed")
                     onToggled: root.destPcm = checked
-                    contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
                 }
-                CheckBox {
+                ThemedCheckBox {
                     objectName: "destMp3"
                     checked: root.destMp3
                     enabled: root.mp3Available && (root.destPcm || root.destM4a || !root.destMp3)
                     text: root.mp3Available ? qsTr("MP3 (256 kbit/s)") : qsTr("MP3 (no encoder on this system)")
                     onToggled: root.destMp3 = checked
-                    contentItem: Text { leftPadding: 24; text: parent.text; color: parent.enabled ? Theme.textPrimary : Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
                 }
-                CheckBox {
+                ThemedCheckBox {
                     objectName: "destM4a"
                     checked: root.destM4a
                     enabled: root.m4aAvailable && (root.destPcm || root.destMp3 || !root.destM4a)
                     text: root.m4aAvailable ? qsTr("M4A: AAC (192 kbit/s)") : qsTr("M4A: AAC (no encoder on this system)")
                     onToggled: root.destM4a = checked
-                    contentItem: Text { leftPadding: 24; text: parent.text; color: parent.enabled ? Theme.textPrimary : Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
                 }
-                CheckBox {
+                ThemedCheckBox {
                     enabled: false
                     text: qsTr("Burn to CD/DVD (not offered)")
-                    contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
                 }
             }
             Label { text: qsTr("File type") }
@@ -158,20 +154,18 @@ Dialog {
                 Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("%1 s").arg(root.tail.toFixed(1)); color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }
             }
         }
-        CheckBox {
+        ThemedCheckBox {
             objectName: "secondPassBox"
             enabled: root.rangeKind !== "project"
             checked: root.secondPass
             onToggled: root.secondPass = checked
             text: qsTr("Bounce 2nd Cycle Pass")
-            contentItem: Text { leftPadding: 24; text: parent.text; color: parent.enabled ? Theme.textPrimary : Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
         }
-        CheckBox {
+        ThemedCheckBox {
             objectName: "addToProjectBox"
             checked: root.addToProject
             onToggled: root.addToProject = checked
             text: qsTr("Add to Project")
-            contentItem: Text { leftPadding: 24; text: parent.text; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; verticalAlignment: Text.AlignVCenter }
         }
         Text {
             Layout.fillWidth: true

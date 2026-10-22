@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
     QCommandLineOption flexOption("flex", "Show Flex and switch the first audio track to the Flex mode <mode> for --screenshot.", "mode");
     QCommandLineOption sizeOption("size", "Window size for --screenshot, for example 1280x800.", "WxH", "1280x800");
     QCommandLineOption windowOption("window", "Open the dialog or window <name> for --screenshot (a window is pictured on its own).", "name");
+    QCommandLineOption effectOption("effect", "Open the window of an insert for --screenshot: <track>:<insert>, tracks counted from 1 (m: the master), the insert from 0 (-2: the instrument).", "track:insert");
     QCommandLineOption delayOption("delay", "Milliseconds to wait before the screenshot.", "ms", "1500");
     parser.addOption(projectOption);
     parser.addOption(noAudioOption);
@@ -58,6 +59,7 @@ int main(int argc, char** argv) {
     parser.addOption(sizeOption);
     parser.addOption(delayOption);
     parser.addOption(windowOption);
+    parser.addOption(effectOption);
     parser.process(app);
 
     QQmlApplicationEngine engine;
@@ -89,7 +91,7 @@ int main(int argc, char** argv) {
         const QString file = parser.value(screenshotOption);
         const int delay = parser.value(delayOption).toInt();
         // the state for the picture is set shortly before it is taken, once the project has been shown
-        QTimer::singleShot(delay, &app, [&parser, &flexOption, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &applyPatchOption, &menuOption, &windowOption, controller, window, file, &app] {
+        QTimer::singleShot(delay, &app, [&parser, &flexOption, &toolOption, &selectTrackOption, &selectRegionOption, &panelsOption, &applyPatchOption, &menuOption, &windowOption, &effectOption, controller, window, file, &app] {
             if (controller && parser.isSet(toolOption)) controller->setTool(parser.value(toolOption));
             if (controller && parser.isSet(flexOption)) {
                 controller->setFlexView(true);
@@ -119,9 +121,17 @@ int main(int argc, char** argv) {
                 controller->selectRegion(controller->regions()->regionIdAt(parser.value(selectRegionOption).toInt() - 1), "replace");
             if (parser.isSet(menuOption)) QMetaObject::invokeMethod(window, "showMenu", Q_ARG(QVariant, parser.value(menuOption).toInt()));
             QQuickWindow* shot = window;
-            if (parser.isSet(windowOption)) {
+            QString windowName = parser.isSet(windowOption) ? parser.value(windowOption) : QString();
+            if (controller && parser.isSet(effectOption)) {
+                const QStringList at = parser.value(effectOption).split(':');
+                if (at.size() == 2) {
+                    controller->openEffectEditor(at[0] == QLatin1String("m") ? controller->masterTrackId() : controller->tracks()->trackIdAt(at[0].toInt() - 1), at[1].toInt());
+                    windowName = QStringLiteral("effect");
+                }
+            }
+            if (!windowName.isEmpty()) {
                 QVariant opened;
-                QMetaObject::invokeMethod(window, "showWindow", Q_RETURN_ARG(QVariant, opened), Q_ARG(QVariant, parser.value(windowOption)));
+                QMetaObject::invokeMethod(window, "showWindow", Q_RETURN_ARG(QVariant, opened), Q_ARG(QVariant, windowName));
                 if (auto* other = qobject_cast<QQuickWindow*>(opened.value<QObject*>())) shot = other;  // a window of its own
             }
             QTimer::singleShot(parser.isSet(flexOption) ? 4000 : 600, &app, [shot, file] {

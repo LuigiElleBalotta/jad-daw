@@ -1,0 +1,853 @@
+{
+  "project": {
+    "markers": [],
+    "mediaPool": [
+      {
+        "channels": 1,
+        "frames": 460800,
+        "hash": "ee21a6149072cac720dc897f59ec68a93dde3c80c0480f31eb9acba58b1032c4",
+        "id": "dbfb3b2e-4132-4909-8505-c743c2ee7c41",
+        "path": "audio/loop.wav",
+        "sampleRate": 48000
+      }
+    ],
+    "name": "Untitled",
+    "sampleRate": 48000,
+    "tempoMap": {
+      "signatures": [
+        {
+          "denominator": 4,
+          "numerator": 4,
+          "tick": 0
+        }
+      ],
+      "tempos": [
+        {
+          "bpm": 100.0,
+          "tick": 0
+        }
+      ]
+    },
+    "tracks": [
+      {
+        "automation": [],
+        "color": "",
+        "id": "ffb35ea6-55dd-4ad0-abf4-64acd7ab1e2e",
+        "instrument": null,
+        "kind": "master",
+        "name": "Master",
+        "regions": [],
+        "strip": {
+          "gainDb": 0.0,
+          "inserts": [
+            {
+              "params": {},
+              "processorId": "builtin.mastering",
+              "state": ""
+            }
+          ],
+          "mute": false,
+          "output": "00000000-0000-0000-0000-000000000000",
+          "pan": 0.0,
+          "sends": [],
+          "solo": false
+        }
+      },
+      {
+        "automation": [],
+        "color": "orange",
+        "id": "a889356e-9811-42e3-a2f2-d11aa42d5aec",
+        "instrument": {
+          "params": {},
+          "processorId": "builtin.drums",
+          "state": ""
+        },
+        "kind": "instrument",
+        "name": "Drums",
+        "regions": [
+          {
+            "gainDb": 0.0,
+            "id": "c4564918-f6be-4c89-97b7-cc63b83807d6",
+            "length": 15360,
+            "mediaId": "00000000-0000-0000-0000-000000000000",
+            "notes": [
+              {
+                "length": 240,
+                "note": 36,
+                "start": 0,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 1440,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 2400,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 960,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 2880,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 0,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 480,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 960,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 1440,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 1920,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 2400,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 2880,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 3360,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 3840,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 5280,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 6240,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 4800,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 6720,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 3840,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 4320,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 4800,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 5280,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 5760,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 6240,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 6720,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 7200,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 7680,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 9120,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 10080,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 8640,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 10560,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 7680,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 8160,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 8640,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 9120,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 9600,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 10080,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 10560,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 11040,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 11520,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 12960,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 36,
+                "start": 13920,
+                "velocity": 112
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 12480,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 38,
+                "start": 14400,
+                "velocity": 104
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 11520,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 12000,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 12480,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 12960,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 13440,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 13920,
+                "velocity": 70
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 14400,
+                "velocity": 92
+              },
+              {
+                "length": 240,
+                "note": 42,
+                "start": 14880,
+                "velocity": 70
+              }
+            ],
+            "sourceOffsetFrames": 0,
+            "start": 0,
+            "timeBase": "musical"
+          }
+        ],
+        "strip": {
+          "gainDb": 0.0,
+          "inserts": [
+            {
+              "params": {},
+              "processorId": "builtin.limiter",
+              "state": ""
+            },
+            {
+              "params": {},
+              "processorId": "builtin.adaptivelimiter",
+              "state": ""
+            },
+            {
+              "params": {},
+              "processorId": "builtin.matcheq",
+              "state": ""
+            }
+          ],
+          "mute": false,
+          "output": "00000000-0000-0000-0000-000000000000",
+          "pan": 0.0,
+          "sends": [],
+          "solo": false
+        }
+      },
+      {
+        "automation": [],
+        "color": "blue",
+        "id": "391466a5-dc0c-4f42-8e5b-6f76500bbda3",
+        "instrument": {
+          "params": {},
+          "processorId": "builtin.synth",
+          "state": ""
+        },
+        "kind": "instrument",
+        "name": "Bass",
+        "regions": [
+          {
+            "gainDb": 0.0,
+            "id": "c099aa91-9537-45dd-90ab-7d490d180117",
+            "length": 15360,
+            "mediaId": "00000000-0000-0000-0000-000000000000",
+            "notes": [
+              {
+                "length": 960,
+                "note": 45,
+                "start": 0,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 45,
+                "start": 1440,
+                "velocity": 100
+              },
+              {
+                "length": 960,
+                "note": 45,
+                "start": 1920,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 45,
+                "start": 3360,
+                "velocity": 100
+              },
+              {
+                "length": 960,
+                "note": 41,
+                "start": 3840,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 41,
+                "start": 5280,
+                "velocity": 100
+              },
+              {
+                "length": 960,
+                "note": 41,
+                "start": 5760,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 41,
+                "start": 7200,
+                "velocity": 100
+              },
+              {
+                "length": 960,
+                "note": 36,
+                "start": 7680,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 36,
+                "start": 9120,
+                "velocity": 100
+              },
+              {
+                "length": 960,
+                "note": 36,
+                "start": 9600,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 36,
+                "start": 11040,
+                "velocity": 100
+              },
+              {
+                "length": 960,
+                "note": 43,
+                "start": 11520,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 43,
+                "start": 12960,
+                "velocity": 100
+              },
+              {
+                "length": 960,
+                "note": 43,
+                "start": 13440,
+                "velocity": 100
+              },
+              {
+                "length": 480,
+                "note": 43,
+                "start": 14880,
+                "velocity": 100
+              }
+            ],
+            "sourceOffsetFrames": 0,
+            "start": 0,
+            "timeBase": "musical"
+          }
+        ],
+        "strip": {
+          "gainDb": -3.0,
+          "inserts": [
+            {
+              "params": {
+                "ratio": 4.0,
+                "threshold": -24.0
+              },
+              "processorId": "builtin.compressor",
+              "state": ""
+            }
+          ],
+          "mute": false,
+          "output": "00000000-0000-0000-0000-000000000000",
+          "pan": 0.0,
+          "sends": [],
+          "solo": false
+        }
+      },
+      {
+        "automation": [],
+        "color": "purple",
+        "id": "6c8020f9-13f1-4c20-bfde-bf3453cb2dfb",
+        "instrument": {
+          "params": {},
+          "processorId": "builtin.synth",
+          "state": ""
+        },
+        "kind": "instrument",
+        "name": "Keys",
+        "regions": [
+          {
+            "gainDb": 0.0,
+            "id": "9ac02eb0-9ee9-4a7f-a08b-c5b5d9c21e0b",
+            "length": 15360,
+            "mediaId": "00000000-0000-0000-0000-000000000000",
+            "notes": [
+              {
+                "length": 3600,
+                "note": 72,
+                "start": 0,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 76,
+                "start": 0,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 79,
+                "start": 0,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 72,
+                "start": 3840,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 77,
+                "start": 3840,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 81,
+                "start": 3840,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 71,
+                "start": 7680,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 76,
+                "start": 7680,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 79,
+                "start": 7680,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 71,
+                "start": 11520,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 74,
+                "start": 11520,
+                "velocity": 78
+              },
+              {
+                "length": 3600,
+                "note": 79,
+                "start": 11520,
+                "velocity": 78
+              }
+            ],
+            "sourceOffsetFrames": 0,
+            "start": 0,
+            "timeBase": "musical"
+          }
+        ],
+        "strip": {
+          "gainDb": -5.0,
+          "inserts": [
+            {
+              "params": {
+                "hsGain": 3.0,
+                "lcFreq": 90.0,
+                "lcOn": 1.0,
+                "lsGain": -2.0,
+                "p1Freq": 220.0,
+                "p1Gain": 3.5,
+                "p2Freq": 520.0,
+                "p2Gain": -4.0,
+                "p3Freq": 2400.0,
+                "p3Gain": 2.5
+              },
+              "processorId": "builtin.eq",
+              "state": ""
+            }
+          ],
+          "mute": false,
+          "output": "00000000-0000-0000-0000-000000000000",
+          "pan": -0.25,
+          "sends": [],
+          "solo": false
+        }
+      },
+      {
+        "automation": [],
+        "color": "green",
+        "id": "9021bdac-47c3-4f49-ba0d-f9bb32211f5d",
+        "instrument": {
+          "params": {},
+          "processorId": "builtin.synth",
+          "state": ""
+        },
+        "kind": "instrument",
+        "name": "Lead",
+        "regions": [
+          {
+            "gainDb": 0.0,
+            "id": "bb0a1d4f-e44b-4a95-83c1-3d17319d990c",
+            "length": 15360,
+            "mediaId": "00000000-0000-0000-0000-000000000000",
+            "notes": [
+              {
+                "length": 960,
+                "note": 72,
+                "start": 0,
+                "velocity": 90
+              },
+              {
+                "length": 480,
+                "note": 74,
+                "start": 960,
+                "velocity": 90
+              },
+              {
+                "length": 480,
+                "note": 76,
+                "start": 1440,
+                "velocity": 90
+              },
+              {
+                "length": 1920,
+                "note": 79,
+                "start": 1920,
+                "velocity": 90
+              },
+              {
+                "length": 960,
+                "note": 72,
+                "start": 3840,
+                "velocity": 90
+              },
+              {
+                "length": 960,
+                "note": 69,
+                "start": 4800,
+                "velocity": 90
+              },
+              {
+                "length": 1920,
+                "note": 72,
+                "start": 5760,
+                "velocity": 90
+              },
+              {
+                "length": 960,
+                "note": 76,
+                "start": 7680,
+                "velocity": 90
+              },
+              {
+                "length": 960,
+                "note": 79,
+                "start": 8640,
+                "velocity": 90
+              },
+              {
+                "length": 960,
+                "note": 76,
+                "start": 9600,
+                "velocity": 90
+              },
+              {
+                "length": 960,
+                "note": 72,
+                "start": 10560,
+                "velocity": 90
+              },
+              {
+                "length": 1920,
+                "note": 74,
+                "start": 11520,
+                "velocity": 90
+              },
+              {
+                "length": 1920,
+                "note": 67,
+                "start": 13440,
+                "velocity": 90
+              }
+            ],
+            "sourceOffsetFrames": 0,
+            "start": 0,
+            "timeBase": "musical"
+          }
+        ],
+        "strip": {
+          "gainDb": -6.0,
+          "inserts": [
+            {
+              "params": {
+                "feedback": 40.0,
+                "time": 375.0
+              },
+              "processorId": "builtin.delay",
+              "state": ""
+            },
+            {
+              "params": {
+                "size": 70.0
+              },
+              "processorId": "builtin.reverb",
+              "state": ""
+            }
+          ],
+          "mute": false,
+          "output": "00000000-0000-0000-0000-000000000000",
+          "pan": 0.30000001192092896,
+          "sends": [],
+          "solo": false
+        }
+      },
+      {
+        "automation": [],
+        "color": "red",
+        "id": "883e43c3-22dd-4a84-8ae7-60fd83df8caa",
+        "instrument": null,
+        "kind": "audio",
+        "name": "Drum Loop",
+        "regions": [
+          {
+            "gainDb": 0.0,
+            "id": "17fadcad-e190-46eb-8123-0aea4c2417b3",
+            "length": 9600000,
+            "mediaId": "dbfb3b2e-4132-4909-8505-c743c2ee7c41",
+            "notes": [],
+            "sourceOffsetFrames": 0,
+            "start": 0,
+            "timeBase": "absolute"
+          }
+        ],
+        "strip": {
+          "gainDb": -8.0,
+          "inserts": [
+            {
+              "params": {
+                "threshold": -40.0
+              },
+              "processorId": "builtin.gate",
+              "state": ""
+            },
+            {
+              "params": {},
+              "processorId": "builtin.mlsaturation",
+              "state": ""
+            }
+          ],
+          "mute": false,
+          "output": "00000000-0000-0000-0000-000000000000",
+          "pan": 0.0,
+          "sends": [],
+          "solo": false
+        }
+      }
+    ]
+  },
+  "schemaVersion": 1
+}

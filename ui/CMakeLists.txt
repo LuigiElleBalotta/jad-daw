@@ -124,6 +124,7 @@ qt_add_qml_module(jad_ui_lib
         qml/NumberPromptDialog.qml
         qml/SearchTrackDialog.qml
         qml/FlagCheck.qml
+        qml/ThemedCheckBox.qml
         qml/MarkerListWindow.qml
         qml/ProjectAudioWindow.qml
         qml/NotePadWindow.qml

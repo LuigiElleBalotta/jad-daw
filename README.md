@@ -5,6 +5,20 @@ Open source (AGPLv3) digital audio workstation, work in progress, modelled on Lo
 and the **UI** (Qt Quick: transport, tracks, timeline, Inspector, Library, Mixer, Piano Roll and many windows). It has only been run on Windows so far.
 Recording, editing, mixing and bouncing work; `docs/roadmap-autonomous.md` lists what was done and what was left out.
 
+## Take a look
+
+![The main window](docs/images/app/main-window.png)
+
+| | |
+|---|---|
+| ![Piano Roll](docs/images/app/piano-roll.png) | ![Mixer](docs/images/app/mixer.png) |
+| ![Channel EQ](docs/images/app/fx-channel-eq.png) | ![Compressor](docs/images/app/fx-compressor.png) |
+| ![Mastering Assistant](docs/images/app/fx-mastering.png) | ![Match EQ](docs/images/app/fx-match-eq.png) |
+| ![Create New Track](docs/images/app/new-tracks.png) | ![Bounce](docs/images/app/bounce.png) |
+
+How to use it, screen by screen: **[docs/user-guide.md](docs/user-guide.md)**. The pictures are taken from the running app on `docs/showcase/Showcase.lpc`
+(`tools/screenshots/`).
+
 ## Build (Windows, Visual Studio 2022, CMake)
 
     cmake -S . -B build -G "Visual Studio 17 2022" -A x64
@@ -54,7 +68,7 @@ The UI needs Qt 6.8 (LGPLv3, linked dynamically) and is off by default.
 On Windows the Qt DLLs are copied next to the executables after each build, so they start by double click and
 `ctest --test-dir build-ui -C Debug` needs nothing on `PATH`.
 
-![The main window](docs/images/main-window.png)
+![The main window](docs/images/app/main-window.png)
 
 ### Window and shortcuts
 
@@ -68,27 +82,26 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   fader and pan, regions (select, rectangle select, move, resize from the edges, split, join, delete, draw an empty
   MIDI region with the pencil, import `.wav` by dropping it on a track), snap, zoom, catch playhead.
 
-![Tools and selection](docs/images/tools-and-selection.png)
+![Tools and selection](docs/images/app/tools.png)
 
 - **Inspector** (`I`, or the Inspector button): the Region and Track sections of the selected region and track, and two
   channel strips (the track and its output). Real: region mute, loop, gain, quantize, transpose and velocity, the track's name, colour,
   transpose, velocity, key and velocity limits and delay, and everything on the strips (inserts, sends, output, pan, fader, mute, solo). The rest
   (region type, No Transpose, Freeze mode, Q-Reference) is visual only and says so when switched on.
 
-![Inspector](docs/images/inspector.png)
 
 - **Library** (`Y`): the patches of the selected track's kind, by category, with search; click a patch or step with the
   Up and Down keys to apply it (strip values, inserts and instrument in one undo step); Revert applies the track's patch
   again. The catalogue is `core/data/patches.json`; the engine has one effect and one synth for now, so the built-in
   patches differ mostly in level, pan and a gain insert. Save, Delete and the Options menu are not implemented.
 
-![Library](docs/images/library.png)
+![Library](docs/images/app/library.png)
 
 - **Smart Controls** (`B`): the screen controls of the selected track's patch, grouped in panels; drag a knob (Shift for
   fine, double click resets). A knob can move several parameters at once (the patch decides), and one release is one undo
   step. Parameter Mapping, External Assignment, Compare and the EQ tab are not implemented.
 
-![Smart Controls](docs/images/smart-controls.png)
+![Smart Controls](docs/images/app/smart-controls.png)
 
 - **Plug-ins (VST3 effects)**: click the `+` slot of an insert area: Gain or any scanned VST3 plug-in, grouped by vendor.
   Double click a plug-in slot to open its own window. The scan runs in the background at start (in a child process: a plug-in
@@ -116,7 +129,7 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   Mixer header has Edit, Options and View menus, Single | Tracks | All and the strip type filters (most menu entries are not
   implemented yet). In a short window the strips become compact and the legend is hidden.
 
-![Mixer](docs/images/mixer.png)
+![Mixer](docs/images/app/mixer.png)
 - **Mixer window and size:** the Mixer can be detached into a window of its own (the Detach button in its bar, Window > Open Mixer,
   Ctrl+2) and docked again (Dock). Docked, drag its top edge to change its height; it is never shorter than the strips with their
   legend, and in its own window it takes all the height it is given, however large (the faders grow). A narrow Mixer drops the type
@@ -210,9 +223,10 @@ On Windows the Qt DLLs are copied next to the executables after each build, so t
   dither on 16 bit; an offline render with the built-in effects and the loaded VST3 effects and instruments, aligned for their latency; the transport stops and cannot play while it renders), Import > MIDI File (one instrument track per channel, one undo step)
   and Export > Selected Regions as MIDI File (format 1 with tempo and signature).
 
-![Piano Roll](docs/images/piano-roll.png)
-![Global Tracks and automation](docs/images/global-tracks-automation.png)
-![Menus](docs/images/menus.png)
+![Piano Roll](docs/images/app/piano-roll.png)
+![Global Tracks](docs/images/app/global-tracks.png)
+![Automation](docs/images/app/automation.png)
+![The Track menu](docs/images/app/menu-track.png)
 
 - Shortcuts: to change some, create `shortcuts.json` in the application config folder (for example
   `%LOCALAPPDATA%/JAD/JAD Daw/` on Windows, `~/.config/JAD/JAD Daw/` on Linux) with only the actions you want to

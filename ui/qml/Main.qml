@@ -31,7 +31,10 @@ ApplicationWindow {
     function showWindow(name) {
         const all = ({ transport: transportFloat, event: eventFloat, regionInspector: regionInspectorFloat, stepInput: stepInput, musicalTyping: musicalTyping,
                        flexEditor: flexEditor, trackIcon: trackIconDialog, automationSettings: automationSettings, alternatives: alternativesDialog, copyMidi: copyMidiEvents, midiTransform: midiTransform,
-                       header: customizeBars })
+                       header: customizeBars, effect: effectEditor, newTracks: newTracksDialog, keyCommands: keyCommands, undoHistory: undoHistoryDialog, colors: colorsDialog,
+                       projectSettings: projectSettings, preferences: preferencesDialog, ioLabels: ioLabelsDialog, bounce: bounceOptions, sessionPlayers: sessionDialog, groupSettings: groupSettings,
+                       audioProcess: audioDialog, templates: templatesDialog, browser: browserWindow, listEditors: listEditors, markers: markerList, notePad: notePadWindow, projectAudio: projectAudioWindow,
+                       createStack: createTrackStackDialog })
         const w = all[name]
         if (!w) return null
         if (name === "header") customizeBars.section = "th"

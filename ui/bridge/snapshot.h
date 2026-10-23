@@ -24,6 +24,7 @@ struct InsertRow {
     bool plugin = false;  // a hosted plug-in (its gain is not editable from the strip)
     bool bypass = false;  // switched off: the signal passes through
     QVariantMap params;   // every parameter of a built-in effect, by name
+    QString sideChain;    // the id of the track the insert listens to; empty: its own input
 };
 struct SendRow {
     QString id, targetId, targetName;

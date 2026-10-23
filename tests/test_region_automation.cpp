@@ -212,3 +212,50 @@ TEST_CASE("sampler: a note plays the sound of its zone, a key outside every zone
     CHECK(peakOf(72) < 1e-6f);
     std::filesystem::remove_all(dir);
 }
+
+#include "lpc/validation.h"
+
+TEST_CASE("media paths: relative inside the project or the absolute path of a file kept elsewhere", "[media-path]") {
+    CHECK(validMediaPath("audio/kick.wav"));
+    CHECK(validMediaPath("C:/Samples/kick.wav"));
+    CHECK(validMediaPath("/Users/me/Music/kick.wav"));
+    CHECK(!validMediaPath("../kick.wav"));
+    CHECK(!validMediaPath("audio/../../kick.wav"));
+    CHECK(!validMediaPath("C:/Samples/../kick.wav"));
+    CHECK(!validMediaPath("C:\Samples\kick.wav"));
+    CHECK(!validMediaPath("//server/share/kick.wav"));
+    CHECK(!validMediaPath(""));
+    CHECK(isExternalMediaPath("C:/a.wav"));
+    CHECK(isExternalMediaPath("/a.wav"));
+    CHECK(!isExternalMediaPath("audio/a.wav"));
+}
+
+TEST_CASE("media paths: Locate points a media item at another file and undo puts it back", "[media-path]") {
+    Project p{Uuid::random(gRng)};
+    MediaItem item{Uuid::random(gRng), "audio/a.wav", "h", 48000, 2, 480000};
+    REQUIRE(makeAddMedia(item)->apply(p).ok());
+    auto r = makeSetMediaPath(item.id, "D:/Moved/a.wav")->apply(p);
+    REQUIRE(r.ok());
+    REQUIRE(p.findMedia(item.id)->path == "D:/Moved/a.wav");
+    REQUIRE(r.inverse->apply(p).ok());
+    REQUIRE(p.findMedia(item.id)->path == "audio/a.wav");
+    REQUIRE(!makeSetMediaPath(item.id, "../x.wav")->apply(p).ok());
+}
+
+TEST_CASE("side chain: an insert can listen to another track, the project keeps it and undo takes it away", "[side-chain]") {
+    Project p{Uuid::random(gRng)};
+    Track a, b;
+    a.id = Uuid::random(gRng); a.kind = TrackKind::Audio; a.name = "Drums";
+    b.id = Uuid::random(gRng); b.kind = TrackKind::Audio; b.name = "Bass";
+    b.strip.inserts.push_back(ProcessorRef{"builtin.compressor", {}, "", "", false});
+    REQUIRE(makeAddTrack(a)->apply(p).ok());
+    REQUIRE(makeAddTrack(b)->apply(p).ok());
+    auto r = makeSetInsertSideChain(b.id, 0, a.id)->apply(p);
+    REQUIRE(r.ok());
+    REQUIRE(p.findTrack(b.id)->strip.inserts[0].sideChain == a.id);
+    const Track saved = nlohmann::json(*p.findTrack(b.id)).get<Track>();
+    REQUIRE(saved.strip.inserts[0].sideChain == a.id);
+    REQUIRE(!makeSetInsertSideChain(b.id, 0, b.id)->apply(p).ok());  // not itself
+    REQUIRE(r.inverse->apply(p).ok());
+    REQUIRE(p.findTrack(b.id)->strip.inserts[0].sideChain.isNull());
+}

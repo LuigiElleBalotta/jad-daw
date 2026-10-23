@@ -209,6 +209,26 @@ bool validRelativeMediaPath(const std::string& path) {
     return true;
 }
 
+bool isExternalMediaPath(const std::string& path) {
+    if (path.size() >= 3 && std::isalpha(static_cast<unsigned char>(path[0])) && path[1] == ':' && path[2] == '/') return true;  // C:/...
+    return path.size() >= 2 && path[0] == '/' && path[1] != '/';                                                                  // /...
+}
+
+bool validMediaPath(const std::string& path) {
+    if (!isExternalMediaPath(path)) return validRelativeMediaPath(path);
+    if (path.find('\\') != std::string::npos || path.size() > 4000) return false;
+    const std::size_t from = path[0] == '/' ? 1 : 3;
+    std::size_t start = from;
+    while (start <= path.size()) {
+        const std::size_t end = path.find('/', start);
+        const std::string part = path.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (part == ".." || part == "." || (part.empty() && end != std::string::npos)) return false;
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    return path.size() > from;
+}
+
 bool reaches(const Project& p, const Uuid& from, const Uuid& goal) {
     std::vector<Uuid> stack{from};
     std::unordered_set<Uuid> seen;
@@ -247,7 +267,7 @@ MaybeError checkProject(const Project& p) {
 
     for (const MediaItem& m : p.mediaPool) {
         if (m.id.isNull() || !mediaIds.insert(m.id).second) return CommandError{"duplicate_id", "media id missing or used twice"};
-        if (!validRelativeMediaPath(m.path)) return CommandError{"bad_media", "media path must be relative, inside the project, with '/' separators"};
+        if (!validMediaPath(m.path)) return CommandError{"bad_media", "media path must be relative and inside the project, or the absolute path of a file kept elsewhere, with '/' separators"};
         if (m.sampleRate != p.sampleRate) return CommandError{"bad_media", "media sample rate must equal the project sample rate"};
         if (m.channels < 1 || m.channels > 2) return CommandError{"bad_media", "media must be mono or stereo"};
         if (m.frames < 0 || m.frames > kMaxPosition) return CommandError{"bad_media", "media frame count out of range"};
@@ -281,8 +301,10 @@ MaybeError checkProject(const Project& p) {
         if (wantsInstrument)
             for (const Uuid& id : samplerMediaIds(*t.instrument))
                 if (!p.findMedia(id)) return CommandError{"not_found", "a sampler zone plays a file that is not in the media pool"};
-        for (const ProcessorRef& ins : t.strip.inserts)
+        for (const ProcessorRef& ins : t.strip.inserts) {
             if (auto e = checkInsert(ins)) return e;
+            if (!ins.sideChain.isNull() && (ins.sideChain == t.id || !p.findTrack(ins.sideChain))) return CommandError{"bad_target", "an insert listens to a side chain source that is not another track of the project"};
+        }
         if (!t.strip.output.isNull()) {
             const Track* out = p.findTrack(t.strip.output);
             if (!out || !isOutputTarget(out->kind) || out->id == t.id)

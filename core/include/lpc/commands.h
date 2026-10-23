@@ -48,6 +48,7 @@ CommandPtr makeRemoveSignature(Ticks tick);
 // The points are sorted by tick; the undo restores the previous points (or the absence of the lane).
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points);
 // Region automation: the same for one region (the ticks count from its start); no points removes the lane. It moves, copies, splits, trims and joins with the region.
+CommandPtr makeSetMediaPath(Uuid mediaId, std::string path);  // Locate a missing file, Consolidate: where the file of a media item is
 CommandPtr makeSetRegionAutomation(Uuid regionId, std::string target, std::vector<AutomationPoint> points);
 // Mix > Convert Automation: the lanes of a track (all of them, or only the listed targets) become the lanes of its regions (toRegion) or the other way round. One undo step.
 CommandPtr makeConvertAutomation(Uuid trackId, bool toRegion, std::vector<std::string> targets);
@@ -97,6 +98,7 @@ CommandPtr makeSetInsertState(Uuid trackId, int index, std::string state);  // p
 // track: the insert leaves `trackId` and is inserted into `toTrackId` at `to` (0..m).
 CommandPtr makeMoveInsert(Uuid trackId, int from, int to, Uuid toTrackId = {});
 CommandPtr makeSetInsertBypass(Uuid trackId, int index, bool bypass);
+CommandPtr makeSetInsertSideChain(Uuid trackId, int index, Uuid source);  // the track an insert listens to (null: its own input)
 CommandPtr makeTransaction(std::vector<CommandPtr> commands);
 
 CommandPtr commandFromJson(const nlohmann::json& j);  // throws std::runtime_error

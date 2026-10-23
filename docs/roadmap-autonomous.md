@@ -529,5 +529,5 @@ Today `EffectEditorWindow.qml` is a list of parameters (plus the Channel EQ curv
       tracks), Allow tempo change recording (a tempo move while recording is a tempo change at the playhead), Trim start of new regions (off by default; needs the tempo analysis). The copy-assets
       flags stay saved only: media paths may not leave the project folder.
 - [x] H5. Windows: Limiter Mode (Legacy has the soft knee, Precision the true peak), Mastering Custom EQ (three bands) and Spread (width), Match EQ Learn (Current, Reference), External MIDI window.
-- [ ] H6. Still open: a side chain routing between tracks (the Side Chain menu is a stub); the Movie window (needs Qt Multimedia, not in the CI's Qt install), Dolby Atmos, printing, Live Loops,
-      Convert to Sampler track; the -12/+12 dB Analog Model level and the Smart Tempo quality check (need the Mac).
+- [x] H6. Side chain between tracks (Compressor, Gate), Sampler + Convert Regions to New Sampler Track, Print/Page Setup to PDF, assets as in Logic (referenced files, Consolidate, Missing Audio Files, Audio Recording Path).
+- [ ] H7. Still open: the Movie window (needs Qt Multimedia, not in the CI's Qt install), Dolby Atmos, Live Loops, Mac window sets; the -12/+12 dB Analog Model level and the Smart Tempo quality check (need the Mac).

@@ -14,6 +14,7 @@
  {"id":"file.revert","label":"Revert to Saved…","menu":"File","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.projectAlternatives","label":"Project Alternatives…","menu":"File","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.pmShowFolder","label":"Show Project in Explorer","menu":"File/Project Management","shortcut":"","kind":"command","status":"ready"},
+ {"id":"file.pmConsolidate","label":"Consolidate…","menu":"File/Project Management","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.pmCleanUp","label":"Clean Up…","menu":"File/Project Management","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.projectSettings","label":"Project Settings","menu":"File","shortcut":"","kind":"command","status":"ready","sep":true},
  {"id":"file.pageSetup","label":"Page Setup…","menu":"File","shortcut":"","kind":"command","status":"ready","sep":true},

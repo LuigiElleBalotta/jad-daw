@@ -10,7 +10,7 @@ bool isSource(TrackKind k) { return k == TrackKind::Audio || k == TrackKind::Mid
 }  // namespace
 
 TrackNode::TrackNode(Uuid id_, TrackKind kind_, const StripParams& strip_, TrackConfig* config_, double sampleRate)
-    : id(id_), kind(kind_), strip(strip_), config(config_), l(kMaxBlock, 0.0f), r(kMaxBlock, 0.0f), synth(sampleRate), tailMax(static_cast<int>(sampleRate * 2.0)) {}
+    : id(id_), kind(kind_), strip(strip_), config(config_), l(kMaxBlock, 0.0f), r(kMaxBlock, 0.0f), scL(kMaxBlock, 0.0f), scR(kMaxBlock, 0.0f), synth(sampleRate), tailMax(static_cast<int>(sampleRate * 2.0)) {}
 
 RenderGraph::RenderGraph(double sampleRate)
     : sampleRate_(sampleRate), scratchL_(kMaxBlock), scratchR_(kMaxBlock), preL_(kMaxBlock), preR_(kMaxBlock), dlyL_(kMaxBlock), dlyR_(kMaxBlock) {}
@@ -308,6 +308,20 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
             const int at = slot++;
             // Low Latency Monitoring Mode: what is played through is not made to wait for a plug-in with a long latency
             if (lowLatencyLimit_ > 0 && t.monitorL >= 0 && insert->latencySamples() > lowLatencyLimit_) continue;
+            if (!cfg->sideChains.empty()) {  // Side Chain: the insert detects on another track's signal
+                const float* sl = nullptr;
+                const float* sr = nullptr;
+                for (const TrackConfig::SideChainLink& link : cfg->sideChains) {
+                    if (link.insert != at) continue;
+                    const TrackNode* src = find(link.source);
+                    if (src && src != &t) {
+                        sl = src->scL.data();
+                        sr = src->scR.data();
+                    }
+                    break;
+                }
+                insert->setSideChain(sl, sr);
+            }
             float peakIn = 0.0f, inL = 0.0f, inR = 0.0f;
             for (int i = 0; i < n; ++i) { inL = std::max(inL, std::abs(l[i])); inR = std::max(inR, std::abs(r[i])); }
             peakIn = std::max(inL, inR);
@@ -334,6 +348,8 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
 
     std::copy_n(l, n, preL_.data());  // pre-fader tap for sends
     std::copy_n(r, n, preR_.data());
+    std::copy_n(l, n, t.scL.data());  // and for the side chains of other tracks
+    std::copy_n(r, n, t.scR.data());
     t.blockPeakPre = 0.0f;
     for (int i = 0; i < n; ++i) t.blockPeakPre = std::max({t.blockPeakPre, std::abs(l[i]), std::abs(r[i])});
 

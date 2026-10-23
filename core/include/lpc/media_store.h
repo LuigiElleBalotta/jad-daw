@@ -23,6 +23,7 @@ public:
     void registerSource(const Uuid& mediaId, std::shared_ptr<audio::IFrameSource> source);
     std::shared_ptr<audio::IFrameSource> open(const MediaItem& item);
 
+    void forget(const Uuid& mediaId);  // the file of this item changed (found again, moved into the project): the next open() looks again
     int missingCount() const;
     std::vector<std::string> warnings() const;
     int takeUnderruns();  // total underruns of all streaming sources since the last call

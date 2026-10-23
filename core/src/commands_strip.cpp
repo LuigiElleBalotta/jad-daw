@@ -386,8 +386,38 @@ private:
     bool bypass_;
 };
 
+// Side Chain: the track an insert listens to (null: its own input). The source has to be another track that makes a signal.
+class SetInsertSideChainCmd final : public Command {
+public:
+    SetInsertSideChainCmd(Uuid trackId, int index, Uuid source) : trackId_(trackId), index_(index), source_(source) {}
+    std::string type() const override { return "set_insert_sidechain"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", trackId_}, {"index", index_}, {"source", source_}}; }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(trackId_);
+        if (!t) return fail("not_found", "no such track");
+        auto& chain = t->strip.inserts;
+        if (index_ < 0 || index_ >= static_cast<int>(chain.size())) return fail("bad_index", "insert index out of range");
+        if (!source_.isNull()) {
+            const Track* src = p.findTrack(source_);
+            if (!src || src->id == t->id) return fail("bad_target", "the side chain source must be another track");
+            if (src->kind != TrackKind::Audio && src->kind != TrackKind::Instrument && src->kind != TrackKind::Bus && src->kind != TrackKind::Aux)
+                return fail("bad_target", "the side chain source must be an audio, instrument, bus or auxiliary track");
+        }
+        ProcessorRef& insert = chain[static_cast<std::size_t>(index_)];
+        const Uuid previous = insert.sideChain;
+        insert.sideChain = source_;
+        return success(makeSetInsertSideChain(trackId_, index_, previous));
+    }
+
+private:
+    Uuid trackId_;
+    int index_;
+    Uuid source_;
+};
+
 }  // namespace
 
+CommandPtr makeSetInsertSideChain(Uuid trackId, int index, Uuid source) { return std::make_unique<SetInsertSideChainCmd>(trackId, index, source); }
 CommandPtr makeMoveInsert(Uuid trackId, int from, int to, Uuid toTrackId) { return std::make_unique<MoveInsertCmd>(trackId, from, to, toTrackId); }
 CommandPtr makeSetInsertBypass(Uuid trackId, int index, bool bypass) { return std::make_unique<SetInsertBypassCmd>(trackId, index, bypass); }
 CommandPtr makeSetInsertState(Uuid trackId, int index, std::string state) {

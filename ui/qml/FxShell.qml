@@ -115,11 +115,14 @@ Item {
             SelectField {
                 visible: root.withSideChain
                 objectName: "fxSideChain"
-                width: 112
-                choices: ["none"]
-                value: "none"
-                format: () => root.editor.kind === "builtin.compressor" ? qsTr("Internal") : qsTr("None")
-                onChosen: () => {}
+                width: 150
+                placeholder: root.editor.kind === "builtin.compressor" ? qsTr("Internal") : qsTr("None")
+                // none (the insert's own input, shown as Internal for the compressor), then the tracks that make a signal
+                readonly property var sources: { root.editor.project.revision; return root.editor.project.sideChainSources(root.editor.trackId) }
+                choices: { const out = [""]; for (const s of sources) out.push(s.id); return out }
+                value: { root.editor.project.revision; return root.editor.project.insertSideChain(root.editor.trackId, root.editor.index) }
+                format: (id) => { if (id === "") return root.editor.kind === "builtin.compressor" ? qsTr("Internal") : qsTr("None"); for (const s of sources) if (s.id === id) return s.name; return qsTr("None") }
+                onChosen: (c) => root.editor.project.setInsertSideChain(root.editor.trackId, root.editor.index, c)
             }
         }
         Row {

@@ -156,9 +156,16 @@ std::vector<Uuid> processingOrder(const Project& p) {
     }
     std::unordered_map<Uuid, int> indegree;
     for (const Track* t : pending) indegree[t->id] = 0;
-    auto forEachTarget = [](const Track& t, auto&& fn) {
+    // a track whose insert listens to another track's side chain comes after it
+    std::unordered_map<Uuid, std::vector<Uuid>> listeners;
+    for (const Track* t : pending)
+        for (const ProcessorRef& ins : t->strip.inserts)
+            if (!ins.sideChain.isNull() && ins.sideChain != t->id && indegree.count(ins.sideChain)) listeners[ins.sideChain].push_back(t->id);
+    auto forEachTarget = [&listeners](const Track& t, auto&& fn) {
         if (!t.strip.output.isNull()) fn(t.strip.output);
         for (const Send& s : t.strip.sends) fn(s.targetTrackId);
+        if (const auto it = listeners.find(t.id); it != listeners.end())
+            for (const Uuid& to : it->second) fn(to);
     };
     for (const Track* t : pending)
         forEachTarget(*t, [&](const Uuid& to) {
@@ -417,6 +424,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         }
         if (auto effect = makeInsert(ref, plugins, InsertSlot{t.id, slotIndex}, static_cast<double>(p.sampleRate), kMaxBlock)) {
             builtAt[static_cast<std::size_t>(slotIndex)] = static_cast<int>(cfg->inserts.size());
+            if (!ref.sideChain.isNull()) cfg->sideChains.push_back({static_cast<int>(cfg->inserts.size()), ref.sideChain});
             cfg->inserts.push_back(std::move(effect));
         }
         ++slotIndex;
@@ -477,7 +485,15 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
     const PdcPlan planBefore = plan ? *plan : computePdc(before, nullptr);
     const PdcPlan planAfter = computePdc(after, plugins);
     bool structural = false;
-    const bool timingChanged = before.tempoMap != after.tempoMap || before.sampleRate != after.sampleRate || buildSettingsKey(before) != buildSettingsKey(after);
+    bool mediaMoved = false;  // a file was found again or moved into the project: the sources are opened anew
+    for (const MediaItem& m : after.mediaPool) {
+        const MediaItem* was = before.findMedia(m.id);
+        if (was && was->path != m.path) {
+            media.forget(m.id);
+            mediaMoved = true;
+        }
+    }
+    const bool timingChanged = before.tempoMap != after.tempoMap || before.sampleRate != after.sampleRate || buildSettingsKey(before) != buildSettingsKey(after) || mediaMoved;
 
     for (const Track& a : after.tracks) {
         if (!before.findTrack(a.id)) {

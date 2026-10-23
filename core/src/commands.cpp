@@ -722,7 +722,7 @@ public:
 
     ApplyResult apply(Project& p) const override {
         if (item_.id.isNull() || p.findMedia(item_.id)) return fail("duplicate_id", "media id missing or already used");
-        if (!validRelativeMediaPath(item_.path)) return fail("bad_media", "media path must be relative, inside the project, with '/' separators");
+        if (!validMediaPath(item_.path)) return fail("bad_media", "media path must be relative and inside the project, or the absolute path of a file kept elsewhere, with '/' separators");
         if (item_.sampleRate != p.sampleRate) return fail("bad_media", "media sample rate must equal the project sample rate (no resampling)");
         if (item_.channels < 1 || item_.channels > 2) return fail("bad_media", "media must be mono or stereo");
         if (item_.frames < 0) return fail("bad_media", "media frame count must be >= 0");
@@ -735,6 +735,29 @@ public:
 private:
     MediaItem item_;
     int index_;
+};
+
+// Where a media file is: Consolidate and the copy on save move the file into the project, Locate (missing files) points it at the file that was found.
+class SetMediaPathCmd final : public Command {
+public:
+    SetMediaPathCmd(Uuid mediaId, std::string path) : id_(mediaId), path_(std::move(path)) {}
+    std::string type() const override { return "set_media_path"; }
+    json toJson() const override { return {{"type", type()}, {"mediaId", id_}, {"path", path_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        for (MediaItem& m : p.mediaPool) {
+            if (m.id != id_) continue;
+            if (!validMediaPath(path_)) return fail("bad_media", "media path must be relative and inside the project, or the absolute path of a file kept elsewhere, with '/' separators");
+            std::string previous = m.path;
+            m.path = path_;
+            return success(makeSetMediaPath(id_, std::move(previous)));
+        }
+        return fail("not_found", "no such media");
+    }
+
+private:
+    Uuid id_;
+    std::string path_;
 };
 
 class RemoveMediaCmd final : public Command {
@@ -1321,6 +1344,7 @@ CommandPtr makeSetMasterVolume(float gainDb) { return std::make_unique<SetMaster
 CommandPtr makeSetPanLaw(PanLaw law) { return std::make_unique<SetPanLawCmd>(law); }
 CommandPtr makeSetProjectSetting(std::string key, std::string value) { return std::make_unique<SetProjectSettingCmd>(std::move(key), std::move(value)); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
+CommandPtr makeSetMediaPath(Uuid mediaId, std::string path) { return std::make_unique<SetMediaPathCmd>(mediaId, std::move(path)); }
 CommandPtr makeConvertAutomation(Uuid trackId, bool toRegion, std::vector<std::string> targets) { return std::make_unique<ConvertAutomationCmd>(trackId, toRegion, std::move(targets)); }
 CommandPtr makeSetRegionAutomation(Uuid regionId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetRegionAutomationCmd>(regionId, std::move(target), std::move(points)); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
@@ -1375,6 +1399,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         }
         if (type == "set_project_setting") return makeSetProjectSetting(j.at("key").get<std::string>(), j.at("value").get<std::string>());
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
+        if (type == "set_media_path") return makeSetMediaPath(j.at("mediaId").get<Uuid>(), j.at("path").get<std::string>());
         if (type == "convert_automation") return makeConvertAutomation(j.at("trackId").get<Uuid>(), j.at("toRegion").get<bool>(), j.value("targets", std::vector<std::string>{}));
         if (type == "set_region_automation") return makeSetRegionAutomation(j.at("regionId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
@@ -1473,6 +1498,8 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         if (type == "move_insert")
             return makeMoveInsert(j.at("trackId").get<Uuid>(), j.at("from").get<int>(), j.at("to").get<int>(),
                                   j.contains("toTrackId") ? j["toTrackId"].get<Uuid>() : Uuid{});
+        if (type == "set_insert_sidechain")
+            return makeSetInsertSideChain(j.at("trackId").get<Uuid>(), j.at("index").get<int>(), j.at("source").get<Uuid>());
         if (type == "set_insert_bypass")
             return makeSetInsertBypass(j.at("trackId").get<Uuid>(), j.at("index").get<int>(), j.at("bypass").get<bool>());
         if (type == "transaction") {

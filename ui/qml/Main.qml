@@ -162,6 +162,9 @@ ApplicationWindow {
     CreateTrackStackDialog { id: createTrackStackDialog; project: controller }
     ConvertToSamplerDialog { id: convertToSamplerDialog; project: controller }
     PageSetupDialog { id: pageSetupDialog; project: controller }
+    ConsolidateDialog { id: consolidateDialog; project: controller }
+    MissingFilesDialog { id: missingFilesDialog; project: controller }
+    Connections { target: controller; function onMissingMediaFound() { missingFilesDialog.open() } }
     FileDialog {
         id: printDialog
         title: qsTr("Print the project to a PDF file")
@@ -485,6 +488,7 @@ ApplicationWindow {
         "track.createTrackStack": () => createTrackStackDialog.open(),
         "track.convertRegionsToNewSamplerTrack": () => convertToSamplerDialog.open(),
         "file.pageSetup": () => pageSetupDialog.open(),
+        "file.pmConsolidate": () => consolidateDialog.open(),
         "file.print": () => printDialog.open(),
         "track.flattenStack": () => { for (const id of controller.selectedTrackIds) controller.flattenStack(id) },
         "track.convertFolderStackToSummingStack": () => { for (const id of controller.selectedTrackIds) controller.convertFolderStackToSummingStack(id) },

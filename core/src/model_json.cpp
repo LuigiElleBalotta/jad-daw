@@ -11,6 +11,7 @@ void to_json(nlohmann::json& j, const ProcessorRef& r) {
     j = {{"processorId", r.processorId}, {"params", r.params}, {"state", r.state}};
     if (!r.label.empty()) j["label"] = r.label;
     if (r.bypass) j["bypass"] = true;
+    if (!r.sideChain.isNull()) j["sideChain"] = r.sideChain;
 }
 
 void from_json(const nlohmann::json& j, ProcessorRef& r) {
@@ -18,6 +19,8 @@ void from_json(const nlohmann::json& j, ProcessorRef& r) {
     j.at("params").get_to(r.params);
     j.at("state").get_to(r.state);
     r.label = j.value("label", std::string());
+    r.sideChain = Uuid{};
+    if (j.contains("sideChain") && j["sideChain"].is_string()) r.sideChain = j["sideChain"].get<Uuid>();
     if (j.contains("bypass")) {
         if (!j["bypass"].is_boolean()) throw std::runtime_error("bypass must be a boolean");
         r.bypass = j["bypass"].get<bool>();

@@ -193,7 +193,7 @@ TEST_CASE("commands: media pool", "[commands]") {
     wrongRate.id = Uuid::random(gRng);
     wrongRate.sampleRate = 44100;
     requireRejected(p, *makeAddMedia(wrongRate), "bad_media");
-    for (const char* bad : {"", "/abs/a.wav", "C:/a.wav", "../escape.wav", "audio/../../x.wav", "a\\b.wav"}) {
+    for (const char* bad : {"", "//server/a.wav", "C:/../a.wav", "../escape.wav", "audio/../../x.wav", "a\\b.wav"}) {
         MediaItem bp = m;
         bp.id = Uuid::random(gRng);
         bp.path = bad;

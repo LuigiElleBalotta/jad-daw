@@ -868,16 +868,17 @@ QString ProjectController::addAudioTrackNamed(const QString& name) {
     return id;
 }
 
-void ProjectController::importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats) {
+void ProjectController::importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats, bool dropped) {
     if (!host_ || files.isEmpty() || !std::isfinite(startBeats)) return;
+    const bool link = !dropped && projectSetting("copyAudioFiles", "1") == QLatin1String("0");
     const TrackRow* track = tracks_.find(trackId);
     if (track && track->kind == "audio") {
-        importAudioFiles(files, trackId, startBeats);
+        importAudioFiles(files, trackId, startBeats, link);
         return;
     }
     for (const QUrl& file : files) {  // not on an audio track: one new track per file, named after it
         const QString id = addAudioTrackNamed(QFileInfo(file.toLocalFile()).completeBaseName());
-        importAudioFiles({file}, id, startBeats);
+        importAudioFiles({file}, id, startBeats, link);
     }
 }
 
@@ -2532,6 +2533,27 @@ void ProjectController::setAutomationMode(const QString& trackId, const QString&
     if (!host_ || !modes.contains(mode)) return;
     finishAutomationCapture(trackId);
     sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"automationMode", mode.toStdString()}});
+}
+
+QVariantList ProjectController::sideChainSources(const QString& trackId) const {
+    QVariantList out;
+    for (const TrackRow& t : allRows_) {
+        if (t.id == trackId || t.master || (t.kind != QLatin1String("audio") && t.kind != QLatin1String("instrument") && t.kind != QLatin1String("bus") && t.kind != QLatin1String("aux"))) continue;
+        out.append(QVariantMap{{"id", t.id}, {"name", t.name}});
+    }
+    return out;
+}
+
+QString ProjectController::insertSideChain(const QString& trackId, int index) const {
+    for (const TrackRow& t : allRows_)
+        if (t.id == trackId && index >= 0 && index < static_cast<int>(t.inserts.size())) return t.inserts[static_cast<std::size_t>(index)].sideChain;
+    return {};
+}
+
+void ProjectController::setInsertSideChain(const QString& trackId, int index, const QString& sourceId) {
+    if (!host_) return;
+    sendCommand({{"type", "set_insert_sidechain"}, {"trackId", trackId.toStdString()}, {"index", index},
+                 {"source", sourceId.isEmpty() ? std::string("00000000-0000-0000-0000-000000000000") : sourceId.toStdString()}});
 }
 
 void ProjectController::setTrackOn(const QString& trackId, bool on) {
@@ -4787,6 +4809,7 @@ QVariantMap ProjectController::unusedMedia() const {
     for (const lpc::MediaItem& m : project.mediaPool) {
         if (used.count(m.id.toString())) continue;
         ++count;
+        if (lpc::isExternalMediaPath(m.path)) continue;  // kept elsewhere: nothing of the project's to free
         std::error_code ec;
         const auto size = std::filesystem::file_size(mediaFile(dir_, QString::fromStdString(m.path)), ec);
         if (!ec) bytes += static_cast<double>(size);
@@ -4817,7 +4840,7 @@ void ProjectController::cleanUpProject() {
     for (const lpc::MediaItem& m : project.mediaPool) {
         if (used.count(m.id.toString())) continue;
         commands.push_back({{"type", "remove_media"}, {"mediaId", m.id.toString()}});
-        files.push_back(mediaFile(dir_, QString::fromStdString(m.path)));
+        if (!lpc::isExternalMediaPath(m.path)) files.push_back(mediaFile(dir_, QString::fromStdString(m.path)));  // a file kept elsewhere stays where it is
     }
     if (commands.empty()) {
         emit notice("Every audio file of the project is in use");

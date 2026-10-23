@@ -230,6 +230,15 @@ a keyboard and lets you change the root key, the key range, the gain and 1Shot o
 
 **File > Print…** writes the arrangement (a bar for every region) and the table of the tracks as a PDF file; **Page Setup…** chooses the paper and the orientation.
 
+**Assets.** As in Logic, a project can keep the audio inside it or refer to the files where they are. *Project Settings > Assets > Audio files* decides what Add Audio File
+and Import do: ticked, the file is copied into the project folder; off, the project refers to the file by its path (a file that does not fit the project is converted and
+the converted file is written beside the original). Files dragged in are always copied. The files a project refers to are copied in when you save (for the kinds that are
+ticked) or at any time with **File > Project Management > Consolidate…**. *Project Settings > Recording > Audio Recording Path* sends new recordings to a folder of your choice.
+When a project is opened whose files are not where it says, a **Missing Audio Files** window lists them: Locate each one, or Search a Folder for all of them by name.
+
+**Side Chain.** The Compressor and the Noise Gate have a *Side Chain* menu in the header of their windows: choose a track and the detector listens to what that track plays
+(before its fader) instead of the plug-in's own input; the signal is not heard through the plug-in.
+
 ## 11. Bounce
 
 `File > Bounce…` writes the mix to a file, faster than real time, without the audio device.
@@ -280,5 +289,5 @@ The menus are laid out as in Logic:
 ## What is not there yet
 
 Some menu commands are present but say "not implemented yet" when chosen: the Movie window, Dolby Atmos, the Mac window sets, Live Loops. Imported audio is always copied into the project folder, so the choices about copying assets do nothing.
-Match EQ's Learn buttons listen to what reaches the insert (there is no side chain routing yet). The plug-in windows
+Match EQ's Learn buttons listen to what reaches the insert. The plug-in windows
 of the stock effects are our own drawings in Logic's style, not Apple's. The file [docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.

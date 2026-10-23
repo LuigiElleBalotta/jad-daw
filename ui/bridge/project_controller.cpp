@@ -278,6 +278,7 @@ bool ProjectController::openProject(const QUrl& folder) {
     host_->setChangeListener([this, generation](std::uint64_t rev) {
         QMetaObject::invokeMethod(this, [this, rev, generation] { if (generation == generation_) refresh(rev); }, Qt::QueuedConnection);
     }).get();
+    checkMissingOnOpen_ = true;
     refresh(host_->revision());
     restoreArmed();
     if (projectSetting("midiSendAfterLoad", "0") == QLatin1String("1")) QTimer::singleShot(0, this, [this] { sendMidiSettings(); });
@@ -311,6 +312,7 @@ bool ProjectController::saveProject() {
     if (!host_) return false;
     commitPluginStates();                                        // what an editor changed is part of the project
     host_->read([](const lpc::Project&) { return 0; }).get();  // the commands above have run
+    if (const int copied = consolidateOnSave(); copied > 0) emit notice(QString("%1 audio file%2 copied into the project").arg(copied).arg(copied == 1 ? "" : "s"));
     try {
         const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
         lpc::saveProject(project, dir_);
@@ -393,6 +395,11 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     groupRows_ = s.groups;
     ++groupsRevision_;
     mediaPaths_ = s.mediaPaths;
+    if (checkMissingOnOpen_) {  // Logic lists the files it cannot find when it opens a project
+        checkMissingOnOpen_ = false;
+        const int missing = missingMedia().size();
+        if (missing > 0) QTimer::singleShot(0, this, [this, missing] { emit missingMediaFound(missing); });
+    }
     sampleRate_ = s.sampleRate;
     name_ = s.name;
     key_ = s.key;
@@ -1215,7 +1222,7 @@ void ProjectController::importAudio(const QUrl& fileUrl, const QString& trackId,
     importAudioFiles({fileUrl}, trackId, startBeats);
 }
 
-void ProjectController::importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats) {
+void ProjectController::importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats, bool link) {
     if (!host_ || files.isEmpty() || !std::isfinite(startBeats)) return;
     const TrackRow* track = tracks_.find(trackId);
     if ((!track || track->kind != "audio") && !pendingAudioTracks_.contains(trackId)) {
@@ -1223,7 +1230,7 @@ void ProjectController::importAudioFiles(const QList<QUrl>& files, const QString
         return;
     }
     for (int i = 0; i < files.size(); ++i)
-        importQueue_.push_back({files[i], trackId, i == 0 ? startBeats : std::numeric_limits<double>::quiet_NaN()});
+        importQueue_.push_back({files[i], trackId, i == 0 ? startBeats : std::numeric_limits<double>::quiet_NaN(), false, {}, false, false, false, link});
     if (!importRunning_) startNextImport();
 }
 
@@ -1246,10 +1253,11 @@ void ProjectController::startNextImport() {
         if (!self) return;
         self->lastImportEnd_ = ok ? endBeats : start;  // a failed file leaves the spot free for the next one
         self->startNextImport();
-    }, next.takeGroup, next.muted, next.musical, next.recorded);
+    }, next.takeGroup, next.muted, next.musical, next.recorded, next.link && !next.temporary,
+       next.recorded ? projectSetting("recordingPath", QString()) : QString());
 }
 
-void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup, bool muted, bool musical, bool recorded) {
+void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup, bool muted, bool musical, bool recorded, bool link, const QString& folder) {
     if (!host_) {
         done(false, startBeats);
         return;
@@ -1262,8 +1270,9 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
     const double startFrames = tempoMap_.ticksToSamples(startTick, projectRate);
     const std::int64_t startMicros = std::min<std::int64_t>(std::llround(startFrames * 1e6 / projectRate), lpc::kMaxPosition);
 
+    const std::filesystem::path folderPath = folder.isEmpty() ? std::filesystem::path() : std::filesystem::path(folder.toStdU16String());
     QPointer<ProjectController> self(this);
-    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done, takeGroup, muted, musical, recorded] {
+    (void)QtConcurrent::run([self, source, projectDir, projectRate, trackId, startMicros, beats, done, takeGroup, muted, musical, recorded, link, folderPath] {
         auto fail = [&](const QString& message) {
             if (!self) return;
             QMetaObject::invokeMethod(self.data(), [self, message, done, beats] {
@@ -1305,33 +1314,52 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
             return;
         }
 
-        // put it into <project>/audio under a name that is not taken yet
+        // Where it goes. Copied into <project>/audio under a name that is not taken yet; or, with "Copy audio files into project" off, left where it is (a file that
+        // does not fit the project is converted and the converted file is written beside it); or into the Audio Recording Path of the project settings. Whatever
+        // is outside the project is referenced by its absolute path. A folder that cannot be written falls back to the project.
         std::filesystem::path target;
-        bool created = false;
-        try {
-            const std::filesystem::path audioDir = projectDir / "audio";
-            std::filesystem::create_directories(audioDir);
-            const std::filesystem::path stem = source.stem();
-            const std::filesystem::path outExt = copyAsIs ? source.extension() : std::filesystem::path(u".wav");
-            // copy_file without overwrite fails when the name is taken (also by a concurrent import): try the next name
-            for (int n = 1; !created; ++n) {
-                target = audioDir / (n == 1 ? stem.u16string() + outExt.u16string()
-                                            : stem.u16string() + u" (" + QString::number(n).toStdU16String() + u")" + outExt.u16string());
-                if (std::filesystem::exists(target)) continue;
-                if (copyAsIs) {
-                    std::error_code ec;
-                    created = std::filesystem::copy_file(source, target, std::filesystem::copy_options::none, ec);
-                    if (ec && ec != std::errc::file_exists) throw std::filesystem::filesystem_error("copy failed", source, target, ec);
-                } else {
-                    lpc::writeWav(target, projectRate, channels, converted.samples, lpc::WavFormat::Pcm24);
-                    created = true;
+        bool created = false, ownsTarget = true, externalTarget = false;
+        if (link && copyAsIs) {
+            target = source;
+            ownsTarget = false;
+            externalTarget = true;
+        } else {
+            for (int attempt = 0; attempt < 2 && target.empty(); ++attempt) {
+                std::filesystem::path outDir = projectDir / "audio";
+                bool outside = false;
+                if (attempt == 0 && link) { outDir = source.parent_path(); outside = true; }
+                else if (attempt == 0 && !folderPath.empty()) { outDir = folderPath; outside = true; }
+                std::filesystem::path chosen;
+                try {
+                    std::filesystem::create_directories(outDir);
+                    const std::filesystem::path stem = source.stem().u16string() + (link && outside ? std::u16string(u" (converted)") : std::u16string());
+                    const std::filesystem::path outExt = copyAsIs ? source.extension() : std::filesystem::path(u".wav");
+                    // copy_file without overwrite fails when the name is taken (also by a concurrent import): try the next name
+                    for (int n = 1; !created; ++n) {
+                        chosen = outDir / (n == 1 ? stem.u16string() + outExt.u16string()
+                                                  : stem.u16string() + u" (" + QString::number(n).toStdU16String() + u")" + outExt.u16string());
+                        if (std::filesystem::exists(chosen)) continue;
+                        if (copyAsIs) {
+                            std::error_code ec;
+                            created = std::filesystem::copy_file(source, chosen, std::filesystem::copy_options::none, ec);
+                            if (ec && ec != std::errc::file_exists) throw std::filesystem::filesystem_error("copy failed", source, chosen, ec);
+                        } else {
+                            lpc::writeWav(chosen, projectRate, channels, converted.samples, lpc::WavFormat::Pcm24);
+                            created = true;
+                        }
+                    }
+                    target = chosen;
+                    externalTarget = outside;
+                } catch (const std::exception& e) {
+                    std::error_code ignore;
+                    if (created) std::filesystem::remove(chosen, ignore);  // only a file this worker made
+                    created = false;
+                    if (attempt == 1 || (!link && folderPath.empty())) {
+                        fail(QString("Cannot import %1: %2").arg(sourceName, QString::fromUtf8(e.what())));
+                        return;
+                    }
                 }
             }
-        } catch (const std::exception& e) {
-            std::error_code ignore;
-            if (created) std::filesystem::remove(target, ignore);  // only a file this worker made
-            fail(QString("Cannot import %1: %2").arg(sourceName, QString::fromUtf8(e.what())));
-            return;
         }
 
         QString hash;
@@ -1343,20 +1371,20 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
 
         if (!self) {
             std::error_code ignore;
-            std::filesystem::remove(target, ignore);
+            if (ownsTarget) std::filesystem::remove(target, ignore);
             return;
         }
-        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats, takeGroup, muted, musical, recorded] {
+        QMetaObject::invokeMethod(self.data(), [self, target, projectDir, trackId, startMicros, frames, channels, projectRate, hash, done, beats, takeGroup, muted, musical, recorded, ownsTarget, externalTarget] {
             std::error_code ignore;
             if (!self || self->dir_ != projectDir || !self->host_) {  // closed or replaced meanwhile
-                std::filesystem::remove(target, ignore);
+                if (ownsTarget) std::filesystem::remove(target, ignore);
                 if (self) self->importQueue_.clear();
                 done(false, beats);
                 return;
             }
             lpc::MediaItem item;
             item.id = lpc::Uuid::random();
-            const std::u8string rel = (std::filesystem::path("audio") / target.filename()).generic_u8string();
+            const std::u8string rel = externalTarget ? target.generic_u8string() : (std::filesystem::path("audio") / target.filename()).generic_u8string();
             item.path.assign(rel.begin(), rel.end());
             item.hash = hash.toStdString();
             item.sampleRate = projectRate;

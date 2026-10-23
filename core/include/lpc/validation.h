@@ -43,6 +43,10 @@ MaybeError checkTrackProps(const std::string& name, const std::string& color);
 MaybeError checkOutputTrack(const Project& p, const Track& t);  // Output tracks: a free pair 1..8, no output, no sends, no regions; others have pair 0
 MaybeError checkShowInTracks(TrackKind kind, bool show);  // only buses and auxes can be hidden
 bool validRelativeMediaPath(const std::string& path);
+// A media path is either relative to the project folder (and stays inside it), or the absolute path of a file kept elsewhere ("C:/..." or "/..."), with "/" separators
+// and no ".." in either case. Logic can copy the audio into the project or reference it where it is (Project Settings > Assets).
+bool validMediaPath(const std::string& path);
+bool isExternalMediaPath(const std::string& path);
 // True when `goal` can be reached from `from` by following outputs and sends.
 bool reaches(const Project& p, const Uuid& from, const Uuid& goal);
 

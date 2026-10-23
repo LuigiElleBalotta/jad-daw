@@ -21,6 +21,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/project_controller_flex.cpp
         bridge/project_controller_mastering.cpp
         bridge/project_controller_matcheq.cpp
+        bridge/project_controller_assets.cpp
         bridge/project_controller_print.cpp
         bridge/project_controller_stacks.cpp
         bridge/project_controller_live.cpp
@@ -117,6 +118,8 @@ qt_add_qml_module(jad_ui_lib
         qml/CopyMidiEventsDialog.qml
         qml/CreateTrackStackDialog.qml
         qml/ConvertToSamplerDialog.qml
+        qml/MissingFilesDialog.qml
+        qml/ConsolidateDialog.qml
         qml/PageSetupDialog.qml
         qml/FxSamplerView.qml
         qml/StepSequencer.qml

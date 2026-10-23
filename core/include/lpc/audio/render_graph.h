@@ -116,6 +116,11 @@ struct TrackConfig {
     std::vector<RegionPlayback> regions;
     std::vector<std::unique_ptr<IProcessor>> inserts;
     std::vector<ParamAuto> paramAuto;
+    struct SideChainLink {
+        int insert = 0;  // index in `inserts`
+        Uuid source;     // the track whose signal (before its fader) the insert listens to
+    };
+    std::vector<SideChainLink> sideChains;
     std::vector<SendPlayback> sends;
     int outputPair = 0;  // Output strips: the pair of device outputs they play on (1 = outputs 3-4)
     Uuid output;  // null = master
@@ -134,6 +139,7 @@ struct TrackNode {
     StripParams strip;
     TrackConfig* config;  // owned; replaced through SetConfig messages
     std::vector<float> l, r;
+    std::vector<float> scL, scR;  // the signal before the fader (after the inserts) of this block, for the inserts of other tracks that use this track as their side chain
     Synth synth;
     // A plug-in instrument (config->instrument): the notes held, what to send when the music stops, live notes waiting for the next block, and how
     // long the stopped graph keeps rendering so that tails ring out.

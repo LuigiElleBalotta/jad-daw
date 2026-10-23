@@ -435,7 +435,7 @@ Item {
             if (files.length === 0) return
             const beats = Math.max(0, root.snapBeat(root.xToBeats(drop.x)))
             // on an audio track the files go there back to back; anywhere else each makes a new track named after the file
-            root.project.importAudioFilesAt(files, root.trackIdAt(drop.y), beats)
+            root.project.importAudioFilesAt(files, root.trackIdAt(drop.y), beats, true)  // dragged in: always copied into the project
         }
     }
 

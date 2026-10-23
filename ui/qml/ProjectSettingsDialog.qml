@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import Jad
 
 // File > Project Settings: Logic's one window with 11 tabs (General, Audio, Recording, Smart Tempo, MIDI, Score, Movie, Synchronization, Metronome,
@@ -25,6 +26,12 @@ Dialog {
     background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
     header: Item { height: 0 }
     onAboutToShow: { nameField.text = project.projectName }
+
+    FolderDialog {
+        id: recordingPathDialog
+        title: qsTr("Folder for the audio recordings")
+        onAccepted: root.project.setProjectSetting("recordingPath", decodeURIComponent(selectedFolder.toString()).replace(/^file:\/\/\/([A-Za-z]:)/, "$1").replace(/^file:\/\//, ""))
+    }
 
     component Row2: RowLayout {
         property string label
@@ -166,7 +173,14 @@ Dialog {
                 Flag { key: "midiDataReduction"; label: qsTr("MIDI data reduction") }
                 Flag { key: "eraseDuplicates"; label: qsTr("Erase duplicate notes and controller data") }
                 Group { text: qsTr("Audio Recording Path") }
-                Value { Layout.fillWidth: true; text: root.project.projectFolder() + "/Audio"; elide: Text.ElideMiddle }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacing[2]
+                    Value { objectName: "recordingPath"; Layout.fillWidth: true; text: root.text("recordingPath", "") === "" ? qsTr("Project") : root.text("recordingPath", ""); elide: Text.ElideMiddle }
+                    IconButton { objectName: "recordingPathSet"; implicitHeight: 24; label: qsTr("Set…"); onClicked: recordingPathDialog.open() }
+                    IconButton { objectName: "recordingPathProject"; implicitHeight: 24; label: qsTr("Project"); onClicked: root.project.setProjectSetting("recordingPath", "") }
+                }
+                Note { text: qsTr("New recordings are written to this folder and the project refers to them there; with Project they are saved inside it.") }
                 Item { Layout.fillHeight: true }
             }
 
@@ -264,7 +278,7 @@ Dialog {
                 Flag { key: "copyImpulseResponses"; fallback: true; label: qsTr("Impulse responses of convolution reverbs") }
                 Flag { key: "copyMovie"; label: qsTr("Movie file") }
                 Flag { key: "copySoundLibrary"; label: qsTr("Sound Library content") }
-                Note { text: qsTr("Imported audio is always copied into the project today; the choices are saved with the project for when other kinds of files are taken in.") }
+                Note { text: qsTr("With Audio files ticked, a file you add with Add Audio File or Import is copied into the project; with it off the project refers to the file where it is. Files dragged in are always copied. The files a project refers to are copied in when you save, for the types that are ticked, or at any time with File > Project Management > Consolidate.") }
                 Item { Layout.fillHeight: true }
             }
         }

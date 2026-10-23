@@ -143,7 +143,8 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             QVariantMap params;
             for (const auto& [name, value] : ins.params) params.insert(QString::fromStdString(name), value);
             tr.inserts.push_back({QString::fromStdString(ins.processorId), g == ins.params.end() ? 0.0 : g->second,
-                                  QString::fromStdString(ins.label), lpc::isVst3Id(ins.processorId), ins.bypass, params});
+                                  QString::fromStdString(ins.label), lpc::isVst3Id(ins.processorId), ins.bypass, params,
+                                  ins.sideChain.isNull() ? QString() : QString::fromStdString(ins.sideChain.toString())});
         }
         for (const lpc::Send& s : t.strip.sends) {
             const lpc::Track* target = p.findTrack(s.targetTrackId);

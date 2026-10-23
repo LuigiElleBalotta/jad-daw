@@ -114,6 +114,7 @@ struct ProcessorRef {
     std::string state;  // opaque, base64 for real plugins
     std::string label;  // display name of a plug-in (informational; empty for built-ins)
     bool bypass = false;  // the insert passes the signal unchanged (a plug-in keeps its latency)
+    Uuid sideChain;       // Side Chain: the track whose signal (before its fader) the plug-in listens to instead of its own input; null: its own input
     bool operator==(const ProcessorRef&) const = default;
 };
 

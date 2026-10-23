@@ -289,10 +289,11 @@ public:
             }
         }
     }
+    void setSideChain(const float* l, const float* r) noexcept override { sideL_ = l; sideR_ = r; }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
             const double inL = l[i] * inputGain_, inR = r[i] * inputGain_;
-            double keyL = inL, keyR = inR;
+            double keyL = sideL_ ? sideL_[i] : inL, keyR = sideR_ ? sideR_[i] : inR;  // the detector hears the side chain when there is one
             if (scState_ > 0) {
                 keyL = key_.l(inL);
                 keyR = key_.r(inR);
@@ -369,6 +370,8 @@ private:
     double sr_;
     double inputGain_ = 1, outputGain_ = 1;
     int scState_ = 0;
+    const float* sideL_ = nullptr;
+    const float* sideR_ = nullptr;
     Section key_;
     double kneeDb_ = 0, attack_ = 0, release_ = 0, releaseFast_ = 0, releaseSlow_ = 0, releaseMs_ = 100, rmsCoef_ = 0, makeup_ = 1, limiterRelease_ = 0;
     bool rms_ = false, dual_ = false;
@@ -491,9 +494,10 @@ public:
         }
     }
     int latencySamples() const override { return look_; }
+    void setSideChain(const float* l, const float* r) noexcept override { sideL_ = l; sideR_ = r; }
     void process(float* l, float* r, int frames) noexcept override {
         for (int i = 0; i < frames; ++i) {
-            double kl = l[i], kr = r[i];
+            double kl = sideL_ ? sideL_[i] : l[i], kr = sideR_ ? sideR_[i] : r[i];  // the detector hears the side chain when there is one
             if (keyFilter_) {  // the detector listens through the side-chain filter
                 for (Section& s : key_) {
                     kl = s.l(kl);
@@ -538,6 +542,8 @@ private:
     bool keyFilter_;
     bool monitor_ = false;
     bool ducker_;
+    const float* sideL_ = nullptr;
+    const float* sideR_ = nullptr;
     Section key_[2];
     std::vector<float> delayL_, delayR_;
     std::size_t pos_ = 0;

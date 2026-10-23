@@ -22,6 +22,8 @@ public:
     virtual float reductionDb() const noexcept { return 0.0f; }
     // Audio thread, before process(): the automated value (0..1) of parameter `index`. Built-in effects and missing plug-ins ignore it.
     virtual void setParameter(int /*index*/, float /*normalized*/) noexcept {}
+    // Audio thread, before process(): the side chain signal of this block (null: the plug-in listens to its own input). Only the ones that detect use it.
+    virtual void setSideChain(const float* /*l*/, const float* /*r*/) noexcept {}
     virtual nlohmann::json describe() const = 0;  // not real-time; used by tests
 };
 

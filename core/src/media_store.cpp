@@ -54,6 +54,13 @@ std::shared_ptr<audio::IFrameSource> MediaStore::open(const MediaItem& item) {
     }
 }
 
+void MediaStore::forget(const Uuid& mediaId) {
+    std::lock_guard lock(mutex_);
+    sources_.erase(mediaId);
+    streams_.erase(mediaId);
+    failed_.erase(mediaId);
+}
+
 int MediaStore::missingCount() const {
     std::lock_guard lock(mutex_);
     return static_cast<int>(failed_.size());

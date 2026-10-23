@@ -287,6 +287,9 @@ public:
     // lane between their first and last point and are one undo step.
     Q_INVOKABLE void setAutomationMode(const QString& trackId, const QString& mode);
     Q_INVOKABLE QString automationMode(const QString& trackId) const;
+    Q_INVOKABLE QVariantList sideChainSources(const QString& trackId) const;                // {id, name} of the tracks an insert of this track can listen to
+    Q_INVOKABLE QString insertSideChain(const QString& trackId, int index) const;            // the id of the source of the insert; empty: none
+    Q_INVOKABLE void setInsertSideChain(const QString& trackId, int index, const QString& sourceId);
     Q_INVOKABLE void setTrackOn(const QString& trackId, bool on);  // the On/Off button of a track header
     Q_INVOKABLE void toggleTrackOnSelected();                      // Track > Turn Track On/Off
     Q_INVOKABLE void setRecordInRegions(const QString& trackId, bool on);  // Record Automation with Audio/MIDI Regions, in the Automation slot's menu
@@ -569,8 +572,16 @@ public:
     Q_INVOKABLE int beatsToBar(double beats) const; // the bar (1-based) that holds the beat
     // Audio files dropped (or chosen) at a position: onto an audio track they go on that track, back to back; anywhere else each file
     // makes a new audio track named after the file. WAV, MP3, FLAC and AIFF; other rates are converted to the project's.
-    Q_INVOKABLE void importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats);
+    // `dropped`: the files were dragged in; those are always copied into the project (Logic), the others follow Project Settings > Assets > Copy audio files into project
+    Q_INVOKABLE void importAudioFilesAt(const QList<QUrl>& files, const QString& trackId, double startBeats, bool dropped = false);
     Q_INVOKABLE void importAudioFilesHere(const QList<QUrl>& files);
+    // Assets: audio kept outside the project is referenced by its path. Consolidate copies it in (File > Project Management > Consolidate), and so does Save when the
+    // checkboxes of Project Settings > Assets are on. Missing files are listed when a project opens: Locate one, or Search a folder for all of them.
+    Q_INVOKABLE int consolidateMedia(bool audio, bool sampler);                 // how many files were copied into the project
+    Q_INVOKABLE int externalMediaCount() const;                                  // files the project references from outside
+    Q_INVOKABLE QVariantList missingMedia() const;                               // {id, name, path} of the files that are not where the project says
+    Q_INVOKABLE bool relinkMedia(const QString& mediaId, const QUrl& file);    // the file that was found for a missing one
+    Q_INVOKABLE int searchMissingMedia(const QUrl& folder);                      // looks in the folder and below it for the missing files by name; how many were found
     // File > Import > MIDI File: one new instrument track with a region per channel of the file, at the playhead
     Q_INVOKABLE void importMidiFile(const QUrl& file);
     // File > Export > Selected Regions as MIDI File (the MIDI regions selected, or every instrument track when none is)
@@ -931,7 +942,7 @@ public:
     // on `trackId` at `startBeats`, as one undo step. Errors go to lastError.
     Q_INVOKABLE void importAudio(const QUrl& file, const QString& trackId, double startBeats);
     // Several files: imported one after the other, back to back from `startBeats`. A bad file is reported and skipped.
-    Q_INVOKABLE void importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats);
+    Q_INVOKABLE void importAudioFiles(const QList<QUrl>& files, const QString& trackId, double startBeats, bool link = false);
     // Peaks of an audio file of the project, `buckets` values in [0,1]. Empty until computed (on a worker);
     // waveformReady(mediaId) fires when the call can be repeated to get them.
     // The waveform of one region: only its own part of the media, `buckets` peaks over its length (empty while it is being read:
@@ -958,6 +969,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void printSetupChanged();
+    void missingMediaFound(int count);  // a project was opened whose audio files are not all where it says
     void metronomeChanged();
     void liveLinkChanged();
     void barsChanged();
@@ -1019,11 +1031,12 @@ private:
         bool muted = false;      // a take that does not play
         bool musical = false;    // the region follows the tempo (Use Musical Grid)
         bool recorded = false;   // a take: the file remembers when it was recorded (Move > To Recorded Position)
+        bool link = false;       // the file stays where it is and the project refers to it
         bool newAlternative = false;  // Create Track Alternative(s): the track first gets a new empty alternative that plays, and the take lands on it
     };
     void startNextImport();
     // `done(ok, endBeats)` runs on the Qt thread when the file is in the project or has failed.
-    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false, bool musical = false, bool recorded = false);
+    void runImport(const QUrl& file, const QString& trackId, double startBeats, std::function<void(bool, double)> done, const QString& takeGroup = {}, bool muted = false, bool musical = false, bool recorded = false, bool link = false, const QString& folder = {});
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     void liveHandle(const nlohmann::json& request, std::function<void(const nlohmann::json&)> reply);
     std::unique_ptr<LiveLink> live_;
@@ -1054,6 +1067,8 @@ private:
     void commitPluginState(const lpc::InsertSlot& slot);
     void commitPluginStates();
     void teardown();
+    bool checkMissingOnOpen_ = false;  // the next snapshot of a project that was just opened is looked at for missing files
+    int consolidateOnSave();            // the copy of the referenced files that Save does for the asset types that are ticked
     void rememberArmed();           // Project Settings > General: with "Reset record enable state" off, the armed Software Instrument tracks are kept for the next opening
     void restoreArmed();            // ... and with it on (the default) they are all let go when the project opens
     void sendMidiSettings();        // Project Settings > MIDI: the volume and pan of External MIDI tracks go to their devices after loading

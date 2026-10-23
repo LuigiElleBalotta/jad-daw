@@ -11,7 +11,7 @@ Contents: [Start](#1-start) · [The main window](#2-the-main-window) · [Tracks 
 [Tools](#4-tools) · [Editing notes](#5-editing-notes) · [Recording](#6-recording) · [Library and Smart Controls](#7-library-and-smart-controls) ·
 [The Mixer](#8-the-mixer) · [Plug-ins and the stock effect windows](#9-plug-ins-and-the-stock-effect-windows) ·
 [Automation and global tracks](#10-automation-and-global-tracks) · [Bounce](#11-bounce) · [Settings](#12-settings) ·
-[Key commands](#13-key-commands) · [What is not there yet](#what-is-not-there-yet)
+[Key commands](#13-key-commands) · [Live Loops, Movie and Dolby Atmos](#14-live-loops-movie-and-dolby-atmos) · [What is not there yet](#what-is-not-there-yet)
 
 ---
 
@@ -286,8 +286,32 @@ The menus are laid out as in Logic:
 
 ---
 
+## 14. Live Loops, Movie and Dolby Atmos
+
+**Live Loops** (`View > Live Loops`). A grid of cells, scenes down and tracks across (audio, instrument and MIDI tracks). A cell is a loop made from regions:
+`Edit > Copy to Live Loops Scene` copies the selected regions to one cell each in the first empty scene; with nothing selected it takes the span of the cycle when
+the cycle is on, and without a cycle it makes a scene for every section of the Arrangement track. A cell can also be made by right-clicking it (`Set from Selected
+Regions`) and emptied (`Clear Cell`). Click a cell to launch it, click it again to stop it, click the play button of a scene to launch the whole row and the name of
+a track to stop its cell. A cell starts at the next multiple of the Quantization (1/4 note up to 8 bars, one bar by default); the transport starts when it is stopped.
+While a cell plays on a track the track's own regions are silent; stopping the transport stops every cell. The Stop All button stops them at the next quantization.
+Cells are saved with the project; what is playing is not.
+
+**Movie** (`File > Movie > Open Movie…`, `View > Movie Window`). A video file plays in a floating window in step with the transport (seeking, playing and stopping follow the
+project), muted: the sound is the project's. `File > Movie > Set Movie Start to Playhead` sets the project time at which the first frame is shown; the file and the start are
+saved with the project (Project Settings > Movie shows them). The formats are the ones the system can play (MOV, MP4, M4V, AVI, MKV, WebM).
+
+**Dolby Atmos** (`Mix > Dolby Atmos…`). Turn Spatial Audio on for the project, then make tracks *objects*: an object has a 3D Object Panner insert (open it for a
+top view of the room, a height bar and a size knob; drag the dot; every parameter can be automated like a plug-in's) and the rest of the tracks are the *bed*, mixed
+together. The Monitoring Format is *Binaural* (the objects are placed with the cues of the head over headphones) or *2.0 Direct* (a plain stereo pan). `File > Export >
+Project as Spatial Audio…` writes a Dolby Atmos ADM BWF master (the project or the cycle range): a wave file with the bed in the 7.1.2 channels (stereo in the front
+ones), one mono channel for every object and the ADM metadata with the movement of every object. `File > Import > Create Project from ADM BWF…` makes a project from
+such a file: a track per object with its panner and its movement as automation, and one stereo track with the bed folded down. The file has no Dolby `dbmd` chunk and
+no downmix and trim metadata; the other monitoring formats (7.1.4, 5.1, Apple renderer, head tracking) are not there because the engine is stereo.
+
+---
+
 ## What is not there yet
 
-Some menu commands are present but say "not implemented yet" when chosen: the Movie window, Dolby Atmos, the Mac window sets, Live Loops. Imported audio is always copied into the project folder, so the choices about copying assets do nothing.
-Match EQ's Learn buttons listen to what reaches the insert. The plug-in windows
+Some menu commands are present but say "not implemented yet" when chosen: the Mac window sets (they belong to macOS) and a few stubs without a counterpart in Logic's guide.
+The Dolby Atmos monitoring is binaural or stereo only; the Live Loops grid has no pattern or Session Player cells, no follow actions and no recording into cells. Match EQ's Learn buttons listen to what reaches the insert. The plug-in windows
 of the stock effects are our own drawings in Logic's style, not Apple's. The file [docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.

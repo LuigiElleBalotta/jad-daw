@@ -577,6 +577,28 @@ public:
     Q_INVOKABLE void importAudioFilesHere(const QList<QUrl>& files);
     // Assets: audio kept outside the project is referenced by its path. Consolidate copies it in (File > Project Management > Consolidate), and so does Save when the
     // checkboxes of Project Settings > Assets are on. Missing files are listed when a project opens: Locate one, or Search a folder for all of them.
+    // Spatial Audio with Dolby Atmos (Mix > Dolby Atmos): an object track has a 3D Object Panner insert, the rest is the bed; the master goes out as an ADM BWF file.
+    Q_INVOKABLE QVariantList atmosTracks() const;  // {id, name, kind, object} of the tracks that can be objects
+    Q_INVOKABLE void setAtmosMode(bool on);
+    Q_INVOKABLE void setAtmosObject(const QString& trackId, bool object);
+    Q_INVOKABLE void setAtmosMonitor(const QString& mode);  // "binaural" or "stereo"
+    Q_INVOKABLE QVariantMap objectPosition(const QString& trackId) const;  // {x, y, z, size} at the playhead
+    Q_INVOKABLE void exportAdmBwf(const QUrl& file, const QVariantMap& options);  // range: project|cycle, bitDepth: 16|24
+    Q_INVOKABLE void createProjectFromAdm(const QUrl& file, const QUrl& folder);
+    // Live Loops: the grid of cells (scenes down, tracks across). A launch starts the cell at the next multiple of the quantization (Project Setting liveQuantize in
+    // beats, a bar by default) and the track's own regions are silent while a cell plays; stopping the transport stops every cell.
+    Q_PROPERTY(int liveRevision READ liveRevision NOTIFY liveLoopsChanged)  // changes when the grid or what plays in it changes
+    int liveRevision() const { return liveRevision_; }
+    Q_INVOKABLE QVariantMap liveGrid() const;  // {tracks: [{id, name, color, kind}], cells: [{trackId, scene, cellId, name, state}], scenes, sceneNames}; state: stopped, queued, playing, stopping
+    Q_INVOKABLE void launchCell(const QString& trackId, int scene);
+    Q_INVOKABLE void launchScene(int scene);
+    Q_INVOKABLE void stopCell(const QString& trackId);
+    Q_INVOKABLE void stopAllCells();
+    Q_INVOKABLE void clearCell(const QString& trackId, int scene);
+    Q_INVOKABLE void setCellFromSelection(const QString& trackId, int scene);  // the selected regions of the track, copied into the cell
+    Q_INVOKABLE void copyToLiveLoopsScene();                                    // Edit > Copy to Live Loops Scene
+    Q_INVOKABLE void addLiveScene();
+    Q_INVOKABLE void renameLiveScene(int scene, const QString& name);
     Q_INVOKABLE int consolidateMedia(bool audio, bool sampler);                 // how many files were copied into the project
     Q_INVOKABLE int externalMediaCount() const;                                  // files the project references from outside
     Q_INVOKABLE QVariantList missingMedia() const;                               // {id, name, path} of the files that are not where the project says
@@ -969,6 +991,7 @@ signals:
     void globalTracksVisibleChanged();
     void automationViewChanged();
     void printSetupChanged();
+    void liveLoopsChanged();
     void missingMediaFound(int count);  // a project was opened whose audio files are not all where it says
     void metronomeChanged();
     void liveLinkChanged();
@@ -1067,6 +1090,21 @@ private:
     void commitPluginState(const lpc::InsertSlot& slot);
     void commitPluginStates();
     void teardown();
+    struct LiveRunRow {
+        QString cellId;
+        lpc::Ticks start = 0, end = -1;
+    };
+    QHash<QString, QVector<LiveCellRow>> liveCells_;  // by track id
+    QHash<QString, QVector<LiveRunRow>> liveRuns_;    // by track id: the cells that play or are queued
+    QString lastLiveSignature_;
+    int liveRevision_ = 0;
+    lpc::Ticks liveQuantizeTicks() const;
+    int liveSceneCount() const;
+    QString liveCellState(const QString& trackId, const QString& cellId) const;
+    void refreshLiveCells(const std::vector<std::pair<QString, LiveCellRow>>& cells);
+    void pushLiveRuns(const QString& trackId);
+    void updateLive();
+    void stopLiveOnStop();
     bool checkMissingOnOpen_ = false;  // the next snapshot of a project that was just opened is looked at for missing files
     int consolidateOnSave();            // the copy of the referenced files that Save does for the asset types that are ticked
     void rememberArmed();           // Project Settings > General: with "Reset record enable state" off, the armed Software Instrument tracks are kept for the next opening

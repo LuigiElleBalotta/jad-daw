@@ -3890,6 +3890,46 @@ private slots:
             return false;
         }());
     }
+    void liveLoopsCellsLaunchAndStop() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.regions()->rowCount() > 0);
+        const auto roles = c.regions()->roleNames();
+        const QString region = c.regions()->data(c.regions()->index(0), roles.key("regionId")).toString();
+        const QString track = c.regions()->data(c.regions()->index(0), roles.key("trackId")).toString();
+        c.selectRegion(region, "replace");
+        c.copyToLiveLoopsScene();  // the selected region goes to a cell of the first empty scene
+        QTRY_VERIFY(c.liveGrid().value("cells").toList().size() == 1);
+        const QVariantMap cell = c.liveGrid().value("cells").toList().first().toMap();
+        QCOMPARE(cell.value("trackId").toString(), track);
+        QCOMPARE(cell.value("scene").toInt(), 0);
+        QCOMPARE(cell.value("state").toString(), QStringLiteral("stopped"));
+        c.launchCell(track, 0);
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().first().toMap().value("state").toString(), QStringLiteral("playing"));  // the transport was stopped: the cell starts at once
+        c.stopCell(track);
+        c.stopAllCells();
+        c.clearCell(track, 0);
+        QTRY_VERIFY(c.liveGrid().value("cells").toList().isEmpty());
+    }
+    void dolbyAtmosObjectsGetAPannerAndTheModeFollows() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        c.setAtmosMode(true);
+        QTRY_COMPARE(c.projectSettings().value("spatialAudio").toString(), QStringLiteral("dolbyAtmos"));
+        const QVariantList tracks = c.atmosTracks();
+        QVERIFY(!tracks.isEmpty());
+        const QString id = tracks.first().toMap().value("id").toString();
+        QVERIFY(!tracks.first().toMap().value("object").toBool());
+        c.setAtmosObject(id, true);
+        QTRY_VERIFY(c.atmosTracks().first().toMap().value("object").toBool());
+        c.setAtmosMonitor("stereo");
+        QTRY_COMPARE(c.projectSettings().value("atmosMonitor").toString(), QStringLiteral("stereo"));
+        c.setAtmosObject(id, false);
+        QTRY_VERIFY(!c.atmosTracks().first().toMap().value("object").toBool());
+    }
     void announceStubEmitsANotice() {
         jad::ProjectController c(false);
         QSignalSpy spy(&c, &jad::ProjectController::notice);

@@ -66,6 +66,11 @@ std::vector<EffectSpec> build() {
                   p("lookahead", "Lookahead", "ms", 0, 10, 0), p("keyFilter", "Side Chain Filter", "", 0, 1, 0), p("keyLowCut", "Low Cut", "Hz", 20, 20000, 20, true),
                   p("keyHighCut", "High Cut", "Hz", 20, 20000, 20000, true), p("ducker", "Ducker (0 gate, 1 ducker)", "", 0, 1, 0),
                   p("keyMode", "Characteristics (0 bandpass, 1 lowpass, 2 highpass)", "", 0, 2, 0), p("keyMonitor", "Monitor", "", 0, 1, 0)}});
+    // The 3D Object Panner of a Dolby Atmos project: x runs from the left wall (-1) to the right wall (1), y from the back (-1) to the front (1), z from the floor (0)
+    // to the ceiling (1); `mode` 1 renders the object for headphones (binaural), 0 as a plain stereo pan. The ADM BWF export writes these as the object's metadata.
+    v.push_back({kProcObjectPanner, "3D Object Panner", "Utility",
+                 {p("x", "Left / Right", "", -1, 1, 0), p("y", "Back / Front", "", -1, 1, 1), p("z", "Height", "", 0, 1, 0), p("size", "Size", "", 0, 1, 0),
+                  p("mode", "Monitoring (0 stereo, 1 binaural)", "", 0, 1, 1)}});
     v.push_back({kProcDelay, "Delay", "Delay & Reverb",
                  {p("time", "Time", "ms", 1, 2000, 250, true), p("feedback", "Feedback", "%", 0, 95, 35), p("mix", "Mix", "%", 0, 100, 30),
                   p("pingPong", "Ping-Pong", "", 0, 1, 0)}});

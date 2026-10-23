@@ -118,6 +118,16 @@ void ProjectHost::publish(const Project& before) {
     if (metronome_ && before.tempoMap != project_.tempoMap) postClick();  // the beats moved with the tempo
 }
 
+std::future<void> ProjectHost::setLiveRuns(Uuid track, std::vector<LiveRun> runs) {
+    return call([this, track, runs = std::move(runs)]() mutable {
+        Track* t = project_.findTrack(track);
+        if (!t || t->liveRuns == runs) return;
+        const Project before = project_;
+        t->liveRuns = std::move(runs);
+        publish(before);  // the audio follows; the revision does not move: launching a cell does not make the project unsaved
+    });
+}
+
 void ProjectHost::rebuildAllConfigs() {
     if (degraded_) return;  // the rebuild that follows will pick the live instances up
     wantInstances();

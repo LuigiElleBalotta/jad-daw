@@ -232,7 +232,11 @@ Dialog {
             // Movie
             ColumnLayout {
                 spacing: Theme.spacing[2]
-                Note { text: qsTr("Video is not part of this app: there are no movie settings.") }
+                Group { text: qsTr("Movie") }
+                Value { objectName: "moviePath"; Layout.fillWidth: true; text: root.text("moviePath", "") === "" ? qsTr("No movie") : root.text("moviePath", ""); elide: Text.ElideMiddle }
+                Group { text: qsTr("Movie Start") }
+                Value { objectName: "movieStart"; text: Number(root.text("movieStart", "0")).toFixed(3) + " s" }
+                Note { text: qsTr("The movie plays in its own window, in step with the project; the project's audio is the sound. Its start is the project time at which the first frame of the movie is shown (File > Movie > Set Movie Start to Playhead).") }
                 Item { Layout.fillHeight: true }
             }
 

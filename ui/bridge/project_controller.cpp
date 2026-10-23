@@ -395,6 +395,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     groupRows_ = s.groups;
     ++groupsRevision_;
     mediaPaths_ = s.mediaPaths;
+    refreshLiveCells(s.liveCells);
     if (checkMissingOnOpen_) {  // Logic lists the files it cannot find when it opens a project
         checkMissingOnOpen_ = false;
         const int missing = missingMedia().size();
@@ -1710,7 +1711,10 @@ void ProjectController::tick() {
     const bool playing = engine_->playing();
     if (playing != playing_) {
         playing_ = playing;
-        if (!playing) finishAutomationCaptures(true);  // stopped: what was written (latch and write too) goes into the lanes
+        if (!playing) {
+            stopLiveOnStop();
+            finishAutomationCaptures(true);
+        }  // stopped: what was written (latch and write too) goes into the lanes
         emit playingChanged();
         applyMonitoring();
     }
@@ -1721,6 +1725,7 @@ void ProjectController::tick() {
         positionSeconds_ = seconds;
         positionBeats_ = static_cast<double>(tempoMap_.samplesToTicks(static_cast<double>(frames), sampleRate_)) / lpc::kPPQ;
         emit positionChanged();
+        updateLive();
     }
     {
         std::vector<std::pair<lpc::Uuid, float>> raw, pre;

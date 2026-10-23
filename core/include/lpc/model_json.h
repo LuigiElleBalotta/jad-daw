@@ -32,6 +32,8 @@ void to_json(nlohmann::json& j, const FlexData& f);
 void from_json(const nlohmann::json& j, FlexData& f);
 void to_json(nlohmann::json& j, const Region& r);
 void from_json(const nlohmann::json& j, Region& r);
+void to_json(nlohmann::json& j, const LiveCell& c);
+void from_json(const nlohmann::json& j, LiveCell& c);
 void to_json(nlohmann::json& j, const ProcessorRef& r);
 void from_json(const nlohmann::json& j, ProcessorRef& r);  // `label` is optional
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Send, id, targetTrackId, levelDb, preFader)

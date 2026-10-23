@@ -1,4 +1,4 @@
-find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickControls2 QuickTest Test Concurrent Network)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickControls2 QuickTest Test Concurrent Network Multimedia)
 qt_standard_project_setup(REQUIRES 6.8)
 
 set_source_files_properties(qml/Theme.qml qml/TrackColors.qml qml/ActionHub.qml qml/InsertDrag.qml qml/StripMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -22,6 +22,8 @@ qt_add_qml_module(jad_ui_lib
         bridge/project_controller_mastering.cpp
         bridge/project_controller_matcheq.cpp
         bridge/project_controller_assets.cpp
+        bridge/project_controller_liveloops.cpp
+        bridge/project_controller_atmos.cpp
         bridge/project_controller_print.cpp
         bridge/project_controller_stacks.cpp
         bridge/project_controller_live.cpp
@@ -119,6 +121,10 @@ qt_add_qml_module(jad_ui_lib
         qml/CreateTrackStackDialog.qml
         qml/ConvertToSamplerDialog.qml
         qml/MissingFilesDialog.qml
+        qml/MovieWindow.qml
+        qml/LiveLoopsWindow.qml
+        qml/DolbyAtmosDialog.qml
+        qml/FxObjectPannerView.qml
         qml/ConsolidateDialog.qml
         qml/PageSetupDialog.qml
         qml/FxSamplerView.qml
@@ -225,7 +231,7 @@ qt_add_qml_module(jad_ui_lib
         ${CMAKE_SOURCE_DIR}/core/data/patches.json
         ${CMAKE_SOURCE_DIR}/core/data/effect_presets.json
 )
-target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent Qt6::Network lpc_core)
+target_link_libraries(jad_ui_lib PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent Qt6::Network Qt6::Multimedia lpc_core)
 target_include_directories(jad_ui_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bridge ${CMAKE_CURRENT_SOURCE_DIR}/actions)
 if(TARGET lpc_juce_device)
     target_link_libraries(jad_ui_lib PUBLIC lpc_juce_device)

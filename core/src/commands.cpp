@@ -39,6 +39,7 @@ std::unordered_set<Uuid> allRegionIds(const Project& p) {
         for (const Region& r : t.regions) ids.insert(r.id);
         for (const TrackAlternative& alt : t.alternatives)  // the regions of the other alternatives keep their ids
             for (const Region& r : alt.regions) ids.insert(r.id);
+        for (const LiveCell& c : t.cells) ids.insert(c.region.id);
     }
     return ids;
 }
@@ -677,6 +678,29 @@ private:
     std::vector<Region> regions_;
 };
 
+// Live Loops: the cells of a track are replaced together (the inverse is the same command with what was there).
+class SetLiveCellsCmd final : public Command {
+public:
+    SetLiveCellsCmd(Uuid id, std::vector<LiveCell> cells) : id_(id), cells_(std::move(cells)) {}
+    std::string type() const override { return "set_live_cells"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", id_}, {"cells", cells_}}; }
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(id_);
+        if (!t) return fail("not_found", "no such track");
+        std::vector<LiveCell> before = std::move(t->cells);
+        t->cells = cells_;
+        if (auto e = checkProject(p)) {
+            t->cells = std::move(before);
+            return fail(e->code, e->message);
+        }
+        return success(std::make_unique<SetLiveCellsCmd>(id_, std::move(before)));
+    }
+
+private:
+    Uuid id_;
+    std::vector<LiveCell> cells_;
+};
+
 class SetSignatureCmd final : public Command {
 public:
     SetSignatureCmd(Ticks tick, int num, int den) : tick_(tick), num_(num), den_(den) {}
@@ -775,6 +799,8 @@ public:
             for (const TrackAlternative& alt : t.alternatives)
                 for (const Region& r : alt.regions)
                     if (r.mediaId == id_ || (r.flex && r.flex->sourceMediaId == id_)) return fail("in_use", "a region of another alternative still uses this media");
+            for (const LiveCell& c : t.cells)
+                if (c.region.mediaId == id_ || (c.region.flex && c.region.flex->sourceMediaId == id_)) return fail("in_use", "a Live Loops cell still uses this media");
         }
         MediaItem removed = *it;
         const int index = static_cast<int>(it - p.mediaPool.begin());
@@ -1353,6 +1379,7 @@ CommandPtr makeSetTrackOrder(std::vector<Uuid> order) { return std::make_unique<
 CommandPtr makeSetTrackAlternatives(Uuid trackId, std::string active, std::vector<TrackAlternative> others, std::vector<Region> regions) {
     return std::make_unique<SetTrackAlternativesCmd>(trackId, std::move(active), std::move(others), std::move(regions));
 }
+CommandPtr makeSetLiveCells(Uuid trackId, std::vector<LiveCell> cells) { return std::make_unique<SetLiveCellsCmd>(trackId, std::move(cells)); }
 CommandPtr makeSetProjectKey(std::string key) { return std::make_unique<SetProjectKeyCmd>(std::move(key)); }
 CommandPtr makeSetProjectName(std::string name) { return std::make_unique<SetProjectNameCmd>(std::move(name)); }
 CommandPtr makeSetMarkers(std::vector<Marker> markers) { return std::make_unique<SetMarkersCmd>(std::move(markers)); }
@@ -1415,6 +1442,7 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             }
             return makeSetTrackAlternatives(j.at("trackId").get<Uuid>(), j.at("active").get<std::string>(), std::move(others), j.at("regions").get<std::vector<Region>>());
         }
+        if (type == "set_live_cells") return makeSetLiveCells(j.at("trackId").get<Uuid>(), j.at("cells").get<std::vector<LiveCell>>());
         if (type == "set_track_order") return makeSetTrackOrder(j.at("order").get<std::vector<Uuid>>());
         if (type == "set_project_key") return makeSetProjectKey(j.at("key").get<std::string>());
         if (type == "set_project_name") return makeSetProjectName(j.at("name").get<std::string>());

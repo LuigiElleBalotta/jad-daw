@@ -1,4 +1,5 @@
 #include "lpc/audio/effects.h"
+#include "lpc/audio/object_panner.h"
 
 #include <algorithm>
 #include <array>
@@ -914,6 +915,7 @@ std::unique_ptr<IProcessor> makeBuiltinEffect(const ProcessorRef& ref, double sa
     if (id == kProcLimiter) return std::make_unique<LimiterProcessor>(ref, sampleRate);
     if (id == kProcAdaptiveLimiter) return std::make_unique<AdaptiveLimiterProcessor>(ref, sampleRate);
     if (id == kProcGate) return std::make_unique<GateProcessor>(ref, sampleRate);
+    if (id == kProcObjectPanner) return makeObjectPanner(ref, sampleRate);
     if (id == kProcDelay) return std::make_unique<DelayProcessor>(ref, sampleRate);
     if (id == kProcReverb) return std::make_unique<ReverbProcessor>(ref, sampleRate);
     if (id == kProcMastering) return std::make_unique<MasteringProcessor>(ref, sampleRate);

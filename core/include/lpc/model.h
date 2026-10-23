@@ -161,6 +161,24 @@ struct TrackAlternative {  // Track Alternatives: another set of regions the tra
     bool operator==(const TrackAlternative&) const = default;
 };
 
+// Live Loops: a cell of the grid, one scene (row) of one track (column). Its region starts at tick 0 and is a loop that plays until the cell is stopped.
+struct LiveCell {
+    Uuid id;
+    int scene = 0;
+    std::string name;
+    Region region;  // start 0, musical; the id is the cell's own and is unique among the regions of the project
+    bool operator==(const LiveCell&) const = default;
+};
+
+// A cell that is playing or queued, in ticks of the timeline: it starts at `start` and loops until `end` (-1: until it is stopped). Not part of the saved
+// project: the Live Loops grid sets it while it plays.
+struct LiveRun {
+    Uuid cellId;
+    Ticks start = 0;
+    Ticks end = -1;
+    bool operator==(const LiveRun&) const = default;
+};
+
 struct Track {
     Uuid id;
     TrackKind kind = TrackKind::Audio;
@@ -187,6 +205,8 @@ struct Track {
     std::string alternative;      // its name (empty: it has not been named, "Main" is shown)
     std::vector<TrackAlternative> alternatives;  // the other alternatives: their regions do not play
     std::vector<AutomationLane> automation;
+    std::vector<LiveCell> cells;   // the Live Loops grid: one cell per scene at most
+    std::vector<LiveRun> liveRuns;  // transient: the cells that play (the track's own regions are silent while one does)
     bool operator==(const Track&) const = default;
 };
 

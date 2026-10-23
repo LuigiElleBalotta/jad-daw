@@ -527,7 +527,16 @@ Today `EffectEditorWindow.qml` is a list of parameters (plus the Channel EQ curv
 - [x] H3. Track On/Off (`Track::on`, header button, Track > Turn Track On/Off); Only load plug-ins needed: an Off track loads none.
 - [x] H4. Settings that were only saved: Reset record enable state (armed instrument tracks kept per project when off), MIDI settings sent after loading (bank, program, volume, pan of External MIDI
       tracks), Allow tempo change recording (a tempo move while recording is a tempo change at the playhead), Trim start of new regions (off by default; needs the tempo analysis). The copy-assets
-      flags stay saved only: media paths may not leave the project folder.
+      flags are used since H6.
 - [x] H5. Windows: Limiter Mode (Legacy has the soft knee, Precision the true peak), Mastering Custom EQ (three bands) and Spread (width), Match EQ Learn (Current, Reference), External MIDI window.
 - [x] H6. Side chain between tracks (Compressor, Gate), Sampler + Convert Regions to New Sampler Track, Print/Page Setup to PDF, assets as in Logic (referenced files, Consolidate, Missing Audio Files, Audio Recording Path).
-- [ ] H7. Still open: the Movie window (needs Qt Multimedia, not in the CI's Qt install), Dolby Atmos, Live Loops, Mac window sets; the -12/+12 dB Analog Model level and the Smart Tempo quality check (need the Mac).
+- [x] H7. Movie window (`MovieWindow.qml`, Qt Multimedia; file and start in the project settings `moviePath`/`movieStart`; File > Movie > Open, Close, Set Movie Start to Playhead; View > Movie Window).
+      The CI installs `qtmultimedia` with the Qt action. The video plays muted, in step with the transport (60 ms timer, a seek when it is more than 180 ms off).
+- [x] H8. Live Loops: `Track::cells` (`LiveCell`: scene, looping region from tick 0), `Track::liveRuns` (transient: cell, start tick, end tick; set through `ProjectHost::setLiveRuns`, outside the
+      undo history), command `set_live_cells`; the graph builder lays the running cells over the track (its own regions are silent meanwhile). Bridge `project_controller_liveloops.cpp`
+      (quantized launch, scene launch, stop, Edit > Copy to Live Loops Scene from regions / cycle / arrangement sections), `LiveLoopsWindow.qml` (View > Live Loops). Not done: pattern and Session Player cells, follow actions, recording into cells.
+- [x] H9. Dolby Atmos: `builtin.objectpanner` (3D Object Panner, parameters x y z size mode; binaural rendering with delay, head shadow, back/up cues, or a stereo pan; automatable like a
+      plug-in's), `core/src/atmos.cpp` (objects = tracks with the panner, the bed = the other tracks; `renderAdm`, `projectFromAdm`), `core/src/adm_bwf.cpp` (ADM BWF writer and reader: fmt/data/chna/axml,
+      no Dolby `dbmd`), `DolbyAtmosDialog.qml` (Mix > Dolby Atmos…, File > Export > Project as Spatial Audio…, File > Import > Create Project from ADM BWF…), `FxObjectPannerView.qml`.
+      Not done: 7.1.4/5.1 monitoring and downmix/trim (the engine is stereo), Apple renderer, head tracking, the Dolby metadata chunk.
+- [ ] H10. Still open: the Mac window sets (macOS only); the -12/+12 dB Analog Model level and the Smart Tempo quality check (need the Mac).

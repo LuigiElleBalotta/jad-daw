@@ -18,6 +18,9 @@ TestCase {
     Component { id: stepC; StepSequencer { width: 900; height: 300 } }
     Component { id: scoreC; ScoreView { width: 900; height: 300 } }
     Component { id: copyC; CopyMidiEventsDialog { parent: Overlay.overlay } }
+    Component { id: liveC; LiveLoopsWindow { parent: Overlay.overlay } }
+    Component { id: atmosC; DolbyAtmosDialog { parent: Overlay.overlay } }
+    Component { id: movieC; MovieWindow { } }
 
     function test_the_number_prompt_returns_a_clamped_number() {
         const d = createTemporaryObject(promptC, this)
@@ -160,5 +163,51 @@ TestCase {
         compare(c.automationParamFor(track), "pan")
         c.automationParam = "volume"
         d.close()
+    }
+
+    function test_the_live_loops_grid_shows_the_tracks_and_the_scenes() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("audio")
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() === 2 })
+        const d = createTemporaryObject(liveC, this, { project: c })
+        d.open()
+        tryCompare(d, "visible", true)
+        compare(d.grid.tracks.length, 2)
+        compare(d.grid.scenes, 8)
+        compare(d.cellAt(d.grid.tracks[0].id, 0), null)
+        verify(findChild(d.contentItem, "launchScene0") !== null)
+        compare(d.quantizeBeats({ label: "1 bar", beats: 0 }), c.barBeats)
+        compare(d.quantizeBeats({ label: "2 bars", beats: -2 }), c.barBeats * 2)
+    }
+
+    function test_the_dolby_atmos_dialog_turns_the_mode_on_and_lists_the_tracks() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("audio")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        const d = createTemporaryObject(atmosC, this, { project: c })
+        d.open()
+        tryCompare(d, "visible", true)
+        compare(d.on, false)
+        compare(d.tracks.length, 1)
+        const box = findChild(d.contentItem, "atmosOn")
+        mouseClick(box)
+        tryCompare(d, "on", true)
+        compare(d.monitor, "binaural")
+    }
+
+    function test_the_movie_window_keeps_the_file_and_the_start_in_the_project() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        const w = createTemporaryObject(movieC, this, { project: c })
+        compare(w.path, "")
+        w.openMovie("file:///tmp/clip.mp4")
+        tryCompare(w, "path", "file:///tmp/clip.mp4")
+        w.setStartToPlayhead()
+        compare(w.startSeconds, 0)
+        w.closeMovie()
+        tryCompare(w, "path", "")
     }
 }

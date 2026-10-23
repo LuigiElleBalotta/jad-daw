@@ -163,6 +163,26 @@ ApplicationWindow {
     ConvertToSamplerDialog { id: convertToSamplerDialog; project: controller }
     PageSetupDialog { id: pageSetupDialog; project: controller }
     ConsolidateDialog { id: consolidateDialog; project: controller }
+    MovieWindow { id: movieWindow; project: controller }
+    LiveLoopsWindow { id: liveLoopsWindow; project: controller }
+    DolbyAtmosDialog { id: atmosDialog; project: controller }
+    FileDialog {
+        id: admDialog
+        title: qsTr("Create Project from ADM BWF")
+        nameFilters: [qsTr("ADM BWF files (*.wav *.bw64 *.rf64)"), qsTr("All files (*)")]
+        onAccepted: admFolderDialog.open()
+    }
+    FolderDialog {
+        id: admFolderDialog
+        title: qsTr("Choose a folder for the new project")
+        onAccepted: controller.createProjectFromAdm(admDialog.selectedFile, selectedFolder)
+    }
+    FileDialog {
+        id: movieDialog
+        title: qsTr("Open Movie")
+        nameFilters: [qsTr("Movies (*.mov *.mp4 *.m4v *.avi *.mkv *.webm)"), qsTr("All files (*)")]
+        onAccepted: movieWindow.openMovie(selectedFile)
+    }
     MissingFilesDialog { id: missingFilesDialog; project: controller }
     Connections { target: controller; function onMissingMediaFound() { missingFilesDialog.open() } }
     FileDialog {
@@ -489,6 +509,15 @@ ApplicationWindow {
         "track.convertRegionsToNewSamplerTrack": () => convertToSamplerDialog.open(),
         "file.pageSetup": () => pageSetupDialog.open(),
         "file.pmConsolidate": () => consolidateDialog.open(),
+        "file.movieOpen": () => movieDialog.open(),
+        "file.movieClose": () => movieWindow.closeMovie(),
+        "file.movieSetStart": () => movieWindow.setStartToPlayhead(),
+        "view.movieWindow": () => movieWindow.toggle(),
+        "mix.dolbyAtmos": () => atmosDialog.open(),
+        "file.exportSpatial": () => atmosDialog.open(),
+        "file.importAdm": () => admDialog.open(),
+        "view.liveLoops": () => { if (liveLoopsWindow.visible) liveLoopsWindow.close(); else liveLoopsWindow.open() },
+        "edit.copyToLiveLoopsScene": () => controller.copyToLiveLoopsScene(),
         "file.print": () => printDialog.open(),
         "track.flattenStack": () => { for (const id of controller.selectedTrackIds) controller.flattenStack(id) },
         "track.convertFolderStackToSummingStack": () => { for (const id of controller.selectedTrackIds) controller.convertFolderStackToSummingStack(id) },
@@ -634,6 +663,8 @@ ApplicationWindow {
     // the displayed state of real toggles and radio entries (stubs keep their own)
     readonly property var states: ({
         "transport.loop": controller.loopEnabled,
+        "view.movieWindow": movieWindow.visible,
+        "view.liveLoops": liveLoopsWindow.visible,
         "view.mixer": controller.mixerVisible,
         "view.editors": root.editorsVisible,
         "view.library": controller.libraryVisible,

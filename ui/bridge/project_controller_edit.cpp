@@ -4800,6 +4800,10 @@ QVariantMap ProjectController::unusedMedia() const {
                 used.insert(r.mediaId.toString());
                 if (r.flex) used.insert(r.flex->sourceMediaId.toString());
             }
+        for (const lpc::LiveCell& c : t.cells) {  // the Live Loops cells as well
+            used.insert(c.region.mediaId.toString());
+            if (c.region.flex) used.insert(c.region.flex->sourceMediaId.toString());
+        }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
         if (t.instrument)
             for (const lpc::Uuid& id : lpc::samplerMediaIds(*t.instrument)) used.insert(id.toString());  // the zones of a sampler
@@ -4831,6 +4835,10 @@ void ProjectController::cleanUpProject() {
                 used.insert(r.mediaId.toString());
                 if (r.flex) used.insert(r.flex->sourceMediaId.toString());
             }
+        for (const lpc::LiveCell& c : t.cells) {  // the Live Loops cells as well
+            used.insert(c.region.mediaId.toString());
+            if (c.region.flex) used.insert(c.region.flex->sourceMediaId.toString());
+        }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
         if (t.instrument)
             for (const lpc::Uuid& id : lpc::samplerMediaIds(*t.instrument)) used.insert(id.toString());  // the zones of a sampler

@@ -5,6 +5,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <set>
 #include <unordered_set>
 #include <vector>
 
@@ -317,6 +318,20 @@ MaybeError checkProject(const Project& p) {
         for (const Region& r : t.regions) {
             if (auto e = checkRegion(p, t.kind, r)) return e;
             if (!regionIds.insert(r.id).second) return CommandError{"duplicate_id", "region id used twice"};
+        }
+        if (!t.cells.empty() && t.kind != TrackKind::Audio && t.kind != TrackKind::Instrument && t.kind != TrackKind::Midi)
+            return CommandError{"invalid_kind", "only audio, instrument and MIDI tracks have Live Loops cells"};
+        if (t.cells.size() > 256) return CommandError{"bad_value", "a track has at most 256 cells"};
+        {
+            std::set<int> scenes;
+            for (const LiveCell& c : t.cells) {
+                if (c.scene < 0 || c.scene > 255) return CommandError{"bad_value", "a cell lies in a scene from 0 to 255"};
+                if (!scenes.insert(c.scene).second) return CommandError{"bad_value", "a track has one cell per scene"};
+                if (c.name.size() > 60) return CommandError{"bad_value", "a cell name has at most 60 bytes"};
+                if (c.region.start != 0 || c.region.timeBase != TimeBase::Musical || c.region.length <= 0) return CommandError{"bad_value", "a cell starts at tick 0, in musical time, and has a length"};
+                if (auto e = checkRegion(p, t.kind, c.region)) return e;
+                if (!regionIds.insert(c.region.id).second) return CommandError{"duplicate_id", "region id used twice"};
+            }
         }
         if (t.alternative.size() > 60 || t.alternatives.size() > 64) return CommandError{"bad_value", "a track has at most 65 alternatives with names of at most 60 bytes"};
         for (const TrackAlternative& alt : t.alternatives) {

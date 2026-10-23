@@ -132,6 +132,13 @@ struct MarkerRow {
     QString text;  // Marker Text
 };
 
+struct LiveCellRow {
+    QString id;
+    int scene = 0;
+    QString name;
+    bool operator==(const LiveCellRow&) const = default;
+};
+
 struct Snapshot {
     std::uint64_t revision = 0;
     QString name;
@@ -150,6 +157,7 @@ struct Snapshot {
     std::vector<MarkerRow> chords;       // the Chord global track (name = the chord symbol)
     std::vector<GroupRow> groups;
     lpc::TempoMap tempoMap;
+    std::vector<std::pair<QString, LiveCellRow>> liveCells;  // (track id, cell) of the Live Loops grid
     QHash<QString, QString> mediaPaths;  // media id -> path relative to the project folder
 };
 

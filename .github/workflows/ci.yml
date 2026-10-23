@@ -54,7 +54,7 @@ jobs:
       - uses: jurplel/install-qt-action@v4
         with:
           version: 6.8.3
-          modules: qtshadertools
+          modules: qtshadertools qtmultimedia
           cache: true
       - name: Configure
         run: cmake -S . -B build ${{ matrix.configure }} -DLPC_BUILD_UI=ON

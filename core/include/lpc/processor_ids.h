@@ -11,6 +11,7 @@ inline constexpr const char* kProcSynth = "builtin.synth";
 inline constexpr const char* kProcDrums = "builtin.drums";
 inline constexpr const char* kProcSampler = "builtin.sampler";  // zones of recorded sound over the keyboard (the zones are in the instrument's state, see sampler.h)
 inline constexpr const char* kProcExternalMidi = "builtin.external";  // an External MIDI track: the notes go out of a MIDI port (the device is in the instrument's state, {"device": "..."})
+inline constexpr const char* kProcObjectPanner = "builtin.objectpanner";  // Spatial Audio: the 3D Object Panner of an object track (position in the room, rendered for headphones)
 inline constexpr const char* kProcEq = "builtin.eq";
 inline constexpr const char* kProcCompressor = "builtin.compressor";
 inline constexpr const char* kProcLimiter = "builtin.limiter";
@@ -51,7 +52,7 @@ inline std::optional<ParamTarget> parseParamTarget(std::string_view target) {
     if (b == std::string_view::npos) return std::nullopt;
     ParamTarget out;
     out.processorId = std::string(target.substr(0, a));
-    if (!isVst3Id(out.processorId)) return std::nullopt;
+    if (!isVst3Id(out.processorId) && out.processorId != kProcObjectPanner) return std::nullopt;  // the 3D Object Panner is the one built-in that automation drives
     const auto number = [](std::string_view s, int& v) {
         if (s.empty() || s.size() > 5) return false;
         v = 0;

@@ -58,6 +58,8 @@ CommandPtr makeSetGroups(std::vector<Group> groups);
 CommandPtr makeSetTrackOrder(std::vector<Uuid> order);
 // Track Alternatives: the regions that play now, the name of that alternative and the other alternatives (names unique ids across the project).
 CommandPtr makeSetTrackAlternatives(Uuid trackId, std::string active, std::vector<TrackAlternative> others, std::vector<Region> regions);
+// Live Loops: replaces the cells of a track (one per scene, each a looping region from tick 0; the region ids are unique in the project).
+CommandPtr makeSetLiveCells(Uuid trackId, std::vector<LiveCell> cells);
 CommandPtr makeSetProjectKey(std::string key);  // "C major" ... "B minor" (sharps, no flats)
 CommandPtr makeSetProjectName(std::string name);  // 1 to 128 characters without control characters
 enum class MarkerList { Markers, Arrangement, Chords };

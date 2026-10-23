@@ -190,6 +190,17 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (!r.automation.empty()) j["automation"] = r.automation;
 }
 
+void to_json(nlohmann::json& j, const LiveCell& c) {
+    j = {{"id", c.id}, {"scene", c.scene}, {"region", c.region}};
+    if (!c.name.empty()) j["name"] = c.name;
+}
+void from_json(const nlohmann::json& j, LiveCell& c) {
+    c.id = j.at("id").get<Uuid>();
+    c.scene = j.at("scene").get<int>();
+    c.name = j.value("name", std::string());
+    j.at("region").get_to(c.region);
+}
+
 void from_json(const nlohmann::json& j, Region& r) {
     j.at("id").get_to(r.id);
     j.at("timeBase").get_to(r.timeBase);
@@ -280,6 +291,7 @@ void to_json(nlohmann::json& j, const Track& t) {
         j["alternatives"] = nlohmann::json::array();
         for (const TrackAlternative& a : t.alternatives) j["alternatives"].push_back({{"name", a.name}, {"regions", a.regions}});
     }
+    if (!t.cells.empty()) j["cells"] = t.cells;
     if (!t.on) j["on"] = false;
     if (t.recordInRegions) j["recordInRegions"] = true;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
@@ -334,6 +346,9 @@ void from_json(const nlohmann::json& j, Track& t) {
     if (t.stack.size() > 10) throw std::runtime_error("a stack is folder or summing");
     t.stackOpen = j.value("stackOpen", true);
     t.alternative = j.value("alternative", std::string());
+    t.cells.clear();
+    t.liveRuns.clear();
+    if (j.contains("cells")) j.at("cells").get_to(t.cells);
     t.alternatives.clear();
     if (j.contains("alternatives"))
         for (const auto& a : j.at("alternatives")) {

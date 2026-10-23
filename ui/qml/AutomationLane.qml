@@ -7,6 +7,7 @@ Item {
     id: root
     required property ProjectController project
     required property string trackId
+    property string regionId: ""                 // set: the lane of this region (Region Automation), its beats still on the timeline
     required property string param            // "volume", "pan" or "send1".."send4" (the level of the track's first sends)
     required property real pixelsPerBeat
     required property real scrollBeats
@@ -19,7 +20,7 @@ Item {
     property bool available: true                // false: a send the track does not have
 
     property var stored: []                      // the points in the project, read again whenever it changes
-    function refresh() { available = project.automationAvailable(trackId, param); stored = project.automationPoints(trackId, param) }
+    function refresh() { available = project.automationAvailable(trackId, param); stored = regionId !== "" ? project.regionAutomationPoints(regionId, param) : project.automationPoints(trackId, param) }
     visible: available
     onTrackIdChanged: refresh()
     onParamChanged: refresh()
@@ -76,7 +77,7 @@ Item {
         commit(points.filter(p => !selected(p)))
         selFrom = -1; selTo = -1
     }
-    function commit(list) { working = null; project.setAutomationPoints(trackId, param, sorted(list)) }
+    function commit(list) { working = null; if (regionId !== "") project.setRegionAutomationPoints(regionId, param, sorted(list)); else project.setAutomationPoints(trackId, param, sorted(list)) }
     focus: hasSelection
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) { deleteSelection(); event.accepted = true }

@@ -110,6 +110,7 @@ struct TrackConfig {
     SynthParams synthParams;            // an instrument track: how its built-in synth sounds
     std::shared_ptr<IInstrument> instrument;  // a plug-in instrument (the notes go to it); null: the built-in synth sounds
     bool frozen = false;                      // the regions are the rendered audio of the track: they play as audio whatever the track kind
+    bool off = false;                         // the track is turned off: it makes no sound and runs no plug-in
     std::vector<AutoPoint> volumeAuto;  // linear gain
     std::vector<AutoPoint> panAuto;
     std::vector<RegionPlayback> regions;

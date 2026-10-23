@@ -27,6 +27,8 @@ struct TrackPatch {
     std::optional<std::string> stack;           // "", "folder" or "summing" (buses only)
     std::optional<bool> stackOpen;
     std::optional<std::string> automationMode;  // off, read, touch, latch or write
+    std::optional<bool> recordInRegions;        // Record Automation with Audio/MIDI Regions
+    std::optional<bool> on;                     // the track's On/Off button
     std::optional<double> delayMs;              // -1000..1000 ms (audio and instrument tracks)
     std::optional<MidiShaping> midi;            // transpose, velocity and the limits (instrument tracks)
 };
@@ -45,6 +47,10 @@ CommandPtr makeRemoveSignature(Ticks tick);
 // Replaces the points of one automation lane of a track; target is "volume" (dB) or "pan" (-1..1). No points removes the lane.
 // The points are sorted by tick; the undo restores the previous points (or the absence of the lane).
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points);
+// Region automation: the same for one region (the ticks count from its start); no points removes the lane. It moves, copies, splits, trims and joins with the region.
+CommandPtr makeSetRegionAutomation(Uuid regionId, std::string target, std::vector<AutomationPoint> points);
+// Mix > Convert Automation: the lanes of a track (all of them, or only the listed targets) become the lanes of its regions (toRegion) or the other way round. One undo step.
+CommandPtr makeConvertAutomation(Uuid trackId, bool toRegion, std::vector<std::string> targets);
 // Replaces the track groups (members must be existing tracks but the master, none in two groups, unique ids, at most 64 groups).
 CommandPtr makeSetGroups(std::vector<Group> groups);
 // Puts the tracks in this order (every track but the master, once each; the master stays first). The undo restores the previous order.

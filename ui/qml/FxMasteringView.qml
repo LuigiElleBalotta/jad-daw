@@ -119,6 +119,86 @@ FxShell {
         }
     }
 
+    // Custom EQ: a dashed curve and three blue control points (low shelf, broad mid band, high shelf, up to 6 dB each way) over the analysis curve
+    Item {
+        id: custom
+        objectName: "masteringCustomEq"
+        visible: root.on("customEq")
+        x: 118; y: 107; width: 432; height: 294
+        readonly property var bands: [
+            { f: "cLowFreq", g: "cLowGain", lo: 20, hi: 200, kind: 0 },
+            { f: "cMidFreq", g: "cMidGain", lo: 200, hi: 8000, kind: 1 },
+            { f: "cHighFreq", g: "cHighGain", lo: 8000, hi: 20000, kind: 2 }
+        ]
+        readonly property var state: { root.editor.insert; root.editor.pending; return custom.bands.map(b => ({ f: root.val(b.f), g: root.val(b.g) })) }
+        // the shape of one band at a frequency, in dB (smooth stand-ins for the filters, for the drawing only)
+        function bandDb(kind, fc, gain, f) {
+            const r = (f / fc) * (f / fc)
+            if (kind === 0) return gain / (1 + r)
+            if (kind === 2) return gain * r / (1 + r)
+            const x = Math.log(f / fc) / Math.log(2)
+            return gain / (1 + (x / 0.9) * (x / 0.9))
+        }
+        Canvas {
+            anchors.fill: parent
+            readonly property var st: custom.state
+            onStChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            Component.onCompleted: requestPaint()
+            onPaint: {
+                const c = getContext("2d")
+                c.reset()
+                c.setLineDash([6, 4]); c.strokeStyle = "#2f9bff"; c.lineWidth = 2
+                c.beginPath()
+                for (let px = 0; px <= width; px += 2) {
+                    const f = 20 * Math.pow(1000, px / width)
+                    let db = 0
+                    for (let i = 0; i < 3; ++i) db += custom.bandDb(custom.bands[i].kind, st[i].f, st[i].g, f)
+                    if (px === 0) c.moveTo(px, display.yOf(db)); else c.lineTo(px, display.yOf(db))
+                }
+                c.stroke()
+            }
+        }
+        Repeater {
+            model: 3
+            delegate: Rectangle {
+                id: dot
+                required property int index
+                readonly property var band: custom.bands[index]
+                property real fDrag: custom.state[index].f
+                property real gDrag: custom.state[index].g
+                property bool dragging: false
+                readonly property real f: dragging ? fDrag : custom.state[index].f
+                readonly property real g: dragging ? gDrag : custom.state[index].g
+                objectName: "masteringCustomDot" + index
+                width: 14; height: 14; radius: 7
+                x: display.xOf(f) - 7; y: display.yOf(g) - 7
+                color: "#2f9bff"; border.color: "#d6e2ee"; border.width: 1
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    onPressed: dot.dragging = true
+                    onPositionChanged: (m) => {
+                        if (!pressed) return
+                        const at = mapToItem(custom, m.x, m.y)
+                        const px = Math.max(0, Math.min(display.width, at.x))
+                        const py = Math.max(display.yOf(6), Math.min(display.yOf(-6), at.y))
+                        const f = 20 * Math.pow(1000, px / display.width)
+                        dot.fDrag = Math.max(dot.band.lo, Math.min(dot.band.hi, f))
+                        dot.gDrag = Math.round((display.zeroY - py) * 12 / 147 * 10) / 10
+                        root.editor.edit(dot.band.f, dot.fDrag)
+                        root.editor.edit(dot.band.g, dot.gDrag)
+                    }
+                    onReleased: {
+                        dot.dragging = false
+                        root.editor.commit(dot.band.f, dot.fDrag)
+                        root.editor.commit(dot.band.g, dot.gDrag)
+                    }
+                }
+            }
+        }
+    }
+
     // Auto EQ fader (0 to 200 %, 100 % on the zero line)
     Item {
         id: fader
@@ -147,7 +227,11 @@ FxShell {
     }
     Text { x: 56 - width / 2; y: 424; text: qsTr("Auto EQ"); color: "#8da2b8"; font.family: Theme.fontFamily; font.pixelSize: 16 }
     Text { x: 56 - width / 2; y: 442; text: Math.round(fader.shown) + " %"; color: root.accent; font.family: Theme.fontFamily; font.pixelSize: 20 }
-    Key { x: 12; y: 475; width: 92; height: 31; label: qsTr("Custom EQ"); lit: true; active: false }  // the three user bands are not implemented yet
+    Key {
+        objectName: "masteringCustomEqKey"
+        x: 12; y: 475; width: 92; height: 31; label: qsTr("Custom EQ"); lit: root.on("customEq")
+        onClicked: root.editor.setNow("customEq", root.on("customEq") ? 0 : 1)
+    }
 
     // Dynamics
     Rectangle { x: 606; y: 9; width: 409; height: 279; color: root.panel }
@@ -203,16 +287,31 @@ FxShell {
     // the notes
     Rectangle { x: 606; y: 294; width: 409; height: 173; color: root.panel }
     Text {
-        x: 626; y: 310; width: 369; wrapMode: Text.WordWrap
+        x: 626; y: 310; width: 240; wrapMode: Text.WordWrap
         text: root.stats.gainDb !== undefined ? qsTr("Brings the mix to -14 LUFS (%1 dB), limited at -1 dBTP.").arg(root.stats.gainDb.toFixed(1)) : qsTr("The Loudness knob centre is -14 LUFS; the output never goes above -1 dB.")
         color: "#8da2b8"; font.family: Theme.fontFamily; font.pixelSize: 16
     }
     Text {
-        x: 626; y: 372; width: 369; wrapMode: Text.WordWrap
+        x: 626; y: 372; width: 240; wrapMode: Text.WordWrap
         visible: root.stats.outputLufs !== undefined && root.stats.outputLufs < -16 && root.stats.truePeakDb - root.stats.integratedLufs > 16
         text: root.stats.outputLufs !== undefined ? qsTr("The mix peaks %1 dB above its loudness: -14 LUFS would need heavy limiting, so it stays at %2 LUFS.").arg((root.stats.truePeakDb - root.stats.integratedLufs).toFixed(0)).arg(root.stats.outputLufs.toFixed(1)) : ""
         color: "#ff6a5a"; font.family: Theme.fontFamily; font.pixelSize: 15
     }
+
+    // Spread: the width of the mix (all the way left is mono, to check the mono compatibility); the correlation meter below shows the phase relation
+    Text { x: 940 - width / 2; y: 304; text: qsTr("Spread"); color: "#8da2b8"; font.family: Theme.fontFamily; font.pixelSize: 16 }
+    FxArcKnob {
+        objectName: "masteringWidth"
+        x: 906; y: 322; showHeader: false
+        tint: root.accent
+        dial: 58; decimals: 0; minLabel: ""; maxLabel: ""
+        readonly property var spec: root.editor.param("width")
+        from: spec.min; to: spec.max; defaultValue: spec.def
+        value: root.val("width")
+        onMoved: (v) => root.editor.edit("width", v)
+        onReleased: (v) => root.editor.commit("width", v)
+    }
+    Text { x: 940 - width / 2; y: 394; text: Math.round(root.val("width")) + " %"; color: root.accent; font.family: Theme.fontFamily; font.pixelSize: 16 }
 
     // the live meters: what the insert puts out right now (momentary and short-term loudness, integrated since the window opened, true peak, stereo correlation)
     property var live: ({})

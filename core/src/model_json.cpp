@@ -184,6 +184,7 @@ void to_json(nlohmann::json& j, const Region& r) {
     if (!r.name.empty()) j["name"] = r.name;
     if (!r.generator.empty()) j["generator"] = r.generator;
     if (r.flex) j["flex"] = *r.flex;
+    if (!r.automation.empty()) j["automation"] = r.automation;
 }
 
 void from_json(const nlohmann::json& j, Region& r) {
@@ -208,6 +209,8 @@ void from_json(const nlohmann::json& j, Region& r) {
     r.generator = j.value("generator", std::string());
     r.flex.reset();
     if (j.contains("flex") && !j["flex"].is_null()) r.flex = j.at("flex").get<FlexData>();
+    r.automation.clear();
+    if (j.contains("automation")) j.at("automation").get_to(r.automation);
 }
 
 void to_json(nlohmann::json& j, const MidiControl& c) { j = {{"tick", c.tick}, {"status", c.status}, {"data1", c.data1}, {"data2", c.data2}}; }
@@ -274,6 +277,8 @@ void to_json(nlohmann::json& j, const Track& t) {
         j["alternatives"] = nlohmann::json::array();
         for (const TrackAlternative& a : t.alternatives) j["alternatives"].push_back({{"name", a.name}, {"regions", a.regions}});
     }
+    if (!t.on) j["on"] = false;
+    if (t.recordInRegions) j["recordInRegions"] = true;
     if (t.automationMode != "read") j["automationMode"] = t.automationMode;  // written only when it is not the default
     if (t.delayMs != 0.0) j["delayMs"] = t.delayMs;
     if (t.freeze) j["freeze"] = {{"mediaId", t.freeze->mediaId}, {"startFrame", t.freeze->startFrame}};
@@ -293,6 +298,8 @@ void from_json(const nlohmann::json& j, Track& t) {
     t.outputPair = j.value("outputPair", 0);
     t.patchId = j.value("patchId", std::string());
     t.automationMode = j.value("automationMode", std::string("read"));
+    t.recordInRegions = j.value("recordInRegions", false);
+    t.on = j.value("on", true);
     t.delayMs = j.value("delayMs", 0.0);
     if (j.contains("freeze") && j["freeze"].is_object()) {
         Freeze f;

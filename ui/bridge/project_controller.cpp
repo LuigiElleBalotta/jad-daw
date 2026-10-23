@@ -182,6 +182,7 @@ void ProjectController::setError(const QString& message) {
 void ProjectController::clearError() { setError({}); }
 
 void ProjectController::teardown() {
+    rememberArmed();
     timer_.stop();
     inspectorBusId_.clear();
     pinOwner_.clear();
@@ -278,6 +279,8 @@ bool ProjectController::openProject(const QUrl& folder) {
         QMetaObject::invokeMethod(this, [this, rev, generation] { if (generation == generation_) refresh(rev); }, Qt::QueuedConnection);
     }).get();
     refresh(host_->revision());
+    restoreArmed();
+    if (projectSetting("midiSendAfterLoad", "0") == QLatin1String("1")) QTimer::singleShot(0, this, [this] { sendMidiSettings(); });
     timer_.start();
     addRecent();
     savedRevision_ = host_->revision();  // as it is on disk
@@ -380,6 +383,9 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
     for (const QString& id : std::exchange(pendingSmartFollow_, {}))
         if (regions_.find(id)) QTimer::singleShot(0, this, [this, id] { smartFollowRegion(id, true); });
         else pendingSmartFollow_ << id;
+    for (const QString& id : std::exchange(pendingSmartTrim_, {}))
+        if (regions_.find(id)) QTimer::singleShot(0, this, [this, id] { smartTrimRegion(id); });
+        else pendingSmartTrim_ << id;
     tempoMap_ = s.tempoMap;
     markerRows_ = s.markers;
     arrangementRows_ = s.arrangement;
@@ -865,6 +871,11 @@ void ProjectController::joinWithNext(const QString& regionId) {
 
 void ProjectController::setTempo(double bpm) {
     if (!host_ || !std::isfinite(bpm)) return;
+    // Project Settings > Recording > Allow tempo change recording: while recording, a move of the tempo is kept as a tempo change at the playhead
+    if (recording_ && playing_ && projectSetting("allowTempoRecording", "0") == QLatin1String("1") && positionBeats_ > 0.0) {
+        setTempoAt(positionBeats_, bpm);
+        return;
+    }
     sendCommand({{"type", "set_tempo"}, {"tick", 0}, {"bpm", std::clamp(bpm, 20.0, 999.0)}});
 }
 
@@ -1381,6 +1392,7 @@ void ProjectController::runImport(const QUrl& fileUrl, const QString& trackId, d
                 const bool firstAudio = std::none_of(self->regionRows_.begin(), self->regionRows_.end(), [](const RegionRow& r) { return r.audio; });
                 if (self->projectSetting("tempoMode", "adapt") == QLatin1String("automatic") && firstAudio) self->pendingSmartTempo_ << regionId;
                 else if (self->projectSetting(recorded ? "followNewRecordings" : "followImports", "off") == QLatin1String("follow")) self->pendingSmartFollow_ << regionId;
+                else if (self->projectSetting(recorded ? "trimNewRecordings" : "trimImports", "0") == QLatin1String("1")) self->pendingSmartTrim_ << regionId;
             }
             self->sendCommand({{"type", "transaction"}, {"commands", commands}}, [target, done, endBeats, beats](bool accepted) {
                 if (!accepted) {
@@ -1800,6 +1812,7 @@ void ProjectController::loadPanelState(QSettings& s) {
     }
     recordButtonMode_ = s.value("record/buttonMode", "toggle").toString() == "repeat" ? QStringLiteral("repeat") : QStringLiteral("toggle");
     automationFollows_ = s.value("edit/automationFollows", false).toBool();
+    regionAutomationView_ = s.value("edit/regionAutomationView", false).toBool();
     aqa_ = s.value("automation/aqa", false).toBool();
     aqaCc_ = s.value("automation/aqaCc", -1).toInt();
     autoselect_ = s.value("automation/autoselect", false).toBool();

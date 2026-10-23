@@ -85,6 +85,7 @@ Rectangle {
             required mute
             required solo
             required recordArm
+            required trackOn
             required inputMonitor
             required frozen
             required icon
@@ -102,9 +103,11 @@ Rectangle {
             required pan
             width: ListView.view.width
             height: root.rowHeight
-            opacity: hidden ? 0.45 : 1  // a hidden track shown by Toggle Hide View
+            opacity: hidden ? 0.45 : (trackOn ? 1 : 0.55)  // a hidden track shown by Toggle Hide View, a track that is turned off
             trackName: name
             showIcon: { root.project.barItemsRevision; return root.project.barItem("th.icon") }
+            showOnOff: { root.project.barItemsRevision; return root.project.barItem("th.onoff") }
+            onOnOffToggled: (id, on) => root.project.setTrackOn(id, on)
             showArm: { root.project.barItemsRevision; return root.project.barItem("th.arm") }
             showMonitor: { root.project.barItemsRevision; return root.project.barItem("th.monitor") }
             showMute: { root.project.barItemsRevision; return root.project.barItem("th.mute") }

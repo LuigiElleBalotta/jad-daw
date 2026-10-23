@@ -383,7 +383,9 @@ public:
     // `truePeak`: the level is also looked for between the samples (a cubic through the neighbours, four times oversampled), so that what
     // comes out stays under the ceiling as a reconstructed signal too, not only as samples
     LimiterProcessor(const ProcessorRef& ref, double sr, bool truePeak = false)
-        : truePeak_(truePeak || param(ref, "truePeak") >= 0.5), softKnee_(param(ref, "softKnee") >= 0.5), gain_(static_cast<float>(dbToLin(param(ref, "gain")))),
+        : truePeak_((truePeak || param(ref, "truePeak") >= 0.5) && !(ref.params.count("mode") && param(ref, "mode") < 0.5)),  // Legacy mode has no true peak detection ...
+          softKnee_(param(ref, "softKnee") >= 0.5 && !(ref.params.count("mode") && param(ref, "mode") >= 0.5)),                // ... and Precision mode no soft knee (hard limiting)
+          gain_(static_cast<float>(dbToLin(param(ref, "gain")))),
           ceiling_(static_cast<float>(dbToLin(param(ref, "ceiling")))), look_(std::max(1, static_cast<int>(std::lround(param(ref, "lookahead") * 0.001 * sr)))),
           release_(smoothing(param(ref, "release"), sr)), attack_(smoothing(std::min(0.25, param(ref, "lookahead") * 0.25), sr)),
           needs_(static_cast<std::size_t>(look_ + 1), 1.0f), delayL_(static_cast<std::size_t>(look_), 0.0f), delayR_(static_cast<std::size_t>(look_), 0.0f) {}
@@ -727,6 +729,13 @@ public:
             else if (i == kBands - 1) bands_[kBands - 1] = highShelf(sr, 11000.0, g);
             else bands_[static_cast<std::size_t>(i)] = peaking(sr, kCentres[static_cast<std::size_t>(i)], g, 0.9);
         }
+        if (param(ref, "customEq") >= 0.5) {  // the Custom EQ: a low shelf, a broad mid band and a high shelf
+            customOn_ = true;
+            custom_[0] = lowShelf(sr, param(ref, "cLowFreq"), param(ref, "cLowGain"));
+            custom_[1] = peaking(sr, param(ref, "cMidFreq"), param(ref, "cMidGain"), 0.7);
+            custom_[2] = highShelf(sr, param(ref, "cHighFreq"), param(ref, "cHighGain"));
+        }
+        width_ = param(ref, "width") / 100.0;
         // the character colours the balance a little
         if (character_ == 1) { bands_[0] = lowShelf(sr, 80.0, param(ref, "eq1") * amount + 1.5); drive_ = 1.6f; }
         if (character_ == 2) extra_ = peaking(sr, 2500.0, 1.5, 0.8);
@@ -784,6 +793,13 @@ public:
             double xl = l[i], xr = r[i];
             for (std::size_t b = 0; b < bands_.size(); ++b) { xl = biquad(bands_[b], z_[b], 0, xl); xr = biquad(bands_[b], z_[b], 2, xr); }
             if (character_ == 2) { xl = biquad(extra_, zx_, 0, xl); xr = biquad(extra_, zx_, 2, xr); }
+            if (customOn_)
+                for (std::size_t b = 0; b < custom_.size(); ++b) { xl = biquad(custom_[b], zc_[b], 0, xl); xr = biquad(custom_[b], zc_[b], 2, xr); }
+            if (width_ != 1.0) {  // Spread: the side signal is scaled (0 leaves the mid only: mono)
+                const double mid = 0.5 * (xl + xr), side = 0.5 * (xl - xr) * width_;
+                xl = mid + side;
+                xr = mid - side;
+            }
             if (excite_) {  // saturated highs mixed back in
                 lowL_ += highpass_ * (xl - lowL_);
                 lowR_ += highpass_ * (xr - lowR_);
@@ -870,6 +886,10 @@ private:
     std::array<std::array<double, 4>, kBands> z_{};
     BiquadCoeffs extra_;
     std::array<double, 4> zx_{};
+    bool customOn_ = false;
+    std::array<BiquadCoeffs, 3> custom_;
+    std::array<std::array<double, 4>, 3> zc_{};
+    double width_ = 1.0;
     float drive_ = 1.0f, gain_ = 1.0f, compIn_ = 1.0f;
     double wet_ = 0.0;
     double totalGain_ = 0.0, highpass_ = 0.2, lowL_ = 0.0, lowR_ = 0.0;

@@ -70,6 +70,20 @@ struct FlexData {
     bool operator==(const FlexData&) const = default;
 };
 
+struct AutomationPoint {
+    Ticks tick = 0;
+    double value = 0.0;
+    double curve = 0.0;  // the bend of the segment up to the next point, -1..1: 0 is straight, above 0 starts slowly, below 0 quickly
+    bool operator==(const AutomationPoint&) const = default;
+};
+
+struct AutomationLane {
+    Uuid id;
+    std::string target;
+    std::vector<AutomationPoint> points;
+    bool operator==(const AutomationLane&) const = default;
+};
+
 struct Region {
     Uuid id;
     TimeBase timeBase = TimeBase::Musical;
@@ -88,6 +102,7 @@ struct Region {
     std::string name;  // shown on the region (Text tool, Region inspector); empty: the track's name
     std::optional<FlexData> flex;  // audio regions: the flex edits behind the sound this region plays
     std::int64_t loopLength = 0;  // > 0: the first loopLength (same unit as length, at most length) repeat until the end of the region
+    std::vector<AutomationLane> automation;  // Region automation: the lanes of this region, the ticks counted from its start (whatever its time base); they follow it when it moves or is copied
     std::vector<MidiNote> notes;
     std::vector<MidiControl> controls;  // MIDI regions: sorted by tick
     bool operator==(const Region&) const = default;
@@ -121,20 +136,6 @@ struct Strip {
     int input = 0;  // the audio input the track records: 0 = inputs 1 and 2 as stereo, n >= 1 = input n as mono
     bool mono = false;  // channel format: a mono strip is panned with the project's pan law, a stereo strip uses the balancer
     bool operator==(const Strip&) const = default;
-};
-
-struct AutomationPoint {
-    Ticks tick = 0;
-    double value = 0.0;
-    double curve = 0.0;  // the bend of the segment up to the next point, -1..1: 0 is straight, above 0 starts slowly, below 0 quickly
-    bool operator==(const AutomationPoint&) const = default;
-};
-
-struct AutomationLane {
-    Uuid id;
-    std::string target;
-    std::vector<AutomationPoint> points;
-    bool operator==(const AutomationLane&) const = default;
 };
 
 // How the notes of an instrument track are shaped when they play (the Inspector's Transpose, Velocity, Key Limit and Velocity Limit).
@@ -178,6 +179,8 @@ struct Track {
     MidiShaping midi;  // instrument tracks
     std::optional<Freeze> freeze;  // audio and instrument tracks
     double delayMs = 0.0;  // audio and instrument tracks: the regions play this many milliseconds later (earlier when negative)
+    bool on = true;  // the track's On/Off button: off, nothing of it plays or is processed (Project Settings > General > "Only load plug-ins needed": its plug-ins are not even loaded)
+    bool recordInRegions = false;  // "Record Automation with Audio/MIDI Regions": what is written in touch, latch or write goes into the lanes of the regions under it (Region automation), not into the track's lanes
     std::string automationMode = "read";  // "off" (the lanes are ignored), "read", "touch", "latch" or "write" (the last three record fader moves)
     std::vector<Region> regions;  // the regions of the alternative that plays now
     std::string alternative;      // its name (empty: it has not been named, "Main" is shown)

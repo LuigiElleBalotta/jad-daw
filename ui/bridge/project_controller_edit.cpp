@@ -1033,6 +1033,13 @@ double ProjectController::projectEndBeats() const {
     return end;
 }
 
+void ProjectController::setRegionAutomationView(bool on) {
+    if (on == regionAutomationView_) return;
+    regionAutomationView_ = on;
+    QSettings().setValue("edit/regionAutomationView", on);
+    emit automationViewChanged();
+}
+
 void ProjectController::setAutomationVisible(bool on) {
     if (on == automationVisible_) return;
     automationVisible_ = on;
@@ -1091,6 +1098,64 @@ QVariantList ProjectController::automationPoints(const QString& trackId, const Q
         for (const AutoRow& p : *points) out.append(QVariantMap{{"beats", p.beats}, {"value", p.value}, {"curve", p.curve}});
     }
     return out;
+}
+
+// The points of a lane as the Core's JSON: the beats are brought to [minBeats, maxBeats], counted from originBeats, and the values to the range of the target.
+nlohmann::json ProjectController::automationPointsJson(const QString& target, const QVariantList& points, double originBeats, double minBeats, double maxBeats) const {
+    const bool normalised = target.startsWith(QLatin1String("param/"));
+    const bool rel = target == "volume.rel" || target == "pan.rel";
+    const double lo = normalised ? 0.0 : (target == "pan" ? -1.0 : (target == "pan.rel" ? -2.0 : (rel ? -120.0 : -96.0))),
+                 hi = normalised ? 1.0 : (target == "pan" ? 1.0 : (target == "pan.rel" ? 2.0 : (rel ? 120.0 : (target == "volume" ? 24.0 : 12.0))));
+    nlohmann::json list = nlohmann::json::array();
+    for (const QVariant& v : points) {
+        const QVariantMap m = v.toMap();
+        const double beats = m.value("beats").toDouble(), value = m.value("value").toDouble();
+        if (!std::isfinite(beats) || !std::isfinite(value)) continue;
+        nlohmann::json point = {{"tick", static_cast<std::int64_t>(std::llround((std::clamp(beats, minBeats, maxBeats) - originBeats) * lpc::kPPQ))}, {"value", std::clamp(value, lo, hi)}};
+        const double curve = m.value("curve").toDouble();
+        if (std::isfinite(curve) && curve != 0.0) point["curve"] = std::clamp(curve, -1.0, 1.0);
+        list.push_back(point);
+    }
+    return list;
+}
+
+const RegionRow* ProjectController::regionRow(const QString& id) const {
+    for (const RegionRow& r : regionRows_)
+        if (r.id == id) return &r;
+    return nullptr;
+}
+
+QVariantList ProjectController::regionAutomationPoints(const QString& regionId, const QString& param) const {
+    QVariantList out;
+    const RegionRow* r = regionRow(regionId);
+    if (!r) return out;
+    const QString target = automationTarget(r->trackId, param);
+    if (target.isEmpty()) return out;
+    const nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+    if (!region.is_object() || !region.contains("automation")) return out;
+    for (const auto& lane : region["automation"]) {
+        if (lane.value("target", std::string()) != target.toStdString()) continue;
+        for (const auto& pt : lane.value("points", nlohmann::json::array()))
+            out.append(QVariantMap{{"beats", r->startBeats + pt.value("tick", 0) / static_cast<double>(lpc::kPPQ)}, {"value", pt.value("value", 0.0)}, {"curve", pt.value("curve", 0.0)}});
+    }
+    return out;
+}
+
+bool ProjectController::regionHasAutomation(const QString& regionId) const {
+    const RegionRow* r = regionRow(regionId);
+    if (!r) return false;
+    const nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+    return region.is_object() && region.contains("automation") && !region["automation"].empty();
+}
+
+void ProjectController::setRegionAutomationPoints(const QString& regionId, const QString& param, const QVariantList& points) {
+    if (!host_) return;
+    const RegionRow* r = regionRow(regionId);
+    if (!r) return;
+    const QString target = automationTarget(r->trackId, param);
+    if (target.isEmpty()) return;
+    sendCommand({{"type", "set_region_automation"}, {"regionId", regionId.toStdString()}, {"target", target.toStdString()},
+                 {"points", automationPointsJson(target, points, r->startBeats, r->startBeats, r->startBeats + r->lengthBeats)}});
 }
 
 void ProjectController::setAutomationPoints(const QString& trackId, const QString& param, const QVariantList& points) {
@@ -1880,6 +1945,93 @@ void ProjectController::newExternalMidiTrack() {
     if (ports.isEmpty()) emit notice("No MIDI output was found: connect a device or a virtual cable, then choose it in the instrument's window");
 }
 
+namespace {
+QString armedKey(const std::filesystem::path& dir) {
+    QString key = QString::fromStdString(dir.generic_string());
+    key.replace(QLatin1Char('/'), QLatin1Char('|')).replace(QLatin1Char(':'), QLatin1Char('_')).replace(QLatin1Char('\\'), QLatin1Char('|'));
+    return QStringLiteral("armed/") + key;
+}
+}  // namespace
+
+void ProjectController::rememberArmed() {
+    if (dir_.empty() || allRows_.empty()) return;
+    QSettings s;
+    if (projectSetting("resetRecordEnable", "1") != QLatin1String("0")) {
+        s.remove(armedKey(dir_));
+        return;
+    }
+    QStringList ids;
+    const QSet<QString> armed = trackToggles_.value(QStringLiteral("track.recordArm"));
+    for (const TrackRow& t : allRows_)
+        if (t.kind == QLatin1String("instrument") && armed.contains(t.id)) ids << t.id;
+    s.setValue(armedKey(dir_), ids);
+}
+
+void ProjectController::restoreArmed() {
+    QSet<QString>& armed = trackToggles_[QStringLiteral("track.recordArm")];
+    const bool reset = projectSetting("resetRecordEnable", "1") != QLatin1String("0");
+    const QStringList kept = reset ? QStringList() : QSettings().value(armedKey(dir_)).toStringList();
+    bool changed = false;
+    for (const TrackRow& t : allRows_) {
+        if (t.kind != QLatin1String("instrument")) continue;
+        const bool want = kept.contains(t.id);
+        if (want && !armed.contains(t.id)) { armed.insert(t.id); changed = true; }
+        if (!want && armed.contains(t.id)) { armed.remove(t.id); changed = true; }
+    }
+    if (changed) refresh(host_ ? host_->revision() : 0);
+}
+
+void ProjectController::sendMidiSettings() {
+#ifdef JAD_HAVE_JUCE
+    int sent = 0;
+    for (const TrackRow& t : allRows_) {
+        if (t.instrument != QLatin1String(lpc::kProcExternalMidi) || t.instrumentDevice.isEmpty()) continue;
+        ensureJuce();
+        const std::shared_ptr<lpc::IMidiOutput> port = lpc::openJuceMidiOutput(t.instrumentDevice.toStdString());
+        if (!port) continue;
+        const unsigned char channel = static_cast<unsigned char>(std::clamp(static_cast<int>(std::lround(t.instrumentParams.value("channel", 1).toDouble())), 1, 16) - 1);
+        const auto number = [&](const char* name, double fallback) { return static_cast<int>(std::lround(t.instrumentParams.value(name, fallback).toDouble())); };
+        if (number("bankMsb", 0) > 0) port->send(static_cast<unsigned char>(0xB0 | channel), 0, static_cast<unsigned char>(std::clamp(number("bankMsb", 0) - 1, 0, 127)));
+        if (number("bankLsb", 0) > 0) port->send(static_cast<unsigned char>(0xB0 | channel), 32, static_cast<unsigned char>(std::clamp(number("bankLsb", 0) - 1, 0, 127)));
+        if (number("program", 0) > 0) port->send(static_cast<unsigned char>(0xC0 | channel), static_cast<unsigned char>(std::clamp(number("program", 0) - 1, 0, 127)), 0);
+        port->send(static_cast<unsigned char>(0xB0 | channel), 7, static_cast<unsigned char>(std::clamp(number("volume", 100), 0, 127)));
+        port->send(static_cast<unsigned char>(0xB0 | channel), 10, static_cast<unsigned char>(std::clamp(number("pan", 64), 0, 127)));
+        ++sent;
+    }
+    if (sent > 0) emit notice(QStringLiteral("MIDI settings sent to %1 device(s)").arg(sent));
+#endif
+}
+
+bool ProjectController::externalMidiSend(const QString& trackId, const QString& what, double value) {
+#ifdef JAD_HAVE_JUCE
+    if (!std::isfinite(value)) return false;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId || t.instrument != QLatin1String(lpc::kProcExternalMidi) || t.instrumentDevice.isEmpty()) continue;
+        ensureJuce();
+        const std::shared_ptr<lpc::IMidiOutput> port = lpc::openJuceMidiOutput(t.instrumentDevice.toStdString());
+        if (!port) return false;
+        const unsigned char channel = static_cast<unsigned char>(std::clamp(static_cast<int>(std::lround(t.instrumentParams.value("channel", 1).toDouble())), 1, 16) - 1);
+        const auto number = [&](const char* name, double fallback) { return static_cast<int>(std::lround(what == QLatin1String(name) ? value : t.instrumentParams.value(name, fallback).toDouble())); };
+        const auto data = [](int v) { return static_cast<unsigned char>(std::clamp(v, 0, 127)); };
+        if (what == QLatin1String("volume")) {
+            port->send(static_cast<unsigned char>(0xB0 | channel), 7, data(number("volume", 100)));
+        } else if (what == QLatin1String("pan")) {
+            port->send(static_cast<unsigned char>(0xB0 | channel), 10, data(number("pan", 64)));
+        } else if (what == QLatin1String("bankMsb") || what == QLatin1String("bankLsb") || what == QLatin1String("program")) {
+            if (number("bankMsb", 0) > 0) port->send(static_cast<unsigned char>(0xB0 | channel), 0, data(number("bankMsb", 0) - 1));
+            if (number("bankLsb", 0) > 0) port->send(static_cast<unsigned char>(0xB0 | channel), 32, data(number("bankLsb", 0) - 1));
+            if (number("program", 0) > 0) port->send(static_cast<unsigned char>(0xC0 | channel), data(number("program", 0) - 1), 0);
+        } else {
+            return false;
+        }
+        return true;
+    }
+#else
+    Q_UNUSED(trackId); Q_UNUSED(what); Q_UNUSED(value);
+#endif
+    return false;
+}
+
 bool ProjectController::externalMidiTestNote(const QString& trackId) {
 #ifdef JAD_HAVE_JUCE
     for (const TrackRow& t : allRows_) {
@@ -2381,6 +2533,31 @@ void ProjectController::setAutomationMode(const QString& trackId, const QString&
     sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"automationMode", mode.toStdString()}});
 }
 
+void ProjectController::setTrackOn(const QString& trackId, bool on) {
+    if (!host_) return;
+    const TrackRow* t = tracks_.find(trackId);
+    if (!t || t->master) return;
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"on", on}});
+}
+
+void ProjectController::toggleTrackOnSelected() {
+    if (!host_) return;
+    nlohmann::json commands = nlohmann::json::array();
+    bool anyOn = false;
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && !t->master && t->on) anyOn = true;
+    for (const QString& id : std::as_const(selectedTracks_))
+        if (const TrackRow* t = tracks_.find(id); t && !t->master && t->on == anyOn) commands.push_back({{"type", "set_track_props"}, {"trackId", id.toStdString()}, {"on", !anyOn}});
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
+void ProjectController::setRecordInRegions(const QString& trackId, bool on) {
+    if (!host_) return;
+    finishAutomationCapture(trackId);
+    sendCommand({{"type", "set_track_props"}, {"trackId", trackId.toStdString()}, {"recordInRegions", on}});
+}
+
 QString ProjectController::automationMode(const QString& trackId) const {
     for (const TrackRow& t : allRows_)
         if (t.id == trackId) return t.automationMode;
@@ -2487,8 +2664,36 @@ void ProjectController::finishAutomationCapture(const QString& trackId) {
     };
     const ModeParts mode = splitMode(t->automationMode);
     if (mode.option.isEmpty()) {
-        merge(c.gain, t->volumeAuto, "volume", 0.05);
-        merge(c.pan, t->panAuto, "pan", 0.01);
+        // Record Automation with Audio/MIDI Regions: the part of the take that lies over a region goes into that region's lane; what lies over none stays on the track's lane
+        auto intoRegions = [&](const std::vector<std::pair<double, double>>& moves, const char* param, double eps) {
+            if (moves.empty() || !t->recordInRegions) return false;
+            const double from = moves.front().first, to = moves.back().first;
+            bool any = false;
+            for (const RegionRow& r : regionRows_) {
+                if (r.trackId != trackId || r.muted) continue;
+                const double rs = r.startBeats, re = r.startBeats + r.lengthBeats;
+                if (to < rs || from > re) continue;
+                const double a = std::max(from, rs), b = std::min(to, re);
+                std::vector<std::pair<double, double>> clipped{{a, movesAt(moves, a)}};
+                for (const auto& m : moves)
+                    if (m.first > a && m.first < b) clipped.push_back(m);
+                if (b > a) clipped.emplace_back(b, movesAt(moves, b));
+                std::vector<std::pair<double, double>> kept;
+                for (std::size_t i = 0; i < clipped.size(); ++i)
+                    if (kept.empty() || i + 1 == clipped.size() || std::abs(clipped[i].second - kept.back().second) > eps) kept.push_back(clipped[i]);
+                QVariantList points;
+                for (const QVariant& old : regionAutomationPoints(r.id, QString::fromLatin1(param))) {
+                    const double beats = old.toMap().value("beats").toDouble();
+                    if (beats < a - 1e-9 || beats > b + 1e-9) points.append(old);
+                }
+                for (const auto& [beats, value] : kept) points.append(QVariantMap{{"beats", beats}, {"value", value}});
+                setRegionAutomationPoints(r.id, QString::fromLatin1(param), points);
+                any = true;
+            }
+            return any;
+        };
+        if (!intoRegions(c.gain, "volume", 0.05)) merge(c.gain, t->volumeAuto, "volume", 0.05);
+        if (!intoRegions(c.pan, "pan", 0.01)) merge(c.pan, t->panAuto, "pan", 0.01);
         return;
     }
     // Trim and Relative (Logic's automation options). A Touch take lets go at its end, so the lane is as it was a moment after the last move; Latch goes on.
@@ -2792,6 +2997,40 @@ void ProjectController::setSelectedTracksColor(const QString& color) {
     sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
 }
 
+void ProjectController::convertAutomation(bool toRegion, bool visibleOnly) {
+    if (!host_) return;
+    if (visibleOnly && !automationVisible_) {
+        emit notice("Show the automation first (Mix > Show Automation)");
+        return;
+    }
+    nlohmann::json commands = nlohmann::json::array();
+    for (const TrackRow& t : allRows_) {
+        if (t.master) continue;
+        const QString param = visibleOnly ? automationParamFor(t.id) : QString();
+        const QString target = visibleOnly ? automationTarget(t.id, param) : QString();
+        if (visibleOnly && target.isEmpty()) continue;
+        bool any = false;
+        if (toRegion) {
+            any = visibleOnly ? !automationPoints(t.id, param).isEmpty()
+                              : (!t.volumeAuto.empty() || !t.panAuto.empty() || !t.volumeRel.empty() || !t.panRel.empty() || !t.sendAuto.empty() || !t.paramAuto.empty());
+        } else {
+            for (const RegionRow& r : regionRows_) {
+                if (r.trackId != t.id || r.muted) continue;
+                if (visibleOnly ? !regionAutomationPoints(r.id, param).isEmpty() : regionHasAutomation(r.id)) { any = true; break; }
+            }
+        }
+        if (!any) continue;
+        nlohmann::json targets = nlohmann::json::array();
+        if (visibleOnly) targets.push_back(target.toStdString());
+        commands.push_back({{"type", "convert_automation"}, {"trackId", t.id.toStdString()}, {"toRegion", toRegion}, {"targets", targets}});
+    }
+    if (commands.empty()) {
+        emit notice(toRegion ? "There is no track automation to convert" : "There is no region automation to convert");
+        return;
+    }
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 void ProjectController::deleteAutomationOfSelected() {
     nlohmann::json commands = nlohmann::json::array();
     for (const QString& id : std::as_const(selectedTracks_)) {
@@ -2800,6 +3039,15 @@ void ProjectController::deleteAutomationOfSelected() {
         if (!t->volumeAuto.empty()) commands.push_back({{"type", "set_automation"}, {"trackId", id.toStdString()}, {"target", "volume"}, {"points", nlohmann::json::array()}});
         if (!t->panAuto.empty()) commands.push_back({{"type", "set_automation"}, {"trackId", id.toStdString()}, {"target", "pan"}, {"points", nlohmann::json::array()}});
     }
+    if (regionAutomationView_)  // Region Automation: the lanes of the selected regions go too
+        for (const QString& id : std::as_const(selectedRegions_)) {
+            const RegionRow* r = regionRow(id);
+            if (!r) continue;
+            const nlohmann::json region = nlohmann::json::parse(r->json, nullptr, false);
+            if (!region.is_object() || !region.contains("automation")) continue;
+            for (const auto& lane : region["automation"])
+                commands.push_back({{"type", "set_region_automation"}, {"regionId", id.toStdString()}, {"target", lane.value("target", std::string())}, {"points", nlohmann::json::array()}});
+        }
     if (commands.empty()) {
         emit notice("The selected tracks have no automation");
         return;

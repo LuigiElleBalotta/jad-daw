@@ -17,6 +17,9 @@ Item {
     property bool mute: false
     property bool solo: false
     property bool recordArm: false
+    property bool trackOn: true           // the On/Off button: off, the track plays nothing
+    property bool showOnOff: true
+    signal onOffToggled(string trackId, bool on)
     property bool inputMonitor: false
     property bool frozen: false          // plays its rendered audio
     property string icon: ""             // Track > Assign Track Icon
@@ -244,6 +247,15 @@ Item {
                 label: qsTr("Flex")
                 active: root.flexMode !== ""
                 onClicked: flexMenu.popup()
+            }
+            IconButton {
+                id: onOffButton
+                objectName: "onOffButton"
+                visible: root.showOnOff
+                implicitWidth: 26; implicitHeight: 20
+                label: qsTr("On")
+                active: root.trackOn
+                onClicked: root.onOffToggled(root.trackId, !root.trackOn)
             }
             IconButton {
                 id: armButton

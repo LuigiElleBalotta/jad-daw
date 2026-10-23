@@ -182,12 +182,12 @@ Dialog {
                     label: qsTr("New recordings")
                     Choice { key: "followNewRecordings"; fallback: "off"; choices: ["off", "follow"]; labels: ({ "off": qsTr("Off"), "follow": qsTr("Flex & Follow") }) }
                 }
-                Flag { key: "trimNewRecordings"; fallback: true; label: qsTr("Trim start of new regions") }
+                Flag { key: "trimNewRecordings"; label: qsTr("Trim start of new regions") }
                 Row2 {
                     label: qsTr("Imported files")
                     Choice { key: "followImports"; fallback: "off"; choices: ["off", "follow"]; labels: ({ "off": qsTr("Off"), "follow": qsTr("Flex & Follow") }) }
                 }
-                Flag { key: "trimImports"; fallback: true; label: qsTr("Trim start of new regions") }
+                Flag { key: "trimImports"; label: qsTr("Trim start of new regions") }
                 Group { text: qsTr("Free Tempo Recording") }
                 Row2 {
                     label: qsTr("Default tempo behavior")

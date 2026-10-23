@@ -57,6 +57,7 @@ QVariant TrackListModel::data(const QModelIndex& index, int role) const {
         case InputMonitor: return r.inputMonitor;
         case Hidden: return r.hidden;
         case Frozen: return r.frozen;
+        case TrackOn: return r.on;
         case Icon: return r.icon;
         case FlexMode: return r.flexMode;
         case Depth: return r.depth;
@@ -70,7 +71,7 @@ QVariant TrackListModel::data(const QModelIndex& index, int role) const {
 }
 
 QHash<int, QByteArray> TrackListModel::roleNames() const {
-    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {RecordArm, "recordArm"}, {InputMonitor, "inputMonitor"}, {Hidden, "hidden"}, {Frozen, "frozen"}, {Icon, "icon"}, {FlexMode, "flexMode"}, {Depth, "depth"}, {StackKind, "stackKind"}, {StackOpen, "stackOpen"}, {ParentId, "parentId"}, {Alternative, "alternative"}, {AlternativeNames, "alternativeNames"}};
+    return {{TrackId, "trackId"}, {Name, "name"}, {Kind, "kind"}, {Color, "color"}, {IsMaster, "isMaster"}, {RegionCount, "regionCount"}, {Mute, "mute"}, {Solo, "solo"}, {GainDb, "gainDb"}, {Pan, "pan"}, {RecordArm, "recordArm"}, {InputMonitor, "inputMonitor"}, {Hidden, "hidden"}, {Frozen, "frozen"}, {Icon, "icon"}, {FlexMode, "flexMode"}, {Depth, "depth"}, {StackKind, "stackKind"}, {StackOpen, "stackOpen"}, {ParentId, "parentId"}, {Alternative, "alternative"}, {AlternativeNames, "alternativeNames"}, {TrackOn, "trackOn"}};
 }
 
 }  // namespace jad

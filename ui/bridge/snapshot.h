@@ -49,6 +49,8 @@ struct TrackRow {
     int input = 0;  // the recording input: 0 stereo 1+2, n mono input n
     QString groupId;  // the group the track is in (empty: none)
     QString automationMode = QStringLiteral("read");  // off, read, touch, latch or write
+    bool recordInRegions = false;  // Record Automation with Audio/MIDI Regions
+    bool on = true;                // the On/Off button of the track
     int regionCount = 0;
     bool showInTracks = true;  // false: hidden from the Tracks area (listed in the Mixer only)
     bool hidden = false;       // the track is hidden but shown anyway (Track > Toggle Hide View): drawn dimmed

@@ -171,3 +171,34 @@ TEST_CASE("mastering fit: the demo mix lands on -14 LUFS within the limiter cont
     CHECK(fit.params.count("gain") == 1);
     CHECK(std::abs(fit.output.integrated - kMasteringTargetLufs) <= 0.6);
 }
+
+TEST_CASE("mastering processor: Spread at 0 makes the mix mono, Custom EQ lifts the band it is set on", "[mastering]") {
+    auto render = [&](const ProcessorRef& ref, double freq, bool opposite) {
+        auto p = audio::makeBuiltinEffect(ref, kRate);
+        REQUIRE(p);
+        std::vector<float> l(kRate), r(kRate);
+        for (int i = 0; i < kRate; ++i) {
+            l[static_cast<std::size_t>(i)] = static_cast<float>(0.05 * std::sin(2 * kPi * freq * i / kRate));
+            r[static_cast<std::size_t>(i)] = opposite ? -l[static_cast<std::size_t>(i)] : l[static_cast<std::size_t>(i)];
+        }
+        p->process(l.data(), r.data(), kRate);
+        double rmsL = 0, side = 0;
+        for (int i = kRate / 2; i < kRate; ++i) {
+            rmsL += l[static_cast<std::size_t>(i)] * l[static_cast<std::size_t>(i)];
+            side += (l[static_cast<std::size_t>(i)] - r[static_cast<std::size_t>(i)]) * (l[static_cast<std::size_t>(i)] - r[static_cast<std::size_t>(i)]);
+        }
+        return std::pair<double, double>{std::sqrt(rmsL / (kRate / 2)), std::sqrt(side / (kRate / 2))};
+    };
+    ProcessorRef mono;
+    mono.processorId = kProcMastering;
+    mono.params = {{"gain", 0.0}, {"autoEq", 0.0}, {"width", 0.0}};
+    CHECK(render(mono, 440.0, true).second < 1e-6);  // all side signal is gone
+    ProcessorRef plain = mono;
+    plain.params["width"] = 100.0;
+    const double before = render(plain, 1000.0, false).first;
+    ProcessorRef custom = plain;
+    custom.params["customEq"] = 1.0;
+    custom.params["cMidFreq"] = 1000.0;
+    custom.params["cMidGain"] = 6.0;
+    CHECK(render(custom, 1000.0, false).first > before * 1.5);
+}

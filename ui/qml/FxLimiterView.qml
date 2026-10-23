@@ -138,7 +138,21 @@ FxShell {
             MouseArea { anchors.fill: parent; onClicked: root.editor.setNow(sw.param, sw.on ? 0 : 1) }
         }
     }
-    Switch { visible: !root.adaptive; param: "truePeak"; label: qsTr("True Peak Detection"); cxPt: 625; cyPt: 233 }
+    readonly property bool precision: val("mode") >= 0.5
+    Item {  // Mode: Precision (hard limiting, true peak) or Legacy (soft knee)
+        visible: !root.adaptive
+        x: 482 - 110; y: 233; width: 220; height: 70
+        Text { x: 0; width: parent.width; horizontalAlignment: Text.AlignHCenter; text: qsTr("Mode"); color: "#9db2c8"; font.family: Theme.fontFamily; font.pixelSize: 19 }
+        Rectangle {
+            objectName: "limiterMode"
+            x: (parent.width - 120) / 2; y: 34; width: 120; height: 36; radius: 4
+            color: "#12202e"
+            Text { anchors.centerIn: parent; text: root.precision ? qsTr("Precision") : qsTr("Legacy"); color: "#d6e2ee"; font.family: Theme.fontFamily; font.pixelSize: 21 }
+            MouseArea { anchors.fill: parent; onClicked: root.editor.setNow("mode", root.precision ? 0 : 1) }
+        }
+    }
+    Switch { visible: !root.adaptive && root.precision; param: "truePeak"; label: qsTr("True Peak Detection"); cxPt: 625; cyPt: 233 }
+    Switch { visible: !root.adaptive && !root.precision; param: "softKnee"; label: qsTr("Soft Knee"); cxPt: 625; cyPt: 233 }
     Switch { visible: root.adaptive; param: "removeDc"; label: qsTr("Remove DC Offset"); cxPt: 560; cyPt: 233 }
     Switch { visible: false; param: "truePeak"; label: qsTr("True Peak Detection"); cxPt: 760; cyPt: 233 }
 }

@@ -183,13 +183,14 @@ Window {
         anchors.fill: parent
         visible: root.graphical
         active: root.graphical
-        sourceComponent: root.kind === "builtin.eq" ? eqView : (root.kind === "builtin.compressor" ? compressorView : (root.kind === "builtin.limiter" || root.kind === "builtin.adaptivelimiter" ? limiterView : (root.kind === "builtin.gate" ? gateView : (root.kind === "builtin.mastering" ? masteringView : (root.kind === "builtin.matcheq" ? matchEqView : (root.kind === "builtin.reverb" ? reverbView : (root.kind === "builtin.delay" ? delayView : (root.kind === "builtin.mlsaturation" ? saturationView : (root.kind === "builtin.synth" ? synthView : (root.kind === "builtin.drums" ? drumKitView : gridView))))))))))
+        sourceComponent: root.kind === "builtin.eq" ? eqView : (root.kind === "builtin.compressor" ? compressorView : (root.kind === "builtin.limiter" || root.kind === "builtin.adaptivelimiter" ? limiterView : (root.kind === "builtin.gate" ? gateView : (root.kind === "builtin.mastering" ? masteringView : (root.kind === "builtin.matcheq" ? matchEqView : (root.kind === "builtin.reverb" ? reverbView : (root.kind === "builtin.delay" ? delayView : (root.kind === "builtin.mlsaturation" ? saturationView : (root.kind === "builtin.synth" ? synthView : (root.kind === "builtin.drums" ? drumKitView : (root.kind === "builtin.external" ? externalMidiView : gridView)))))))))))
     }
     Component { id: eqView; FxChannelEqView { editor: root } }
     Component { id: compressorView; FxCompressorView { editor: root } }
     Component { id: reverbView; FxReverbView { editor: root } }
     Component { id: synthView; FxSynthView { editor: root } }
     Component { id: drumKitView; FxDrumKitView { editor: root } }
+    Component { id: externalMidiView; FxExternalMidiView { editor: root } }
     Component { id: saturationView; FxSaturationView { editor: root } }
     Component { id: delayView; FxDelayView { editor: root } }
     Component { id: matchEqView; FxMatchEqView { editor: root } }

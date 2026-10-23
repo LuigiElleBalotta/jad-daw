@@ -960,12 +960,13 @@ void ProjectController::smartAnalyse(const QString& regionId) {
             e.tempoDone = true;
             const int what = st.wanted.take(regionId);
             if (result->bpm <= 0.0 || result->beats.size() < 3) {
-                if (what) emit self->notice("No steady tempo was found in this region");
+                if (what && what != 3) emit self->notice("No steady tempo was found in this region");
                 return;
             }
             emit self->flexAnalysisReady(regionId);
             if (what == 1) self->smartFollowRegion(regionId, true);
             else if (what == 2) self->smartApplyRegionTempo(regionId);
+            else if (what == 3) self->smartTrimRegion(regionId);
         }, Qt::QueuedConnection);
     });
 }
@@ -1011,6 +1012,27 @@ void ProjectController::smartFollow(bool on) {
         smartFollowRegion(r->id, on);
     }
     if (!any) emit notice("Select an audio region first");
+}
+
+// Trim start of new regions: a recording or an imported file of some length is analysed, and its region starts at the first downbeat of the sound.
+void ProjectController::smartTrimRegion(const QString& regionId) {
+    const RegionRow* row = regions_.find(regionId);
+    if (!host_ || !row || !row->audio || row->missing || row->lengthFrames < 2 * static_cast<std::int64_t>(sampleRate_)) return;
+    const lpc::FlexData data = flexDataOf(*row);
+    FlexState& st = flexState();
+    const FlexState::Entry entry = st.entries.value(windowKey(data));
+    if (!entry.tempoDone || !entry.tempo) {
+        st.wanted[regionId] = 3;
+        smartAnalyse(regionId);
+        return;
+    }
+    const lpc::TempoAnalysis& tempo = *entry.tempo;
+    if (tempo.bpm <= 0.0 || tempo.beats.size() < 3) return;
+    const std::int64_t frame = tempo.beats[static_cast<std::size_t>(std::clamp(tempo.firstDownbeat, 0, static_cast<int>(tempo.beats.size()) - 1))];
+    if (frame < sampleRate_ / 200 || frame >= row->lengthFrames) return;
+    const double startSamples = tempoMap_.ticksToSamples(static_cast<lpc::Ticks>(std::llround(row->startBeats * lpc::kPPQ)), sampleRate_);
+    const double newStart = static_cast<double>(tempoMap_.samplesToTicks(startSamples + static_cast<double>(frame), sampleRate_)) / lpc::kPPQ;
+    resizeRegion(regionId, newStart, row->startBeats + row->lengthBeats - newStart);
 }
 
 void ProjectController::smartFollowRegion(const QString& regionId, bool on) {

@@ -5,8 +5,10 @@
 #include <cmath>
 #include <iterator>
 #include <stdexcept>
+#include <set>
 #include <unordered_set>
 
+#include "lpc/automation.h"
 #include "lpc/flex_model.h"
 #include "lpc/model_json.h"
 #include "lpc/processor_ids.h"
@@ -397,6 +399,33 @@ private:
     MarkerList list_;
 };
 
+// Checks that a lane of `t` can have this target and these points, and sorts the points by tick. Shared by the lanes of a track and those of its regions.
+std::optional<CommandError> checkAutomation(const Track& t, const std::string& target, const std::vector<AutomationPoint>& points, std::vector<AutomationPoint>& sorted) {
+    const bool sendTarget = target.rfind("send:", 0) == 0;
+    const auto paramTarget = parseParamTarget(target);
+    const bool relative = target == "volume.rel" || target == "pan.rel";  // the Relative automation: an offset added to the volume or pan lane
+    if (target != "volume" && target != "pan" && !relative && !sendTarget && !paramTarget) return CommandError{"bad_target", "automation target must be volume, pan, volume.rel, pan.rel, send:<send id> or param/<plug-in>/<n>/<index>"};
+    if (paramTarget) {
+        int count = 0;
+        for (const ProcessorRef& ins : t.strip.inserts)
+            if (ins.processorId == paramTarget->processorId) ++count;
+        if (paramTarget->ordinal >= count) return CommandError{"bad_target", "the track has no such plug-in insert"};
+    }
+    if (sendTarget) {
+        const auto id = Uuid::parse(target.substr(5));
+        if (!id || std::none_of(t.strip.sends.begin(), t.strip.sends.end(), [&](const Send& s) { return s.id == *id; }))
+            return CommandError{"bad_target", "the track has no such send"};
+    }
+    if (points.size() > 4096) return CommandError{"too_many", "at most 4096 automation points per lane"};
+    const double lo = paramTarget ? 0.0 : (target == "pan" ? -1.0 : (target == "pan.rel" ? -2.0 : (relative ? -120.0 : -96.0))),
+                 hi = paramTarget ? 1.0 : (target == "pan" ? 1.0 : (target == "pan.rel" ? 2.0 : (relative ? 120.0 : (sendTarget ? 12.0 : 24.0))));
+    for (const AutomationPoint& pt : points)
+        if (pt.tick < 0 || pt.tick > kMaxPosition || !(pt.value >= lo && pt.value <= hi) || !(pt.curve >= -1.0 && pt.curve <= 1.0)) return CommandError{"bad_point", "an automation point is out of range"};
+    sorted = points;
+    std::stable_sort(sorted.begin(), sorted.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.tick < b.tick; });
+    return std::nullopt;
+}
+
 class SetAutomationCmd final : public Command {
 public:
     SetAutomationCmd(Uuid id, std::string target, std::vector<AutomationPoint> points) : id_(id), target_(std::move(target)), points_(std::move(points)) {}
@@ -406,28 +435,8 @@ public:
     ApplyResult apply(Project& p) const override {
         Track* t = p.findTrack(id_);
         if (!t) return fail("not_found", "no such track");
-        const bool sendTarget = target_.rfind("send:", 0) == 0;
-        const auto paramTarget = parseParamTarget(target_);
-        const bool relative = target_ == "volume.rel" || target_ == "pan.rel";  // the Relative automation: an offset added to the volume or pan lane
-        if (target_ != "volume" && target_ != "pan" && !relative && !sendTarget && !paramTarget) return fail("bad_target", "automation target must be volume, pan, volume.rel, pan.rel, send:<send id> or param/<plug-in>/<n>/<index>");
-        if (paramTarget) {
-            int count = 0;
-            for (const ProcessorRef& ins : t->strip.inserts)
-                if (ins.processorId == paramTarget->processorId) ++count;
-            if (paramTarget->ordinal >= count) return fail("bad_target", "the track has no such plug-in insert");
-        }
-        if (sendTarget) {
-            const auto id = Uuid::parse(target_.substr(5));
-            if (!id || std::none_of(t->strip.sends.begin(), t->strip.sends.end(), [&](const Send& s) { return s.id == *id; }))
-                return fail("bad_target", "the track has no such send");
-        }
-        if (points_.size() > 4096) return fail("too_many", "at most 4096 automation points per lane");
-        const double lo = paramTarget ? 0.0 : (target_ == "pan" ? -1.0 : (target_ == "pan.rel" ? -2.0 : (relative ? -120.0 : -96.0))),
-                     hi = paramTarget ? 1.0 : (target_ == "pan" ? 1.0 : (target_ == "pan.rel" ? 2.0 : (relative ? 120.0 : (sendTarget ? 12.0 : 24.0))));
-        for (const AutomationPoint& pt : points_)
-            if (pt.tick < 0 || pt.tick > kMaxPosition || !(pt.value >= lo && pt.value <= hi) || !(pt.curve >= -1.0 && pt.curve <= 1.0)) return fail("bad_point", "an automation point is out of range");
-        std::vector<AutomationPoint> sorted = points_;
-        std::stable_sort(sorted.begin(), sorted.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.tick < b.tick; });
+        std::vector<AutomationPoint> sorted;
+        if (auto e = checkAutomation(*t, target_, points_, sorted)) return fail(*e);
         auto it = std::find_if(t->automation.begin(), t->automation.end(), [&](const AutomationLane& l) { return l.target == target_; });
         std::vector<AutomationPoint> previous;
         if (it != t->automation.end()) previous = it->points;
@@ -443,6 +452,43 @@ public:
             t->automation.push_back(std::move(lane));
         }
         return success(makeSetAutomation(id_, target_, std::move(previous)));
+    }
+
+private:
+    Uuid id_;
+    std::string target_;
+    std::vector<AutomationPoint> points_;
+};
+
+// Region automation: replaces one lane of a region (no points removes it). The ticks count from the start of the region.
+class SetRegionAutomationCmd final : public Command {
+public:
+    SetRegionAutomationCmd(Uuid regionId, std::string target, std::vector<AutomationPoint> points) : id_(regionId), target_(std::move(target)), points_(std::move(points)) {}
+    std::string type() const override { return "set_region_automation"; }
+    json toJson() const override { return {{"type", type()}, {"regionId", id_}, {"target", target_}, {"points", points_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        std::size_t idx = 0;
+        Track* t = p.findTrackOfRegion(id_, &idx);
+        if (!t) return fail("not_found", "no such region");
+        std::vector<AutomationPoint> sorted;
+        if (auto e = checkAutomation(*t, target_, points_, sorted)) return fail(*e);
+        Region& r = t->regions[idx];
+        auto it = std::find_if(r.automation.begin(), r.automation.end(), [&](const AutomationLane& l) { return l.target == target_; });
+        std::vector<AutomationPoint> previous;
+        if (it != r.automation.end()) previous = it->points;
+        if (sorted.empty()) {
+            if (it != r.automation.end()) r.automation.erase(it);
+        } else if (it != r.automation.end()) {
+            it->points = std::move(sorted);
+        } else {
+            AutomationLane lane;
+            lane.id = Uuid::random();
+            lane.target = target_;
+            lane.points = std::move(sorted);
+            r.automation.push_back(std::move(lane));
+        }
+        return success(makeSetRegionAutomation(id_, target_, std::move(previous)));
     }
 
 private:
@@ -467,6 +513,8 @@ public:
         if (patch_.stack) j["stack"] = *patch_.stack;
         if (patch_.stackOpen) j["stackOpen"] = *patch_.stackOpen;
         if (patch_.automationMode) j["automationMode"] = *patch_.automationMode;
+        if (patch_.recordInRegions) j["recordInRegions"] = *patch_.recordInRegions;
+        if (patch_.on) j["on"] = *patch_.on;
         if (patch_.delayMs) j["delayMs"] = *patch_.delayMs;
         if (patch_.midi)
             j["midi"] = {{"transpose", patch_.midi->transpose}, {"velocity", patch_.midi->velocity}, {"keyLow", patch_.midi->keyLow}, {"keyHigh", patch_.midi->keyHigh},
@@ -541,6 +589,15 @@ public:
         if (patch_.automationMode) {
             previous.automationMode = t->automationMode;
             t->automationMode = *patch_.automationMode;
+        }
+        if (patch_.recordInRegions) {
+            previous.recordInRegions = t->recordInRegions;
+            t->recordInRegions = *patch_.recordInRegions;
+        }
+        if (patch_.on) {
+            if (t->kind == TrackKind::Master) return fail("invalid_kind", "the master cannot be turned off");
+            previous.on = t->on;
+            t->on = *patch_.on;
         }
         if (patch_.name) {
             previous.name = t->name;
@@ -780,6 +837,74 @@ std::int64_t framesBetween(const Project& p, TimeBase base, std::int64_t from, s
     return static_cast<std::int64_t>(std::llround(static_cast<double>(to - from) * p.sampleRate / 1e6));
 }
 
+// A position of a region's own time base (ticks or microseconds) as ticks: the unit the lanes of a region are counted in.
+Ticks ticksOfPosition(const Project& p, TimeBase base, std::int64_t value) {
+    if (base == TimeBase::Musical) return value;
+    return p.tempoMap.samplesToTicks(static_cast<double>(value) * p.sampleRate / 1e6, p.sampleRate);
+}
+
+class ConvertAutomationCmd final : public Command {
+public:
+    ConvertAutomationCmd(Uuid trackId, bool toRegion, std::vector<std::string> targets) : id_(trackId), toRegion_(toRegion), targets_(std::move(targets)) {}
+    std::string type() const override { return "convert_automation"; }
+    json toJson() const override { return {{"type", type()}, {"trackId", id_}, {"toRegion", toRegion_}, {"targets", targets_}}; }
+
+    ApplyResult apply(Project& p) const override {
+        Track* t = p.findTrack(id_);
+        if (!t) return fail("not_found", "no such track");
+        const auto wanted = [&](const std::string& target) { return targets_.empty() || std::find(targets_.begin(), targets_.end(), target) != targets_.end(); };
+        std::vector<CommandPtr> undo;  // restores, in the order they were changed
+        if (toRegion_) {
+            const std::vector<AutomationLane> lanes = t->automation;
+            for (const AutomationLane& lane : lanes) {
+                if (!wanted(lane.target) || lane.points.empty()) continue;
+                for (Region& r : t->regions) {
+                    const Ticks from = ticksOfPosition(p, r.timeBase, r.start), to = ticksOfPosition(p, r.timeBase, r.start + r.length);
+                    if (lane.points.front().tick >= to || lane.points.back().tick <= from) continue;  // the lane does not reach this region
+                    std::vector<AutomationPoint> cut = cutAutomation(lane.points, from, to);
+                    auto it = std::find_if(r.automation.begin(), r.automation.end(), [&](const AutomationLane& l) { return l.target == lane.target; });
+                    undo.push_back(makeSetRegionAutomation(r.id, lane.target, it != r.automation.end() ? it->points : std::vector<AutomationPoint>{}));
+                    if (it != r.automation.end()) {
+                        it->points = std::move(cut);
+                    } else {
+                        r.automation.push_back(AutomationLane{Uuid::random(), lane.target, std::move(cut)});
+                    }
+                }
+                undo.push_back(makeSetAutomation(id_, lane.target, lane.points));
+                t->automation.erase(std::remove_if(t->automation.begin(), t->automation.end(), [&](const AutomationLane& l) { return l.target == lane.target; }), t->automation.end());
+            }
+        } else {
+            const std::vector<AutomationLane> playing = overlayRegionLanes(p, *t, true, false);
+            std::set<std::string> targets;
+            for (const Region& r : t->regions)
+                for (const AutomationLane& lane : r.automation)
+                    if (wanted(lane.target) && !lane.points.empty()) targets.insert(lane.target);
+            for (const std::string& target : targets) {
+                auto own = std::find_if(t->automation.begin(), t->automation.end(), [&](const AutomationLane& l) { return l.target == target; });
+                const auto made = std::find_if(playing.begin(), playing.end(), [&](const AutomationLane& l) { return l.target == target; });
+                if (made == playing.end()) continue;
+                undo.push_back(makeSetAutomation(id_, target, own != t->automation.end() ? own->points : std::vector<AutomationPoint>{}));
+                if (own != t->automation.end()) own->points = made->points;
+                else t->automation.push_back(AutomationLane{Uuid::random(), target, made->points});
+                for (Region& r : t->regions) {
+                    auto lane = std::find_if(r.automation.begin(), r.automation.end(), [&](const AutomationLane& l) { return l.target == target; });
+                    if (lane == r.automation.end()) continue;
+                    undo.push_back(makeSetRegionAutomation(r.id, target, lane->points));
+                    r.automation.erase(lane);
+                }
+            }
+        }
+        if (undo.empty()) return fail("nothing_to_do", toRegion_ ? "the track has no automation to convert" : "the regions of the track have no automation to convert");
+        std::reverse(undo.begin(), undo.end());
+        return success(makeTransaction(std::move(undo)));
+    }
+
+private:
+    Uuid id_;
+    bool toRegion_;
+    std::vector<std::string> targets_;
+};
+
 class ReplaceRegionCmd final : public Command {
 public:
     explicit ReplaceRegionCmd(Region region) : region_(std::move(region)) {}
@@ -818,6 +943,11 @@ public:
         r.start = start_;
         r.length = length_;
         r.loopLength = std::min(old.loopLength, length_);
+        if (!old.automation.empty()) {  // the lanes keep the window the region now shows
+            const Ticks origin = ticksOfPosition(p, old.timeBase, old.start);
+            const Ticks from = ticksOfPosition(p, old.timeBase, start_) - origin, to = ticksOfPosition(p, old.timeBase, start_ + length_) - origin;
+            for (AutomationLane& lane : r.automation) lane.points = cutAutomation(lane.points, from, to);
+        }
         const std::int64_t moved = start_ - old.start;
         if (t->kind == TrackKind::Audio) {
             r.sourceOffsetFrames = old.sourceOffsetFrames + framesBetween(p, old.timeBase, old.start, start_);
@@ -885,6 +1015,12 @@ public:
         if (!rightTakeGroup_.empty() && !old.takeGroup.empty()) right.takeGroup = rightTakeGroup_;  // the right parts of the takes of a passage become a passage of their own
         right.start = at_;
         right.length = old.start + old.length - at_;
+        if (!old.automation.empty()) {  // each part keeps the lanes of its own span, with the value at the cut at the edge
+            const Ticks origin = ticksOfPosition(p, old.timeBase, old.start);
+            const Ticks cutTick = ticksOfPosition(p, old.timeBase, at_) - origin, endTick = ticksOfPosition(p, old.timeBase, old.start + old.length) - origin;
+            for (AutomationLane& lane : left.automation) lane.points = cutAutomation(lane.points, 0, cutTick);
+            for (AutomationLane& lane : right.automation) lane.points = cutAutomation(lane.points, cutTick, endTick);
+        }
         if (t->kind == TrackKind::Audio) {
             right.sourceOffsetFrames = old.sourceOffsetFrames + framesBetween(p, old.timeBase, old.start, at_);
             if (old.flex) {
@@ -976,6 +1112,30 @@ public:
         Region joined = first;
         joined.length = last.start + last.length - first.start;
         joined.fadeOut = last.fadeOut;
+        {  // the lanes of the parts follow each other
+            const Ticks origin = ticksOfPosition(p, first.timeBase, first.start);
+            for (AutomationLane& lane : joined.automation)
+                lane.points = cutAutomation(lane.points, 0, ticksOfPosition(p, first.timeBase, first.start + first.length) - origin);
+            for (std::size_t i = 1; i < order.size(); ++i) {
+                const Region& r = regions[order[i]];
+                const Ticks shift = ticksOfPosition(p, r.timeBase, r.start) - origin, span = ticksOfPosition(p, r.timeBase, r.start + r.length) - ticksOfPosition(p, r.timeBase, r.start);
+                for (const AutomationLane& src : r.automation) {
+                    auto it = std::find_if(joined.automation.begin(), joined.automation.end(), [&](const AutomationLane& l) { return l.target == src.target; });
+                    if (it == joined.automation.end()) {
+                        joined.automation.push_back(AutomationLane{Uuid::random(), src.target, {}});
+                        it = std::prev(joined.automation.end());
+                    }
+                    for (AutomationPoint pt : cutAutomation(src.points, 0, span)) {
+                        pt.tick += shift;
+                        it->points.push_back(pt);
+                    }
+                }
+            }
+            for (AutomationLane& lane : joined.automation) {
+                std::stable_sort(lane.points.begin(), lane.points.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.tick < b.tick; });
+                lane.points.erase(std::unique(lane.points.begin(), lane.points.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.tick == b.tick; }), lane.points.end());
+            }
+        }
         if (track->kind == TrackKind::Audio) {
             const bool anyFlex = std::any_of(order.begin(), order.end(), [&](std::size_t i) { return regions[i].flex.has_value(); });
             if (anyFlex) {  // the flex edits of neighbours that came from one sound become one set of edits
@@ -1161,6 +1321,8 @@ CommandPtr makeSetMasterVolume(float gainDb) { return std::make_unique<SetMaster
 CommandPtr makeSetPanLaw(PanLaw law) { return std::make_unique<SetPanLawCmd>(law); }
 CommandPtr makeSetProjectSetting(std::string key, std::string value) { return std::make_unique<SetProjectSettingCmd>(std::move(key), std::move(value)); }
 CommandPtr makeSetTempo(Ticks tick, double bpm) { return std::make_unique<SetTempoCmd>(tick, bpm); }
+CommandPtr makeConvertAutomation(Uuid trackId, bool toRegion, std::vector<std::string> targets) { return std::make_unique<ConvertAutomationCmd>(trackId, toRegion, std::move(targets)); }
+CommandPtr makeSetRegionAutomation(Uuid regionId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetRegionAutomationCmd>(regionId, std::move(target), std::move(points)); }
 CommandPtr makeSetAutomation(Uuid trackId, std::string target, std::vector<AutomationPoint> points) { return std::make_unique<SetAutomationCmd>(trackId, std::move(target), std::move(points)); }
 CommandPtr makeSetGroups(std::vector<Group> groups) { return std::make_unique<SetGroupsCmd>(std::move(groups)); }
 CommandPtr makeSetTrackOrder(std::vector<Uuid> order) { return std::make_unique<SetTrackOrderCmd>(std::move(order)); }
@@ -1213,6 +1375,8 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
         }
         if (type == "set_project_setting") return makeSetProjectSetting(j.at("key").get<std::string>(), j.at("value").get<std::string>());
         if (type == "set_tempo") return makeSetTempo(j.at("tick").get<Ticks>(), j.at("bpm").get<double>());
+        if (type == "convert_automation") return makeConvertAutomation(j.at("trackId").get<Uuid>(), j.at("toRegion").get<bool>(), j.value("targets", std::vector<std::string>{}));
+        if (type == "set_region_automation") return makeSetRegionAutomation(j.at("regionId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_automation") return makeSetAutomation(j.at("trackId").get<Uuid>(), j.at("target").get<std::string>(), j.at("points").get<std::vector<AutomationPoint>>());
         if (type == "set_region_fades") return makeSetRegionFades(j.at("regionId").get<Uuid>(), j.at("fadeIn").get<std::int64_t>(), j.at("fadeOut").get<std::int64_t>());
         if (type == "set_groups") return makeSetGroups(j.at("groups").get<std::vector<Group>>());
@@ -1245,6 +1409,8 @@ CommandPtr commandFromJson(const nlohmann::json& j) {
             if (j.contains("flexMode")) patch.flexMode = j["flexMode"].get<std::string>();
             if (j.contains("flexParams")) patch.flexParams = j["flexParams"].get<std::map<std::string, double>>();
             if (j.contains("automationMode")) patch.automationMode = j["automationMode"].get<std::string>();
+            if (j.contains("recordInRegions")) patch.recordInRegions = j["recordInRegions"].get<bool>();
+            if (j.contains("on")) patch.on = j["on"].get<bool>();
             if (j.contains("delayMs")) patch.delayMs = j["delayMs"].get<double>();
             if (j.contains("midi")) {
                 const auto& m = j["midi"];

@@ -1,7 +1,7 @@
 # Handoff: where the work stands
 
 Updated at every commit so that another session (or another AI) can resume. The detailed list is `docs/roadmap-autonomous.md` (sections E and F); this file is the short version.
-Last update: 2026-10-21, after the UI build and tests.
+Last update: 2026-10-23, after region automation and the rest of the list.
 
 ## Rules from the owner (Luigi, Italian-speaking)
 - Use ALL the reverse-engineering knowledge (Logic Pro 11.2) and `jad-daw-private` (nested git repo, ignored): do not skip anything.
@@ -17,10 +17,10 @@ F0, F0b converters and icon tracer; F1 presets (324) and Match EQ curves (75); F
 Everything is built and tested: core (`build-core`) 434 test cases, 1 skipped; UI QML 228, bridge 172 (1 skipped), all green. The UI had never been compiled before this day: only missing includes showed up.
 
 ## What is missing, in order
-1. G (the owner, 2026-10-21): graphical windows for the stock effects. Done: Channel EQ, Compressor, Limiter, Adaptive Limiter, Noise Gate, Mastering Assistant, Match EQ, Reverb, Delay, Neural Saturation, Synth (files `ui/qml/Fx*View.qml`, frame `FxShell.qml`, chosen in the Loader of `EffectEditorWindow.qml`). Also done since: EQ Analyzer (SpectrumTap), Q-Couple, Processing (Stereo/Left/Right/Mid/Side, param `processing`), Gate Monitor + Characteristics (`keyMonitor`, `keyMode`), compressor side chain filter. Drum Kit has its pad window (`FxDrumKitView`, no Logic reference exists for it). Left: External MIDI (still the knob grid; no reference), and G4 in the roadmap (what the windows draw but the engine does not do).
+1. G (the owner, 2026-10-21): graphical windows for the stock effects: all done now, including the Limiter Mode (Legacy/Precision), the Mastering Custom EQ and Spread, the Match EQ Learn buttons (Current and Reference, from what reaches the insert) and the External MIDI window (`FxExternalMidiView`: channel pads, port, bank, program, volume, pan). Not there: a real side chain routing between tracks (the Side Chain menu of the windows still says none).
 2. (done) Pattern tracks: the Pattern card of Create New Track makes a drum instrument track and opens the Step Sequencer.
-3. E1 sub-item: Record Automation with Audio Regions (Trim and Relative are done).
-4. Engine behaviour still only saved for: region automation priority and preset value for regions (there is no region automation in the model: it would need lanes per region, edits on split/trim/glue and an editing view), loadOnlyNeeded, resetRecordEnable, midiSendAfterLoad, assets copy flags (the project always keeps its own copy of the audio), trim start of new regions, allow tempo change recording. Done: balancer pan law, colorize takes, MIDI thru, erase duplicates, data reduction, metronome options and MIDI click, CAF bounce (`writeCaf`).
+3. (done 2026-10-23) E1: Record Automation with Audio/MIDI Regions (`Track::recordInRegions`, the Automation slot's menu).
+4. (done 2026-10-23, code first, tests written but only partly run) Region automation: `Region::automation` (ticks from the region start), `set_region_automation`, split/trim/join keep the lanes (`core/src/automation.cpp`), `playingLanes` lays them over the track's lanes with the two project choices, Mix > Region Automation and Convert Automation (`convert_automation`), the lanes are drawn in the regions (`AutomationLane.regionId`). Also done: track On/Off (`Track::on`, Only load plug-ins needed), Reset record enable state, MIDI settings sent after loading, Allow tempo change recording, Trim start of new regions (off by default, needs the analysis). Still only saved: the copy-assets flags (the project always keeps its audio, and project paths may not leave the folder).
 5. F7 done (ten glyphs wired, see roadmap). F8 macOS CI: confirmed green on run 39817637433 (all four jobs; core mac 6 min, UI mac 27 min, thanks to `--parallel 4`). 0.0.2 alpha released 2026-10-23.
 6. The replacement of the -12/+12 dB guess in `MasteringProcessor`: the Mac could not say what level the Analog Model networks expect (see mac-pass-3.md 2b/2e).
 

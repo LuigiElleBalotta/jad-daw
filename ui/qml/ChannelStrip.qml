@@ -104,6 +104,7 @@ Panel {
     signal instrumentEditorRequested(string id)                 // a double click on the instrument slot
     signal groupChosen(string id, string groupId)             // the Group slot's menu: "" none, "new" a new group, else a group
     signal groupSettingsRequested(string id)
+    signal recordInRegionsChosen(string id, bool on)         // Record Automation with Audio/MIDI Regions
     signal automationModeChosen(string id, string mode)      // the Automation slot's menu: off, read, touch, latch, write
     signal peakReset()                                          // a click on the peak field
 
@@ -221,6 +222,16 @@ Panel {
             }
             onObjectAdded: (index, object) => automationMenu.insertItem(index, object)
             onObjectRemoved: (index, object) => automationMenu.removeItem(object)
+        }
+        MenuSeparator {}
+        ThemedMenuItem {
+            objectName: "automationInRegions"
+            visible: root.kind === "audio" || root.kind === "instrument"
+            height: visible ? implicitHeight : 0
+            text: root.kind === "audio" ? qsTr("Record Automation with Audio Regions") : qsTr("Record Automation with MIDI Regions")
+            checkable: true
+            checked: root.info.recordInRegions ?? false
+            onTriggered: root.recordInRegionsChosen(root.trackId, !(root.info.recordInRegions ?? false))
         }
         MenuSeparator {}
         ThemedMenuItem {

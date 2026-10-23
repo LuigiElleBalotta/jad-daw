@@ -122,6 +122,7 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool toolbarVisible READ toolbarVisible WRITE setToolbarVisible NOTIFY barsChanged)          // View > Toolbar
     Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
     Q_PROPERTY(bool automationVisible READ automationVisible WRITE setAutomationVisible NOTIFY automationViewChanged)  // Mix > Show Automation
+    Q_PROPERTY(bool regionAutomationView READ regionAutomationView WRITE setRegionAutomationView NOTIFY automationViewChanged)  // Mix > Region Automation: the lanes belong to the regions, not the track
     Q_PROPERTY(int automationRevision READ automationRevision NOTIFY automationViewChanged)  // follows the per-track choices of the lanes
     Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume", "pan", "send1".."send4"
     Q_PROPERTY(bool metronomeOn READ metronomeOn NOTIFY metronomeChanged)  // the click while playing
@@ -284,6 +285,10 @@ public:
     // lane between their first and last point and are one undo step.
     Q_INVOKABLE void setAutomationMode(const QString& trackId, const QString& mode);
     Q_INVOKABLE QString automationMode(const QString& trackId) const;
+    Q_INVOKABLE void setTrackOn(const QString& trackId, bool on);  // the On/Off button of a track header
+    Q_INVOKABLE void toggleTrackOnSelected();                      // Track > Turn Track On/Off
+    Q_INVOKABLE void setRecordInRegions(const QString& trackId, bool on);  // Record Automation with Audio/MIDI Regions, in the Automation slot's menu
+    Q_INVOKABLE void convertAutomation(bool toRegion, bool visibleOnly);  // Mix > Convert Automation: track lanes <-> region lanes, of the lanes that are shown or of all of them
     Q_INVOKABLE void deleteAutomationOfSelected();  // Mix > Delete Automation: every lane of the selected tracks (one step)
     Q_INVOKABLE void createTrackAutomation();       // Mix > Create Track Automation: shows the lanes and takes the selected tracks out of Off
     // Group Settings window: for the group of this track ("" closes it)
@@ -320,11 +325,13 @@ public:
     Q_INVOKABLE QVariantList effectPresetMenu(const QString& processorId) const;
     Q_INVOKABLE void applyEffectPreset(const QString& trackId, int index, const QString& processorId, const QString& category, const QString& name);
     Q_INVOKABLE QStringList matchEqCurveNames() const;
+    Q_INVOKABLE void matchEqApplyBands(const QString& trackId, int index, const QVariantList& gains);  // the 31 bands written in one undo step (the Learn buttons compute them)
     Q_INVOKABLE void matchEqLearn(const QString& trackId, int index, const QString& curveName);  // reads the track's sound, writes the correction towards the curve
     // An instrument track's instrument: the choice (params start at their defaults) and one parameter of it (one undo step each)
     Q_INVOKABLE void setInstrument(const QString& trackId, const QString& processorId);
     Q_INVOKABLE QStringList midiOutputNames() const;                  // the MIDI output ports of the system
     Q_INVOKABLE void newExternalMidiTrack();                           // Track > New External MIDI Track
+    Q_INVOKABLE bool externalMidiSend(const QString& trackId, const QString& what, double value);  // "bankMsb", "bankLsb", "program", "volume" or "pan" of an External MIDI track, out of its port now
     Q_INVOKABLE bool externalMidiTestNote(const QString& trackId);     // a soft middle C out of the track's port, to hear it is connected
     Q_INVOKABLE void setExternalMidiDevice(const QString& trackId, const QString& device);
     Q_INVOKABLE void setInstrumentParam(const QString& trackId, const QString& param, double value);
@@ -413,6 +420,8 @@ public:
     Q_INVOKABLE void setLiveLink(bool on);
     Q_INVOKABLE QString liveLinkInfoPath() const;
     bool automationVisible() const { return automationVisible_; }
+    bool regionAutomationView() const { return regionAutomationView_; }
+    void setRegionAutomationView(bool on);
     void setAutomationVisible(bool on);
     QString automationParam() const { return automationParam_; }
     bool hasMarquee() const { return marqueeTo_ > marqueeFrom_; }
@@ -440,6 +449,10 @@ public:
     // What a track's lane can show: [{param, label}]: Volume, Pan, its sends and the automatable parameters of its VST3 inserts that are loaded
     Q_INVOKABLE QVariantList automationChoices(const QString& trackId) const;      // false for a send the track does not have
     Q_INVOKABLE void setAutomationPoints(const QString& trackId, const QString& param, const QVariantList& points);
+    // Region automation: the same for one region's lane. The beats are on the timeline (not counted from the region); a point outside the region is brought to its edge.
+    Q_INVOKABLE QVariantList regionAutomationPoints(const QString& regionId, const QString& param) const;
+    Q_INVOKABLE void setRegionAutomationPoints(const QString& regionId, const QString& param, const QVariantList& points);
+    Q_INVOKABLE bool regionHasAutomation(const QString& regionId) const;
     // Customize Control Bar and Display / Customize Toolbar: the parts of the bars that are shown ("cb.panels", "cb.transport", "cb.lcd", "cb.modes",
     // "cb.master", "tb.menus", "tb.tools", "tb.snap", "tb.heights", "tb.zoom", "tb.undo"); every part is on until the user turns it off. Kept in the settings.
     Q_PROPERTY(int barItemsRevision READ barItemsRevision NOTIFY barsChanged)
@@ -610,6 +623,7 @@ public:
     Q_INVOKABLE void flexQuantizeGroup(double gridBeats, double strengthPercent);                // Q-Reference: the first selected region goes to the grid, the others follow its hits
     Q_INVOKABLE void smartFollow(bool on);                                                       // Flex & Follow for the selected audio regions: their beats conform to the project tempo (Flex is turned on for their track)
     Q_INVOKABLE void smartFollowRegion(const QString& regionId, bool on);
+    Q_INVOKABLE void smartTrimRegion(const QString& regionId);  // Project Settings > Smart Tempo > Trim start of new regions: the start moves to the first downbeat of the sound
     Q_INVOKABLE void smartApplyRegionTempo(const QString& regionId);                             // the project tempo becomes the tempo found in the region
     Q_INVOKABLE void smartMoveBeat(const QString& regionId, int index, double fraction);         // Smart Tempo beat markers: a beat is where the sound has it, at `fraction` of the region
     Q_INVOKABLE void smartHint(const QString& regionId, double fraction, bool downbeat);        // Smart Tempo hints (D / T): the beat nearest the place opens a bar, or a beat is added there
@@ -1027,6 +1041,9 @@ private:
     void commitPluginState(const lpc::InsertSlot& slot);
     void commitPluginStates();
     void teardown();
+    void rememberArmed();           // Project Settings > General: with "Reset record enable state" off, the armed Software Instrument tracks are kept for the next opening
+    void restoreArmed();            // ... and with it on (the default) they are all let go when the project opens
+    void sendMidiSettings();        // Project Settings > MIDI: the volume and pan of External MIDI tracks go to their devices after loading
     static std::filesystem::path toPath(const QUrl& url);
 
     bool openAudioDevice_;
@@ -1052,7 +1069,7 @@ private:
     std::unique_ptr<lpc::audio::LiveMeter> liveMeter_;  // fed from the analyzer tap by editorLoudness
     std::uint64_t liveCursor_ = 0;
     double editorCh_[4] = {-120.0, -120.0, -120.0, -120.0};  // left and right going in, then left and right coming out
-    QStringList pendingSmartFollow_, pendingSmartTempo_;  // new audio regions the Smart Tempo project settings act on, when the next snapshot lists them
+    QStringList pendingSmartFollow_, pendingSmartTempo_, pendingSmartTrim_;  // new audio regions the Smart Tempo project settings act on, when the next snapshot lists them
     QStringList pendingRegionSelection_;  // ids of regions just pasted: selected when the next snapshot has them
     double nudgeBeats_ = 0.25;
     std::vector<const RegionRow*> selectedRegionRows() const;
@@ -1131,6 +1148,9 @@ private:
     std::filesystem::path templatesDir() const;
     int barItemsRevision_ = 0;
     bool automationVisible_ = false;
+    bool regionAutomationView_ = false;
+    nlohmann::json automationPointsJson(const QString& target, const QVariantList& points, double originBeats, double minBeats, double maxBeats) const;
+    const RegionRow* regionRow(const QString& id) const;
     bool metronome_ = false;
     bool autoInput_ = true;
     bool showHidden_ = false;

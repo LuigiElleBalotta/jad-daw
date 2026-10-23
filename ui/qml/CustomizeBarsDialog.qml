@@ -14,7 +14,7 @@ Dialog {
     background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
     header: Item { height: 0 }
     readonly property var parts: section === "th"
-        ? [{ key: "th.icon", label: qsTr("Track icon") }, { key: "th.arm", label: qsTr("Record Enable (R)") }, { key: "th.monitor", label: qsTr("Input Monitoring (I)") },
+        ? [{ key: "th.icon", label: qsTr("Track icon") }, { key: "th.onoff", label: qsTr("On/Off") }, { key: "th.arm", label: qsTr("Record Enable (R)") }, { key: "th.monitor", label: qsTr("Input Monitoring (I)") },
            { key: "th.mute", label: qsTr("Mute (M)") }, { key: "th.solo", label: qsTr("Solo (S)") }, { key: "th.sliders", label: qsTr("Volume and pan sliders") }]
         : section === "cb"
         ? [{ key: "cb.panels", label: qsTr("Panel buttons (Library, Inspector, Mixer, Editors …)") }, { key: "cb.transport", label: qsTr("Transport buttons") },

@@ -5,11 +5,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <set>
 #include <unordered_map>
 
 #include <nlohmann/json.hpp>
 
 #include "lpc/audio/processors.h"
+#include "lpc/automation.h"
 #include "lpc/processor_ids.h"
 
 namespace lpc {
@@ -98,8 +101,18 @@ bool stripChanged(const Track& a, const Track& b) {
     return a.strip.gainDb != b.strip.gainDb || a.strip.pan != b.strip.pan || a.strip.mono != b.strip.mono || a.strip.mute != b.strip.mute || a.strip.solo != b.strip.solo;
 }
 
+// The project settings that change what the tracks are built from: the two Region automation choices and "Only load plug-ins needed".
+std::string buildSettingsKey(const Project& p) {
+    std::string key;
+    for (const char* name : {"regionAutomationPriority", "presetValueForRegions", "loadOnlyNeeded"}) {
+        const auto it = p.settings.find(name);
+        key += (it == p.settings.end() ? "-" : it->second) + "|";
+    }
+    return key;
+}
+
 bool configChanged(const Track& a, const Track& b) {
-    return a.kind != b.kind || a.midi != b.midi || a.delayMs != b.delayMs || a.freeze != b.freeze || a.automation != b.automation || a.automationMode != b.automationMode || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
+    return a.kind != b.kind || a.midi != b.midi || a.delayMs != b.delayMs || a.freeze != b.freeze || a.automation != b.automation || a.automationMode != b.automationMode || a.on != b.on || a.regions != b.regions || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
            a.strip.sends != b.strip.sends || a.strip.output != b.strip.output;
 }
 
@@ -216,7 +229,8 @@ PdcPlan computePdc(const Project& p, IPluginHost* plugins) {
 // The automation lanes of the sends of a track: cfg->sends is in the order of t.strip.sends.
 void fillSendAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
     if (t.automationMode == "off") return;
-    for (const AutomationLane& lane : t.automation) {
+    const std::vector<AutomationLane> lanes = playingLanes(p, t);
+    for (const AutomationLane& lane : lanes) {
         if (lane.target.rfind("send:", 0) != 0 || lane.points.empty()) continue;
         const auto id = Uuid::parse(lane.target.substr(5));
         if (!id) continue;
@@ -230,29 +244,18 @@ void fillSendAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
 
 // The volume and pan of a track while it plays: its lane, plus the Relative lane ("volume.rel", "pan.rel": dB, or a pan offset) when there is one. The two curves
 // are added at every point of either one, and inside a curved segment at a few more places. Without a Relative lane this is the lane as it is.
-double laneValueAt(const std::vector<AutomationPoint>& pts, Ticks tick, double fallback) {
-    if (pts.empty()) return fallback;
-    if (tick <= pts.front().tick) return pts.front().value;
-    if (tick >= pts.back().tick) return pts.back().value;
-    std::size_t i = 0;
-    while (i + 1 < pts.size() && pts[i + 1].tick <= tick) ++i;
-    const AutomationPoint& a = pts[i];
-    const AutomationPoint& b = pts[i + 1];
-    double t = static_cast<double>(tick - a.tick) / static_cast<double>(std::max<Ticks>(1, b.tick - a.tick));
-    if (a.curve != 0.0) t = std::pow(t, std::exp2(2.0 * a.curve));
-    return a.value + (b.value - a.value) * t;
-}
+double laneValueAt(const std::vector<AutomationPoint>& pts, Ticks tick, double fallback) { return automationValueAt(pts, tick, fallback); }
 
-const std::vector<AutomationPoint>* findLane(const Track& t, const std::string& target) {
-    for (const AutomationLane& lane : t.automation)
+const std::vector<AutomationPoint>* findLane(const std::vector<AutomationLane>& lanes, const std::string& target) {
+    for (const AutomationLane& lane : lanes)
         if (lane.target == target) return &lane.points;
     return nullptr;
 }
 
-std::vector<AutomationPoint> effectiveLane(const Track& t, const std::string& target, double base) {
+std::vector<AutomationPoint> effectiveLane(const std::vector<AutomationLane>& lanes, const std::string& target, double base) {
     static const std::vector<AutomationPoint> none;
-    const std::vector<AutomationPoint>* primary = findLane(t, target);
-    const std::vector<AutomationPoint>* relative = findLane(t, target + ".rel");
+    const std::vector<AutomationPoint>* primary = findLane(lanes, target);
+    const std::vector<AutomationPoint>* relative = findLane(lanes, target + ".rel");
     if (!relative || relative->empty()) return primary ? *primary : none;
     const std::vector<AutomationPoint>& a = primary ? *primary : none;
     std::vector<Ticks> ticks;
@@ -282,10 +285,11 @@ std::vector<AutomationPoint> effectiveLane(const Track& t, const std::string& ta
 
 void fillFaderAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
     if (t.automationMode == "off") return;  // the fader and the pan stay where the strip has them
+    const std::vector<AutomationLane> lanes = playingLanes(p, t);
     for (const char* target : {"volume", "pan"}) {
         const bool volume = std::string(target) == "volume";
         std::vector<AutoPoint>& out = volume ? cfg.volumeAuto : cfg.panAuto;
-        for (const AutomationPoint& pt : effectiveLane(t, target, volume ? static_cast<double>(t.strip.gainDb) : static_cast<double>(t.strip.pan)))
+        for (const AutomationPoint& pt : effectiveLane(lanes, target, volume ? static_cast<double>(t.strip.gainDb) : static_cast<double>(t.strip.pan)))
             out.push_back(AutoPoint{toFrames(p.tempoMap.ticksToSamples(pt.tick, p.sampleRate)), volume ? dbToLinear(static_cast<float>(pt.value)) : static_cast<float>(pt.value), static_cast<float>(pt.curve)});
     }
 }
@@ -293,6 +297,12 @@ void fillFaderAutomation(const Project& p, const Track& t, TrackConfig& cfg) {
 std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, MediaStore& media, IPluginHost* plugins, const PdcPlan* pdc) {
     auto cfg = std::make_unique<TrackConfig>();
     cfg->outputPair = t.outputPair;
+    cfg->off = !t.on;
+    const bool loadOnlyNeeded = [&] {
+        const auto it = p.settings.find("loadOnlyNeeded");
+        return it != p.settings.end() && (it->second == "1" || it->second == "true");
+    }();
+    const bool skipPlugins = cfg->off && loadOnlyNeeded;  // an Off track does not load its plug-ins when the project only loads what playback needs
     if (t.freeze) {  // the rendered audio replaces the instrument, the regions and the inserts; the strip, the sends and the output stay live
         cfg->frozen = true;
         if (const MediaItem* item = p.findMedia(t.freeze->mediaId))
@@ -318,7 +328,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
     }
     const std::int64_t delay = static_cast<std::int64_t>(std::llround(t.delayMs * static_cast<double>(p.sampleRate) / 1000.0));  // Track Delay, in frames
     for (const Region& r : t.regions) {
-        if (r.muted) continue;  // Mute Regions: it stays in the project but does not play
+        if (r.muted || cfg->off) continue;  // Mute Regions: it stays in the project but does not play (nor does anything on a track that is turned off)
         RegionPlayback rp;
         rp.startFrame = regionFrame(p, r, r.start) + delay;
         rp.endFrame = regionFrame(p, r, r.start + r.length) + delay;
@@ -379,7 +389,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
     if (t.instrument) cfg->synthParams = synthParamsOf(*t.instrument);
     if (t.instrument && isVst3Id(t.instrument->processorId)) {  // the notes go to a plug-in; silence while it is missing, loading or bypassed
         std::shared_ptr<IInstrument> live;
-        if (plugins && !t.instrument->bypass)
+        if (plugins && !t.instrument->bypass && !skipPlugins)
             live = plugins->acquireInstrument(InsertSlot{t.id, kInstrumentSlot}, *t.instrument, static_cast<double>(p.sampleRate), kMaxBlock);
         cfg->instrument = live ? live : std::make_shared<SilentInstrument>(true);
     }
@@ -398,6 +408,10 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
     int slotIndex = 0;
     std::vector<int> builtAt(t.strip.inserts.size(), -1);  // where each insert of the model ended up in the config
     for (const ProcessorRef& ref : t.strip.inserts) {
+        if (skipPlugins) {
+            ++slotIndex;
+            continue;
+        }
         if (auto effect = makeInsert(ref, plugins, InsertSlot{t.id, slotIndex}, static_cast<double>(p.sampleRate), kMaxBlock)) {
             builtAt[static_cast<std::size_t>(slotIndex)] = static_cast<int>(cfg->inserts.size());
             cfg->inserts.push_back(std::move(effect));
@@ -405,7 +419,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
         ++slotIndex;
     }
     if (t.automationMode != "off")  // the lanes that drive a parameter of a plug-in insert
-        for (const AutomationLane& lane : t.automation) {
+        for (const AutomationLane& lane : playingLanes(p, t)) {
             const auto target = parseParamTarget(lane.target);
             if (!target || lane.points.empty()) continue;
             int seen = 0, built = -1;
@@ -460,7 +474,7 @@ std::vector<AudioMsg> diffToMessages(const Project& before, const Project& after
     const PdcPlan planBefore = plan ? *plan : computePdc(before, nullptr);
     const PdcPlan planAfter = computePdc(after, plugins);
     bool structural = false;
-    const bool timingChanged = before.tempoMap != after.tempoMap || before.sampleRate != after.sampleRate;
+    const bool timingChanged = before.tempoMap != after.tempoMap || before.sampleRate != after.sampleRate || buildSettingsKey(before) != buildSettingsKey(after);
 
     for (const Track& a : after.tracks) {
         if (!before.findTrack(a.id)) {

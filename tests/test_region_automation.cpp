@@ -1,0 +1,137 @@
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <random>
+
+#include "lpc/automation.h"
+#include "lpc/commands.h"
+#include "lpc/model_json.h"
+
+using namespace lpc;
+
+namespace {
+std::mt19937_64 gRng(4242);
+
+struct Setup {
+    Project p{Uuid::random(gRng)};
+    Track track;
+    Region region;
+    Setup() {
+        track.id = Uuid::random(gRng);
+        track.kind = TrackKind::Instrument;
+        track.name = "Keys";
+        track.instrument = ProcessorRef{"builtin.sine", {}, ""};
+        REQUIRE(makeAddTrack(track)->apply(p).ok());
+        region.id = Uuid::random(gRng);
+        region.start = 0;
+        region.length = 3840;  // four beats
+        REQUIRE(makeAddRegion(track.id, region)->apply(p).ok());
+    }
+    const Track& t() const { return *p.findTrack(track.id); }
+};
+}  // namespace
+
+TEST_CASE("region automation: a lane is set on the region, saved and undone", "[region-automation]") {
+    Setup s;
+    auto r = makeSetRegionAutomation(s.region.id, "volume", {{0, -12.0, 0.0}, {3840, 0.0, 0.0}})->apply(s.p);
+    REQUIRE(r.ok());
+    REQUIRE(s.t().regions[0].automation.size() == 1);
+    REQUIRE(s.t().automation.empty());  // the track's own lanes are untouched
+    const Region saved = nlohmann::json(s.t().regions[0]).get<Region>();
+    REQUIRE(saved == s.t().regions[0]);
+    REQUIRE(r.inverse->apply(s.p).ok());
+    REQUIRE(s.t().regions[0].automation.empty());
+    REQUIRE(!makeSetRegionAutomation(s.region.id, "nonsense", {{0, 0.0, 0.0}})->apply(s.p).ok());
+}
+
+TEST_CASE("region automation: cutting a lane keeps the values", "[region-automation]") {
+    const std::vector<AutomationPoint> lane{{0, -12.0, 0.0}, {3840, 0.0, 0.0}};
+    const auto head = cutAutomation(lane, 0, 1920);
+    REQUIRE(head.size() == 2);
+    REQUIRE(head.back().tick == 1920);
+    REQUIRE(head.back().value == Catch::Approx(-6.0));
+    const auto tail = cutAutomation(lane, 1920, 3840);
+    REQUIRE(tail.front().value == Catch::Approx(-6.0));
+    REQUIRE(tail.back().value == Catch::Approx(0.0));
+}
+
+TEST_CASE("region automation: a split gives each part its span, a join puts them back", "[region-automation]") {
+    Setup s;
+    REQUIRE(makeSetRegionAutomation(s.region.id, "volume", {{0, -12.0, 0.0}, {3840, 0.0, 0.0}})->apply(s.p).ok());
+    const Uuid right = Uuid::random(gRng);
+    REQUIRE(makeSplitRegion(s.region.id, 1920, right)->apply(s.p).ok());
+    REQUIRE(s.t().regions.size() == 2);
+    REQUIRE(s.t().regions[0].automation[0].points.back().value == Catch::Approx(-6.0));
+    REQUIRE(s.t().regions[1].automation[0].points.front().value == Catch::Approx(-6.0));
+    REQUIRE(s.t().regions[1].automation[0].points.front().tick == 0);
+    REQUIRE(makeJoinRegions({s.region.id, right})->apply(s.p).ok());
+    REQUIRE(s.t().regions.size() == 1);
+    const auto& pts = s.t().regions[0].automation[0].points;
+    REQUIRE(pts.front().value == Catch::Approx(-12.0));
+    REQUIRE(pts.back().value == Catch::Approx(0.0));
+    REQUIRE(pts.back().tick == 3840);
+}
+
+TEST_CASE("region automation: trimming the start moves the lane with it", "[region-automation]") {
+    Setup s;
+    REQUIRE(makeSetRegionAutomation(s.region.id, "pan", {{0, -1.0, 0.0}, {3840, 1.0, 0.0}})->apply(s.p).ok());
+    REQUIRE(makeResizeRegion(s.region.id, 1920, 1920)->apply(s.p).ok());
+    const auto& pts = s.t().regions[0].automation[0].points;
+    REQUIRE(pts.front().value == Catch::Approx(0.0));
+    REQUIRE(pts.back().value == Catch::Approx(1.0));
+}
+
+TEST_CASE("region automation: the lanes a track plays follow the two project choices", "[region-automation]") {
+    Setup s;
+    s.p.findTrack(s.track.id)->strip.gainDb = -3.0f;
+    REQUIRE(makeSetRegionAutomation(s.region.id, "volume", {{0, -12.0, 0.0}, {3840, 0.0, 0.0}})->apply(s.p).ok());
+    const auto valueOf = [&](bool priority, bool preset, Ticks tick) {
+        for (const AutomationLane& lane : overlayRegionLanes(s.p, s.t(), priority, preset))
+            if (lane.target == "volume") return automationValueAt(lane.points, tick, 99.0);
+        return 99.0;
+    };
+    REQUIRE(valueOf(true, false, 1920) == Catch::Approx(-6.0).margin(0.01));  // inside the region the region's lane plays
+    REQUIRE(valueOf(true, false, 6000) == Catch::Approx(0.0));   // after it the last value holds
+    REQUIRE(valueOf(true, true, 6000) == Catch::Approx(-3.0));   // or the fader's own value with the preset choice
+
+    REQUIRE(makeSetAutomation(s.track.id, "volume", {{0, -20.0, 0.0}})->apply(s.p).ok());
+    REQUIRE(valueOf(true, false, 1920) == Catch::Approx(-6.0).margin(0.01));    // the region wins over the track's lane ...
+    REQUIRE(valueOf(true, false, 6000) == Catch::Approx(-20.0));   // ... and the track's lane takes over after it
+    REQUIRE(valueOf(false, false, 1920) == Catch::Approx(-20.0));  // with priority off the track's lane stays
+}
+
+TEST_CASE("region automation: converting between track and region lanes is one undo step", "[region-automation]") {
+    Setup s;
+    REQUIRE(makeSetAutomation(s.track.id, "volume", {{0, -12.0, 0.0}, {3840, 0.0, 0.0}})->apply(s.p).ok());
+    auto toRegion = makeConvertAutomation(s.track.id, true, {})->apply(s.p);
+    REQUIRE(toRegion.ok());
+    REQUIRE(s.t().automation.empty());
+    REQUIRE(s.t().regions[0].automation.size() == 1);
+    REQUIRE(toRegion.inverse->apply(s.p).ok());
+    REQUIRE(s.t().automation.size() == 1);
+    REQUIRE(s.t().regions[0].automation.empty());
+
+    REQUIRE(makeConvertAutomation(s.track.id, true, {})->apply(s.p).ok());
+    auto toTrack = makeConvertAutomation(s.track.id, false, {})->apply(s.p);
+    REQUIRE(toTrack.ok());
+    REQUIRE(s.t().regions[0].automation.empty());
+    REQUIRE(s.t().automation.size() == 1);
+    REQUIRE(automationValueAt(s.t().automation[0].points, 1920, 99.0) == Catch::Approx(-6.0).margin(0.01));
+    REQUIRE(!makeConvertAutomation(s.track.id, false, {})->apply(s.p).ok());  // nothing left to convert
+}
+
+TEST_CASE("track on/off and record in regions are kept and undone", "[region-automation]") {
+    Setup s;
+    TrackPatch patch;
+    patch.on = false;
+    patch.recordInRegions = true;
+    auto r = makeSetTrackProps(s.track.id, patch)->apply(s.p);
+    REQUIRE(r.ok());
+    REQUIRE(!s.t().on);
+    REQUIRE(s.t().recordInRegions);
+    const Track saved = nlohmann::json(s.t()).get<Track>();
+    REQUIRE(!saved.on);
+    REQUIRE(saved.recordInRegions);
+    REQUIRE(r.inverse->apply(s.p).ok());
+    REQUIRE(s.t().on);
+    REQUIRE(!s.t().recordInRegions);
+}

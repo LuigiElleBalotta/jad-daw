@@ -263,7 +263,10 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     float* l = t.l.data();
     float* r = t.r.data();
     TrackConfig* cfg = t.config;
-    if (cfg) {
+    if (cfg && cfg->off) {  // turned off: nothing plays, nothing is processed, the strip still passes silence on
+        std::fill_n(l, n, 0.0f);
+        std::fill_n(r, n, 0.0f);
+    } else if (cfg) {
         if (withRegions) {
             if (t.kind == TrackKind::Audio || cfg->frozen) renderAudio(t, *cfg, blockStart, n);
             else if (t.kind == TrackKind::Instrument && cfg->instrument) renderPluginInstrument(t, *cfg, blockStart, n, true);

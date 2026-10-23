@@ -207,6 +207,17 @@ Instruments: the **Synth** (waveform, envelope, cutoff, level) and the **Drum Ki
 
 Set a track's **automation mode** in its strip: Read plays the lane back; Touch, Latch and Write record the moves of the fader and the pan while the project plays
 (Touch only while the control is held, Latch from the first touch to the end, Write all the time). The `T-` and `R-` variants record a Trim or a Relative offset.
+The same menu has **Record Automation with Audio Regions** (or MIDI Regions on an instrument track): what is recorded goes into the regions under it instead of the
+track's lane.
+
+**Region automation** (Mix > Region Automation) draws the lanes inside the regions instead of over the track. A region's lanes move, copy, split, trim and glue with
+it. While a region has a lane for a parameter, the track's lane for it is suspended between the region's start and end (Project Settings > General > *Region
+automation takes priority over track automation*); a region with no lane holds the last value of the one before it, or the parameter's own value with *Use preset
+parameter value for regions without region automation*. **Mix > Convert Automation** turns the track's lanes into region lanes and back, for the lanes that are
+shown or for all of them.
+
+The **On** button of a track header (Track > Turn Track On/Off) turns a track off: it plays nothing and runs no plug-in. With *Only load plug-ins needed for
+playback* its plug-ins are not even loaded.
 
 **Global tracks** (`G`) put the Arrangement, Marker, Tempo, Signature and Chord lanes above the tracks: a place to name sections, change the tempo and the meter,
 and write the chords that Session Players follow.
@@ -263,7 +274,6 @@ The menus are laid out as in Logic:
 ## What is not there yet
 
 Some menu commands are present but say "not implemented yet" when chosen: printing and page setup, the Movie window, Dolby Atmos, the Mac window sets,
-conversion of regions to a Sampler track, Live Loops. A few settings are saved with the project but do not change the sound yet: region automation
-priority, loading only the plug-ins needed for playback, copying assets on import. There is no region automation (only track automation).
-The Custom EQ and Spread of the Mastering Assistant, and the live spectrum of the reference in Match EQ, are missing. The plug-in windows
+conversion of regions to a Sampler track, Live Loops. Imported audio is always copied into the project folder, so the choices about copying assets do nothing.
+Match EQ's Learn buttons listen to what reaches the insert (there is no side chain routing yet). The plug-in windows
 of the stock effects are our own drawings in Logic's style, not Apple's. The file [docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.

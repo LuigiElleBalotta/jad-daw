@@ -15,6 +15,16 @@
 
 namespace jad {
 
+void ProjectController::matchEqApplyBands(const QString& trackId, int index, const QVariantList& gains) {
+    if (!host_ || gains.size() != lpc::kMatchEqBands) return;
+    nlohmann::json commands = nlohmann::json::array();
+    for (int b = 0; b < lpc::kMatchEqBands; ++b) {
+        const double g = gains.at(b).toDouble();
+        commands.push_back({{"type", "set_insert_param"}, {"trackId", trackId.toStdString()}, {"index", index}, {"param", "b" + std::to_string(b)}, {"value", std::isfinite(g) ? std::clamp(g, -30.0, 30.0) : 0.0}});
+    }
+    sendCommand({{"type", "transaction"}, {"commands", commands}});
+}
+
 void ProjectController::matchEqLearn(const QString& trackId, int index, const QString& curveName) {
     if (!host_ || !effectPresets_) return;
     if (masteringBusy_) {

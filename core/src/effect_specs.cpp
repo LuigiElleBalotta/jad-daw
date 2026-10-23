@@ -55,7 +55,8 @@ std::vector<EffectSpec> build() {
                   p("inputGain", "Input Gain", "dB", -30, 30, 0), p("outputGain", "Output Gain", "dB", -30, 30, 0)}});
     v.push_back({kProcLimiter, "Limiter", "Dynamics",
                  {p("gain", "Gain", "dB", -20, 20, 0), p("lookahead", "Lookahead", "ms", 0, 10, 5), p("softKnee", "Soft Knee", "", 0, 1, 1),
-                  p("release", "Release", "ms", 2, 2000, 250, true), p("ceiling", "Output Level", "dB", -10, 1, 0), p("truePeak", "True Peak Detection", "", 0, 1, 1)}});
+                  p("release", "Release", "ms", 2, 2000, 250, true), p("ceiling", "Output Level", "dB", -10, 1, 0), p("truePeak", "True Peak Detection", "", 0, 1, 1),
+                  p("mode", "Mode (0 Legacy: soft knee, 1 Precision: hard limiting, true peak)", "", 0, 1, 1)}});
     v.push_back({kProcAdaptiveLimiter, "Adaptive Limiter", "Dynamics",
                  {p("inputScale", "Input Scale", "dB", -12, 12, 0), p("gain", "Gain", "dB", 0, 12, 3), p("ceiling", "Out Ceiling", "dB", -2, 0, 0),
                   p("mode", "Mode (0 low, 1 average, 2 high)", "", 0, 2, 1), p("lookahead", "Lookahead", "ms", 0, 100, 50), p("removeDc", "Remove DC Offset", "", 0, 1, 1)}});
@@ -90,6 +91,15 @@ std::vector<EffectSpec> build() {
                                    p("character", "Character (0-3)", "", 0, 3, 0), p("bypass", "Bypass", "", 0, 1, 0),
                                    p("compensate", "Loudness Compensation", "", 0, 1, 0), p("gain", "Analysed Gain", "dB", -24, 36, 0), p("compTrim", "Compensation Trim", "dB", -12, 12, 0)};
         for (int i = 1; i <= 8; ++i) m.push_back(p(("eq" + std::to_string(i)).c_str(), ("Analysed EQ " + std::to_string(i)).c_str(), "dB", -12, 12, 0));
+        // Custom EQ (three broad bands on top of the analysis) and Spread (the width of the mix: 0 is mono, 100 is as it is, 200 twice as wide)
+        m.push_back(p("customEq", "Custom EQ", "", 0, 1, 0));
+        m.push_back(p("cLowFreq", "Custom Low Frequency", "Hz", 20, 200, 100, true));
+        m.push_back(p("cLowGain", "Custom Low Gain", "dB", -6, 6, 0));
+        m.push_back(p("cMidFreq", "Custom Mid Frequency", "Hz", 200, 8000, 1000, true));
+        m.push_back(p("cMidGain", "Custom Mid Gain", "dB", -6, 6, 0));
+        m.push_back(p("cHighFreq", "Custom High Frequency", "Hz", 8000, 20000, 12000, true));
+        m.push_back(p("cHighGain", "Custom High Gain", "dB", -6, 6, 0));
+        m.push_back(p("width", "Spread Width", "%", 0, 200, 100));
         v.push_back({kProcMastering, "Mastering Assistant", "Mastering", std::move(m)});
     }
     return v;
@@ -98,7 +108,9 @@ std::vector<EffectSpec> build() {
 std::vector<EffectSpec> buildInstruments() {
     std::vector<EffectSpec> v;
     v.push_back({kProcSine, "Sine", "Instruments", {}});
-    v.push_back({kProcExternalMidi, "External MIDI", "Instruments", {p("channel", "MIDI Channel", "", 1, 16, 1)}});
+    v.push_back({kProcExternalMidi, "External MIDI", "Instruments",
+                 {p("channel", "MIDI Channel", "", 1, 16, 1), p("bankMsb", "Bank MSB (0 sends nothing, n sends n - 1)", "", 0, 128, 0), p("bankLsb", "Bank LSB (0 sends nothing, n sends n - 1)", "", 0, 128, 0),
+                  p("program", "Program (0 sends nothing, n sends n - 1)", "", 0, 128, 0), p("volume", "Volume (controller 7)", "", 0, 127, 100), p("pan", "Pan (controller 10)", "", 0, 127, 64)}});
     v.push_back({kProcDrums, "Drum Kit", "Instruments", {p("level", "Level", "dB", -24, 6, -6)}});
     v.push_back({kProcSynth, "Synth", "Instruments",
                  {p("wave", "Waveform (0 sine, 1 triangle, 2 saw, 3 square)", "", 0, 3, 2), p("attack", "Attack", "ms", 0.5, 2000, 5, true),

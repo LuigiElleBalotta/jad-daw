@@ -372,7 +372,7 @@ Item {
         }
 
         Repeater {  // the automation lanes, over the rows while Show Automation is on
-            model: root.project.automationVisible ? root.project.tracks : null
+            model: root.project.automationVisible && !root.project.regionAutomationView ? root.project.tracks : null
             delegate: AutomationLane {
                 required property int index
                 project: root.project
@@ -384,6 +384,26 @@ Item {
                 y: index * root.rowHeight - root.scrollY
                 width: body.width
                 height: root.rowHeight
+            }
+        }
+
+        Repeater {  // Region Automation: each region has its own lanes, drawn inside it
+            model: root.project.automationVisible && root.project.regionAutomationView ? root.project.regions : null
+            delegate: AutomationLane {
+                required property int index
+                project: root.project
+                regionId: model.regionId
+                trackId: model.trackId
+                param: { root.project.automationRevision; return root.project.automationParamFor(model.trackId) }
+                onParameterRequested: (id) => root.automationParameterRequested(id)
+                pixelsPerBeat: root.pixelsPerBeat
+                scrollBeats: model.startBeats          // x = 0 is the start of the region
+                snapBeats: root.snapBeats
+                x: root.beatsToX(model.startBeats)
+                y: model.trackIndex * root.rowHeight - root.scrollY + 2
+                width: model.lengthBeats * root.pixelsPerBeat
+                height: root.rowHeight - 4
+                visible: x + width > 0 && x < body.width
             }
         }
 

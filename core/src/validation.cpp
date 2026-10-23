@@ -1,4 +1,5 @@
 #include "lpc/validation.h"
+#include "lpc/sampler.h"
 #include "lpc/flex_model.h"
 #include "lpc/effect_specs.h"
 
@@ -135,6 +136,10 @@ MaybeError checkInstrument(const ProcessorRef& instrument) {
     if (isVst3Id(instrument.processorId)) return checkInsert(instrument);
     if (instrument.processorId.rfind("vst3:", 0) == 0) return CommandError{"bad_value", "malformed plug-in id: " + instrument.processorId};
     if (!isKnownInstrument(instrument.processorId)) return CommandError{"bad_value", "unknown instrument: " + instrument.processorId};
+    if (instrument.processorId == kProcSampler && !instrument.state.empty()) {
+        const std::string problem = checkSamplerZones(samplerZonesOf(instrument));
+        if (!problem.empty()) return CommandError{"bad_value", problem};
+    }
     return std::nullopt;
 }
 
@@ -273,6 +278,9 @@ MaybeError checkProject(const Project& p) {
         if (wantsInstrument != t.instrument.has_value()) return CommandError{"invalid_kind", "exactly instrument tracks need an instrument"};
         if (wantsInstrument)
             if (auto e = checkInstrument(*t.instrument)) return e;
+        if (wantsInstrument)
+            for (const Uuid& id : samplerMediaIds(*t.instrument))
+                if (!p.findMedia(id)) return CommandError{"not_found", "a sampler zone plays a file that is not in the media pool"};
         for (const ProcessorRef& ins : t.strip.inserts)
             if (auto e = checkInsert(ins)) return e;
         if (!t.strip.output.isNull()) {

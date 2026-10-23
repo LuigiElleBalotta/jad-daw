@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "lpc/audio/processors.h"
+#include "lpc/audio/sampler.h"
 #include "lpc/automation.h"
 #include "lpc/processor_ids.h"
 
@@ -393,6 +394,8 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             live = plugins->acquireInstrument(InsertSlot{t.id, kInstrumentSlot}, *t.instrument, static_cast<double>(p.sampleRate), kMaxBlock);
         cfg->instrument = live ? live : std::make_shared<SilentInstrument>(true);
     }
+    if (t.instrument && t.instrument->processorId == kProcSampler)  // the notes play the zones of the sampler
+        cfg->instrument = audio::makeSamplerInstrument(*t.instrument, p, media, static_cast<double>(p.sampleRate));
     if (t.instrument && t.instrument->processorId == kProcExternalMidi) {  // the notes go out of a MIDI port; silence when it cannot be opened
         std::shared_ptr<IMidiOutput> out;
         if (plugins && !t.instrument->bypass) {

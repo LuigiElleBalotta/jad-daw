@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -28,6 +29,7 @@
 #include "lpc/flex_time.h"
 #include "lpc/model_json.h"
 #include "lpc/project_host.h"
+#include "lpc/sampler.h"
 #include "lpc/session_player.h"
 #include "lpc/processor_ids.h"
 #include "lpc/tempo_analysis.h"
@@ -1632,6 +1634,170 @@ void ProjectController::appendDrumHitsTrack(nlohmann::json& commands, const Regi
                              {"sourceOffsetFrames", 0}, {"gainDb", 0}, {"notes", notes}, {"name", "Drum Hits"}};
     commands.push_back({{"type", "add_track"}, {"index", -1}, {"track", track}});
     commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"region", region}});
+}
+
+// Track > Convert Regions to New Sampler Track. Every selected audio region (or, with "transients", every part of it between two transients) becomes a zone of a Sampler
+// on a new instrument track below the first selected region's track, and a MIDI region with the zone's trigger note is put where the sound was; the audio regions
+// that were converted are muted. The trigger notes go up from the lowest note of the range; with "mapEvenly" the zones share the keys of the range between them.
+void ProjectController::convertRegionsToSampler(const QVariantMap& options) {
+    if (!host_) return;
+    struct Source { QString id, trackId, mediaId, name; double startBeats, lengthBeats; std::int64_t offset, frames; std::string json; std::filesystem::path file; };
+    std::vector<Source> sources;
+    for (const RegionRow* r : selectedRegionRows()) {
+        if (!r->audio || r->missing || r->lengthFrames <= 0) continue;
+        sources.push_back({r->id, r->trackId, r->mediaId, r->name, r->startBeats, r->lengthBeats, r->sourceOffsetFrames, r->lengthFrames, r->json,
+                           mediaPath(dir_, mediaPaths_.value(r->mediaId))});
+    }
+    if (sources.empty()) {
+        emit notice("Select audio regions to convert");
+        return;
+    }
+    const bool transients = options.value("source").toString() == QLatin1String("transients");
+    const bool oneShot = options.value("oneShot").toBool(), evenly = options.value("mapEvenly").toBool();
+    const int low = std::clamp(options.value("low", 36).toInt(), 0, 127), high = std::clamp(options.value("high", 96).toInt(), low, 127);
+    const int rate = sampleRate_;
+    QPointer<ProjectController> self(this);
+    const std::uint64_t generation = generation_;
+    emit notice(transients ? "Looking for the transients…" : "Making the sampler…");
+    (void)QtConcurrent::run([self, sources, transients, oneShot, evenly, low, high, rate, generation] {
+        struct Slice { std::size_t source; std::int64_t from, to; };  // frames inside the region
+        std::vector<Slice> slices;
+        for (std::size_t i = 0; i < sources.size(); ++i) {
+            std::vector<std::int64_t> cuts{0};
+            if (transients) {
+                try {
+                    const lpc::WavData wav = readWindow(sources[i].file, sources[i].offset, sources[i].frames);
+                    for (std::int64_t t : lpc::findTransients(wav, 0.5))
+                        if (t > cuts.back() + rate / 50 && t < sources[i].frames - rate / 50) cuts.push_back(t);  // parts shorter than 20 ms are not zones
+                } catch (const std::exception&) {
+                }
+            }
+            cuts.push_back(sources[i].frames);
+            for (std::size_t k = 0; k + 1 < cuts.size(); ++k) slices.push_back({i, cuts[k], cuts[k + 1]});
+        }
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self, sources, slices, oneShot, evenly, low, high, generation] {
+            if (!self || generation != self->generation_ || !self->host_) return;
+            const int keys = high - low + 1;
+            const int count = std::min<int>(static_cast<int>(slices.size()), evenly ? 256 : keys);
+            if (count <= 0) return;
+            std::vector<lpc::SamplerZone> zones;
+            nlohmann::json commands = nlohmann::json::array();
+            const std::string nullId = "00000000-0000-0000-0000-000000000000";
+            const QString trackId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            std::vector<nlohmann::json> regions;
+            for (int z = 0; z < count; ++z) {
+                const Slice& sl = slices[static_cast<std::size_t>(z)];
+                const Source& src = sources[sl.source];
+                const int lo = evenly ? low + z * keys / count : low + z;
+                const int hi = evenly ? std::max(lo, low + (z + 1) * keys / count - 1) : lo;
+                lpc::SamplerZone zone;
+                const auto media = lpc::Uuid::parse(src.mediaId.toStdString());
+                if (!media) continue;
+                zone.mediaId = *media;
+                zone.name = (src.name.isEmpty() ? QStringLiteral("Zone") : src.name).toStdString() + (slices.size() > sources.size() ? " " + std::to_string(z + 1) : std::string());
+                zone.root = lo;
+                zone.lo = lo;
+                zone.hi = hi;
+                zone.start = src.offset + sl.from;
+                zone.end = src.offset + sl.to;
+                zone.oneShot = oneShot;
+                zones.push_back(zone);
+                // the trigger region: where the sound was, with one note on the zone's key
+                const lpc::Ticks regionStart = static_cast<lpc::Ticks>(std::llround(src.startBeats * lpc::kPPQ));
+                const double startSamples = self->tempoMap_.ticksToSamples(regionStart, self->sampleRate_);
+                const lpc::Ticks from = static_cast<lpc::Ticks>(self->tempoMap_.samplesToTicks(startSamples + static_cast<double>(sl.from), self->sampleRate_));
+                const lpc::Ticks to = static_cast<lpc::Ticks>(self->tempoMap_.samplesToTicks(startSamples + static_cast<double>(sl.to), self->sampleRate_));
+                const std::int64_t length = std::max<std::int64_t>(1, to - from);
+                regions.push_back({{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"}, {"start", from}, {"length", length},
+                                   {"mediaId", nullId}, {"sourceOffsetFrames", 0}, {"gainDb", 0},
+                                   {"notes", nlohmann::json::array({{{"start", 0}, {"length", length}, {"note", lo}, {"velocity", 100}}})}, {"name", zone.name}});
+            }
+            if (zones.empty()) return;
+            const TrackRow* first = self->tracks_.find(sources.front().trackId);
+            int index = -1;
+            for (std::size_t i = 0; i < self->allRows_.size(); ++i)
+                if (self->allRows_[i].id == sources.front().trackId) index = static_cast<int>(i) + 1;
+            nlohmann::json track = {{"id", trackId.toStdString()}, {"kind", "instrument"}, {"name", (first ? first->name + QStringLiteral(" Sampler") : QStringLiteral("Sampler")).toStdString()}, {"color", ""},
+                                    {"strip", {{"gainDb", 0}, {"pan", 0}, {"mute", false}, {"solo", false}, {"inserts", nlohmann::json::array()}, {"sends", nlohmann::json::array()}, {"output", nullId}}},
+                                    {"regions", nlohmann::json::array()}, {"automation", nlohmann::json::array()},
+                                    {"instrument", {{"processorId", lpc::kProcSampler}, {"params", nlohmann::json::object()}, {"state", lpc::samplerStateOf(zones)}}}};
+            commands.push_back({{"type", "add_track"}, {"index", index}, {"track", track}});
+            for (const nlohmann::json& r : regions) commands.push_back({{"type", "add_region"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"region", r}});
+            for (const Source& src : sources) {  // the regions that were converted are muted
+                nlohmann::json region = nlohmann::json::parse(src.json, nullptr, false);
+                if (region.is_discarded()) continue;
+                region["muted"] = true;
+                commands.push_back({{"type", "replace_region"}, {"region", region}});
+            }
+            self->sendCommand({{"type", "transaction"}, {"commands", commands}});
+            emit self->notice(QString("Sampler track made with %1 zone%2").arg(zones.size()).arg(zones.size() == 1 ? "" : "s"));
+        }, Qt::QueuedConnection);
+    });
+}
+
+QVariantList ProjectController::samplerZones(const QString& trackId) const {
+    QVariantList out;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId || t.instrument != QLatin1String(lpc::kProcSampler)) continue;
+        lpc::ProcessorRef ref;
+        ref.processorId = lpc::kProcSampler;
+        ref.state = t.instrumentState;
+        for (const lpc::SamplerZone& z : lpc::samplerZonesOf(ref))
+            out.append(QVariantMap{{"name", QString::fromStdString(z.name)}, {"root", z.root}, {"lo", z.lo}, {"hi", z.hi}, {"gainDb", z.gainDb}, {"oneShot", z.oneShot}, {"loop", z.loop}});
+    }
+    return out;
+}
+
+// the instrument of a Sampler track as a JSON object for set_instrument, with its zones changed by `edit`
+static bool changeSamplerZones(const TrackRow& t, const std::function<bool(std::vector<lpc::SamplerZone>&)>& edit, nlohmann::json& instrument) {
+    lpc::ProcessorRef ref;
+    ref.processorId = lpc::kProcSampler;
+    ref.state = t.instrumentState;
+    std::vector<lpc::SamplerZone> zones = lpc::samplerZonesOf(ref);
+    if (!edit(zones) || !lpc::checkSamplerZones(zones).empty()) return false;
+    nlohmann::json params = nlohmann::json::object();
+    for (auto it = t.instrumentParams.begin(); it != t.instrumentParams.end(); ++it) params[it.key().toStdString()] = it.value().toDouble();
+    instrument = {{"processorId", lpc::kProcSampler}, {"params", params}, {"state", lpc::samplerStateOf(zones)}};
+    return true;
+}
+
+void ProjectController::setSamplerZone(const QString& trackId, int index, const QVariantMap& changes) {
+    if (!host_) return;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId || t.instrument != QLatin1String(lpc::kProcSampler)) continue;
+        nlohmann::json instrument;
+        const bool ok = changeSamplerZones(t, [&](std::vector<lpc::SamplerZone>& zones) {
+            if (index < 0 || index >= static_cast<int>(zones.size())) return false;
+            lpc::SamplerZone& z = zones[static_cast<std::size_t>(index)];
+            if (changes.contains("root")) z.root = std::clamp(changes.value("root").toInt(), 0, 127);
+            if (changes.contains("lo")) z.lo = std::clamp(changes.value("lo").toInt(), 0, 127);
+            if (changes.contains("hi")) z.hi = std::clamp(changes.value("hi").toInt(), 0, 127);
+            if (z.lo > z.hi) { if (changes.contains("lo")) z.hi = z.lo; else z.lo = z.hi; }
+            if (changes.contains("gainDb")) z.gainDb = std::clamp(changes.value("gainDb").toDouble(), -60.0, 24.0);
+            if (changes.contains("name")) z.name = changes.value("name").toString().left(60).toStdString();
+            if (changes.contains("oneShot")) z.oneShot = changes.value("oneShot").toBool();
+            if (changes.contains("loop")) z.loop = changes.value("loop").toBool();
+            return true;
+        }, instrument);
+        if (ok) sendCommand({{"type", "set_instrument"}, {"trackId", trackId.toStdString()}, {"instrument", instrument}});
+        return;
+    }
+}
+
+void ProjectController::removeSamplerZone(const QString& trackId, int index) {
+    if (!host_) return;
+    for (const TrackRow& t : allRows_) {
+        if (t.id != trackId || t.instrument != QLatin1String(lpc::kProcSampler)) continue;
+        nlohmann::json instrument;
+        const bool ok = changeSamplerZones(t, [&](std::vector<lpc::SamplerZone>& zones) {
+            if (index < 0 || index >= static_cast<int>(zones.size())) return false;
+            zones.erase(zones.begin() + index);
+            return true;
+        }, instrument);
+        if (ok) sendCommand({{"type", "set_instrument"}, {"trackId", trackId.toStdString()}, {"instrument", instrument}});
+        return;
+    }
 }
 
 // Track > Replace or Double Drum Track: the hits of the selected audio regions get a drum sound. The regions are rendered in a worker thread and

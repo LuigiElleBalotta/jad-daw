@@ -122,6 +122,8 @@ class ProjectController : public QObject {
     Q_PROPERTY(bool toolbarVisible READ toolbarVisible WRITE setToolbarVisible NOTIFY barsChanged)          // View > Toolbar
     Q_PROPERTY(bool globalTracksVisible READ globalTracksVisible WRITE setGlobalTracksVisible NOTIFY globalTracksVisibleChanged)  // the Marker, Tempo and Signature lanes
     Q_PROPERTY(bool automationVisible READ automationVisible WRITE setAutomationVisible NOTIFY automationViewChanged)  // Mix > Show Automation
+    Q_PROPERTY(QString printPaper READ printPaper WRITE setPrintPaper NOTIFY printSetupChanged)  // File > Page Setup…: A4, A3, Letter or Legal
+    Q_PROPERTY(bool printLandscape READ printLandscape WRITE setPrintLandscape NOTIFY printSetupChanged)
     Q_PROPERTY(bool regionAutomationView READ regionAutomationView WRITE setRegionAutomationView NOTIFY automationViewChanged)  // Mix > Region Automation: the lanes belong to the regions, not the track
     Q_PROPERTY(int automationRevision READ automationRevision NOTIFY automationViewChanged)  // follows the per-track choices of the lanes
     Q_PROPERTY(QString automationParam READ automationParam WRITE setAutomationParam NOTIFY automationViewChanged)   // "volume", "pan", "send1".."send4"
@@ -288,6 +290,7 @@ public:
     Q_INVOKABLE void setTrackOn(const QString& trackId, bool on);  // the On/Off button of a track header
     Q_INVOKABLE void toggleTrackOnSelected();                      // Track > Turn Track On/Off
     Q_INVOKABLE void setRecordInRegions(const QString& trackId, bool on);  // Record Automation with Audio/MIDI Regions, in the Automation slot's menu
+    Q_INVOKABLE bool printProject(const QUrl& file);  // File > Print…: the arrangement and the table of the tracks as a PDF file
     Q_INVOKABLE void convertAutomation(bool toRegion, bool visibleOnly);  // Mix > Convert Automation: track lanes <-> region lanes, of the lanes that are shown or of all of them
     Q_INVOKABLE void deleteAutomationOfSelected();  // Mix > Delete Automation: every lane of the selected tracks (one step)
     Q_INVOKABLE void createTrackAutomation();       // Mix > Create Track Automation: shows the lanes and takes the selected tracks out of Off
@@ -421,6 +424,10 @@ public:
     Q_INVOKABLE QString liveLinkInfoPath() const;
     bool automationVisible() const { return automationVisible_; }
     bool regionAutomationView() const { return regionAutomationView_; }
+    QString printPaper() const;
+    void setPrintPaper(const QString& paper);
+    bool printLandscape() const;
+    void setPrintLandscape(bool on);
     void setRegionAutomationView(bool on);
     void setAutomationVisible(bool on);
     QString automationParam() const { return automationParam_; }
@@ -643,6 +650,11 @@ public:
     Q_INVOKABLE void newSessionPlayer(const QVariantMap& options);   // also startBeats
     Q_INVOKABLE void sessionRegenerate(const QString& regionId);      // the part again with the next seed
     Q_INVOKABLE QVariantMap sessionChordsFromMarkers() const;         // {chords, startBeats, bars} from the markers named as chords; empty when there are none
+    // Track > Convert Regions to New Sampler Track: options {source: "regions" or "transients", oneShot, low, high (MIDI notes), mapEvenly}
+    Q_INVOKABLE void convertRegionsToSampler(const QVariantMap& options);
+    Q_INVOKABLE QVariantList samplerZones(const QString& trackId) const;               // {name, root, lo, hi, gainDb, oneShot, loop} of a Sampler track
+    Q_INVOKABLE void setSamplerZone(const QString& trackId, int index, const QVariantMap& changes);  // root, lo, hi, gainDb, name, oneShot, loop of one zone (one undo step)
+    Q_INVOKABLE void removeSamplerZone(const QString& trackId, int index);
     Q_INVOKABLE void drumReplace(const QVariantMap& options);
     // Mastering Assistant (on the stereo output): adding it analyses the project; Reanalyze does it again (the cycle only, when one is set)
     Q_PROPERTY(bool masteringBusy READ masteringBusy NOTIFY masteringBusyChanged)
@@ -945,6 +957,7 @@ signals:
     void peaksChanged();
     void globalTracksVisibleChanged();
     void automationViewChanged();
+    void printSetupChanged();
     void metronomeChanged();
     void liveLinkChanged();
     void barsChanged();

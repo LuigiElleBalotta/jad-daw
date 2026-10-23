@@ -112,6 +112,7 @@ std::vector<EffectSpec> buildInstruments() {
                  {p("channel", "MIDI Channel", "", 1, 16, 1), p("bankMsb", "Bank MSB (0 sends nothing, n sends n - 1)", "", 0, 128, 0), p("bankLsb", "Bank LSB (0 sends nothing, n sends n - 1)", "", 0, 128, 0),
                   p("program", "Program (0 sends nothing, n sends n - 1)", "", 0, 128, 0), p("volume", "Volume (controller 7)", "", 0, 127, 100), p("pan", "Pan (controller 10)", "", 0, 127, 64)}});
     v.push_back({kProcDrums, "Drum Kit", "Instruments", {p("level", "Level", "dB", -24, 6, -6)}});
+    v.push_back({kProcSampler, "Sampler", "Instruments", {p("level", "Level", "dB", -24, 6, -6), p("attack", "Attack", "ms", 0.5, 2000, 2, true), p("release", "Release", "ms", 1, 5000, 120, true)}});
     v.push_back({kProcSynth, "Synth", "Instruments",
                  {p("wave", "Waveform (0 sine, 1 triangle, 2 saw, 3 square)", "", 0, 3, 2), p("attack", "Attack", "ms", 0.5, 2000, 5, true),
                   p("decay", "Decay", "ms", 1, 5000, 200, true), p("sustain", "Sustain", "%", 0, 100, 70), p("release", "Release", "ms", 1, 5000, 150, true),

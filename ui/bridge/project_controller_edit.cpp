@@ -29,6 +29,7 @@
 #include "juce_plugin_host.h"
 #endif
 #include "lpc/model_json.h"
+#include "lpc/sampler.h"
 #include "lpc/session_player.h"
 #include "lpc/compressed_audio.h"
 #include "lpc/effect_presets.h"
@@ -4778,6 +4779,8 @@ QVariantMap ProjectController::unusedMedia() const {
                 if (r.flex) used.insert(r.flex->sourceMediaId.toString());
             }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
+        if (t.instrument)
+            for (const lpc::Uuid& id : lpc::samplerMediaIds(*t.instrument)) used.insert(id.toString());  // the zones of a sampler
     }
     int count = 0;
     double bytes = 0;
@@ -4806,6 +4809,8 @@ void ProjectController::cleanUpProject() {
                 if (r.flex) used.insert(r.flex->sourceMediaId.toString());
             }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
+        if (t.instrument)
+            for (const lpc::Uuid& id : lpc::samplerMediaIds(*t.instrument)) used.insert(id.toString());  // the zones of a sampler
     }
     nlohmann::json commands = nlohmann::json::array();
     std::vector<std::filesystem::path> files;

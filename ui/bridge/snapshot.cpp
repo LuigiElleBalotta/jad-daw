@@ -127,6 +127,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
             const nlohmann::json state = nlohmann::json::parse(t.instrument->state.empty() ? "{}" : t.instrument->state, nullptr, false);
             if (state.is_object()) tr.instrumentDevice = QString::fromStdString(state.value("device", std::string()));
         }
+        if (t.instrument && t.instrument->processorId == lpc::kProcSampler) tr.instrumentState = t.instrument->state;
         if (t.instrument)
             for (const auto& [name, value] : t.instrument->params) tr.instrumentParams.insert(QString::fromStdString(name), value);
         tr.outputPair = t.outputPair;

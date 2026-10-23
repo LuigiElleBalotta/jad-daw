@@ -224,6 +224,12 @@ and write the chords that Session Players follow.
 
 ![Global tracks](images/app/global-tracks.png)
 
+**Convert Regions to New Sampler Track** (Track menu) turns the selected audio regions into zones of a Sampler on a new track: one zone for every region, or for every
+part of a region between two transients, with MIDI regions that play them where the sound was (the converted regions are muted). The Sampler window shows the zones over
+a keyboard and lets you change the root key, the key range, the gain and 1Shot of each.
+
+**File > Print…** writes the arrangement (a bar for every region) and the table of the tracks as a PDF file; **Page Setup…** chooses the paper and the orientation.
+
 ## 11. Bounce
 
 `File > Bounce…` writes the mix to a file, faster than real time, without the audio device.
@@ -273,7 +279,6 @@ The menus are laid out as in Logic:
 
 ## What is not there yet
 
-Some menu commands are present but say "not implemented yet" when chosen: printing and page setup, the Movie window, Dolby Atmos, the Mac window sets,
-conversion of regions to a Sampler track, Live Loops. Imported audio is always copied into the project folder, so the choices about copying assets do nothing.
+Some menu commands are present but say "not implemented yet" when chosen: the Movie window, Dolby Atmos, the Mac window sets, Live Loops. Imported audio is always copied into the project folder, so the choices about copying assets do nothing.
 Match EQ's Learn buttons listen to what reaches the insert (there is no side chain routing yet). The plug-in windows
 of the stock effects are our own drawings in Logic's style, not Apple's. The file [docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.

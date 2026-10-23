@@ -160,6 +160,16 @@ ApplicationWindow {
     MidiTransformDialog { id: midiTransform; project: controller }
     CopyMidiEventsDialog { id: copyMidiEvents; project: controller }
     CreateTrackStackDialog { id: createTrackStackDialog; project: controller }
+    ConvertToSamplerDialog { id: convertToSamplerDialog; project: controller }
+    PageSetupDialog { id: pageSetupDialog; project: controller }
+    FileDialog {
+        id: printDialog
+        title: qsTr("Print the project to a PDF file")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "pdf"
+        nameFilters: [qsTr("PDF document (*.pdf)")]
+        onAccepted: controller.printProject(selectedFile)
+    }
     TrackIconDialog { id: trackIconDialog; project: controller }
     AutomationSettingsDialog { id: automationSettings; project: controller }
     AlternativesDialog { id: alternativesDialog; project: controller }
@@ -473,6 +483,9 @@ ApplicationWindow {
         "file.revert": () => confirm.ask(qsTr("Revert to Saved"), qsTr("Every change since the last save is lost."), qsTr("Revert"), () => controller.revertToSaved()),
         "file.projectSettings": () => projectSettings.showTab(0),
         "track.createTrackStack": () => createTrackStackDialog.open(),
+        "track.convertRegionsToNewSamplerTrack": () => convertToSamplerDialog.open(),
+        "file.pageSetup": () => pageSetupDialog.open(),
+        "file.print": () => printDialog.open(),
         "track.flattenStack": () => { for (const id of controller.selectedTrackIds) controller.flattenStack(id) },
         "track.convertFolderStackToSummingStack": () => { for (const id of controller.selectedTrackIds) controller.convertFolderStackToSummingStack(id) },
         "mix.iOLabels": () => ioLabelsDialog.open(),

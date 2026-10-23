@@ -135,3 +135,80 @@ TEST_CASE("track on/off and record in regions are kept and undone", "[region-aut
     REQUIRE(s.t().on);
     REQUIRE(!s.t().recordInRegions);
 }
+
+#include "lpc/audio/frame_source.h"
+#include "lpc/audio/sampler.h"
+#include "lpc/media_store.h"
+#include "lpc/sampler.h"
+#include "lpc/processor_ids.h"
+
+TEST_CASE("sampler: the zones are kept in the state and a note plays the zone that covers it", "[sampler]") {
+    SamplerZone zone;
+    zone.mediaId = Uuid::random(gRng);
+    zone.name = "Kick";
+    zone.root = 60;
+    zone.lo = 60;
+    zone.hi = 62;
+    zone.oneShot = true;
+    ProcessorRef ref{kProcSampler, {}, samplerStateOf({zone}), "", false};
+    const auto back = samplerZonesOf(ref);
+    REQUIRE(back.size() == 1);
+    REQUIRE(back[0] == zone);
+    REQUIRE(samplerMediaIds(ref).size() == 1);
+    REQUIRE(checkSamplerZones(back).empty());
+    zone.lo = 70;
+    REQUIRE(!checkSamplerZones({zone}).empty());  // low above high
+}
+
+#include <filesystem>
+#include "lpc/offline_render.h"
+#include "lpc/wav.h"
+
+TEST_CASE("sampler: a note plays the sound of its zone, a key outside every zone is silent", "[sampler]") {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "jad_sampler_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "audio");
+    WavData wav;
+    wav.sampleRate = 48000;
+    wav.channels = 2;
+    for (int i = 0; i < 24000; ++i) {
+        const float v = 0.5f * std::sin(2.0f * 3.14159265f * 440.0f * static_cast<float>(i) / 48000.0f);
+        wav.samples.push_back(v);
+        wav.samples.push_back(v);
+    }
+    writeWav(dir / "audio" / "tone.wav", wav.sampleRate, wav.channels, wav.samples);
+    Project p{Uuid::random(gRng)};
+    MediaItem item{Uuid::random(gRng), "audio/tone.wav", "h", 48000, 2, 24000};
+    REQUIRE(makeAddMedia(item)->apply(p).ok());
+    SamplerZone zone;
+    zone.mediaId = item.id;
+    zone.name = "Tone";
+    zone.root = 60;
+    zone.lo = 60;
+    zone.hi = 60;
+    Track t;
+    t.id = Uuid::random(gRng);
+    t.kind = TrackKind::Instrument;
+    t.name = "Sampler";
+    t.instrument = ProcessorRef{kProcSampler, {}, samplerStateOf({zone}), "", false};
+    REQUIRE(makeAddTrack(t)->apply(p).ok());
+    auto peakOf = [&](int note) {
+        Project q = p;
+        Region r;
+        r.id = Uuid::random(gRng);
+        r.start = 0;
+        r.length = 960;
+        r.notes.push_back(MidiNote{0, 480, static_cast<std::uint8_t>(note), 100, false});
+        REQUIRE(makeAddRegion(t.id, r)->apply(q).ok());
+        MediaStore media(dir, false);
+        RenderOptions o;
+        o.tailSeconds = 0.3;
+        const RenderResult res = renderOffline(q, media, o);
+        float peak = 0.0f;
+        for (const float v : res.interleaved) peak = std::max(peak, std::abs(v));
+        return peak;
+    };
+    CHECK(peakOf(60) > 0.05f);
+    CHECK(peakOf(72) < 1e-6f);
+    std::filesystem::remove_all(dir);
+}

@@ -60,6 +60,7 @@ jobs:
             name: macos-arm64
             configure: -DCMAKE_BUILD_TYPE=Release
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
@@ -70,7 +71,7 @@ jobs:
       - name: Configure
         run: cmake -S . -B build ${{ matrix.configure }} -DLPC_BUILD_UI=ON -DJAD_VERSION=${{ needs.meta.outputs.version }}
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel 4
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
         env:
@@ -124,4 +125,5 @@ jobs:
 
           - Windows: unzip and run \`jad-daw.exe\`.
           - macOS (Apple Silicon): unzip, then right-click the app and choose Open the first time (the app is not signed yet).
-          - 48 kHz audio device and WAV files only. This is early software: expect rough edges."
+          - New since 0.0.1: Channel EQ (HQ mode, Mid/Side), Noise Gate side-chain filter, Drum Kit, Match EQ analyzer, live loudness and correlation meters in Mastering, CAF export, signature and key lists in the control bar. A screen-by-screen guide with pictures is in docs/user-guide.md.
+          - 48 kHz audio device. This is early software: expect rough edges."

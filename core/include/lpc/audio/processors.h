@@ -24,6 +24,8 @@ public:
     virtual void setParameter(int /*index*/, float /*normalized*/) noexcept {}
     // Audio thread, before process(): the side chain signal of this block (null: the plug-in listens to its own input). Only the ones that detect use it.
     virtual void setSideChain(const float* /*l*/, const float* /*r*/) noexcept {}
+    // Spatial Audio: the gains (12, in the container order of atmos_render.h) at which the track's signal is fed to the speakers instead of going to the master; null: it goes to the master.
+    virtual const float* speakerGains() const noexcept { return nullptr; }
     virtual nlohmann::json describe() const = 0;  // not real-time; used by tests
 };
 

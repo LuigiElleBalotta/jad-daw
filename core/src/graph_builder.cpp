@@ -1,4 +1,5 @@
 #include "lpc/graph_builder.h"
+#include "lpc/live_loops.h"
 #include "lpc/validation.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
@@ -113,7 +114,7 @@ std::string buildSettingsKey(const Project& p) {
 }
 
 bool configChanged(const Track& a, const Track& b) {
-    return a.kind != b.kind || a.midi != b.midi || a.delayMs != b.delayMs || a.freeze != b.freeze || a.automation != b.automation || a.automationMode != b.automationMode || a.on != b.on || a.regions != b.regions || a.cells != b.cells || a.liveRuns != b.liveRuns || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
+    return a.kind != b.kind || a.midi != b.midi || a.delayMs != b.delayMs || a.freeze != b.freeze || a.automation != b.automation || a.automationMode != b.automationMode || a.on != b.on || a.regions != b.regions || a.cells != b.cells || a.liveRuns != b.liveRuns || a.liveCells != b.liveCells || a.instrument != b.instrument || a.strip.inserts != b.strip.inserts ||
            a.strip.sends != b.strip.sends || a.strip.output != b.strip.output;
 }
 
@@ -337,19 +338,13 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
     const std::int64_t delay = static_cast<std::int64_t>(std::llround(t.delayMs * static_cast<double>(p.sampleRate) / 1000.0));  // Track Delay, in frames
     // Live Loops: while a cell plays on the track, the cell (looping from its launch to its stop) plays instead of the track's own regions
     std::vector<Region> played;
-    if (!t.liveRuns.empty()) {
-        for (const LiveRun& run : t.liveRuns) {
-            const auto cell = std::find_if(t.cells.begin(), t.cells.end(), [&](const LiveCell& c) { return c.id == run.cellId; });
-            if (cell == t.cells.end()) continue;
-            Region r = cell->region;
-            r.start = run.start;
-            const Ticks loop = r.loopLength > 0 ? r.loopLength : r.length;
-            r.loopLength = loop;
-            r.length = run.end >= 0 ? std::max<Ticks>(1, run.end - run.start) : loop * 1024;  // open: it loops for as long as anything can play
-            played.push_back(std::move(r));
-        }
+    const bool cellsPlay = !t.liveRuns.empty() || t.liveCells;
+    for (const LiveRun& run : t.liveRuns) {
+        const auto cell = std::find_if(t.cells.begin(), t.cells.end(), [&](const LiveCell& c) { return c.id == run.cellId; });
+        if (cell == t.cells.end()) continue;
+        for (Region& r : playedRegions(p, t, run, *cell)) played.push_back(std::move(r));
     }
-    for (const Region& r : t.liveRuns.empty() ? t.regions : played) {
+    for (const Region& r : cellsPlay ? played : t.regions) {
         if (r.muted || cfg->off) continue;  // Mute Regions: it stays in the project but does not play (nor does anything on a track that is turned off)
         RegionPlayback rp;
         rp.startFrame = regionFrame(p, r, r.start) + delay;
@@ -430,6 +425,7 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
     }
     fillFaderAutomation(p, t, *cfg);
     int slotIndex = 0;
+    int pannerAt = -1;
     std::vector<int> builtAt(t.strip.inserts.size(), -1);  // where each insert of the model ended up in the config
     for (const ProcessorRef& ref : t.strip.inserts) {
         if (skipPlugins) {
@@ -437,12 +433,14 @@ std::unique_ptr<TrackConfig> buildConfig(const Project& p, const Track& t, Media
             continue;
         }
         if (auto effect = makeInsert(ref, plugins, InsertSlot{t.id, slotIndex}, static_cast<double>(p.sampleRate), kMaxBlock)) {
+            if (ref.processorId == kProcObjectPanner && pannerAt < 0) pannerAt = static_cast<int>(cfg->inserts.size());
             builtAt[static_cast<std::size_t>(slotIndex)] = static_cast<int>(cfg->inserts.size());
             if (!ref.sideChain.isNull()) cfg->sideChains.push_back({static_cast<int>(cfg->inserts.size()), ref.sideChain});
             cfg->inserts.push_back(std::move(effect));
         }
         ++slotIndex;
     }
+    cfg->atmosInsert = pannerAt;
     if (t.automationMode != "off")  // the lanes that drive a parameter of a plug-in insert
         for (const AutomationLane& lane : playingLanes(p, t)) {
             const auto target = parseParamTarget(lane.target);

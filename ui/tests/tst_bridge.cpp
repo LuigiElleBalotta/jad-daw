@@ -3912,6 +3912,31 @@ private slots:
         c.clearCell(track, 0);
         QTRY_VERIFY(c.liveGrid().value("cells").toList().isEmpty());
     }
+    void liveLoopsPatternCellsSettingsAndTakes() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProject(url(dir.path() / "p.lpc")));
+        c.addTrack("instrument");
+        QTRY_VERIFY(c.liveGrid().value("tracks").toList().size() == 1);
+        const QString track = c.liveGrid().value("tracks").toList().first().toMap().value("id").toString();
+        c.newPatternCell(track, 1);
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().size(), 1);
+        QCOMPARE(c.liveGrid().value("cells").toList().first().toMap().value("type").toString(), QStringLiteral("pattern"));
+        c.setCellSetting(track, 1, "trigger", "retrigger");
+        c.setCellSetting(track, 1, "quantize", "2");
+        c.setCellSetting(track, 1, "loop", false);
+        c.setCellSetting(track, 1, "loopStartBeats", 1.0);
+        QTRY_COMPARE(c.liveCellInfo(track, 1).value("trigger").toString(), QStringLiteral("retrigger"));
+        QTRY_COMPARE(c.liveCellInfo(track, 1).value("loop").toBool(), false);
+        QCOMPARE(c.liveCellInfo(track, 1).value("quantize").toString(), QStringLiteral("2"));
+        QCOMPARE(c.liveCellInfo(track, 1).value("loopStartBeats").toDouble(), 1.0);
+        c.convertToMidiCell(track, 1);
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().first().toMap().value("type").toString(), QStringLiteral("midi"));
+        c.launchCell(track, 1);  // a one-shot: plays and ends by itself
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().first().toMap().value("state").toString(), QStringLiteral("playing"));
+        c.pauseCell(track);
+        c.stopAllCells();
+    }
     void dolbyAtmosObjectsGetAPannerAndTheModeFollows() {
         TempDir dir;
         jad::ProjectController c(false);

@@ -288,30 +288,48 @@ The menus are laid out as in Logic:
 
 ## 14. Live Loops, Movie and Dolby Atmos
 
-**Live Loops** (`View > Live Loops`). A grid of cells, scenes down and tracks across (audio, instrument and MIDI tracks). A cell is a loop made from regions:
-`Edit > Copy to Live Loops Scene` copies the selected regions to one cell each in the first empty scene; with nothing selected it takes the span of the cycle when
-the cycle is on, and without a cycle it makes a scene for every section of the Arrangement track. A cell can also be made by right-clicking it (`Set from Selected
-Regions`) and emptied (`Clear Cell`). Click a cell to launch it, click it again to stop it, click the play button of a scene to launch the whole row and the name of
-a track to stop its cell. A cell starts at the next multiple of the Quantization (1/4 note up to 8 bars, one bar by default); the transport starts when it is stopped.
-While a cell plays on a track the track's own regions are silent; stopping the transport stops every cell. The Stop All button stops them at the next quantization.
-Cells are saved with the project; what is playing is not.
+**Live Loops** (`View > Live Loops`). The grid is Logic's: tracks are the rows and scenes the columns (audio, instrument and MIDI tracks). A cell is a loop made from regions:
+`Edit > Copy to Live Loops Scene` copies the selected regions to one cell each in the first empty scene; with nothing selected it takes the span of the cycle when the cycle is on,
+and without a cycle it makes a scene for every section of the Arrangement track. The shortcut menu of a cell (right-click) offers *Add Audio File…* (audio tracks), *Set from Selected
+Regions*, *Extract Loops* (the tempo and beats of an audio cell are analysed and the Start, Loop Start and Loop Length are set to 1, 2, 4 or 8 bars), *New Session Player Cell* and
+*New Pattern Cell* (instrument tracks), *Convert to MIDI Cell*, *Copy Cell to Tracks Area* (at the playhead; the way to edit the notes or the comp of a cell and send it back with *Set from
+Selected Regions*), the take folder and *Clear Cell*. `File > Import > Live Loops Grid…` brings in the tracks that have cells from another project, with their audio.
+
+*Playing.* Click the play button of a cell to start it and the stop button to stop it; a click on an empty cell of a running row stops the row (Option-click, or *Queue Cell Playback*,
+queues a cell: it starts with the transport or with Trigger; Return and Option-Return are the key commands of the selected cell). The trigger below a scene starts its cells, an empty scene
+stops everything, *Queue Scene* is in its shortcut menu. Cells start at the Quantize Start of the grid (Off, 1/16 note up to 8 bars), of their scene or of their own (*Global*, *Cell End*:
+when the playing cell reaches the end of its loop); *Smart Pickup* starts a cell that was triggered a little late at once, at the right place. The *Cell inspector* under the grid has the
+settings of Logic's: Loop, Cell Length, Play From (Start, Stop Position, Playing Cell Position, Playhead Position), Start, Loop Start, Loop Length, Trigger Mode (Start/Stop, Momentary,
+Retrigger), Quantize and Q Loop Start (Off, On, On Preserve Start). Only one cell plays on a track; a cell without Loop plays once and stops. When the transport stops the cells stop and are
+queued again. In the *Divider column* at the right of each row a lamp shows what plays, the pause button stops at the next quantize start and resumes from there, and the arrow is Track
+Activation: while a track plays its cells its regions are silent, and the button gives the track back to them.
+
+*Recording.* With the track armed (R), the shortcut menu (or Alt+R) records into a cell from the next quantize start (a bar at most) for the Rec-Length: the length of the cell, or
+automatic in bars or beats (press again to end it). *Recording* is Replace, Takes (a take folder: the take that plays can be chosen, renamed, deleted, flattened, copied, moved or unpacked
+to a new scene, the next empty cell to the right, a new track or the next matching empty cell below) or Merge (instruments); *At Rec-End* plays the cell or continues recording. The
+*Performance Recording* button lets Record (R) turn what you play in the grid into regions in the Tracks area, with no track armed. Cells are saved with the project; what is playing is not.
 
 **Movie** (`File > Movie > Open Movie…`, `View > Movie Window`). A video file plays in a floating window in step with the transport (seeking, playing and stopping follow the
 project), muted: the sound is the project's. `File > Movie > Set Movie Start to Playhead` sets the project time at which the first frame is shown; the file and the start are
 saved with the project (Project Settings > Movie shows them). The formats are the ones the system can play (MOV, MP4, M4V, AVI, MKV, WebM).
 
-**Dolby Atmos** (`Mix > Dolby Atmos…`). Turn Spatial Audio on for the project, then make tracks *objects*: an object has a 3D Object Panner insert (open it for a
-top view of the room, a height bar and a size knob; drag the dot; every parameter can be automated like a plug-in's) and the rest of the tracks are the *bed*, mixed
-together. The Monitoring Format is *Binaural* (the objects are placed with the cues of the head over headphones) or *2.0 Direct* (a plain stereo pan). `File > Export >
-Project as Spatial Audio…` writes a Dolby Atmos ADM BWF master (the project or the cycle range): a wave file with the bed in the 7.1.2 channels (stereo in the front
-ones), one mono channel for every object and the ADM metadata with the movement of every object. `File > Import > Create Project from ADM BWF…` makes a project from
-such a file: a track per object with its panner and its movement as automation, and one stereo track with the bed folded down. The file has no Dolby `dbmd` chunk and
-no downmix and trim metadata; the other monitoring formats (7.1.4, 5.1, Apple renderer, head tracking) are not there because the engine is stereo.
+**Dolby Atmos** (`Mix > Dolby Atmos…`). Turn Spatial Audio on for the project, then make tracks *objects*: an object has a 3D Object Panner insert (open it for a top view of the
+room, a height bar and a size knob; drag the dot; every parameter can be automated like a plug-in's) and the rest of the tracks are the *bed*, mixed together. The *Monitoring Format* is
+Stereo pan, Binaural (the objects are placed with the cues of the head over headphones), 2.0 Direct, 2.0 from 5.1 Downmix, or 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4: in the last five the
+objects are fed to the speakers by their place in the room and play on the outputs of the audio interface (L R on 1-2, C and LFE on 3-4, the surrounds on 5-6 and so on; the bed plays in
+L and R). *Downmix & Trim* is Logic's pane: the 5.1 algorithm (Lo/Ro, Dolby Pro Logic IIx, direct render with or without room balance), the 5.1 to 2.0 algorithm (Lo/Ro, Lt/Rt, Lt/Rt with
+phase 90) and, for each of the five layouts, Automatic or Manual surround and height trims and the overhead and listener plane front/back balance. `File > Export > Project as Spatial
+Audio…` writes a Dolby Atmos ADM BWF master (the project or the cycle range): a wave file with the bed in the 7.1.2 channels (stereo in the front ones), one mono channel for every
+object and the ADM metadata with the movement of every object. *Bounce to Format…* writes the mix as a wave file with the channels of the Monitoring Format. `File > Import >
+Create Project from ADM BWF…` makes a project from such a file: a track per object with its panner and its movement as automation, and one stereo track with the bed folded down.
+The renderer is our own, not Dolby's, and the Automatic trims are our values. Not there: the Apple renderer and head tracking (Apple's), the Dolby `dbmd` chunk and the MP4 exports
+(Dolby's encoders).
 
 ---
 
 ## What is not there yet
 
 Some menu commands are present but say "not implemented yet" when chosen: the Mac window sets (they belong to macOS) and a few stubs without a counterpart in Logic's guide.
-The Dolby Atmos monitoring is binaural or stereo only; the Live Loops grid has no pattern or Session Player cells, no follow actions and no recording into cells. Match EQ's Learn buttons listen to what reaches the insert. The plug-in windows
-of the stock effects are our own drawings in Logic's style, not Apple's. The file [docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.
+The Live Loops grid has no graphical Cell Editor (the inspector sets the loop points and a cell is edited as a region in the Tracks area) and is not controlled from other devices. Match EQ's
+Learn buttons listen to what reaches the insert. The plug-in windows of the stock effects are our own drawings in Logic's style, not Apple's. The file
+[docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.

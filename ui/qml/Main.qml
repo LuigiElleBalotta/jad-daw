@@ -166,6 +166,11 @@ ApplicationWindow {
     MovieWindow { id: movieWindow; project: controller }
     LiveLoopsWindow { id: liveLoopsWindow; project: controller }
     DolbyAtmosDialog { id: atmosDialog; project: controller }
+    FolderDialog {
+        id: gridFolderDialog
+        title: qsTr("Import Live Loops Grid from a project")
+        onAccepted: controller.importLiveLoopsGrid(selectedFolder)
+    }
     FileDialog {
         id: admDialog
         title: qsTr("Create Project from ADM BWF")
@@ -516,6 +521,7 @@ ApplicationWindow {
         "mix.dolbyAtmos": () => atmosDialog.open(),
         "file.exportSpatial": () => atmosDialog.open(),
         "file.importAdm": () => admDialog.open(),
+        "file.importLiveLoopsGrid": () => gridFolderDialog.open(),
         "view.liveLoops": () => { if (liveLoopsWindow.visible) liveLoopsWindow.close(); else liveLoopsWindow.open() },
         "edit.copyToLiveLoopsScene": () => controller.copyToLiveLoopsScene(),
         "file.print": () => printDialog.open(),

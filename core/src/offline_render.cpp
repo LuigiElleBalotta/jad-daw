@@ -1,4 +1,5 @@
 #include "lpc/offline_render.h"
+#include "lpc/processor_ids.h"
 
 #include <algorithm>
 #include <cmath>
@@ -64,7 +65,15 @@ RenderResult renderOffline(const Project& p, MediaStore& media, const RenderOpti
     out.interleaved.assign(static_cast<std::size_t>(total) * 2, 0.0f);
 
     audio::AudioEngine engine(static_cast<double>(p.sampleRate));
-    for (const audio::AudioMsg& m : initialMessages(p, media, options.plugins)) engine.applyDirect(m);
+    // a stereo bounce has no speakers: an object panner that feeds speakers is heard as the stereo downmix instead
+    Project stereo = p;
+    for (Track& t : stereo.tracks)
+        for (ProcessorRef& ref : t.strip.inserts)
+            if (ref.processorId == kProcObjectPanner) {
+                const auto it = ref.params.find("mode");
+                if (it != ref.params.end() && it->second >= 4.0) it->second = 3.0;
+            }
+    for (const audio::AudioMsg& m : initialMessages(stereo, media, options.plugins)) engine.applyDirect(m);
     const std::int64_t skip = computePdc(p, options.plugins).totalLatency;  // frames the plug-ins delay everything by
     audio::AudioMsg locate;
     locate.kind = audio::MsgKind::Locate;

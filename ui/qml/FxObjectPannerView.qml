@@ -14,7 +14,8 @@ FxShell {
     readonly property real objY: val("y")
     readonly property real objZ: val("z")
     readonly property real objSize: val("size")
-    readonly property bool binaural: val("mode") >= 0.5
+    readonly property int format: Math.round(val("mode"))
+    readonly property var formatNames: [qsTr("Stereo pan"), qsTr("Binaural"), qsTr("2.0 Direct"), qsTr("2.0 from 5.1"), qsTr("5.1"), qsTr("7.1"), qsTr("5.1.2"), qsTr("5.1.4"), qsTr("7.1.4")]
 
     Rectangle { x: 0; y: 0; width: root.bodyWidth; height: root.bodyHeight; gradient: Gradient { GradientStop { position: 0; color: "#2a4663" } GradientStop { position: 1; color: "#1d3148" } } }
 
@@ -107,8 +108,8 @@ FxShell {
         Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: qsTr("Monitoring"); color: "#9db2c8"; font.family: Theme.fontFamily; font.pixelSize: 19 }
         Rectangle {
             x: 10; y: 34; width: 130; height: 36; radius: 4; color: "#12202e"
-            Text { anchors.centerIn: parent; text: root.binaural ? qsTr("Binaural") : qsTr("Stereo"); color: root.binaural ? "#8dffa0" : "#9db2c8"; font.family: Theme.fontFamily; font.pixelSize: 20 }
-            MouseArea { objectName: "monitoringSwitch"; anchors.fill: parent; onClicked: root.editor.setNow("mode", root.binaural ? 0 : 1) }
+            Text { objectName: "monitoringFormat"; anchors.centerIn: parent; text: root.formatNames[Math.max(0, Math.min(8, root.format))]; color: root.format >= 4 ? "#5cc8ff" : "#8dffa0"; font.family: Theme.fontFamily; font.pixelSize: 20 }
         }
+        Text { x: 0; y: 76; width: parent.width; horizontalAlignment: Text.AlignHCenter; text: qsTr("set in Mix > Dolby Atmos"); color: "#6c8196"; font.family: Theme.fontFamily; font.pixelSize: 12 }
     }
 }

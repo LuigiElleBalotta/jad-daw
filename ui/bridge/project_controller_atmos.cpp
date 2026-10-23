@@ -13,6 +13,8 @@
 #include "bridge/project_controller.h"
 #include "lpc/adm_bwf.h"
 #include "lpc/atmos.h"
+#include "lpc/atmos_render.h"
+#include "lpc/wav.h"
 #include "lpc/commands.h"
 #include "lpc/offline_render.h"
 #include "lpc/processor_ids.h"
@@ -38,6 +40,41 @@ QVariantList ProjectController::atmosTracks() const {
 
 void ProjectController::setAtmosMode(bool on) { setProjectSetting("spatialAudio", on ? "dolbyAtmos" : ""); }
 
+nlohmann::json ProjectController::atmosPannerParams() const {
+    const int format = std::clamp(projectSetting("atmosFormat", projectSetting("atmosMonitor", "binaural") == QLatin1String("stereo") ? "0" : "1").toInt(), 0, lpc::kMonitorFormats - 1);
+    const int layout = lpc::trimLayoutOf(static_cast<lpc::MonitorFormat>(format));
+    lpc::AtmosTrim trim = layout >= 0 ? lpc::automaticTrim(layout) : lpc::AtmosTrim{};
+    if (layout >= 0 && projectSetting(QStringLiteral("atmosTrimMode.%1").arg(layout), "auto") == QLatin1String("manual")) {
+        const auto get = [&](const char* key, double fallback) { return projectSetting(QStringLiteral("atmosTrim.%1.%2").arg(layout).arg(key), QString::number(fallback)).toDouble(); };
+        trim.surroundDb = get("surround", trim.surroundDb);
+        trim.heightDb = get("height", trim.heightDb);
+        trim.overhead = get("overhead", 0.0) / 100.0;
+        trim.plane = get("plane", 0.0) / 100.0;
+    }
+    return {{"mode", format}, {"downmix51", std::clamp(projectSetting("atmosDownmix51", "0").toInt(), 0, 3)}, {"downmix20", std::clamp(projectSetting("atmosDownmix20", "0").toInt(), 0, 2)},
+            {"surroundTrim", std::clamp(trim.surroundDb, -24.0, 0.0)}, {"heightTrim", std::clamp(trim.heightDb, -24.0, 0.0)},
+            {"overhead", std::clamp(trim.overhead * 100.0, -100.0, 100.0)}, {"plane", std::clamp(trim.plane * 100.0, -100.0, 100.0)}};
+}
+
+// Every panner takes the parameters the settings ask for: the Monitoring Format as its mode, the downmix algorithms and the trims of the layout.
+void ProjectController::applyAtmosToPanners(nlohmann::json extra) {
+    nlohmann::json commands = nlohmann::json::array();
+    if (extra.is_array())
+        for (auto& c : extra) commands.push_back(std::move(c));
+    const nlohmann::json want = atmosPannerParams();
+    for (const TrackRow& t : allRows_)
+        for (std::size_t i = 0; i < t.inserts.size(); ++i) {
+            if (t.inserts[i].processorId != QLatin1String(lpc::kProcObjectPanner)) continue;
+            for (auto it = want.begin(); it != want.end(); ++it) {
+                const QString key = QString::fromStdString(it.key());
+                if (std::abs(t.inserts[i].params.value(key, -1e9).toDouble() - it.value().get<double>()) < 1e-9) continue;
+                commands.push_back({{"type", "set_insert_param"}, {"trackId", t.id.toStdString()}, {"index", static_cast<int>(i)}, {"param", it.key()}, {"value", it.value()}});
+            }
+        }
+    if (commands.empty()) return;
+    sendCommand(commands.size() == 1 ? commands.front() : nlohmann::json{{"type", "transaction"}, {"commands", commands}});
+}
+
 void ProjectController::setAtmosObject(const QString& trackId, bool object) {
     if (!host_) return;
     int at = -1;
@@ -52,9 +89,7 @@ void ProjectController::setAtmosObject(const QString& trackId, bool object) {
             emit notice("A Dolby Atmos master has at most 118 object tracks");
             return;
         }
-        const bool stereo = projectSetting("atmosMonitor", "binaural") == QLatin1String("stereo");
-        sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
-                     {"insert", {{"processorId", lpc::kProcObjectPanner}, {"params", {{"mode", stereo ? 0.0 : 1.0}}}, {"state", ""}}}});
+        sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1}, {"insert", {{"processorId", lpc::kProcObjectPanner}, {"params", atmosPannerParams()}, {"state", ""}}}});
     } else if (!object && at >= 0) {
         removeInsert(trackId, at);
     }
@@ -63,13 +98,119 @@ void ProjectController::setAtmosObject(const QString& trackId, bool object) {
 // Listening to the objects over headphones (binaural) or as a plain stereo pan: the panners follow.
 void ProjectController::setAtmosMonitor(const QString& mode) {
     if (mode != QLatin1String("binaural") && mode != QLatin1String("stereo")) return;
-    nlohmann::json commands = nlohmann::json::array();
-    commands.push_back({{"type", "set_project_setting"}, {"key", "atmosMonitor"}, {"value", mode.toStdString()}});
-    for (const TrackRow& t : allRows_)
-        for (std::size_t i = 0; i < t.inserts.size(); ++i)
-            if (t.inserts[i].processorId == QLatin1String(lpc::kProcObjectPanner))
-                commands.push_back({{"type", "set_insert_param"}, {"trackId", t.id.toStdString()}, {"index", static_cast<int>(i)}, {"param", "mode"}, {"value", mode == QLatin1String("binaural") ? 1.0 : 0.0}});
-    sendCommand({{"type", "transaction"}, {"commands", commands}});
+    setAtmosFormat(mode == QLatin1String("binaural") ? 1 : 0);
+}
+
+void ProjectController::setAtmosFormat(int format) {
+    if (format < 0 || format >= lpc::kMonitorFormats) return;
+    nlohmann::json extra = nlohmann::json::array();
+    extra.push_back({{"type", "set_project_setting"}, {"key", "atmosFormat"}, {"value", std::to_string(format)}});
+    extra.push_back({{"type", "set_project_setting"}, {"key", "atmosMonitor"}, {"value", format == 1 ? "binaural" : "stereo"}});
+    // the panners must see the new setting: the commands that change them are built from it
+    const QString before = projectSetting("atmosFormat", "");
+    (void)before;
+    projectSettings_["atmosFormat"] = QString::number(format);
+    applyAtmosToPanners(extra);
+}
+
+QVariantMap ProjectController::atmosSettings() const {
+    QVariantList trims;
+    for (int layout = 0; layout < 5; ++layout) {
+        const lpc::AtmosTrim automatic = lpc::automaticTrim(layout);
+        const bool manual = projectSetting(QStringLiteral("atmosTrimMode.%1").arg(layout), "auto") == QLatin1String("manual");
+        const auto get = [&](const char* key, double fallback) { return projectSetting(QStringLiteral("atmosTrim.%1.%2").arg(layout).arg(key), QString::number(fallback)).toDouble(); };
+        trims.append(QVariantMap{{"manual", manual}, {"surround", manual ? get("surround", automatic.surroundDb) : automatic.surroundDb}, {"height", manual ? get("height", automatic.heightDb) : automatic.heightDb},
+                                 {"overhead", manual ? get("overhead", 0.0) : 0.0}, {"plane", manual ? get("plane", 0.0) : 0.0}});
+    }
+    const nlohmann::json p = atmosPannerParams();
+    return {{"format", p.value("mode", 1)}, {"downmix51", p.value("downmix51", 0)}, {"downmix20", p.value("downmix20", 0)}, {"trims", trims}};
+}
+
+void ProjectController::setAtmosDownmix(const QString& which, int value) {
+    const QString key = which == QLatin1String("to20") ? QStringLiteral("atmosDownmix20") : QStringLiteral("atmosDownmix51");
+    projectSettings_[key] = QString::number(value);
+    applyAtmosToPanners(nlohmann::json::array({{{"type", "set_project_setting"}, {"key", key.toStdString()}, {"value", std::to_string(value)}}}));
+}
+
+void ProjectController::setAtmosTrim(int layout, const QString& key, double value) {
+    if (layout < 0 || layout > 4 || !std::isfinite(value)) return;
+    if (key != QLatin1String("surround") && key != QLatin1String("height") && key != QLatin1String("overhead") && key != QLatin1String("plane")) return;
+    nlohmann::json extra = nlohmann::json::array();
+    // changing a trim makes the layout Manual, starting from what Automatic had
+    if (projectSetting(QStringLiteral("atmosTrimMode.%1").arg(layout), "auto") != QLatin1String("manual")) {
+        const lpc::AtmosTrim a = lpc::automaticTrim(layout);
+        extra.push_back({{"type", "set_project_setting"}, {"key", QStringLiteral("atmosTrimMode.%1").arg(layout).toStdString()}, {"value", "manual"}});
+        extra.push_back({{"type", "set_project_setting"}, {"key", QStringLiteral("atmosTrim.%1.surround").arg(layout).toStdString()}, {"value", std::to_string(a.surroundDb)}});
+        extra.push_back({{"type", "set_project_setting"}, {"key", QStringLiteral("atmosTrim.%1.height").arg(layout).toStdString()}, {"value", std::to_string(a.heightDb)}});
+        projectSettings_[QStringLiteral("atmosTrimMode.%1").arg(layout)] = "manual";
+        projectSettings_[QStringLiteral("atmosTrim.%1.surround").arg(layout)] = QString::number(a.surroundDb);
+        projectSettings_[QStringLiteral("atmosTrim.%1.height").arg(layout)] = QString::number(a.heightDb);
+    }
+    const double v = key == QLatin1String("surround") || key == QLatin1String("height") ? std::clamp(value, -24.0, 0.0) : std::clamp(value, -100.0, 100.0);
+    const QString full = QStringLiteral("atmosTrim.%1.%2").arg(layout).arg(key);
+    extra.push_back({{"type", "set_project_setting"}, {"key", full.toStdString()}, {"value", std::to_string(v)}});
+    projectSettings_[full] = QString::number(v);
+    applyAtmosToPanners(extra);
+}
+
+void ProjectController::setAtmosTrimManual(int layout, bool manual) {
+    if (layout < 0 || layout > 4) return;
+    const QString key = QStringLiteral("atmosTrimMode.%1").arg(layout);
+    projectSettings_[key] = manual ? "manual" : "auto";
+    applyAtmosToPanners(nlohmann::json::array({{{"type", "set_project_setting"}, {"key", key.toStdString()}, {"value", manual ? "manual" : "auto"}}}));
+}
+
+// File > Bounce for a Spatial Audio project: the mix as a file of the channels of the Monitoring Format.
+void ProjectController::bounceAtmos(const QUrl& file) {
+    if (!host_) return;
+    const int format = std::clamp(projectSetting("atmosFormat", projectSetting("atmosMonitor", "binaural") == QLatin1String("stereo") ? "0" : "1").toInt(), 0, lpc::kMonitorFormats - 1);
+    if (format < 2) {
+        emit notice("The binaural and stereo pan formats are bounced with File > Bounce");
+        return;
+    }
+    std::filesystem::path out = file.toLocalFile().toStdWString();
+    if (out.extension().empty()) out += ".wav";
+    if (!saveProject()) return;
+    const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
+    if (lpc::atmosObjects(project).empty()) {
+        setError("Make some tracks objects first (Mix > Dolby Atmos)");
+        return;
+    }
+    const nlohmann::json want = atmosPannerParams();
+    lpc::AtmosDownmix dm;
+    dm.to51 = want.value("downmix51", 0);
+    dm.to20 = want.value("downmix20", 0);
+    dm.trim = {want.value("surroundTrim", 0.0), want.value("heightTrim", 0.0), want.value("overhead", 0.0) / 100.0, want.value("plane", 0.0) / 100.0};
+    lpc::AtmosExportOptions render;
+    if (bouncing_->exchange(true)) {
+        setError("A bounce is already running");
+        return;
+    }
+    if (playing_) stop();
+#ifdef JAD_HAVE_JUCE
+    render.plugins = pluginHost_.get();
+#endif
+    emit notice("Bouncing the Spatial Audio mix…");
+    const std::filesystem::path root = dir_;
+    QPointer<ProjectController> self(this);
+    const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
+    (void)QtConcurrent::run([self, flag, project, root, out, render, format, dm] {
+        QString message;
+        bool failed = false;
+        try {
+            lpc::MediaStore media(root, /*streaming=*/false);
+            const lpc::AdmFile adm = lpc::renderAdm(project, media, render);
+            flag->store(false);
+            const std::vector<float> mix = lpc::renderSpeakers(adm, static_cast<lpc::MonitorFormat>(format), dm);
+            lpc::writeWav(out, adm.sampleRate, lpc::monitorChannels(static_cast<lpc::MonitorFormat>(format)), mix, lpc::WavFormat::Pcm24);
+            message = QString("Bounced %1 (%2 channels)").arg(lpc::monitorName(static_cast<lpc::MonitorFormat>(format))).arg(lpc::monitorChannels(static_cast<lpc::MonitorFormat>(format)));
+        } catch (const std::exception& e) {
+            flag->store(false);
+            failed = true;
+            message = QString::fromUtf8(e.what());
+        }
+        if (self) QMetaObject::invokeMethod(self.data(), [self, message, failed] { if (self) { if (failed) self->setError(message); else emit self->notice(message); } }, Qt::QueuedConnection);
+    });
 }
 
 // The position of an object at the playhead, for the panner's window: (x, y, z, size) from the parameters and the automation.

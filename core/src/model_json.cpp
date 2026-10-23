@@ -193,12 +193,50 @@ void to_json(nlohmann::json& j, const Region& r) {
 void to_json(nlohmann::json& j, const LiveCell& c) {
     j = {{"id", c.id}, {"scene", c.scene}, {"region", c.region}};
     if (!c.name.empty()) j["name"] = c.name;
+    if (c.pattern) j["pattern"] = true;
+    if (!c.loop) j["loop"] = false;
+    if (c.startPos) j["startPos"] = c.startPos;
+    if (c.loopStart) j["loopStart"] = c.loopStart;
+    if (c.loopLength) j["loopLength"] = c.loopLength;
+    if (c.trigger != "startStop") j["trigger"] = c.trigger;
+    if (c.playFrom != "start") j["playFrom"] = c.playFrom;
+    if (c.quantize != "global") j["quantize"] = c.quantize;
+    if (c.qLoopStart != "off") j["qLoopStart"] = c.qLoopStart;
+    if (c.recording != "replace") j["recording"] = c.recording;
+    if (c.recLength != "cell") j["recLength"] = c.recLength;
+    if (c.atRecEnd != "play") j["atRecEnd"] = c.atRecEnd;
+    if (!c.takes.empty()) {
+        j["takes"] = nlohmann::json::array();
+        for (const LiveTake& t : c.takes) j["takes"].push_back({{"name", t.name}, {"region", t.region}});
+        j["activeTake"] = c.activeTake;
+    }
 }
 void from_json(const nlohmann::json& j, LiveCell& c) {
     c.id = j.at("id").get<Uuid>();
     c.scene = j.at("scene").get<int>();
     c.name = j.value("name", std::string());
     j.at("region").get_to(c.region);
+    c.pattern = j.value("pattern", false);
+    c.loop = j.value("loop", true);
+    c.startPos = j.value("startPos", Ticks{0});
+    c.loopStart = j.value("loopStart", Ticks{0});
+    c.loopLength = j.value("loopLength", Ticks{0});
+    c.trigger = j.value("trigger", std::string("startStop"));
+    c.playFrom = j.value("playFrom", std::string("start"));
+    c.quantize = j.value("quantize", std::string("global"));
+    c.qLoopStart = j.value("qLoopStart", std::string("off"));
+    c.recording = j.value("recording", std::string("replace"));
+    c.recLength = j.value("recLength", std::string("cell"));
+    c.atRecEnd = j.value("atRecEnd", std::string("play"));
+    c.takes.clear();
+    if (j.contains("takes"))
+        for (const auto& t : j.at("takes")) {
+            LiveTake take;
+            take.name = t.value("name", std::string());
+            t.at("region").get_to(take.region);
+            c.takes.push_back(std::move(take));
+        }
+    c.activeTake = j.value("activeTake", 0);
 }
 
 void from_json(const nlohmann::json& j, Region& r) {
@@ -348,6 +386,7 @@ void from_json(const nlohmann::json& j, Track& t) {
     t.alternative = j.value("alternative", std::string());
     t.cells.clear();
     t.liveRuns.clear();
+    t.liveCells = false;
     if (j.contains("cells")) j.at("cells").get_to(t.cells);
     t.alternatives.clear();
     if (j.contains("alternatives"))

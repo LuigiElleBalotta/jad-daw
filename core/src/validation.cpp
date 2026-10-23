@@ -5,6 +5,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <set>
 #include <unordered_set>
 #include <vector>
@@ -331,6 +332,31 @@ MaybeError checkProject(const Project& p) {
                 if (c.region.start != 0 || c.region.timeBase != TimeBase::Musical || c.region.length <= 0) return CommandError{"bad_value", "a cell starts at tick 0, in musical time, and has a length"};
                 if (auto e = checkRegion(p, t.kind, c.region)) return e;
                 if (!regionIds.insert(c.region.id).second) return CommandError{"duplicate_id", "region id used twice"};
+                if (c.startPos < 0 || c.loopStart < 0 || c.loopLength < 0 || c.startPos >= c.region.length || c.loopStart >= c.region.length || c.loopStart + c.loopLength > c.region.length)
+                    return CommandError{"bad_value", "the start, the loop start and the loop length of a cell lie inside the cell"};
+                const auto oneOf = [](const std::string& v, std::initializer_list<const char*> ok) {
+                    for (const char* o : ok)
+                        if (v == o) return true;
+                    return false;
+                };
+                if (!oneOf(c.trigger, {"startStop", "momentary", "retrigger"}) || !oneOf(c.playFrom, {"start", "stopPosition", "playingCell", "playhead"}) || !oneOf(c.qLoopStart, {"off", "on", "onPreserve"}) ||
+                    !oneOf(c.recording, {"replace", "takes", "merge"}) || !oneOf(c.recLength, {"cell", "bars", "beats"}) || !oneOf(c.atRecEnd, {"play", "continue"}))
+                    return CommandError{"bad_value", "unknown cell setting"};
+                if (!oneOf(c.quantize, {"global", "off", "cellEnd"})) {
+                    char* end = nullptr;
+                    const double beats = std::strtod(c.quantize.c_str(), &end);
+                    if (end == c.quantize.c_str() || *end != '\0' || !(beats >= 0.0625 && beats <= 128.0)) return CommandError{"bad_value", "the quantize start of a cell is global, off, cell end or a length in beats"};
+                }
+                if (c.takes.size() > 64) return CommandError{"bad_value", "a cell has at most 64 takes"};
+                if (!c.takes.empty()) {
+                    if (c.activeTake < 0 || c.activeTake >= static_cast<int>(c.takes.size())) return CommandError{"bad_value", "no such take"};
+                    for (const LiveTake& take : c.takes) {
+                        if (take.name.size() > 60) return CommandError{"bad_value", "a take name has at most 60 bytes"};
+                        if (take.region.start != 0 || take.region.timeBase != TimeBase::Musical || take.region.length <= 0) return CommandError{"bad_value", "a take starts at tick 0, in musical time, and has a length"};
+                        if (auto e = checkRegion(p, t.kind, take.region)) return e;
+                        if (take.region.id != c.region.id && !regionIds.insert(take.region.id).second) return CommandError{"duplicate_id", "region id used twice"};
+                    }
+                }
             }
         }
         if (t.alternative.size() > 60 || t.alternatives.size() > 64) return CommandError{"bad_value", "a track has at most 65 alternatives with names of at most 60 bytes"};

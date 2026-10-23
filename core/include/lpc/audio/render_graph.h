@@ -123,6 +123,7 @@ struct TrackConfig {
     std::vector<SideChainLink> sideChains;
     std::vector<SendPlayback> sends;
     int outputPair = 0;  // Output strips: the pair of device outputs they play on (1 = outputs 3-4)
+    int atmosInsert = -1;  // the 3D Object Panner among the inserts, -1 when there is none: when it is set to a speaker format the track is fed to the speakers by its gains
     Uuid output;  // null = master
     DelayLine outputDelay;  // plug-in delay compensation of the output edge
     std::vector<std::shared_ptr<IFrameSource>> keepAlive;
@@ -149,6 +150,7 @@ struct TrackNode {
     MidiEvent live[64];
     int liveCount = 0;
     int monitorL = -1, monitorR = -1;  // the input channels heard on this track (-1: none)
+    std::array<float, 12> spkPrev{};  // the speaker gains of the last block (Spatial Audio)
     float smoothL = 1.0f;
     float blockPeak = 0.0f;  // after the fader, this block
     float blockPeakPre = 0.0f;  // before the fader (after the inserts), this block
@@ -215,6 +217,8 @@ private:
     int count_ = 0;
     TrackNode* master_ = nullptr;
     std::vector<float> scratchL_, scratchR_, preL_, preR_, dlyL_, dlyR_;
+    std::array<std::vector<float>, 12> spk_;  // the speaker feeds of the object tracks in a speaker format, this block (container order, see atmos_render.h)
+    bool spkActive_ = false;
     float masterPeak_ = 0.0f;
     const float* const* input_ = nullptr;
     int lowLatencyLimit_ = 0;  // Low Latency Monitoring Mode: see MsgKind::SetLowLatency

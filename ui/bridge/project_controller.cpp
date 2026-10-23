@@ -1714,6 +1714,8 @@ void ProjectController::tick() {
         if (!playing) {
             stopLiveOnStop();
             finishAutomationCaptures(true);
+        } else {
+            liveTransportStarted();
         }  // stopped: what was written (latch and write too) goes into the lanes
         emit playingChanged();
         applyMonitoring();

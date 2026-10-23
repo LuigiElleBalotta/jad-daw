@@ -582,21 +582,52 @@ public:
     Q_INVOKABLE void setAtmosMode(bool on);
     Q_INVOKABLE void setAtmosObject(const QString& trackId, bool object);
     Q_INVOKABLE void setAtmosMonitor(const QString& mode);  // "binaural" or "stereo"
+    Q_INVOKABLE void setAtmosFormat(int format);            // the Monitoring Format: 0 stereo pan, 1 binaural, 2 2.0 Direct, 3 2.0 from 5.1, 4 5.1, 5 7.1, 6 5.1.2, 7 5.1.4, 8 7.1.4
+    Q_INVOKABLE QVariantMap atmosSettings() const;          // {format, downmix51, downmix20, trims: [{manual, surround, height, overhead, plane}] for the five layouts}
+    Q_INVOKABLE void setAtmosDownmix(const QString& which, int value);  // "to51" or "to20"
+    Q_INVOKABLE void setAtmosTrim(int layout, const QString& key, double value);  // surround, height (dB), overhead, plane (%); the layout goes to Manual
+    Q_INVOKABLE void setAtmosTrimManual(int layout, bool manual);
+    Q_INVOKABLE void bounceAtmos(const QUrl& file);         // the mix rendered to the Monitoring Format, as a file with its channels (the speaker formats and 2.0)
     Q_INVOKABLE QVariantMap objectPosition(const QString& trackId) const;  // {x, y, z, size} at the playhead
     Q_INVOKABLE void exportAdmBwf(const QUrl& file, const QVariantMap& options);  // range: project|cycle, bitDepth: 16|24
     Q_INVOKABLE void createProjectFromAdm(const QUrl& file, const QUrl& folder);
-    // Live Loops: the grid of cells (scenes down, tracks across). A launch starts the cell at the next multiple of the quantization (Project Setting liveQuantize in
-    // beats, a bar by default) and the track's own regions are silent while a cell plays; stopping the transport stops every cell.
+    // Live Loops: the grid of cells (scenes down, tracks across), as Logic's: cells start at the Quantize Start of the grid, of their scene or of their own (Project Settings
+    // liveQuantize in beats, "off"; sceneQuantize.N), Smart Pickup (liveSmartPickup), the trigger mode, Play From, the loop settings and Q Loop Start of each cell, queued cells,
+    // pause and resume, the Divider column (a track plays its cells or its regions), recording into cells (takes, merge, replace) and recording a performance as regions.
     Q_PROPERTY(int liveRevision READ liveRevision NOTIFY liveLoopsChanged)  // changes when the grid or what plays in it changes
+    Q_PROPERTY(bool livePerformance READ livePerformance WRITE setLivePerformance NOTIFY liveLoopsChanged)  // Enable Performance Recording
     int liveRevision() const { return liveRevision_; }
-    Q_INVOKABLE QVariantMap liveGrid() const;  // {tracks: [{id, name, color, kind}], cells: [{trackId, scene, cellId, name, state}], scenes, sceneNames}; state: stopped, queued, playing, stopping
-    Q_INVOKABLE void launchCell(const QString& trackId, int scene);
-    Q_INVOKABLE void launchScene(int scene);
+    bool livePerformance() const { return livePerformance_; }
+    void setLivePerformance(bool on);
+    // {tracks: [{id, name, color, kind, cells (the track plays its cells), running, queued, paused}], cells: [{trackId, scene, cellId, name, state, type, loop, takes, activeTake, takeNames}],
+    // scenes, sceneNames}; state: stopped, queued, playing, stopping, recording, recordQueued
+    Q_INVOKABLE QVariantMap liveGrid() const;
+    Q_INVOKABLE QVariantMap liveCellInfo(const QString& trackId, int scene) const;  // every setting of the cell, for the Cell inspector
+    Q_INVOKABLE double liveProgress(const QString& trackId, int scene) const;       // where the playing cell is, 0..1 of its length; -1 when it is not playing
+    Q_INVOKABLE void setCellSetting(const QString& trackId, int scene, const QString& key, const QVariant& value);  // loop, startBeats, loopStartBeats, loopLengthBeats, lengthBeats, trigger, playFrom, quantize, qLoopStart, recording, recLength, atRecEnd, name
+    Q_INVOKABLE void launchCell(const QString& trackId, int scene, bool queueOnly = false);  // queueOnly: Option-click, it starts with the transport or with Trigger
+    Q_INVOKABLE void releaseCell(const QString& trackId, int scene);                         // the pointer is let go: a Momentary cell stops
+    Q_INVOKABLE void launchScene(int scene, bool queueOnly = false);                         // an empty scene stops everything at the next quantize start
+    Q_INVOKABLE void triggerQueued();                                                        // Trigger Live Loops: the queued cells start at the next quantize start
     Q_INVOKABLE void stopCell(const QString& trackId);
+    Q_INVOKABLE void pauseCell(const QString& trackId);   // stops at the next quantize start and gives the track back to its regions; resume continues from there
+    Q_INVOKABLE void resumeCell(const QString& trackId);
+    Q_INVOKABLE void activateTrackRegions(const QString& trackId);  // the Track Activation button: the regions of the track play, not its cells
+    Q_INVOKABLE void activateTrackCells(const QString& trackId);
     Q_INVOKABLE void stopAllCells();
     Q_INVOKABLE void clearCell(const QString& trackId, int scene);
     Q_INVOKABLE void setCellFromSelection(const QString& trackId, int scene);  // the selected regions of the track, copied into the cell
-    Q_INVOKABLE void copyToLiveLoopsScene();                                    // Edit > Copy to Live Loops Scene
+    Q_INVOKABLE void newSessionCell(const QString& trackId, int scene, const QVariantMap& options);  // a Session Player cell on an instrument track (the options of newSessionPlayer)
+    Q_INVOKABLE void newPatternCell(const QString& trackId, int scene);                              // a pattern cell: a drum pattern of one bar to open in the Step Sequencer
+    Q_INVOKABLE void convertToMidiCell(const QString& trackId, int scene);                           // Convert > Convert to MIDI Cell
+    Q_INVOKABLE void copyCellToTracks(const QString& trackId, int scene);                            // a copy of the cell's region at the playhead, in the Tracks area
+    Q_INVOKABLE void copySceneToTracks(int scene);
+    Q_INVOKABLE void takeAction(const QString& trackId, int scene, const QString& action, int take = -1, const QString& argument = QString());  // select, rename, delete, flatten, copyTo/moveTo/unpack with newScene, nextRight, newTrack, nextBelow
+    Q_INVOKABLE void recordIntoCell(const QString& trackId, int scene);                              // Record Into Cell
+    Q_INVOKABLE void addAudioFileToCell(const QUrl& file, const QString& trackId, int scene);       // Add Audio File: the file becomes the cell
+    Q_INVOKABLE void extractLoops(const QString& trackId, int scene);                                // Extract Loops: the loop points that suit an audio cell
+    Q_INVOKABLE void importLiveLoopsGrid(const QUrl& projectFolder);                                 // File > Import > Live Loops Grid
+    Q_INVOKABLE void copyToLiveLoopsScene();                                                         // Edit > Copy to Live Loops Scene
     Q_INVOKABLE void addLiveScene();
     Q_INVOKABLE void renameLiveScene(int scene, const QString& name);
     Q_INVOKABLE int consolidateMedia(bool audio, bool sampler);                 // how many files were copied into the project
@@ -1092,19 +1123,54 @@ private:
     void teardown();
     struct LiveRunRow {
         QString cellId;
-        lpc::Ticks start = 0, end = -1;
+        lpc::Ticks start = 0, end = -1, offset = 0;
+    };
+    struct CellRecording {
+        QString trackId;
+        int scene = 0;
+        lpc::Ticks start = 0, end = -1, length = 0;  // the window of the pass in ticks (end -1: until the cell is stopped or the next Record Into Cell)
+        enum State { Waiting, Recording, Finishing } state = Waiting;
+        QStringList regionsBefore;  // the ids of the regions of the track before the pass
+        int passes = 0;
     };
     QHash<QString, QVector<LiveCellRow>> liveCells_;  // by track id
     QHash<QString, QVector<LiveRunRow>> liveRuns_;    // by track id: the cells that play or are queued
+    QHash<QString, int> liveQueued_;                   // track id -> the scene of the cell that waits for the transport or for Trigger
+    bool liveForceStopPos_ = false;
+    QSet<QString> liveCellsMode_;                      // the tracks that play their cells (the Track Activation button of the Divider column)
+    QHash<QString, lpc::Ticks> liveStopPos_;           // cell id -> where it last stopped, for Play From: Stop Position and for Resume
+    QHash<QString, QString> livePaused_;               // track id -> the paused cell
+    std::vector<CellRecording> cellRec_;
+    struct PendingCellFile {
+        QString trackId;
+        int scene = 0;
+        QStringList regionsBefore;
+        int waited = 0;
+    };
+    std::vector<PendingCellFile> pendingCellFiles_;  // audio files that are being imported to become cells
+    bool livePerformance_ = false, perfRecording_ = false;
+    lpc::Ticks perfStart_ = 0;
+    std::vector<std::pair<QString, LiveRunRow>> perfLog_;  // every run that began during a performance recording: (track id, run)
     QString lastLiveSignature_;
     int liveRevision_ = 0;
-    lpc::Ticks liveQuantizeTicks() const;
+    lpc::Ticks liveQuantizeTicks(const QString& cellQuantize, int scene) const;  // -1: Off, -2: Cell End
     int liveSceneCount() const;
     QString liveCellState(const QString& trackId, const QString& cellId) const;
-    void refreshLiveCells(const std::vector<std::pair<QString, LiveCellRow>>& cells);
+    const lpc::LiveCell* findLiveCell(const lpc::Project& project, const QString& trackId, int scene) const;
+    void refreshLiveCells(const std::vector<LiveCellRow>& cells);
     void pushLiveRuns(const QString& trackId);
     void updateLive();
     void stopLiveOnStop();
+    void liveTransportStarted();
+    void launchCellAt(const QString& trackId, int scene, int sceneQuantizeFrom, bool queueOnly);
+    void saveCells(const QString& trackId, std::vector<lpc::LiveCell> cells);
+    nlohmann::json atmosPannerParams() const;  // the parameters of the 3D Object Panners that the Monitoring Format, the downmix and the trims ask for
+    void applyAtmosToPanners(nlohmann::json extra = nullptr);  // sets them on every panner (one undo step); `extra` commands go in the same step
+    nlohmann::json buildSessionRegion(const QVariantMap& options, std::string& error) const;  // the region of a Session Player part (JSON), or null with the reason
+    void finishPerformance();
+    void updateCellRecording();
+    void updatePendingCellFiles();
+    void finishCellPass(const CellRecording& rec);
     bool checkMissingOnOpen_ = false;  // the next snapshot of a project that was just opened is looked at for missing files
     int consolidateOnSave();            // the copy of the referenced files that Save does for the asset types that are ticked
     void rememberArmed();           // Project Settings > General: with "Reset record enable state" off, the armed Software Instrument tracks are kept for the next opening

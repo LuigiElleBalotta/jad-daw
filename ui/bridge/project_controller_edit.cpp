@@ -1287,6 +1287,10 @@ void ProjectController::setCountInChoice(int choice) {
 }
 
 void ProjectController::toggleRecording() {
+    if (perfRecording_) {  // the performance ends, the project goes on playing
+        finishPerformance();
+        return;
+    }
     if (!recording_) startRecording();
     else if (recordButtonMode_ == "repeat") {  // Record/Record Repeat: this take ends and another begins where it began
         repeatOnFinish_ = true;
@@ -1373,6 +1377,16 @@ void ProjectController::startRecording() {
     for (const TrackRow& t : allRows_)
         if (t.kind == "instrument" && !t.master && armed.contains(t.id)) recMidiTracks_ << t.id;
     if (recTracks_.isEmpty() && recMidiTracks_.isEmpty()) {
+        if (livePerformance_) {  // Enable Performance Recording: no track needs to be armed, what is played in the Live Loops grid is recorded
+            perfRecording_ = true;
+            perfStart_ = static_cast<lpc::Ticks>(std::llround(std::clamp(positionBeats_, 0.0, kMaxBeatsEdit) * lpc::kPPQ));
+            perfLog_.clear();
+            const QStringList tracks = liveRuns_.keys();
+            for (const QString& id : tracks) pushLiveRuns(id);  // what already plays is part of it
+            if (!playing_) play();
+            emit liveLoopsChanged();
+            return;
+        }
         emit notice("Arm a track (R) to record");
         return;
     }
@@ -4800,9 +4814,10 @@ QVariantMap ProjectController::unusedMedia() const {
                 used.insert(r.mediaId.toString());
                 if (r.flex) used.insert(r.flex->sourceMediaId.toString());
             }
-        for (const lpc::LiveCell& c : t.cells) {  // the Live Loops cells as well
+        for (const lpc::LiveCell& c : t.cells) {  // the Live Loops cells as well, with their takes
             used.insert(c.region.mediaId.toString());
             if (c.region.flex) used.insert(c.region.flex->sourceMediaId.toString());
+            for (const lpc::LiveTake& take : c.takes) used.insert(take.region.mediaId.toString());
         }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
         if (t.instrument)
@@ -4835,9 +4850,10 @@ void ProjectController::cleanUpProject() {
                 used.insert(r.mediaId.toString());
                 if (r.flex) used.insert(r.flex->sourceMediaId.toString());
             }
-        for (const lpc::LiveCell& c : t.cells) {  // the Live Loops cells as well
+        for (const lpc::LiveCell& c : t.cells) {  // the Live Loops cells as well, with their takes
             used.insert(c.region.mediaId.toString());
             if (c.region.flex) used.insert(c.region.flex->sourceMediaId.toString());
+            for (const lpc::LiveTake& take : c.takes) used.insert(take.region.mediaId.toString());
         }
         if (t.freeze) used.insert(t.freeze->mediaId.toString());
         if (t.instrument)

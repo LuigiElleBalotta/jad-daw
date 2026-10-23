@@ -26,6 +26,7 @@
  {"id":"file.importMidi","label":"MIDI File…","menu":"File/Import","shortcut":"","kind":"command","status":"ready","subsep":true},
  {"id":"file.exportSpatial","label":"Project as Spatial Audio…","menu":"File/Export","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.importAdm","label":"Create Project from ADM BWF…","menu":"File/Import","shortcut":"","kind":"command","status":"ready"},
+ {"id":"file.importLiveLoopsGrid","label":"Live Loops Grid…","menu":"File/Import","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.exportMidi","label":"Selected Regions as MIDI File…","menu":"File/Export","shortcut":"","kind":"command","status":"ready","subsep":true},
  {"id":"file.bounce","label":"Bounce…","menu":"File","shortcut":"","kind":"command","status":"ready"},
  {"id":"file.share","label":"Share Project as Audio File…","menu":"File","shortcut":"","kind":"command","status":"ready"},

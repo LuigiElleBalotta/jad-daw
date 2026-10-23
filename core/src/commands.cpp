@@ -39,7 +39,10 @@ std::unordered_set<Uuid> allRegionIds(const Project& p) {
         for (const Region& r : t.regions) ids.insert(r.id);
         for (const TrackAlternative& alt : t.alternatives)  // the regions of the other alternatives keep their ids
             for (const Region& r : alt.regions) ids.insert(r.id);
-        for (const LiveCell& c : t.cells) ids.insert(c.region.id);
+        for (const LiveCell& c : t.cells) {
+            ids.insert(c.region.id);
+            for (const LiveTake& take : c.takes) ids.insert(take.region.id);
+        }
     }
     return ids;
 }
@@ -799,6 +802,9 @@ public:
             for (const TrackAlternative& alt : t.alternatives)
                 for (const Region& r : alt.regions)
                     if (r.mediaId == id_ || (r.flex && r.flex->sourceMediaId == id_)) return fail("in_use", "a region of another alternative still uses this media");
+            for (const LiveCell& c : t.cells)
+                for (const LiveTake& take : c.takes)
+                    if (take.region.mediaId == id_) return fail("in_use", "a Live Loops take still uses this media");
             for (const LiveCell& c : t.cells)
                 if (c.region.mediaId == id_ || (c.region.flex && c.region.flex->sourceMediaId == id_)) return fail("in_use", "a Live Loops cell still uses this media");
         }

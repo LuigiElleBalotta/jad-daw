@@ -74,7 +74,7 @@ Snapshot makeSnapshot(const lpc::Project& p, std::uint64_t revision, const std::
     for (const lpc::Marker& m : p.chords)
         s.chords.push_back({QString::fromStdString(m.id.toString()), QString::fromStdString(m.name), static_cast<double>(m.tick) / lpc::kPPQ, QString::fromStdString(m.text)});
     for (const lpc::Track& t : p.tracks)
-        for (const lpc::LiveCell& c : t.cells) s.liveCells.push_back({QString::fromStdString(t.id.toString()), {QString::fromStdString(c.id.toString()), c.scene, QString::fromStdString(c.name)}});
+        for (const lpc::LiveCell& c : t.cells) s.liveCells.push_back({QString::fromStdString(t.id.toString()), c});
     for (const lpc::MediaItem& m : p.mediaPool) s.mediaPaths.insert(QString::fromStdString(m.id.toString()), QString::fromStdString(m.path));
 
     int row = 0;       // colour rotation: counts every non-master track

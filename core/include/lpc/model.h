@@ -161,12 +161,34 @@ struct TrackAlternative {  // Track Alternatives: another set of regions the tra
     bool operator==(const TrackAlternative&) const = default;
 };
 
-// Live Loops: a cell of the grid, one scene (row) of one track (column). Its region starts at tick 0 and is a loop that plays until the cell is stopped.
+// A take of a cell (Recording: Takes): the take that plays is also the cell's `region`.
+struct LiveTake {
+    std::string name;
+    Region region;  // start 0, musical; the id is unique among the regions of the project
+    bool operator==(const LiveTake&) const = default;
+};
+
+// Live Loops: a cell of the grid, one scene (row) of one track (column). Its region starts at tick 0, its length is the cell length. The settings are those of Logic's Cell
+// inspector. All positions are ticks from the start of the cell.
 struct LiveCell {
     Uuid id;
     int scene = 0;
     std::string name;
-    Region region;  // start 0, musical; the id is the cell's own and is unique among the regions of the project
+    Region region;  // start 0, musical; the id is the cell's own and is unique among the regions of the project; `generator` set: a Session Player cell
+    bool pattern = false;           // a pattern cell: made in the Step Sequencer
+    bool loop = true;               // off: the cell plays to the end of its length once (one-shot)
+    Ticks startPos = 0;             // Start: where the first pass begins
+    Ticks loopStart = 0;            // Loop Start
+    Ticks loopLength = 0;           // Loop Length (0: to the end of the cell)
+    std::string trigger = "startStop";   // startStop, momentary, retrigger
+    std::string playFrom = "start";      // start, stopPosition, playingCell, playhead
+    std::string quantize = "global";     // global, off, cellEnd, or a length in beats ("0.25" .. "32")
+    std::string qLoopStart = "off";      // off, on, onPreserve
+    std::string recording = "replace";   // replace, takes, merge
+    std::string recLength = "cell";      // cell, bars, beats
+    std::string atRecEnd = "play";       // play, continue
+    std::vector<LiveTake> takes;         // Recording: Takes; `region` is the active one (empty: the cell has no take folder)
+    int activeTake = 0;
     bool operator==(const LiveCell&) const = default;
 };
 
@@ -176,6 +198,7 @@ struct LiveRun {
     Uuid cellId;
     Ticks start = 0;
     Ticks end = -1;
+    Ticks offset = 0;  // the position in the cell at `start` (Play From, Smart Pickup, Q Loop Start)
     bool operator==(const LiveRun&) const = default;
 };
 
@@ -206,7 +229,8 @@ struct Track {
     std::vector<TrackAlternative> alternatives;  // the other alternatives: their regions do not play
     std::vector<AutomationLane> automation;
     std::vector<LiveCell> cells;   // the Live Loops grid: one cell per scene at most
-    std::vector<LiveRun> liveRuns;  // transient: the cells that play (the track's own regions are silent while one does)
+    std::vector<LiveRun> liveRuns;  // transient: the cells that play
+    bool liveCells = false;         // transient: the track plays its cells, not its regions (the Divider column's Track Activation), also while no cell plays
     bool operator==(const Track&) const = default;
 };
 

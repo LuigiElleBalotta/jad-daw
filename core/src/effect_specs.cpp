@@ -70,7 +70,10 @@ std::vector<EffectSpec> build() {
     // to the ceiling (1); `mode` 1 renders the object for headphones (binaural), 0 as a plain stereo pan. The ADM BWF export writes these as the object's metadata.
     v.push_back({kProcObjectPanner, "3D Object Panner", "Utility",
                  {p("x", "Left / Right", "", -1, 1, 0), p("y", "Back / Front", "", -1, 1, 1), p("z", "Height", "", 0, 1, 0), p("size", "Size", "", 0, 1, 0),
-                  p("mode", "Monitoring (0 stereo, 1 binaural)", "", 0, 1, 1)}});
+                  p("mode", "Monitoring (0 stereo pan, 1 binaural, 2 2.0 direct, 3 2.0 from 5.1, 4 5.1, 5 7.1, 6 5.1.2, 7 5.1.4, 8 7.1.4)", "", 0, 8, 1),
+                  p("downmix51", "5.1 Downmix (0 Lo/Ro, 1 Pro Logic IIx, 2 direct with room balance, 3 direct)", "", 0, 3, 0), p("downmix20", "5.1 to 2.0 (0 Lo/Ro, 1 Lt/Rt, 2 Lt/Rt phase 90)", "", 0, 2, 0),
+                  p("surroundTrim", "Surround Trim", "dB", -24, 0, 0), p("heightTrim", "Height Trim", "dB", -24, 0, 0), p("overhead", "Overhead Balance", "%", -100, 100, 0),
+                  p("plane", "Listener Plane Balance", "%", -100, 100, 0)}});
     v.push_back({kProcDelay, "Delay", "Delay & Reverb",
                  {p("time", "Time", "ms", 1, 2000, 250, true), p("feedback", "Feedback", "%", 0, 95, 35), p("mix", "Mix", "%", 0, 100, 30),
                   p("pingPong", "Ping-Pong", "", 0, 1, 0)}});

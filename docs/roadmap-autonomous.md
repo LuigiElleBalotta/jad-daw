@@ -532,11 +532,15 @@ Today `EffectEditorWindow.qml` is a list of parameters (plus the Channel EQ curv
 - [x] H6. Side chain between tracks (Compressor, Gate), Sampler + Convert Regions to New Sampler Track, Print/Page Setup to PDF, assets as in Logic (referenced files, Consolidate, Missing Audio Files, Audio Recording Path).
 - [x] H7. Movie window (`MovieWindow.qml`, Qt Multimedia; file and start in the project settings `moviePath`/`movieStart`; File > Movie > Open, Close, Set Movie Start to Playhead; View > Movie Window).
       The CI installs `qtmultimedia` with the Qt action. The video plays muted, in step with the transport (60 ms timer, a seek when it is more than 180 ms off).
-- [x] H8. Live Loops: `Track::cells` (`LiveCell`: scene, looping region from tick 0), `Track::liveRuns` (transient: cell, start tick, end tick; set through `ProjectHost::setLiveRuns`, outside the
-      undo history), command `set_live_cells`; the graph builder lays the running cells over the track (its own regions are silent meanwhile). Bridge `project_controller_liveloops.cpp`
-      (quantized launch, scene launch, stop, Edit > Copy to Live Loops Scene from regions / cycle / arrangement sections), `LiveLoopsWindow.qml` (View > Live Loops). Not done: pattern and Session Player cells, follow actions, recording into cells.
-- [x] H9. Dolby Atmos: `builtin.objectpanner` (3D Object Panner, parameters x y z size mode; binaural rendering with delay, head shadow, back/up cues, or a stereo pan; automatable like a
-      plug-in's), `core/src/atmos.cpp` (objects = tracks with the panner, the bed = the other tracks; `renderAdm`, `projectFromAdm`), `core/src/adm_bwf.cpp` (ADM BWF writer and reader: fmt/data/chna/axml,
-      no Dolby `dbmd`), `DolbyAtmosDialog.qml` (Mix > Dolby Atmos…, File > Export > Project as Spatial Audio…, File > Import > Create Project from ADM BWF…), `FxObjectPannerView.qml`.
-      Not done: 7.1.4/5.1 monitoring and downmix/trim (the engine is stereo), Apple renderer, head tracking, the Dolby metadata chunk.
+- [x] H8. Live Loops as Logic's grid: `Track::cells` (`LiveCell` with the Cell inspector settings: loop, start, loop start/length, trigger mode, Play From, Quantize Start, Q Loop Start, recording
+      mode, Rec-Length, At Rec-End, takes, pattern/Session Player type), `Track::liveRuns` and `liveCells` (transient, `ProjectHost::setLiveRuns`, outside the undo history), command `set_live_cells`.
+      `core/src/live_loops.cpp`: `cellFromRegions`, `cellPositionAt`, `ticksToCellEnd`, `playedRegions` (intro, then the loop; the graph builder lays them over the track), `importLiveLoopsGrid`, `suggestLoop`
+      (Extract Loops). Bridge `project_controller_liveloops.cpp`: quantized launch with Smart Pickup, Cell End, queue, pause/resume, Track Activation, recording into cells (takes, merge, replace), takes menu,
+      Session Player/pattern cells, Add Audio File, copy cell/scene to Tracks, performance recording to regions. UI `LiveLoopsWindow.qml` (tracks as rows, Divider column, Cell inspector). Not done:
+      the graphical Cell Editor, control from other devices.
+- [x] H9. Dolby Atmos: `builtin.objectpanner` (3D Object Panner: x y z size, Monitoring Format 0-8, downmix and trim parameters; binaural, stereo, 2.0 downmixes with the Hilbert shift for Lt/Rt phase 90,
+      or speaker gains published to the graph, which feeds the objects to the output pairs), `core/src/atmos_render.cpp` (distance-based panning over a 7.1.4 room, folds to 7.1/5.1/5.1.2/5.1.4 with the
+      guide's downmix algorithms, trims and balances; `renderSpeakers` for bounces), `core/src/atmos.cpp` (objects, `renderAdm`, `projectFromAdm`), `core/src/adm_bwf.cpp` (ADM BWF writer and reader: fmt/data/chna/axml),
+      `DolbyAtmosDialog.qml` (Mix > Dolby Atmos…: formats, Downmix & Trim, export, bounce, File > Import > Create Project from ADM BWF…), `FxObjectPannerView.qml`. Not done (not ours to do): Apple renderer,
+      head tracking, the Dolby `dbmd` chunk, MP4 exports.
 - [ ] H10. Still open: the Mac window sets (macOS only); the -12/+12 dB Analog Model level and the Smart Tempo quality check (need the Mac).

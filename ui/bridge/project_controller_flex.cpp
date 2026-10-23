@@ -2022,6 +2022,19 @@ const char* sessionName(lpc::SessionKind k) {
 
 }  // namespace
 
+nlohmann::json ProjectController::buildSessionRegion(const QVariantMap& options, std::string& error) const {
+    const SessionPart part = buildSession(options, beatsPerBar_);
+    if (!part.error.empty()) {
+        error = part.error;
+        return nullptr;
+    }
+    if (part.notes.empty()) return nullptr;
+    const std::string nullId = "00000000-0000-0000-0000-000000000000";
+    return {{"id", QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString()}, {"timeBase", "musical"}, {"start", 0},
+            {"length", static_cast<std::int64_t>(std::llround(part.progressionBeats * part.repeats * lpc::kPPQ))}, {"mediaId", nullId}, {"sourceOffsetFrames", 0},
+            {"gainDb", 0}, {"notes", part.notes}, {"name", sessionName(part.kind)}, {"generator", part.generator.dump()}};
+}
+
 void ProjectController::newSessionPlayer(const QVariantMap& options) {
     if (!host_) return;
     const SessionPart part = buildSession(options, beatsPerBar_);

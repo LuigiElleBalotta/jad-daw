@@ -13,7 +13,9 @@ TrackNode::TrackNode(Uuid id_, TrackKind kind_, const StripParams& strip_, Track
     : id(id_), kind(kind_), strip(strip_), config(config_), l(kMaxBlock, 0.0f), r(kMaxBlock, 0.0f), scL(kMaxBlock, 0.0f), scR(kMaxBlock, 0.0f), synth(sampleRate), tailMax(static_cast<int>(sampleRate * 2.0)) {}
 
 RenderGraph::RenderGraph(double sampleRate)
-    : sampleRate_(sampleRate), scratchL_(kMaxBlock), scratchR_(kMaxBlock), preL_(kMaxBlock), preR_(kMaxBlock), dlyL_(kMaxBlock), dlyR_(kMaxBlock) {}
+    : sampleRate_(sampleRate), scratchL_(kMaxBlock), scratchR_(kMaxBlock), preL_(kMaxBlock), preR_(kMaxBlock), dlyL_(kMaxBlock), dlyR_(kMaxBlock) {
+    for (auto& feed : spk_) feed.assign(kMaxBlock, 0.0f);
+}
 
 RenderGraph::~RenderGraph() {
     for (int i = 0; i < count_; ++i) delete nodes_[static_cast<std::size_t>(i)];
@@ -388,6 +390,29 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
     for (int i = 0; i < n; ++i) t.blockPeak = std::max({t.blockPeak, std::abs(l[i]), std::abs(r[i])});
 
     if (t.kind == TrackKind::Master || t.kind == TrackKind::Output || !cfg) return;
+    // Spatial Audio: an object in a speaker format is fed to the speakers at the gains of its panner (the fader and mute are in the signal already)
+    bool speakerFed = false;
+    if (cfg->atmosInsert >= 0 && cfg->atmosInsert < static_cast<int>(cfg->inserts.size())) {
+        const float* sg = cfg->inserts[static_cast<std::size_t>(cfg->atmosInsert)]->speakerGains();
+        if (sg) {
+            speakerFed = true;
+            spkActive_ = true;
+            for (std::size_t ch = 0; ch < 12; ++ch) {
+                const float g0 = t.spkPrev[ch], g1 = sg[ch];
+                t.spkPrev[ch] = g1;
+                if (g0 == 0.0f && g1 == 0.0f) continue;
+                const float step = (g1 - g0) / static_cast<float>(n);
+                float g = g0;
+                float* feed = spk_[ch].data();
+                for (int i = 0; i < n; ++i) {
+                    g += step;
+                    feed[i] += 0.5f * (l[i] + r[i]) * g;
+                }
+            }
+        } else {
+            t.spkPrev.fill(0.0f);
+        }
+    }
     if (!muted) {
         for (SendPlayback& s : cfg->sends) {
             TrackNode* dst = find(s.target);
@@ -406,6 +431,7 @@ void RenderGraph::processNode(TrackNode& t, std::int64_t blockStart, int n, bool
             }
         }
     }
+    if (speakerFed) return;  // an object in a speaker format reaches the speakers, not the master
     TrackNode* out = cfg->output.isNull() ? master_ : find(cfg->output);
     if (out && out != &t) {
         const float* srcL = l;
@@ -435,6 +461,12 @@ void RenderGraph::copyOutputPairs(float* const* extra, int pairs, int offset, in
         std::copy_n(t.l.data(), n, extra[2 * (pair - 1)] + offset);
         std::copy_n(t.r.data(), n, extra[2 * (pair - 1) + 1] + offset);
     }
+    if (spkActive_)  // the other channels of a speaker format take the pairs after the first: C and LFE on outputs 3-4, the surrounds on 5-6, and so on
+        for (int ch = 2; ch < 12; ++ch) {
+            const int pair = ch / 2;
+            if (pair > pairs) break;
+            std::copy_n(spk_[static_cast<std::size_t>(ch)].data(), n, extra[2 * (pair - 1) + (ch % 2)] + offset);
+        }
 }
 
 bool RenderGraph::liveNote(const Uuid& track, bool on, std::uint8_t note, std::uint8_t velocity) noexcept {
@@ -479,13 +511,17 @@ void RenderGraph::render(std::int64_t blockStart, int frames, float* outL, float
         if (t.strip.solo && isSource(t.kind)) anySolo = true;
         if (t.kind == TrackKind::Master) master_ = &t;
     }
+    if (spkActive_) {
+        for (auto& feed : spk_) std::fill_n(feed.data(), n, 0.0f);
+        spkActive_ = false;
+    }
     for (int i = 0; i < count_; ++i) processNode(*nodes_[static_cast<std::size_t>(i)], blockStart, n, anySolo, withRegions);
 
     float peak = 0.0f;
     if (master_) {
         for (int i = 0; i < n; ++i) {
-            outL[i] = master_->l[static_cast<std::size_t>(i)];
-            outR[i] = master_->r[static_cast<std::size_t>(i)];
+            outL[i] = master_->l[static_cast<std::size_t>(i)] + (spkActive_ ? spk_[0][static_cast<std::size_t>(i)] : 0.0f);  // the front pair of the objects joins the bed
+            outR[i] = master_->r[static_cast<std::size_t>(i)] + (spkActive_ ? spk_[1][static_cast<std::size_t>(i)] : 0.0f);
             peak = std::max({peak, std::abs(outL[i]), std::abs(outR[i])});
         }
     }

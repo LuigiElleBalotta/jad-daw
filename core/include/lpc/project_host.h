@@ -60,7 +60,7 @@ public:
     std::future<void> startRecording(std::int64_t startFrame, std::int64_t countInFrames, audio::ClickTrack countIn, bool relocate = true, std::int64_t preRollFrames = 0);
     std::future<void> stopRecording();
     // Live Loops: the cells that play or are queued on a track (not undoable, not saved); an empty list stops the track's cells.
-    std::future<void> setLiveRuns(Uuid track, std::vector<LiveRun> runs);
+    std::future<void> setLiveRuns(Uuid track, std::vector<LiveRun> runs, bool cellsActive);
     std::future<void> setLiveTarget(Uuid track);  // the instrument track that plays the live MIDI (null: none)  // the transport keeps playing
     // Which input channels a track plays through its strip (first/second 1-based, 0 = not monitored)
     std::future<void> setMonitor(Uuid track, int first, int second);

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <vector>
 
+#include "lpc/atmos_render.h"
 #include "lpc/effect_specs.h"
 #include "lpc/processor_ids.h"
 
@@ -67,7 +68,12 @@ public:
         target_[2] = clamped(ref, "z");
         target_[3] = clamped(ref, "size");
         mode_ = clamped(ref, "mode");
+        dm_.to51 = static_cast<int>(clamped(ref, "downmix51"));
+        dm_.to20 = static_cast<int>(clamped(ref, "downmix20"));
+        dm_.trim = {clamped(ref, "surroundTrim"), clamped(ref, "heightTrim"), clamped(ref, "overhead") / 100.0, clamped(ref, "plane") / 100.0};
         for (int i = 0; i < 4; ++i) now_[i] = target_[i];
+        for (int k = -kHilbertHalf; k <= kHilbertHalf; ++k)  // a Hamming-windowed Hilbert transformer: the 90-degree shifted copy for the Lt/Rt downmix
+            hilbert_[static_cast<std::size_t>(k + kHilbertHalf)] = (k % 2 == 0) ? 0.0f : static_cast<float>(2.0 / (kPi * k) * (0.54 + 0.46 * std::cos(kPi * k / (kHilbertHalf + 1))));
         smoothing_ = 1.0 - std::exp(-1.0 / (0.01 * sampleRate_));  // 10 ms
         cutoffCoef(20000.0, lpL_.a);
         lpR_.a = lpL_.a;
@@ -75,25 +81,65 @@ public:
         cur_ = cues_;
     }
 
-    // The automated value (0..1) of a parameter, in the order of the spec: x, y, z, size, mode.
+    // The automated value (0..1) of a parameter, in the order of the spec: x, y, z, size, mode, downmix51, downmix20, surroundTrim, heightTrim, overhead, plane.
     void setParameter(int index, float normalized) noexcept override {
-        if (index < 0 || index > 4) return;
+        const EffectSpec* spec = findEffectSpec(kProcObjectPanner);
+        if (!spec || index < 0 || index >= static_cast<int>(spec->params.size())) return;
+        const EffectParam& p = spec->params[static_cast<std::size_t>(index)];
         const double n = std::clamp<double>(normalized, 0.0, 1.0);
+        const double v = p.min + n * (p.max - p.min);
         switch (index) {
-            case 0: target_[0] = -1.0 + 2.0 * n; break;
-            case 1: target_[1] = -1.0 + 2.0 * n; break;
-            case 2: target_[2] = n; break;
-            case 3: target_[3] = n; break;
-            default: mode_ = n >= 0.5 ? 1.0 : 0.0; break;
+            case 0: case 1: case 2: case 3: target_[static_cast<std::size_t>(index)] = v; break;
+            case 4: mode_ = std::round(v); break;
+            case 5: dm_.to51 = static_cast<int>(std::round(v)); break;
+            case 6: dm_.to20 = static_cast<int>(std::round(v)); break;
+            case 7: dm_.trim.surroundDb = v; break;
+            case 8: dm_.trim.heightDb = v; break;
+            case 9: dm_.trim.overhead = v / 100.0; break;
+            default: dm_.trim.plane = v / 100.0; break;
         }
     }
 
+    int latencySamples() const override { return static_cast<int>(mode_) == 3 && dm_.to20 == 2 ? kHilbertHalf : 0; }
+    const float* speakerGains() const noexcept override { return mode_ >= 4.0 ? spk_.data() : nullptr; }
+
     void process(float* l, float* r, int frames) noexcept override {
         const std::size_t mask = line_.size() - 1;
+        const int format = static_cast<int>(mode_);
+        if (format >= 4) {  // speakers: the sound is left as it is, the gains for the speakers are published for the graph, which feeds them
+            for (int i = 0; i < frames; ++i)
+                for (int k = 0; k < 4; ++k) now_[k] += (target_[k] - now_[k]) * smoothing_;
+            const SpeakerGains g = objectGains(static_cast<MonitorFormat>(std::min(format, 8)), now_[0], now_[1], now_[2], now_[3], dm_);
+            for (std::size_t c = 0; c < g.size(); ++c) spk_[c] = g[c];
+            return;
+        }
+        if (format == 2 || format == 3) {  // 2.0: the gains of the downmix, smoothed; with phase 90 the surround part goes through the shifted copy
+            const bool phase = format == 3 && dm_.to20 == 2;
+            for (int i = 0; i < frames; ++i) {
+                for (int k = 0; k < 4; ++k) now_[k] += (target_[k] - now_[k]) * smoothing_;
+                if ((counter_++ & 15) == 0) st_ = stereoGains(static_cast<MonitorFormat>(format), now_[0], now_[1], now_[2], now_[3], dm_);
+                const float s = static_cast<float>(smoothing_ * 4.0);
+                sl_ += (st_.l - sl_) * s;
+                sr_ += (st_.r - sr_) * s;
+                slp_ += (st_.lPhase - slp_) * s;
+                srp_ += (st_.rPhase - srp_) * s;
+                const float mono = 0.5f * (l[i] + r[i]);
+                hist_[histPos_] = mono;
+                float direct = mono, shifted = 0.0f;
+                if (phase) {
+                    for (int k = 0; k <= 2 * kHilbertHalf; ++k) shifted += hilbert_[static_cast<std::size_t>(k)] * hist_[(histPos_ + kHistSize - static_cast<std::size_t>(k)) % kHistSize];
+                    direct = hist_[(histPos_ + kHistSize - static_cast<std::size_t>(kHilbertHalf)) % kHistSize];  // the unshifted part waits for the filter's delay
+                }
+                histPos_ = (histPos_ + 1) % kHistSize;
+                l[i] = direct * sl_ + shifted * slp_;
+                r[i] = direct * sr_ + shifted * srp_;
+            }
+            return;
+        }
         for (int i = 0; i < frames; ++i) {
             for (int k = 0; k < 4; ++k) now_[k] += (target_[k] - now_[k]) * smoothing_;
             const float mono = 0.5f * (l[i] + r[i]);
-            if (mode_ < 0.5) {  // a stereo pan from the left/right place (the same law as the strips: -3 dB in the middle)
+            if (format == 0) {  // a stereo pan from the left/right place (the same law as the strips: -3 dB in the middle)
                 const double angle = (std::clamp(now_[0], -1.0, 1.0) + 1.0) * 0.25 * kPi;
                 l[i] = mono * static_cast<float>(std::cos(angle)) * 1.4142135f;
                 r[i] = mono * static_cast<float>(std::sin(angle)) * 1.4142135f;
@@ -124,7 +170,7 @@ public:
         }
     }
 
-    nlohmann::json describe() const override { return {{"id", kProcObjectPanner}, {"x", target_[0]}, {"y", target_[1]}, {"z", target_[2]}, {"size", target_[3]}, {"mode", mode_}}; }
+    nlohmann::json describe() const override { return {{"id", kProcObjectPanner}, {"x", target_[0]}, {"y", target_[1]}, {"z", target_[2]}, {"size", target_[3]}, {"mode", mode_}, {"downmix51", dm_.to51}, {"downmix20", dm_.to20}}; }
 
 private:
     struct OnePole {
@@ -146,6 +192,15 @@ private:
     double smoothing_ = 0.0;
     std::array<double, 4> target_{}, now_{};
     double mode_ = 1.0;
+    AtmosDownmix dm_;
+    static constexpr int kHilbertHalf = 31;
+    static constexpr std::size_t kHistSize = 128;
+    std::array<float, 2 * kHilbertHalf + 1> hilbert_{};
+    std::array<float, kHistSize> hist_{};
+    std::size_t histPos_ = 0;
+    std::array<float, 12> spk_{};
+    StereoGains st_;
+    float sl_ = 0, sr_ = 0, slp_ = 0, srp_ = 0;
     std::vector<float> line_;
     std::size_t head_ = 0;
     unsigned counter_ = 0;

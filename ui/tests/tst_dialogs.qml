@@ -178,8 +178,8 @@ TestCase {
         compare(d.grid.scenes, 8)
         compare(d.cellAt(d.grid.tracks[0].id, 0), null)
         verify(findChild(d.contentItem, "launchScene0") !== null)
-        compare(d.quantizeBeats({ label: "1 bar", beats: 0 }), c.barBeats)
-        compare(d.quantizeBeats({ label: "2 bars", beats: -2 }), c.barBeats * 2)
+        compare(Number(d.quantizeBeats("bar")), c.barBeats)
+        compare(Number(d.quantizeBeats("2bar")), c.barBeats * 2)
     }
 
     function test_the_dolby_atmos_dialog_turns_the_mode_on_and_lists_the_tracks() {

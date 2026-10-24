@@ -313,6 +313,11 @@ starts the cell (a Momentary cell stops when it is let go) or the scene. The *Co
 with the project and shown on the cells; an assigned key does not play the instrument. A connected Novation Launchpad plays the grid by itself: its eight by eight pads are the cells and the
 buttons at the right launch the scenes.
 
+*Remote for a phone or tablet.* Logic Remote is Apple's app, so the grid has its own: *Controller > Remote for Phone or Tablet…* shows an address; open it in the browser of a phone or tablet
+on the same network and the grid appears with a button per cell and scene, Trigger, Stop all and Performance. No app is needed. The address ends with a secret code, and only pages opened with
+it work. The same menu item also listens for Open Sound Control on UDP port 8000, for the free OSC apps (Open Stage Control, TouchOSC): `/jad/cell/<row>/<column>`, `/jad/scene/<n>` (counted
+from 1; a value above 0 presses, 0 lets go), `/jad/stopall`, `/jad/trigger`, `/jad/performance`. OSC has no password: use it only on a network you trust. The remote is off at every start.
+
 *Recording.* With the track armed (R), the shortcut menu (or Alt+R) records into a cell from the next quantize start (a bar at most) for the Rec-Length: the length of the cell, or
 automatic in bars or beats (press again to end it). *Recording* is Replace, Takes (a take folder: the take that plays can be chosen, renamed, deleted, flattened, copied, moved or unpacked
 to a new scene, the next empty cell to the right, a new track or the next matching empty cell below) or Merge (instruments); *At Rec-End* plays the cell or continues recording. The
@@ -339,6 +344,6 @@ The renderer is our own, not Dolby's, and the Automatic trims are our values. No
 ## What is not there yet
 
 Some menu commands are present but say "not implemented yet" when chosen: the Mac window sets (they belong to macOS) and a few stubs without a counterpart in Logic's guide.
-Live Loops cannot be controlled from Logic Remote (the iPad and iPhone app is Apple's). Match EQ's
+Match EQ's
 Learn buttons listen to what reaches the insert. The plug-in windows of the stock effects are our own drawings in Logic's style, not Apple's. The file
 [docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.

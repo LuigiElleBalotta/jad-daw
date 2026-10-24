@@ -18,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include "bridge/project_controller.h"
+#include "bridge/remote_server.h"
 #include "bridge/waveform_cache.h"
 #include "lpc/commands.h"
 #include "lpc/live_loops.h"
@@ -1340,6 +1341,63 @@ void ProjectController::liveMidiMessage(int status, int d1, int d2) {
     QString target = liveBindings().value(key).toString();
     if (target.isEmpty() && type != 0xB0) target = livePadTarget(d1);
     if (!target.isEmpty()) runLiveTarget(target, on);
+}
+
+// ---- control from a phone (the web page and OSC of RemoteServer)
+
+bool ProjectController::setRemote(bool on) {
+    if (!on) {
+        remote_.reset();
+        emit liveLoopsChanged();
+        return true;
+    }
+    if (remote_) return true;
+    remote_ = std::make_unique<RemoteServer>(
+        [this] {
+            const QVariantMap grid = liveGrid();
+            QVariantMap out;
+            out.insert("tracks", grid.value("tracks"));
+            out.insert("cells", grid.value("cells"));
+            out.insert("scenes", grid.value("scenes"));
+            out.insert("sceneNames", grid.value("sceneNames"));
+            return QJsonDocument(QJsonObject::fromVariantMap(out)).toJson(QJsonDocument::Compact);
+        },
+        [this](const QString& command, const QStringList& args) { remoteCommand(command, args); });
+    if (!remote_->start()) {
+        remote_.reset();
+        emit notice("Cannot open a network port for the remote");
+        return false;
+    }
+    emit liveLoopsChanged();
+    return true;
+}
+
+bool ProjectController::remoteOn() const { return remote_ != nullptr; }
+QStringList ProjectController::remoteAddresses() const { return remote_ ? remote_->addresses() : QStringList{}; }
+int ProjectController::remoteOscPort() const { return remote_ ? remote_->oscPort() : 0; }
+
+void ProjectController::remoteCommand(const QString& command, const QStringList& args) {
+    const bool on = args.value(args.size() - 1) != QLatin1String("0");
+    if (command == QLatin1String("cell") && args.size() == 3) {
+        runLiveTarget(QStringLiteral("cell:%1:%2").arg(args[0], args[1]), on);
+    } else if (command == QLatin1String("cellAt") && args.size() == 3) {  // OSC: the row and the column of the grid, counted from 1
+        int row = 0;
+        for (const TrackRow& t : allRows_) {
+            if (t.master || !holdsCells(t.kind)) continue;
+            if (++row == args[0].toInt()) {
+                runLiveTarget(QStringLiteral("cell:%1:%2").arg(t.id).arg(args[1].toInt() - 1), on);
+                break;
+            }
+        }
+    } else if (command == QLatin1String("scene") && args.size() == 2) {
+        runLiveTarget(QStringLiteral("scene:%1").arg(args[0]), on);
+    } else if (command == QLatin1String("stopAll")) {
+        runLiveTarget(QStringLiteral("action:stopAll"), true);
+    } else if (command == QLatin1String("trigger")) {
+        runLiveTarget(QStringLiteral("action:trigger"), true);
+    } else if (command == QLatin1String("performance")) {
+        runLiveTarget(QStringLiteral("action:performance"), true);
+    }
 }
 
 void ProjectController::runLiveTarget(const QString& target, bool on) {

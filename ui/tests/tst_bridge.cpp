@@ -1,3 +1,5 @@
+#include <QUrlQuery>
+#include "bridge/remote_server.h"
 #include <QSettings>
 #include <QDir>
 #include <QSignalSpy>
@@ -3964,6 +3966,60 @@ private slots:
         QTRY_COMPARE(c.liveGrid().value("assignments").toMap().value("action:stopAll").toString(), QStringLiteral("CC 20"));
         c.clearLiveAssignment("cell:" + track + ":0");
         QTRY_VERIFY(!c.liveGrid().value("assignments").toMap().contains("cell:" + track + ":0"));
+    }
+    void theRemoteShowsTheGridAndRunsCellsFromAWebPageAndOsc() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProject(url(dir.path() / "p.lpc")));
+        c.addTrack("instrument");
+        QTRY_VERIFY(c.liveGrid().value("tracks").toList().size() == 1);
+        const QString track = c.liveGrid().value("tracks").toList().first().toMap().value("id").toString();
+        c.newPatternCell(track, 0);
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().size(), 1);
+        QVERIFY(c.setRemote(true));
+        QVERIFY(c.remoteOn());
+        const QString address = c.remoteAddresses().first();  // http://<ip>:<port>/?k=<token>
+        const QUrl base(address);
+        const auto get = [&](const QString& path) {
+            QTcpSocket socket;
+            socket.connectToHost(QStringLiteral("127.0.0.1"), static_cast<quint16>(base.port()));
+            QByteArray all;
+            bool sent = false;
+            QElapsedTimer timer;
+            timer.start();
+            while (timer.elapsed() < 4000 && socket.state() != QAbstractSocket::UnconnectedState) {  // the server lives in this thread: the events must run
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+                if (!sent && socket.state() == QAbstractSocket::ConnectedState) {
+                    socket.write("GET " + path.toUtf8() + " HTTP/1.1\r\nHost: x\r\n\r\n");
+                    sent = true;
+                }
+                all += socket.readAll();
+            }
+            all += socket.readAll();
+            return all;
+        };
+        const QString k = QUrlQuery(base).queryItemValue("k");
+        QVERIFY(get("/state").contains("403"));  // without the token nothing is shown
+        QVERIFY(get("/?k=" + k).contains("Live Loops"));  // the page
+        const QByteArray state = get("/state?k=" + k);
+        QVERIFY(state.contains("\"cells\""));
+        QVERIFY(state.contains(track.toUtf8()));
+        get("/cmd?k=" + k + "&c=cell&a=" + track + ",0,1");  // the button of the cell is pressed
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().first().toMap().value("state").toString(), QStringLiteral("playing"));
+        c.stopAllCells();
+        // OSC: /jad/cell/1/1 with the float 1.0
+        QByteArray osc("/jad/cell/1/1\0\0\0", 16);
+        osc += QByteArray(",f\0\0", 4);
+        const float one = 1.0f;
+        quint32 raw;
+        memcpy(&raw, &one, 4);
+        raw = qToBigEndian(raw);
+        osc += QByteArray(reinterpret_cast<const char*>(&raw), 4);
+        QStringList seen;
+        jad::RemoteServer::parseOsc(osc, [&](const QString& command, const QStringList& args) { seen << command + ":" + args.join(","); });
+        QCOMPARE(seen, QStringList{QStringLiteral("cellAt:1,1,1")});
+        c.setRemote(false);
+        QVERIFY(!c.remoteOn());
     }
     void dolbyAtmosObjectsGetAPannerAndTheModeFollows() {
         TempDir dir;

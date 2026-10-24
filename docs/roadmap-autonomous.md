@@ -538,7 +538,7 @@ Today `EffectEditorWindow.qml` is a list of parameters (plus the Channel EQ curv
       (Extract Loops). Bridge `project_controller_liveloops.cpp`: quantized launch with Smart Pickup, Cell End, queue, pause/resume, Track Activation, recording into cells (takes, merge, replace), takes menu,
       Session Player/pattern cells, Add Audio File, copy cell/scene to Tracks, performance recording to regions. UI `LiveLoopsWindow.qml` (tracks as rows, Divider column, Cell inspector). Cell Editor: `CellEditor.qml`
       (waveform from `rangePeaks`, notes, markers dragged on the ruler, `liveCellContent`). Control from MIDI devices: Learn Assignment (`learnLiveAssignment`, bindings saved in the project setting `liveMidi`, the MIDI thread
-      keeps a flag per note/controller and queues `liveMidiMessage`), Launchpad pad layout as default. Not done: Logic Remote (Apple's iOS app).
+      keeps a flag per note/controller and queues `liveMidiMessage`), Launchpad pad layout as default. Phone remote instead of Logic Remote: `RemoteServer` (web page with a token + OSC on UDP 8000), `setRemote`.
 - [x] H9. Dolby Atmos: `builtin.objectpanner` (3D Object Panner: x y z size, Monitoring Format 0-8, downmix and trim parameters; binaural, stereo, 2.0 downmixes with the Hilbert shift for Lt/Rt phase 90,
       or speaker gains published to the graph, which feeds the objects to the output pairs), `core/src/atmos_render.cpp` (distance-based panning over a 7.1.4 room, folds to 7.1/5.1/5.1.2/5.1.4 with the
       guide's downmix algorithms, trims and balances; `renderSpeakers` for bounces), `core/src/atmos.cpp` (objects, `renderAdm`, `projectFromAdm`), `core/src/adm_bwf.cpp` (ADM BWF writer and reader: fmt/data/chna/axml),

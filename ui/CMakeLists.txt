@@ -28,6 +28,7 @@ qt_add_qml_module(jad_ui_lib
         bridge/project_controller_stacks.cpp
         bridge/project_controller_live.cpp
         bridge/live_link.cpp
+        bridge/remote_server.cpp
         bridge/waveform_cache.cpp
         bridge/lcd_parse.cpp
         bridge/inspector_model.cpp

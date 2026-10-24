@@ -1,5 +1,6 @@
 #include "bridge/project_controller.h"
 #include "bridge/live_link.h"
+#include "bridge/remote_server.h"
 
 #include <QCryptographicHash>
 #include <QDir>

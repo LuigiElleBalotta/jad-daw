@@ -145,12 +145,20 @@ Dialog {
                 onClicked: controllerMenu.popup()
                 Menu {
                     id: controllerMenu
+                    property bool remote: false
+                    onAboutToShow: remote = root.project.remoteOn()
                     MenuItem { text: qsTr("Learn Assignment for Selected Cell"); enabled: root.selected !== null && root.info.exists === true; onTriggered: root.learnSelected() }
                     MenuItem { text: qsTr("Learn Trigger Live Loops"); onTriggered: root.project.learnLiveAssignment("action:trigger") }
                     MenuItem { text: qsTr("Learn Grid Stop"); onTriggered: root.project.learnLiveAssignment("action:stopAll") }
                     MenuItem { text: qsTr("Learn Performance Recording"); onTriggered: root.project.learnLiveAssignment("action:performance") }
                     MenuSeparator { }
                     MenuItem { text: qsTr("Clear Assignment of Selected Cell"); enabled: root.selected !== null; onTriggered: root.project.clearLiveAssignment("cell:" + root.selected.trackId + ":" + root.selected.scene) }
+                    MenuItem {
+                        objectName: "remoteToggle"
+                        text: controllerMenu.remote ? qsTr("Stop the Remote (phone or tablet)") : qsTr("Remote for Phone or Tablet…")
+                        onTriggered: { if (root.project.remoteOn()) root.project.setRemote(false); else if (root.project.setRemote(true)) remoteInfo.open() }
+                    }
+                    MenuItem { text: qsTr("Show the Remote Addresses"); enabled: controllerMenu.remote; onTriggered: remoteInfo.open() }
                     MenuItem { text: root.grid.launchpad === true ? qsTr("A Novation Launchpad plays the grid") : qsTr("A Novation Launchpad plays the grid when it is connected"); enabled: false }
                 }
             }
@@ -512,6 +520,27 @@ Dialog {
     Shortcut { sequence: "Alt+T"; enabled: root.visible; onActivated: root.project.triggerQueued() }
     Shortcut { sequence: "E"; enabled: root.visible && root.selected !== null && root.info.exists === true; onActivated: root.editorOpen = !root.editorOpen }
     Shortcut { sequence: "Ctrl+L"; enabled: root.visible && root.selected !== null; onActivated: root.learnSelected() }
+    Dialog {   // how to reach the grid from a phone
+        id: remoteInfo
+        objectName: "remoteInfo"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 460
+        background: Rectangle { color: Theme.surfacePanel; border.color: Theme.borderStrong; radius: Theme.radiusDialog }
+        header: Item { height: 0 }
+        contentItem: ColumnLayout {
+            spacing: 6
+            Text { text: qsTr("Remote for phone or tablet"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeTitleSize; font.weight: Theme.fontTypeTitleWeight }
+            Text { Layout.fillWidth: true; wrapMode: Text.Wrap; text: qsTr("Web page: on a phone or tablet on the same network open one of these addresses in the browser. No app is needed."); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize }
+            Repeater {
+                model: root.project.remoteAddresses()
+                delegate: TextInput { required property string modelData; text: modelData; readOnly: true; selectByMouse: true; color: Theme.textValue; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }
+            }
+            Text { Layout.fillWidth: true; wrapMode: Text.Wrap; text: qsTr("OSC apps (Open Stage Control, TouchOSC and other free ones): send to this computer, UDP port %1: /jad/cell/<row>/<column>, /jad/scene/<n> (counted from 1; a value above 0 presses, 0 lets go), /jad/stopall, /jad/trigger, /jad/performance. OSC has no password: use it on a network you trust.").arg(root.project.remoteOscPort()); color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize }
+            RowLayout { Item { Layout.fillWidth: true } IconButton { implicitHeight: 24; label: qsTr("Close"); onClicked: remoteInfo.close() } }
+        }
+    }
     Dialog {   // the name of a take
         id: renameBox
         property string track

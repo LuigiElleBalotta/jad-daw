@@ -42,6 +42,7 @@
 
 namespace jad {
 class LiveLink;
+class RemoteServer;
 }
 
 namespace lpc {
@@ -632,6 +633,11 @@ public:
     Q_INVOKABLE QVariantMap liveCellContent(const QString& trackId, int scene, int buckets);          // what the Cell Editor draws: the waveform of an audio cell (regionPeaksReady follows) or the notes of a MIDI cell
     Q_INVOKABLE void learnLiveAssignment(const QString& target);                                     // Learn Assignment: the next MIDI note or controller runs cell:<track>:<scene>, scene:<n> or action:<trigger|stopAll|performance>
     Q_INVOKABLE void clearLiveAssignment(const QString& target);
+    Q_INVOKABLE bool setRemote(bool on);                       // control of the grid from a phone: a web page and OSC (false if the port could not be opened)
+    Q_INVOKABLE bool remoteOn() const;
+    Q_INVOKABLE QStringList remoteAddresses() const;           // what to type in the browser of the phone
+    Q_INVOKABLE int remoteOscPort() const;
+    void remoteCommand(const QString& command, const QStringList& args);
     Q_INVOKABLE void liveMidiMessage(int status, int d1, int d2);                                    // from the MIDI thread (queued)
     Q_INVOKABLE void addLiveScene();
     Q_INVOKABLE void renameLiveScene(int scene, const QString& name);
@@ -1099,6 +1105,7 @@ private:
     void sendCommand(const nlohmann::json& command, std::function<void(bool)> done = {});
     void liveHandle(const nlohmann::json& request, std::function<void(const nlohmann::json&)> reply);
     std::unique_ptr<LiveLink> live_;
+    std::unique_ptr<RemoteServer> remote_;
     QString inspectorBusId_, pinOwner_;  // the pinned bus of the right strip and the track it was pinned for
     int routingRevision_ = 0;
     QString selectWhenListed_;  // a track made by a command: selected as soon as a snapshot lists it

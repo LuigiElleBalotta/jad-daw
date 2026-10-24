@@ -41,7 +41,7 @@ Dialog {
         id: bounceDialog
         title: qsTr("Bounce Spatial Audio as")
         fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("Wave file (*.wav)")]
+        nameFilters: [qsTr("Wave file (*.wav)"), qsTr("Dolby Digital Plus 5.1 (*.ec3)"), qsTr("Dolby Digital 5.1 (*.ac3)")]
         defaultSuffix: "wav"
         onAccepted: root.project.bounceAtmos(selectedFile)
     }

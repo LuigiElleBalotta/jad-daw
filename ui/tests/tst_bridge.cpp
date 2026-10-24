@@ -843,7 +843,7 @@ private slots:
         jad::ProjectController c(false);
         QVERIFY(c.openProject(url(makeDemo(dir))));
         QTRY_VERIFY(c.regions()->rowCount() > 0);
-        const auto out = other.path() / "mix.wav";
+        const auto out = other.path() / "mix.ec3";
         QSignalSpy notices(&c, &jad::ProjectController::notice);
         c.bounceProject(url(out));
         QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(out) && std::filesystem::file_size(out) > 1000 && notices.count() >= 2, 20000);
@@ -4020,6 +4020,25 @@ private slots:
         QCOMPARE(seen, QStringList{QStringLiteral("cellAt:1,1,1")});
         c.setRemote(false);
         QVERIFY(!c.remoteOn());
+    }
+    void theAtmosMixIsEncodedAsDolbyDigitalPlusByFfmpeg() {
+        if (QStandardPaths::findExecutable("ffmpeg").isEmpty()) QSKIP("FFmpeg is not installed");
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.openProject(url(makeDemo(dir))));
+        QTRY_VERIFY(c.tracks()->rowCount() >= 3);
+        c.setAtmosMode(true);
+        QTRY_COMPARE(c.projectSettings().value("spatialAudio").toString(), QStringLiteral("dolbyAtmos"));
+        c.setAtmosObject(c.atmosTracks().first().toMap().value("id").toString(), true);
+        QTRY_VERIFY(c.atmosTracks().first().toMap().value("object").toBool());
+        const std::filesystem::path out = dir.path() / "mix.ec3";
+        c.bounceAtmos(QUrl::fromLocalFile(QString::fromStdWString(out.wstring())));
+        QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(out) && std::filesystem::file_size(out) > 1000, 120000);
+        c.setAtmosFormat(4);  // a 5.1 bounce is a wave file of six channels
+        QTRY_COMPARE(c.projectSettings().value("atmosFormat").toString(), QStringLiteral("4"));
+        const std::filesystem::path wav = dir.path() / "mix51.wav";
+        c.bounceAtmos(QUrl::fromLocalFile(QString::fromStdWString(wav.wstring())));
+        QTRY_VERIFY_WITH_TIMEOUT(std::filesystem::exists(wav) && std::filesystem::file_size(wav) > 6 * 3 * 48000, 120000);
     }
     void dolbyAtmosObjectsGetAPannerAndTheModeFollows() {
         TempDir dir;

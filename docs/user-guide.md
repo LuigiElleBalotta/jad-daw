@@ -334,10 +334,9 @@ objects are fed to the speakers by their place in the room and play on the outpu
 L and R). *Downmix & Trim* is Logic's pane: the 5.1 algorithm (Lo/Ro, Dolby Pro Logic IIx, direct render with or without room balance), the 5.1 to 2.0 algorithm (Lo/Ro, Lt/Rt, Lt/Rt with
 phase 90) and, for each of the five layouts, Automatic or Manual surround and height trims and the overhead and listener plane front/back balance. `File > Export > Project as Spatial
 Audio…` writes a Dolby Atmos ADM BWF master (the project or the cycle range): a wave file with the bed in the 7.1.2 channels (stereo in the front ones), one mono channel for every
-object and the ADM metadata with the movement of every object. *Bounce to Format…* writes the mix as a wave file with the channels of the Monitoring Format. `File > Import >
+object and the ADM metadata with the movement of every object. *Bounce to Format…* writes the mix as a wave file with the channels of the Monitoring Format (a wave file with more than two channels is WAVE_FORMAT_EXTENSIBLE), or, with the name ending in `.ec3` or `.ac3`, as a Dolby Digital Plus or Dolby Digital 5.1 file encoded by FFmpeg (it must be installed and in the PATH; it encodes the 5.1 bed of the mix, without Atmos objects). `File > Import >
 Create Project from ADM BWF…` makes a project from such a file: a track per object with its panner and its movement as automation, and one stereo track with the bed folded down.
-The renderer is our own, not Dolby's, and the Automatic trims are our values. Not there: the Apple renderer and head tracking (Apple's), the Dolby `dbmd` chunk and the MP4 exports
-(Dolby's encoders).
+The renderer is our own, not Dolby's, and the Automatic trims are our values. Not there: the Apple renderer and head tracking (Apple's), the Dolby `dbmd` chunk (its Atmos segment is not published) and the Atmos (JOC) encoding of Dolby Digital Plus and AC-4 (Dolby's encoders).
 
 ---
 

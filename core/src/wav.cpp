@@ -131,7 +131,7 @@ WavData readWav(const std::filesystem::path& path) {
 }
 
 void writeWav(const std::filesystem::path& path, int sampleRate, int channels, const std::vector<float>& samples, WavFormat format) {
-    if (channels < 1 || channels > 2) throw std::runtime_error("writeWav: only mono and stereo are supported");
+    if (channels < 1 || channels > 16) throw std::runtime_error("writeWav: 1 to 16 channels are supported");
     const int bytes = format == WavFormat::Pcm16 ? 2 : format == WavFormat::Pcm24 ? 3 : 4;
     const std::uint32_t dataSize = static_cast<std::uint32_t>(samples.size() * bytes);
     const bool isFloat = format == WavFormat::Float32;
@@ -139,16 +139,26 @@ void writeWav(const std::filesystem::path& path, int sampleRate, int channels, c
     std::ofstream o(path, std::ios::binary | std::ios::trunc);
     if (!o) throw std::runtime_error("cannot write " + pathText(path));
     o.write("RIFF", 4);
-    put32(o, 4 + (8 + 16) + (isFloat ? 12 : 0) + (8 + dataSize));
+    const bool extensible = channels > 2;  // more than two channels: WAVE_FORMAT_EXTENSIBLE, with the speaker mask of 5.1 when it is that
+    const std::uint32_t fmtSize = extensible ? 40 : 16;
+    put32(o, 4 + (8 + fmtSize) + (isFloat ? 12 : 0) + (8 + dataSize));
     o.write("WAVE", 4);
     o.write("fmt ", 4);
-    put32(o, 16);
-    put16(o, isFloat ? 3 : 1);
+    put32(o, fmtSize);
+    put16(o, extensible ? 0xFFFE : (isFloat ? 3 : 1));
     put16(o, channels);
     put32(o, sampleRate);
     put32(o, sampleRate * channels * bytes);
     put16(o, channels * bytes);
     put16(o, bytes * 8);
+    if (extensible) {
+        put16(o, 22);                // the size of the rest
+        put16(o, bytes * 8);         // valid bits
+        put32(o, channels == 6 ? 0x60F : 0);  // L R C LFE side-left side-right
+        put16(o, isFloat ? 3 : 1);   // the sub-format: PCM or float, then the fixed tail of the GUID
+        static const unsigned char tail[14] = {0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
+        o.write(reinterpret_cast<const char*>(tail), 14);
+    }
     if (isFloat) {
         o.write("fact", 4);
         put32(o, 4);

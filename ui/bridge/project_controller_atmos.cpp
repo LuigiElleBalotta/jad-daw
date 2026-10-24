@@ -2,6 +2,9 @@
 // and a project can be made from one (File > Import > Create Project from ADM BWF). Project settings: spatialAudio ("dolbyAtmos" when on), atmosMonitor ("binaural" or "stereo").
 #include <QDir>
 #include <QPointer>
+#include <QProcess>
+#include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QtConcurrent>
 
 #include <algorithm>
@@ -163,13 +166,25 @@ void ProjectController::setAtmosTrimManual(int layout, bool manual) {
 // File > Bounce for a Spatial Audio project: the mix as a file of the channels of the Monitoring Format.
 void ProjectController::bounceAtmos(const QUrl& file) {
     if (!host_) return;
-    const int format = std::clamp(projectSetting("atmosFormat", projectSetting("atmosMonitor", "binaural") == QLatin1String("stereo") ? "0" : "1").toInt(), 0, lpc::kMonitorFormats - 1);
+    int format = std::clamp(projectSetting("atmosFormat", projectSetting("atmosMonitor", "binaural") == QLatin1String("stereo") ? "0" : "1").toInt(), 0, lpc::kMonitorFormats - 1);
+    std::filesystem::path out = file.toLocalFile().toStdWString();
+    if (out.extension().empty()) out += ".wav";
+    // .ec3 / .ac3: Dolby Digital Plus / Dolby Digital 5.1, encoded by FFmpeg (the encoder is FFmpeg's, not ours: it has no Atmos objects, only the 5.1 bed of the mix)
+    const QString ext = QString::fromStdWString(out.extension().wstring()).toLower();
+    const bool dolby = ext == QLatin1String(".ec3") || ext == QLatin1String(".eac3") || ext == QLatin1String(".ac3");
+    QString ffmpeg;
+    if (dolby) {
+        ffmpeg = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+        if (ffmpeg.isEmpty()) {
+            setError("Dolby Digital files are encoded by FFmpeg: install FFmpeg and put it in the PATH");
+            return;
+        }
+        format = static_cast<int>(lpc::MonitorFormat::S51);
+    }
     if (format < 2) {
         emit notice("The binaural and stereo pan formats are bounced with File > Bounce");
         return;
     }
-    std::filesystem::path out = file.toLocalFile().toStdWString();
-    if (out.extension().empty()) out += ".wav";
     if (!saveProject()) return;
     const lpc::Project project = host_->read([](const lpc::Project& p) { return p; }).get();
     if (lpc::atmosObjects(project).empty()) {
@@ -194,7 +209,7 @@ void ProjectController::bounceAtmos(const QUrl& file) {
     const std::filesystem::path root = dir_;
     QPointer<ProjectController> self(this);
     const std::shared_ptr<std::atomic<bool>> flag = bouncing_;
-    (void)QtConcurrent::run([self, flag, project, root, out, render, format, dm] {
+    (void)QtConcurrent::run([self, flag, project, root, out, render, format, dm, dolby, ffmpeg, plus = ext != QLatin1String(".ac3")] {
         QString message;
         bool failed = false;
         try {
@@ -202,8 +217,20 @@ void ProjectController::bounceAtmos(const QUrl& file) {
             const lpc::AdmFile adm = lpc::renderAdm(project, media, render);
             flag->store(false);
             const std::vector<float> mix = lpc::renderSpeakers(adm, static_cast<lpc::MonitorFormat>(format), dm);
+            if (dolby) {
+                QTemporaryDir tmp;
+                if (!tmp.isValid()) throw std::runtime_error("Cannot make a temporary folder");
+                const std::filesystem::path wav = std::filesystem::path(tmp.path().toStdWString()) / "mix.wav";
+                lpc::writeWav(wav, adm.sampleRate, 6, mix, lpc::WavFormat::Pcm24);
+                QProcess encoder;
+                encoder.start(ffmpeg, {"-nostdin", "-y", "-v", "error", "-i", QString::fromStdWString(wav.wstring()), "-af", "channelmap=channel_layout=5.1", "-c:a", plus ? "eac3" : "ac3", "-b:a", plus ? "768k" : "640k",
+                                       QString::fromStdWString(out.wstring())});
+                if (!encoder.waitForFinished(600000) || encoder.exitCode() != 0) throw std::runtime_error("FFmpeg failed: " + encoder.readAllStandardError().toStdString());
+                message = QString(plus ? "Encoded Dolby Digital Plus 5.1" : "Encoded Dolby Digital 5.1");
+            } else {
             lpc::writeWav(out, adm.sampleRate, lpc::monitorChannels(static_cast<lpc::MonitorFormat>(format)), mix, lpc::WavFormat::Pcm24);
             message = QString("Bounced %1 (%2 channels)").arg(lpc::monitorName(static_cast<lpc::MonitorFormat>(format))).arg(lpc::monitorChannels(static_cast<lpc::MonitorFormat>(format)));
+            }
         } catch (const std::exception& e) {
             flag->store(false);
             failed = true;

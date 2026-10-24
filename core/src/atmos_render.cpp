@@ -244,15 +244,21 @@ std::vector<float> renderSpeakers(const AdmFile& adm, MonitorFormat f, const Atm
     const int channels = monitorChannels(f);
     const std::int64_t frames = adm.frames();
     std::vector<float> out(static_cast<std::size_t>(frames) * static_cast<std::size_t>(channels), 0.0f);
-    const auto add = [&](int slot, std::int64_t i, float v) {
-        // the container slot to the channel of the format
+    // the container slot to the channel of the format (found once: the names are compared here, not for every sample)
+    int slotAt[kSpeakerSlots];
+    {
         const std::vector<std::string>& names = monitorChannelNames(f);
         static const char* slotNames[kSpeakerSlots] = {"L", "R", "C", "LFE", "Ls", "Rs", "Lrs", "Rrs", "Ltf", "Rtf", "Ltr", "Rtr"};
-        int at = -1;
-        for (std::size_t k = 0; k < names.size(); ++k) {
-            const std::string& n = names[k];
-            if (n == slotNames[slot] || (slot == 4 && n == "Lss") || (slot == 5 && n == "Rss") || (slot == 8 && n == "Ltm") || (slot == 9 && n == "Rtm")) at = static_cast<int>(k);
+        for (int slot = 0; slot < kSpeakerSlots; ++slot) {
+            slotAt[slot] = -1;
+            for (std::size_t k = 0; k < names.size(); ++k) {
+                const std::string& n = names[k];
+                if (n == slotNames[slot] || (slot == 4 && n == "Lss") || (slot == 5 && n == "Rss") || (slot == 8 && n == "Ltm") || (slot == 9 && n == "Rtm")) slotAt[slot] = static_cast<int>(k);
+            }
         }
+    }
+    const auto add = [&](int slot, std::int64_t i, float v) {
+        const int at = slotAt[slot];
         if (at >= 0) out[static_cast<std::size_t>(i) * static_cast<std::size_t>(channels) + static_cast<std::size_t>(at)] += v;
     };
     // the bed: its ten channels (L R C LFE Lss Rss Lrs Rrs Lts Rts) go to the channels of the format with the same names; the ones the format lacks are folded into the front pair

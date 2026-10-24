@@ -63,7 +63,7 @@ Dialog {
                 id: row
                 required property int index
                 required property var modelData
-                readonly property var label: { root.project.inputLabelsRevision; return root.project.ioLabel(modelData.key) }
+                readonly property var label: { const rev = root.project.inputLabelsRevision; return [rev, root.project.ioLabel(modelData.key)][1] }
                 width: ListView.view.width - 10
                 height: 24
                 color: index % 2 ? Theme.surfaceRaised : "transparent"

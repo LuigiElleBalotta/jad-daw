@@ -197,12 +197,12 @@ Dialog {
                             delegate: Rectangle {
                                 id: cell
                                 required property int index
-                                readonly property var info: { root.grid; return root.cellAt(trackRow.modelData.id, index) }
-                                readonly property var rec: { root.grid; return root.recordingAt(trackRow.modelData.id, index) }
+                                readonly property var info: { const dep = root.grid; return [dep, root.cellAt(trackRow.modelData.id, index)][1] }
+                                readonly property var rec: { const dep = root.grid; return [dep, root.recordingAt(trackRow.modelData.id, index)][1] }
                                 readonly property string state: rec ? rec.state : (info ? info.state : "empty")
                                 readonly property bool playing: state === "playing" || state === "stopping"
                                 readonly property bool isSelected: root.selected !== null && root.selected.trackId === trackRow.modelData.id && root.selected.scene === index
-                                readonly property real progress: { root.tick; return playing ? root.project.liveProgress(trackRow.modelData.id, index) : -1 }
+                                readonly property real progress: { const dep = root.tick; return [dep, playing ? root.project.liveProgress(trackRow.modelData.id, index) : -1][1] }
                                 width: root.cellW; height: root.cellH; radius: 3
                                 color: info ? TrackColors.solid(trackRow.modelData.color) : Theme.surfaceCanvas
                                 opacity: state === "stopped" ? 0.6 : 1
@@ -239,7 +239,7 @@ Dialog {
                                     color: "#101010"; font.family: Theme.fontFamily; font.pixelSize: 10
                                 }
                                 readonly property string target: "cell:" + trackRow.modelData.id + ":" + index
-                                readonly property string assigned: { root.grid; return root.assignmentOf(target) }
+                                readonly property string assigned: { const dep = root.grid; return [dep, root.assignmentOf(target)][1] }
                                 Text {   // the note or controller that runs the cell
                                     objectName: "cellAssignment"
                                     anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 3

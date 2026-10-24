@@ -8,9 +8,9 @@ Item {
     id: root
     required property ProjectController project
     property string regionId: ""
-    readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
+    readonly property var info: { const rev = project.revision; return [rev, regionId !== "" ? project.regionInfo(regionId) : ({ found: false })][1] }
     readonly property bool hasMidi: info.found === true && info.audio !== true
-    readonly property var notes: { project.revision; return hasMidi ? project.regionNotes(regionId) : [] }
+    readonly property var notes: { const rev = project.revision; return [rev, hasMidi ? project.regionNotes(regionId) : []][1] }
     property var working: null                 // the notes as sent, until the project has them (a second click right after the first sees the first)
     readonly property var shown: working !== null ? working : notes
     onNotesChanged: working = null
@@ -98,7 +98,7 @@ Item {
                         id: stepCell
                         required property int index
                         objectName: "step_" + row.modelData.pitch + "_" + index
-                        readonly property bool on: { root.shown; return root.noteAt(row.modelData.pitch, index) }
+                        readonly property bool on: { const dep = root.shown; return [dep, root.noteAt(row.modelData.pitch, index)][1] }
                         x: root.labelWidth + index * root.cell
                         width: root.cell - 2
                         height: root.cell - 2

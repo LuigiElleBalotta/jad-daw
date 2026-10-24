@@ -623,3 +623,21 @@ TEST_CASE("graph: a mono strip is panned with the pan law, a stereo strip is bal
     u.addMaster();
     requireAll(u.render(400).l, 100, 400, 0.5f * 0.75f, 1e-5f);
 }
+
+TEST_CASE("graph: the compressor on a track reports its gain reduction, once per read", "[graph][meter]") {
+    Rig rig;
+    TrackConfig* cfg = rig.dcConfig(0.8f, 0, 100000);  // a constant 0.8: about -2 dB, over a -20 dB threshold
+    ProcessorRef ref;
+    ref.processorId = "builtin.compressor";
+    ref.params = {{"threshold", -20.0}, {"ratio", 4.0}, {"attack", 1.0}, {"release", 100.0}};
+    cfg->inserts.push_back(makeEffect(ref, 48000.0));
+    rig.addNode(1, TrackKind::Audio, cfg);
+    rig.addMaster();
+    rig.render(8192);
+    std::vector<std::pair<Uuid, float>> gr;
+    rig.g.takeTrackReductions(gr);
+    float seen = 0.0f;
+    for (auto& [u, v] : gr)
+        if (u == id(1)) seen = v;
+    REQUIRE(seen > 3.0f);
+}

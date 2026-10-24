@@ -960,6 +960,13 @@ public:
     Q_INVOKABLE void applyPatch(const QString& patchId);  // to the track the panels show; a notice when it does not fit
     Q_INVOKABLE void revertPatch();                       // applies the patch of that track again
     Q_INVOKABLE void addInsert(const QString& trackId, const QString& processorId);
+    struct PendingInsertOpen {
+        QString trackId;
+        int index = 0;
+        bool plugin = false;
+    };
+    std::vector<PendingInsertOpen> pendingInsertOpen_;  // inserts that were just added and whose window opens when they show up in the project
+    void openPendingInserts();
     Q_INVOKABLE void removeInsert(const QString& trackId, int index);
     Q_INVOKABLE void addPlugin(const QString& trackId, const QString& pluginId, const QString& label);
     Q_INVOKABLE void openPluginEditor(const QString& trackId, int index);

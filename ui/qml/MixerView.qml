@@ -25,7 +25,7 @@ Item {
         if (bar.hiddenTypes[typeOf(info)] === true) return false
         if (bar.scope === "all") return true
         if (bar.scope === "single") return project.selectedTrackIds.indexOf(info.trackId) >= 0
-        return info.master || info.kind !== "bus"  // Tracks: the track strips, the Output strips and Stereo Out
+        return info.master || info.kind !== "bus" || info.busInUse === true  // Tracks: the track strips, the Output strips, Stereo Out and the Aux strips that a send or an output reaches
     }
 
     clip: true
@@ -110,7 +110,7 @@ Item {
                     project: root.project
                     info: model.info
                     longFader: bar.longFaders
-                    peak: model.isMaster ? root.project.masterPeak : (root.project.peaksRevision, root.project.trackPeak(model.info.trackId))
+                    peak: model.isMaster ? root.project.masterPeak : [root.project.peaksRevision, root.project.trackPeak(model.info.trackId)][1]
                     onSwiped: (kind, on, p, from) => flick.swipeTo(kind, on, p, from)
                 }
             }

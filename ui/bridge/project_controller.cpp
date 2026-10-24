@@ -379,6 +379,7 @@ void ProjectController::applySnapshot(Snapshot s, std::uint64_t generation) {
         pendingRegionSelection_.clear();
     }
     allRows_ = s.tracks;
+    openPendingInserts();
     regionRows_ = s.regions;
     for (const QString& id : std::exchange(pendingSmartTempo_, {}))
         if (regions_.find(id)) QTimer::singleShot(0, this, [this, id] { smartApplyRegionTempo(id); });
@@ -1969,7 +1970,45 @@ void ProjectController::setSmartControl(const QString& trackId, const QString& c
     }
 }
 
+// The insert added at the end of the track opens its window as soon as the project has it.
+static int insertCountOf(const std::vector<TrackRow>& rows, const QString& trackId) {
+    for (const TrackRow& t : rows)
+        if (t.id == trackId) return static_cast<int>(t.inserts.size());
+    return -1;
+}
+
+void ProjectController::openPendingInserts() {
+    for (auto it = pendingInsertOpen_.begin(); it != pendingInsertOpen_.end();) {
+        const int count = insertCountOf(allRows_, it->trackId);
+        if (count < 0) {  // the track is gone
+            it = pendingInsertOpen_.erase(it);
+        } else if (count > it->index) {
+            const PendingInsertOpen open = *it;
+            it = pendingInsertOpen_.erase(it);
+            if (!open.plugin) {
+                openEffectEditor(open.trackId, open.index);
+            } else {
+#ifdef JAD_HAVE_JUCE
+                // a plug-in is loaded in the background: try again for a moment, without an error if it does not open
+                auto attempt = std::make_shared<std::function<void(int)>>();
+                QPointer<ProjectController> self(this);
+                *attempt = [self, open, attempt](int left) {
+                    if (!self || !self->pluginHost_) return;
+                    const auto id = lpc::Uuid::parse(open.trackId.toStdString());
+                    if (id && self->pluginHost_->openEditor(lpc::InsertSlot{*id, open.index})) return;
+                    if (left > 0) QTimer::singleShot(400, self.data(), [attempt, left] { (*attempt)(left - 1); });
+                };
+                (*attempt)(8);
+#endif
+            }
+        } else {
+            ++it;
+        }
+    }
+}
+
 void ProjectController::addInsert(const QString& trackId, const QString& processorId) {
+    pendingInsertOpen_.push_back({trackId, std::max(0, insertCountOf(allRows_, trackId)), false});
     sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
                  {"insert", {{"processorId", processorId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""}}}});
 }
@@ -2034,6 +2073,7 @@ void ProjectController::refreshPluginRows() {
 }
 
 void ProjectController::addPlugin(const QString& trackId, const QString& pluginId, const QString& label) {
+    pendingInsertOpen_.push_back({trackId, std::max(0, insertCountOf(allRows_, trackId)), true});
     sendCommand({{"type", "add_insert"}, {"trackId", trackId.toStdString()}, {"index", -1},
                  {"insert", {{"processorId", pluginId.toStdString()}, {"params", nlohmann::json::object()}, {"state", ""},
                              {"label", label.left(128).toStdString()}}}});

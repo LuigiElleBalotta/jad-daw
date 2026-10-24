@@ -7,13 +7,13 @@ ChannelStrip {
     required property ProjectController project
     signal swiped(string kind, bool on, point scenePos, var from)  // a swipe over M or S reached scenePos
     // what the Core accepts: no loop through outputs and sends (routingRevision makes the list follow every change)
-    targets: { project.routingRevision; return project.targetsFor(root.trackId) }
+    targets: { const rev = project.routingRevision; return [rev, project.targetsFor(root.trackId)][1] }
     pluginGroups: project.plugins.menu
     knownPluginIds: project.plugins.knownIds
 
     onAutomationModeChosen: (id, mode) => project.setAutomationMode(id, mode)
     onRecordInRegionsChosen: (id, on) => project.setRecordInRegions(id, on)
-    groupChoices: { project.groupsRevision; return project.groups().map(g => ({ id: g.id, name: g.name })) }
+    groupChoices: { const rev = project.groupsRevision; return [rev, project.groups().map(g => ({ id: g.id, name: g.name }))][1] }
     onGroupChosen: (id, groupId) => project.setTrackGroup(id, groupId)
     onGroupSettingsRequested: (id) => project.openGroupSettings(id)
     instrumentChoices: project.instrumentSpecs().map(s => ({ id: s.id, name: s.name }))
@@ -37,7 +37,7 @@ ChannelStrip {
     onEffectInsertRequested: (id, processorId) => project.addInsert(id, processorId)
     onEffectEditorRequested: (id, index) => project.openEffectEditor(id, index)
     onEqRequested: (id) => { if (eqIndex >= 0) project.openEffectEditor(id, eqIndex); else project.addInsert(id, "builtin.eq") }
-    inputChoices: { project.inputChannels; return project.inputChoices() }
+    inputChoices: { const dep = project.inputChannels; return [dep, project.inputChoices()][1] }
     onInputChosen: (id, input) => project.setTrackInput(id, input)
     onGestureStarted: project.beginGesture()
     onGainMoved: (id, db) => project.setGainLive(id, db)
@@ -70,9 +70,9 @@ ChannelStrip {
     onSoloAllRequested: (on) => project.soloAll(on)
     onSoloExclusiveRequested: (id) => project.soloExclusive(id)
     onSoloClearRequested: project.clearSolo()
-    level: { project.peaksRevision; return project.trackPeak(root.trackId) }
-    peakHold: { project.peaksRevision; return project.trackHold(root.trackId) }
-    reduction: { project.peaksRevision; return project.trackReduction(root.trackId) }
+    level: { const rev = project.peaksRevision; return [rev, project.trackPeak(root.trackId)][1] }
+    peakHold: { const rev = project.peaksRevision; return [rev, project.trackHold(root.trackId)][1] }
+    reduction: { const rev = project.peaksRevision; return [rev, project.trackReduction(root.trackId)][1] }
     onPeakReset: project.resetPeaks()
     onSelectRequested: (id, modifiers) => project.selectTrack(id, modifiers & Qt.ShiftModifier ? "extend" : (modifiers & Qt.ControlModifier ? "toggle" : "replace"))
     selected: project.selectedTrackIds.indexOf(root.trackId) >= 0

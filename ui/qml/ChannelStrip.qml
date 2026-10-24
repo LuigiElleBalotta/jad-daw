@@ -442,6 +442,7 @@ Panel {
                 radius: 1
                 color: Theme.surfaceCanvas
                 Rectangle {  // grows from the right: the deeper the reduction the longer
+                    objectName: "gainReductionBar"
                     anchors.right: parent.right
                     height: parent.height
                     radius: 1

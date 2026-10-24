@@ -7,6 +7,11 @@
 namespace jad {
 
 void MixerModel::reset(const std::vector<TrackRow>& rows) {
+    used_.clear();
+    for (const TrackRow& r : rows) {
+        for (const SendRow& s : r.sends) used_.insert(s.targetId);
+        if (!r.outputId.isEmpty()) used_.insert(r.outputId);
+    }
     std::vector<TrackRow> ordered = rows;
     // the tracks, then the Output strips, the master (Stereo Out) last
     const auto rank = [](const TrackRow& r) { return r.master ? 2 : (r.kind == "output" ? 1 : 0); };
@@ -45,7 +50,11 @@ QVariant MixerModel::data(const QModelIndex& index, int role) const {
         case Solo: return r.solo;
         case GainDb: return r.gainDb;
         case Pan: return r.pan;
-        case Info: return trackToMap(r);
+        case Info: {
+            QVariantMap m = trackToMap(r);
+            m.insert(QStringLiteral("busInUse"), used_.contains(r.id));  // an aux strip with a send or an output pointing at it
+            return m;
+        }
     }
     return {};
 }

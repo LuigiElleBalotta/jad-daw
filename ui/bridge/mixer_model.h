@@ -1,5 +1,6 @@
 #pragma once
 #include <QAbstractListModel>
+#include <QSet>
 #include <QtQml/qqmlregistration.h>
 #include <vector>
 
@@ -23,6 +24,7 @@ public:
 
 private:
     std::vector<TrackRow> rows_;
+    QSet<QString> used_;  // the ids of the buses and auxes that a send or an output points to
 };
 
 }  // namespace jad

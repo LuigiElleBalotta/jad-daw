@@ -8,9 +8,9 @@ Item {
     id: root
     required property ProjectController project
     property string regionId: ""
-    readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
+    readonly property var info: { const rev = project.revision; return [rev, regionId !== "" ? project.regionInfo(regionId) : ({ found: false })][1] }
     readonly property bool hasMidi: info.found === true && info.audio !== true
-    readonly property var notes: { project.revision; return hasMidi ? project.regionNotes(regionId) : [] }
+    readonly property var notes: { const rev = project.revision; return [rev, hasMidi ? project.regionNotes(regionId) : []][1] }
     readonly property real lineGap: 8              // between two staff lines
     readonly property real pixelsPerBeat: 46
     readonly property real leftMargin: 70                // clefs and the time signature

@@ -472,6 +472,19 @@ TestCase {
         mouseClick(s.insertList.itemAt(1), 6, 9)
         compare(got[2], ["t", 1, false])                          // a bypassed insert is switched on again
     }
+    function test_the_gain_reduction_bar_grows_with_the_reduction() {
+        var s = createTemporaryObject(stripC, this)
+        var bar = findChild(s, "gainReductionBar")
+        verify(bar !== null)
+        compare(bar.width, 0)
+        s.reduction = 12
+        verify(bar.width > 0)
+        verify(bar.visible)
+        verify(bar.width < bar.parent.width)
+        s.reduction = 40
+        compare(bar.width, bar.parent.width)  // a deeper reduction than the bar can show fills it
+    }
+
     function test_escape_during_a_drag_drops_it() {
         var s = createTemporaryObject(threeC, this)
         var moves = []

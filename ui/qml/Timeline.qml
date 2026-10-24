@@ -376,7 +376,7 @@ Item {
             delegate: AutomationLane {
                 required property int index
                 project: root.project
-                param: { root.project.automationRevision; return root.project.automationParamFor(trackId) }
+                param: { const rev = root.project.automationRevision; return [rev, root.project.automationParamFor(trackId)][1] }
                 onParameterRequested: (id) => root.automationParameterRequested(id)
                 pixelsPerBeat: root.pixelsPerBeat
                 scrollBeats: root.scrollBeats
@@ -394,7 +394,7 @@ Item {
                 project: root.project
                 regionId: model.regionId
                 trackId: model.trackId
-                param: { root.project.automationRevision; return root.project.automationParamFor(model.trackId) }
+                param: { const rev = root.project.automationRevision; return [rev, root.project.automationParamFor(model.trackId)][1] }
                 onParameterRequested: (id) => root.automationParameterRequested(id)
                 pixelsPerBeat: root.pixelsPerBeat
                 scrollBeats: model.startBeats          // x = 0 is the start of the region

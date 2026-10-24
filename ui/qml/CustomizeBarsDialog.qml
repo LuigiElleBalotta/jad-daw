@@ -31,7 +31,7 @@ Dialog {
                 spacing: Theme.spacing[2]
                 FlagCheck {
                     objectName: "part_" + modelData.key
-                    on: { root.project.barItemsRevision; return root.project.barItem(modelData.key) }
+                    on: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem(modelData.key)][1] }
                     onFlipped: root.project.setBarItem(modelData.key, !on)
                 }
                 Text { text: modelData.label; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize }

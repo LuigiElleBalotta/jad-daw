@@ -12,7 +12,7 @@ Action {
     readonly property bool stub: registry.isStub(actionId)
 
     text: registry.label(actionId)
-    shortcut: { registry.shortcutsRevision; return registry.shortcut(actionId) }
+    shortcut: { const rev = registry.shortcutsRevision; return [rev, registry.shortcut(actionId)][1] }
     checkable: false  // `on` carries the state, so that a bound state is never broken by a click
 
     onTriggered: {

@@ -332,3 +332,29 @@ TEST_CASE("click: the counting mode and the signature decide the beats and their
     REQUIRE(plain.accent[1] == 0);
     REQUIRE(plain.frames[1] - plain.frames[0] == 12000);                         // an eighth at 120 bpm: 0.25 s at 48 kHz
 }
+
+TEST_CASE("builder: a compressor insert of a project reports its gain reduction through the graph", "[builder][meter]") {
+    Scene s(Project(Uuid::random(gRng)));
+    const MediaItem media{Uuid::random(gRng), "audio/a.wav", "h", 48000, 2, 4800};
+    REQUIRE(makeAddMedia(media)->apply(s.p).ok());
+    s.registerMedia();
+    Track audio = track(TrackKind::Audio, "A");
+    Region r;
+    r.id = Uuid::random(gRng);
+    r.start = 0;
+    r.length = 4 * kPPQ;
+    r.mediaId = media.id;
+    audio.regions = {r};
+    audio.strip.inserts.push_back(ProcessorRef{"builtin.compressor", {{"threshold", -40.0}, {"ratio", 8.0}}, ""});
+    add(s.p, audio);
+    RenderGraph g(48000.0);
+    applyAll(g, initialMessages(s.p, s.media));
+    std::vector<float> l(512), rr(512);
+    for (int b = 0; b < 8; ++b) g.render(b * 512, 512, l.data(), rr.data());
+    std::vector<std::pair<Uuid, float>> gr;
+    g.takeTrackReductions(gr);
+    float seen = 0.0f;
+    for (auto& [u, v] : gr)
+        if (u == audio.id) seen = v;
+    REQUIRE(seen > 3.0f);
+}

@@ -252,7 +252,7 @@ Item {
         x: 6
         y: 2
         implicitHeight: 16
-        label: { root.project.automationRevision; return root.project.automationLabel(root.trackId, root.param) }
+        label: { const rev = root.project.automationRevision; return [rev, root.project.automationLabel(root.trackId, root.param)][1] }
         onClicked: root.parameterRequested(root.trackId)
     }
 }

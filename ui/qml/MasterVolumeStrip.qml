@@ -8,7 +8,7 @@ ChannelStrip {
     volumeOnly: true
     showSlots: false
     info: ({ trackId: "__master", name: qsTr("Master"), color: "purple", kind: "master", master: true, gainDb: project.masterGainDb, pan: 0, mute: false, solo: false, inserts: [], sends: [] })
-    level: { project.peaksRevision; return project.masterPeak }
+    level: { const rev = project.peaksRevision; return [rev, project.masterPeak][1] }
     onGestureStarted: project.beginGesture()
     onGainReleased: (id, db) => { project.setMasterGain(db); project.endGesture() }
     onGainMoved: (id, db) => project.setMasterGain(db)

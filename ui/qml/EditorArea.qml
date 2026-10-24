@@ -12,7 +12,7 @@ Rectangle {
     property int tab: 0
 
     readonly property string regionId: project.selectedRegionIds.length > 0 ? project.selectedRegionIds[0] : ""
-    readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
+    readonly property var info: { const rev = project.revision; return [rev, regionId !== "" ? project.regionInfo(regionId) : ({ found: false })][1] }
     readonly property bool audioRegion: info.found === true && info.audio === true
     readonly property bool midiRegion: info.found === true && info.audio !== true
     readonly property var tabs: audioRegion ? [qsTr("Track"), qsTr("File"), qsTr("Smart Tempo")]

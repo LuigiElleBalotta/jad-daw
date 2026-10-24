@@ -13,10 +13,10 @@ Item {
     signal transformRequested()
 
     readonly property string regionId: project.selectedRegionIds.length > 0 ? project.selectedRegionIds[0] : ""
-    readonly property var info: { project.revision; return regionId !== "" ? project.regionInfo(regionId) : ({ found: false }) }
+    readonly property var info: { const rev = project.revision; return [rev, regionId !== "" ? project.regionInfo(regionId) : ({ found: false })][1] }
     readonly property bool hasMidi: info.found === true && info.audio !== true
     readonly property real regionStart: hasMidi ? info.startBeats : 0
-    readonly property var notes: { project.revision; return hasMidi ? project.regionNotes(regionId) : [] }
+    readonly property var notes: { const rev = project.revision; return [rev, hasMidi ? project.regionNotes(regionId) : []][1] }
     property var working: null                      // the notes while a gesture is under way (shown instead of `notes`)
     readonly property alias grid: grid
     readonly property var shown: working !== null ? working : notes
@@ -38,7 +38,7 @@ Item {
     readonly property bool controlLane: laneKey !== "velocity"
     readonly property real laneMin: laneKey === "bend" ? -8192 : 0
     readonly property real laneMax: laneKey === "bend" ? 8191 : 127
-    readonly property var controlPoints: { project.revision; return hasMidi && controlLane ? project.regionControls(regionId, laneKey) : [] }
+    readonly property var controlPoints: { const rev = project.revision; return [rev, hasMidi && controlLane ? project.regionControls(regionId, laneKey) : []][1] }
     property var workingPoints: null                // the points while a gesture is under way
     readonly property var shownPoints: workingPoints !== null ? workingPoints : controlPoints
     property string snapMode: "smart"               // "smart", "bar", "beat", "half", "eighth", "sixteenth", "thirtysecond", "off"

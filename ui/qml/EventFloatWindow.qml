@@ -9,7 +9,7 @@ Window {
     property var piano: null                       // the Piano Roll whose selection is shown
     readonly property int index: piano && piano.selected.length === 1 ? piano.selected[0] : -1
     readonly property var note: index >= 0 && piano.notes[index] ? piano.notes[index] : null
-    readonly property var region: { project.revision; return project.selectedRegionIds.length > 0 ? project.regionInfo(project.selectedRegionIds[0]) : ({ found: false }) }
+    readonly property var region: { const rev = project.revision; return [rev, project.selectedRegionIds.length > 0 ? project.regionInfo(project.selectedRegionIds[0]) : ({ found: false })][1] }
 
     function setNote(key, value) {
         const list = piano.copyNotes(piano.notes)

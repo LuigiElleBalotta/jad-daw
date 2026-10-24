@@ -48,24 +48,24 @@ Panel {
             MouseArea { anchors.fill: parent; onClicked: root.project.clearSolo() }
         }
         MenuButton {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.menus") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.menus")][1] }
             label: qsTr("Edit ▾")
             ids: ["edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.duplicate", "edit.delete", "edit.selectAll", "edit.deselectAll"]
         }
         MenuButton {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.menus") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.menus")][1] }
             label: qsTr("Functions ▾")
             ids: ["edit.splitAtPlayhead", "edit.joinRegions", "transport.goToPosition", "nav.followPlayhead"]
         }
         MenuButton {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.menus") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.menus")][1] }
             label: qsTr("View ▾")
             ids: ["view.zoomIn", "view.zoomOut", "view.zoomFit", "view.waveformZoom", "track.height.compact", "track.height.normal", "track.height.large", "track.height.xlarge"]
         }
         Separator {}
 
         Row {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.tools") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.tools")][1] }
             spacing: Theme.spacing[1]
             ActionButton { id: pointerButton; actionId: "tool.pointer"; source: "icons/pointer.svg"; implicitHeight: 24 }
             ActionButton { id: pencilButton; actionId: "tool.pencil"; source: "icons/pencil.svg"; implicitHeight: 24 }
@@ -76,19 +76,19 @@ Panel {
         Separator {}
 
         MenuButton {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.snap") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.snap")][1] }
             label: qsTr("Snap: %1 ▾").arg(root.snapLabel)
             ids: ["snap.off", "snap.bar", "snap.half", "snap.quarter", "snap.eighth", "snap.sixteenth", "snap.smart"]
         }
         MenuButton {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.snap") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.snap")][1] }
             label: qsTr("Drag: %1 ▾").arg(({ "noOverlap": qsTr("No Overlap"), "xfade": qsTr("X-Fade"), "shuffleL": qsTr("Shuffle L"), "shuffleR": qsTr("Shuffle R") })[root.project.dragMode] ?? qsTr("Overlap"))
             ids: ["drag.overlap", "drag.noOverlap", "drag.xfade", "view.dragModeShuffleR", "view.dragModeShuffleL"]
         }
         Separator {}
 
         Row {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.heights") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.heights")][1] }
             spacing: Theme.spacing[1]
             ActionButton { actionId: "track.height.compact"; label: "S"; implicitHeight: 24 }
             ActionButton { actionId: "track.height.normal"; label: "M"; implicitHeight: 24 }
@@ -96,7 +96,7 @@ Panel {
             ActionButton { actionId: "track.height.xlarge"; label: "XL"; implicitHeight: 24 }
         }
         Row {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.zoom") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.zoom")][1] }
             spacing: Theme.spacing[1]
             ActionButton { actionId: "view.zoomOut"; source: "icons/zoom-out.svg"; implicitHeight: 24 }
             ActionButton { actionId: "view.zoomIn"; source: "icons/zoom-in.svg"; implicitHeight: 24 }
@@ -106,7 +106,7 @@ Panel {
         Item { Layout.fillWidth: true }
 
         Row {
-            visible: { root.project.barItemsRevision; return root.project.barItem("tb.undo") }
+            visible: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("tb.undo")][1] }
             spacing: Theme.spacing[1]
             ActionButton { actionId: "edit.undo"; label: qsTr("Undo"); implicitHeight: 24 }
             ActionButton { actionId: "edit.redo"; label: qsTr("Redo"); implicitHeight: 24 }

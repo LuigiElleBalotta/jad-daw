@@ -105,14 +105,14 @@ Rectangle {
             height: root.rowHeight
             opacity: hidden ? 0.45 : (trackOn ? 1 : 0.55)  // a hidden track shown by Toggle Hide View, a track that is turned off
             trackName: name
-            showIcon: { root.project.barItemsRevision; return root.project.barItem("th.icon") }
-            showOnOff: { root.project.barItemsRevision; return root.project.barItem("th.onoff") }
+            showIcon: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("th.icon")][1] }
+            showOnOff: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("th.onoff")][1] }
             onOnOffToggled: (id, on) => root.project.setTrackOn(id, on)
-            showArm: { root.project.barItemsRevision; return root.project.barItem("th.arm") }
-            showMonitor: { root.project.barItemsRevision; return root.project.barItem("th.monitor") }
-            showMute: { root.project.barItemsRevision; return root.project.barItem("th.mute") }
-            showSolo: { root.project.barItemsRevision; return root.project.barItem("th.solo") }
-            showSliders: { root.project.barItemsRevision; return root.project.barItem("th.sliders") }
+            showArm: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("th.arm")][1] }
+            showMonitor: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("th.monitor")][1] }
+            showMute: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("th.mute")][1] }
+            showSolo: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("th.solo")][1] }
+            showSliders: { const rev = root.project.barItemsRevision; return [rev, root.project.barItem("th.sliders")][1] }
             trackColor: color
             flexShown: root.project.flexView && kind === "audio"
             onFlexModeRequested: (id, mode) => root.project.setTrackFlexMode(id, mode)

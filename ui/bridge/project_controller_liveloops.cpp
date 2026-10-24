@@ -4,6 +4,8 @@
 // audio graph (see live_loops.h). Stopping the transport stops the cells and queues the ones that played; recording into a cell takes the pass out of the Tracks area into
 // the cell; a performance recording turns what was played into regions.
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPointer>
 #include <QtConcurrent>
 #include <QTimer>
@@ -16,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include "bridge/project_controller.h"
+#include "bridge/waveform_cache.h"
 #include "lpc/commands.h"
 #include "lpc/live_loops.h"
 #include "lpc/model_json.h"
@@ -95,6 +98,16 @@ QString ProjectController::liveCellState(const QString& trackId, const QString& 
     return QStringLiteral("stopped");
 }
 
+namespace {
+// "n36" is the note C1, "c20" the controller 20.
+QString controlKey(int status, int d1) { return QString(QChar((status & 0xF0) == 0xB0 ? 'c' : 'n')) + QString::number(d1); }
+QString controlLabel(const QString& key) {
+    static const char* const names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    const int n = key.mid(1).toInt();
+    return key.startsWith(QLatin1Char('c')) ? QStringLiteral("CC %1").arg(n) : QStringLiteral("%1%2").arg(QLatin1String(names[n % 12])).arg(n / 12 - 2);
+}
+}  // namespace
+
 QVariantMap ProjectController::liveGrid() const {
     QVariantList columns, cells;
     for (const TrackRow& t : allRows_) {
@@ -124,7 +137,11 @@ QVariantMap ProjectController::liveGrid() const {
     QVariantList recordings;
     for (const CellRecording& r : cellRec_)
         recordings.append(QVariantMap{{"trackId", r.trackId}, {"scene", r.scene}, {"state", r.state == CellRecording::Waiting ? QStringLiteral("recordQueued") : QStringLiteral("recording")}, {"automatic", r.end < 0}});
-    return {{"tracks", columns}, {"cells", cells}, {"scenes", scenes}, {"sceneNames", names}, {"sceneQuantize", quantize}, {"performance", perfRecording_}, {"recordings", recordings}};
+    QVariantMap assignments;
+    const QJsonObject bound = liveBindings();
+    for (auto it = bound.begin(); it != bound.end(); ++it) assignments.insert(it.value().toString(), controlLabel(it.key()));
+    return {{"tracks", columns}, {"cells", cells}, {"scenes", scenes}, {"sceneNames", names}, {"sceneQuantize", quantize}, {"performance", perfRecording_}, {"recordings", recordings},
+            {"assignments", assignments}, {"learning", liveLearnTarget_}, {"launchpad", launchpadPresent_}};
 }
 
 QVariantMap ProjectController::liveCellInfo(const QString& trackId, int scene) const {
@@ -157,6 +174,7 @@ double ProjectController::liveProgress(const QString& trackId, int scene) const 
 
 // The cells of the project as the last snapshot saw them (refreshed with the snapshot).
 void ProjectController::refreshLiveCells(const std::vector<LiveCellRow>& cells) {
+    syncLiveMidi();
     QHash<QString, QVector<LiveCellRow>> next;
     for (const LiveCellRow& c : cells) next[c.trackId].push_back(c);
     if (next == liveCells_) return;
@@ -1188,6 +1206,157 @@ void ProjectController::importLiveLoopsGrid(const QUrl& projectFolder) {
         emit notice(QString("%1 track%2 with cells imported").arg(grid.tracks.size()).arg(grid.tracks.size() == 1 ? "" : "s"));
     } catch (const std::exception& e) {
         setError(QString("Cannot import the grid: ") + QString::fromUtf8(e.what()));
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------- Cell Editor, control from MIDI devices
+
+// What the Cell Editor draws: the waveform of the sound of an audio cell, or the notes of a MIDI cell.
+QVariantMap ProjectController::liveCellContent(const QString& trackId, int scene, int buckets) {
+    for (const LiveCellRow& row : liveCells_.value(trackId)) {
+        if (row.cell.scene != scene) continue;
+        const lpc::Region& r = row.cell.region;
+        const double q = 1.0 / lpc::kPPQ;
+        QVariantMap out{{"exists", true}, {"lengthBeats", static_cast<double>(r.length) * q}, {"cellId", QString::fromStdString(row.cell.id.toString())}};
+        if (!r.mediaId.isNull()) {
+            out.insert("kind", "audio");
+            const QString media = QString::fromStdString(r.mediaId.toString());
+            const std::int64_t frames = static_cast<std::int64_t>(std::llround(tempoMap_.ticksToSamples(r.length, sampleRate_) - tempoMap_.ticksToSamples(0, sampleRate_)));
+            const QString key = out.value("cellId").toString() + '#' + media + '#' + QString::number(r.sourceOffsetFrames) + '#' + QString::number(frames) + '#' + QString::number(buckets);
+            if (const auto it = regionPeaksCache_.constFind(key); it != regionPeaksCache_.constEnd()) {
+                out.insert("peaks", it.value());
+            } else if (buckets > 0 && buckets <= 4096 && frames > 0 && !regionPeaksPending_.contains(key)) {
+                const auto path = mediaPaths_.constFind(media);
+                if (path != mediaPaths_.constEnd()) {
+                    regionPeaksPending_.insert(key);
+                    const QByteArray rel = path->toUtf8();
+                    const std::filesystem::path file = dir_ / std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(rel.constData()), static_cast<std::size_t>(rel.size())));
+                    const std::int64_t offset = r.sourceOffsetFrames;
+                    const QString cellId = out.value("cellId").toString();
+                    QPointer<ProjectController> self(this);
+                    const std::uint64_t generation = generation_;
+                    (void)QtConcurrent::run([self, key, cellId, buckets, file, offset, frames, generation] {
+                        const std::vector<float> peaks = rangePeaks(file, offset, frames, buckets);
+                        if (!self) return;
+                        QVariantList list;
+                        list.reserve(static_cast<qsizetype>(peaks.size()));
+                        for (float v : peaks) list.push_back(static_cast<double>(v));
+                        QMetaObject::invokeMethod(self.data(), [self, key, cellId, list, generation] {
+                            if (!self || generation != self->generation_ || !self->regionPeaksPending_.remove(key)) return;
+                            if (self->regionPeaksCache_.size() > 400) self->regionPeaksCache_.clear();
+                            self->regionPeaksCache_.insert(key, list);
+                            emit self->regionPeaksReady(cellId);
+                        }, Qt::QueuedConnection);
+                    });
+                }
+            }
+        } else {
+            out.insert("kind", row.cell.region.generator.empty() && !row.cell.pattern ? "midi" : (row.cell.pattern ? "pattern" : "session"));
+            QVariantList notes;
+            int low = 127, high = 0;
+            for (const lpc::MidiNote& n : r.notes) {
+                notes.append(QVariantMap{{"start", static_cast<double>(n.start) * q}, {"length", static_cast<double>(n.length) * q}, {"note", static_cast<int>(n.note)}, {"velocity", static_cast<int>(n.velocity)}});
+                low = std::min(low, static_cast<int>(n.note));
+                high = std::max(high, static_cast<int>(n.note));
+            }
+            if (notes.isEmpty()) low = 48, high = 72;
+            out.insert("notes", notes);
+            out.insert("low", low);
+            out.insert("high", std::max(high, low + 11));
+        }
+        return out;
+    }
+    return {{"exists", false}};
+}
+
+QJsonObject ProjectController::liveBindings() const {
+    return QJsonDocument::fromJson(projectSetting("liveMidi").toUtf8()).object();
+}
+
+// The pads of a Novation Launchpad (the layout of the grid: note = 16 * row + column, the ninth column launches the scene of its row) are the cells of the grid.
+QString ProjectController::livePadTarget(int note) const {
+    if (!launchpadPresent_) return {};
+    const int row = note / 16, col = note % 16;
+    if (row > 7 || col > 8) return {};
+    if (col == 8) return QStringLiteral("scene:%1").arg(row);
+    int r = 0;
+    for (const TrackRow& t : allRows_) {
+        if (t.master || !holdsCells(t.kind)) continue;
+        if (r++ == row) return QStringLiteral("cell:%1:%2").arg(t.id).arg(col);
+    }
+    return {};
+}
+
+void ProjectController::syncLiveMidi() {
+    for (std::atomic<bool>& f : liveMidiFlags_) f.store(false, std::memory_order_relaxed);
+    const QJsonObject bound = liveBindings();
+    for (auto it = bound.begin(); it != bound.end(); ++it) {
+        const int n = it.key().mid(1).toInt();
+        if (n >= 0 && n < 128) liveMidiFlags_[it.key().startsWith(QLatin1Char('c')) ? 128 + n : n].store(true, std::memory_order_relaxed);
+    }
+    if (launchpadPresent_)
+        for (int row = 0; row < 8; ++row)
+            for (int col = 0; col <= 8; ++col) liveMidiFlags_[row * 16 + col].store(true, std::memory_order_relaxed);
+}
+
+// Learn Assignment (Command-L in Logic): the cell, scene or command waits for a note or a controller; asking again for the same one cancels.
+void ProjectController::learnLiveAssignment(const QString& target) {
+    if (liveLearnTarget_ == target || target.isEmpty()) {
+        liveLearnTarget_.clear();
+        liveLearning_.store(false);
+    } else {
+        liveLearnTarget_ = target;
+        liveLearning_.store(true);
+        emit notice("Press the key, pad or button of your controller");
+    }
+    emit liveLoopsChanged();
+}
+
+void ProjectController::clearLiveAssignment(const QString& target) {
+    QJsonObject bound = liveBindings();
+    for (auto it = bound.begin(); it != bound.end();) it = it.value().toString() == target ? bound.erase(it) : it + 1;
+    setProjectSetting(QStringLiteral("liveMidi"), bound.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(bound).toJson(QJsonDocument::Compact)));
+    syncLiveMidi();
+    emit liveLoopsChanged();
+}
+
+void ProjectController::liveMidiMessage(int status, int d1, int d2) {
+    const int type = status & 0xF0;
+    const bool on = (type == 0x90 || type == 0xB0) && d2 > 0;
+    const QString key = controlKey(status, d1);
+    if (!liveLearnTarget_.isEmpty()) {
+        if (!on) return;
+        QJsonObject bound = liveBindings();
+        for (auto it = bound.begin(); it != bound.end();) it = it.value().toString() == liveLearnTarget_ ? bound.erase(it) : it + 1;  // a target has one control
+        bound.insert(key, liveLearnTarget_);
+        setProjectSetting(QStringLiteral("liveMidi"), QString::fromUtf8(QJsonDocument(bound).toJson(QJsonDocument::Compact)));
+        emit notice(QStringLiteral("Assigned to %1").arg(controlLabel(key)));
+        liveLearnTarget_.clear();
+        liveLearning_.store(false);
+        syncLiveMidi();
+        emit liveLoopsChanged();
+        return;
+    }
+    QString target = liveBindings().value(key).toString();
+    if (target.isEmpty() && type != 0xB0) target = livePadTarget(d1);
+    if (!target.isEmpty()) runLiveTarget(target, on);
+}
+
+void ProjectController::runLiveTarget(const QString& target, bool on) {
+    const QStringList parts = target.split(QLatin1Char(':'));
+    if (parts.value(0) == QLatin1String("cell") && parts.size() == 3) {
+        if (on) launchCell(parts[1], parts[2].toInt(), false);
+        else releaseCell(parts[1], parts[2].toInt());
+    } else if (!on) {
+        return;
+    } else if (parts.value(0) == QLatin1String("scene") && parts.size() == 2) {
+        launchScene(parts[1].toInt(), false);
+    } else if (target == QLatin1String("action:trigger")) {
+        triggerQueued();
+    } else if (target == QLatin1String("action:stopAll")) {
+        stopAllCells();
+    } else if (target == QLatin1String("action:performance")) {
+        setLivePerformance(!livePerformance_);
     }
 }
 

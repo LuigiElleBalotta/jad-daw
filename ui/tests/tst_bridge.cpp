@@ -3937,6 +3937,34 @@ private slots:
         c.pauseCell(track);
         c.stopAllCells();
     }
+    void liveLoopsAreRunFromLearnedMidiControls() {
+        TempDir dir;
+        jad::ProjectController c(false);
+        QVERIFY(c.newProject(url(dir.path() / "p.lpc")));
+        c.addTrack("instrument");
+        QTRY_VERIFY(c.liveGrid().value("tracks").toList().size() == 1);
+        const QString track = c.liveGrid().value("tracks").toList().first().toMap().value("id").toString();
+        c.newPatternCell(track, 0);
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().size(), 1);
+        const QVariantMap content = c.liveCellContent(track, 0, 64);
+        QVERIFY(content.value("exists").toBool());
+        QVERIFY(content.value("notes").toList().size() > 0);  // the Cell Editor shows the notes of a pattern cell
+        QVERIFY(content.value("high").toInt() > content.value("low").toInt());
+        c.learnLiveAssignment("cell:" + track + ":0");  // Learn Assignment, then the controller is moved
+        QCOMPARE(c.liveGrid().value("learning").toString(), "cell:" + track + ":0");
+        c.liveMidiMessage(0x90, 36, 100);
+        QTRY_COMPARE(c.liveGrid().value("assignments").toMap().value("cell:" + track + ":0").toString(), QStringLiteral("C1"));
+        QVERIFY(c.liveGrid().value("learning").toString().isEmpty());
+        c.liveMidiMessage(0x90, 36, 100);  // the key starts the cell, as a click would
+        QTRY_COMPARE(c.liveGrid().value("cells").toList().first().toMap().value("state").toString(), QStringLiteral("playing"));
+        c.liveMidiMessage(0x80, 36, 0);
+        c.stopAllCells();
+        c.learnLiveAssignment("action:stopAll");
+        c.liveMidiMessage(0xB0, 20, 127);
+        QTRY_COMPARE(c.liveGrid().value("assignments").toMap().value("action:stopAll").toString(), QStringLiteral("CC 20"));
+        c.clearLiveAssignment("cell:" + track + ":0");
+        QTRY_VERIFY(!c.liveGrid().value("assignments").toMap().contains("cell:" + track + ":0"));
+    }
     void dolbyAtmosObjectsGetAPannerAndTheModeFollows() {
         TempDir dir;
         jad::ProjectController c(false);

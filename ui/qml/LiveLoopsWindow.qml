@@ -16,6 +16,8 @@ Dialog {
     property var selected: null                     // {trackId, scene} of the cell shown in the inspector
     property var info: ({ exists: false })
     property int tick: 0
+    property bool editorOpen: false                 // the Cell Editor under the inspector
+    function assignmentOf(target) { return grid.assignments !== undefined && grid.assignments[target] !== undefined ? grid.assignments[target] : "" }
     readonly property int cellW: 104
     readonly property int cellH: 40
     readonly property int labelW: 130
@@ -55,11 +57,12 @@ Dialog {
         for (const r of grid.recordings) if (r.trackId === trackId && r.scene === scene) return r
         return null
     }
+    function learnSelected() { if (selected !== null) project.learnLiveAssignment("cell:" + selected.trackId + ":" + selected.scene) }
     function select(trackId, scene) { selected = { trackId: trackId, scene: scene }; info = project.liveCellInfo(trackId, scene) }
     modal: false
     anchors.centerIn: parent
     width: Math.min(parent ? parent.width - 40 : 980, Math.max(560, labelW + dividerW + grid.scenes * (cellW + 4) + 48))
-    height: Math.min(parent ? parent.height - 40 : 640, 150 + grid.tracks.length * (cellH + 4) + 76 + (selected !== null && info.exists ? 140 : 0))
+    height: Math.min(parent ? parent.height - 40 : 640, 150 + grid.tracks.length * (cellH + 4) + 76 + (selected !== null && info.exists ? 140 : 0) + (editorOpen && selected !== null && info.exists ? 170 : 0))
     onAboutToShow: refresh()
     Connections {
         target: root.project
@@ -134,6 +137,23 @@ Dialog {
             IconButton { objectName: "liveTrigger"; implicitHeight: 24; label: qsTr("Trigger"); onClicked: root.project.triggerQueued() }
             IconButton { objectName: "liveStopAll"; implicitHeight: 24; label: qsTr("Grid Stop"); onClicked: root.project.stopAllCells() }
             IconButton { objectName: "liveAddScene"; implicitHeight: 24; label: qsTr("Add Scene"); onClicked: root.project.addLiveScene() }
+            IconButton {
+                objectName: "liveControls"
+                implicitHeight: 24
+                label: root.grid.learning !== undefined && root.grid.learning !== "" ? qsTr("Learning…") : qsTr("Controller")
+                active: root.grid.learning !== undefined && root.grid.learning !== ""
+                onClicked: controllerMenu.popup()
+                Menu {
+                    id: controllerMenu
+                    MenuItem { text: qsTr("Learn Assignment for Selected Cell"); enabled: root.selected !== null && root.info.exists === true; onTriggered: root.learnSelected() }
+                    MenuItem { text: qsTr("Learn Trigger Live Loops"); onTriggered: root.project.learnLiveAssignment("action:trigger") }
+                    MenuItem { text: qsTr("Learn Grid Stop"); onTriggered: root.project.learnLiveAssignment("action:stopAll") }
+                    MenuItem { text: qsTr("Learn Performance Recording"); onTriggered: root.project.learnLiveAssignment("action:performance") }
+                    MenuSeparator { }
+                    MenuItem { text: qsTr("Clear Assignment of Selected Cell"); enabled: root.selected !== null; onTriggered: root.project.clearLiveAssignment("cell:" + root.selected.trackId + ":" + root.selected.scene) }
+                    MenuItem { text: root.grid.launchpad === true ? qsTr("A Novation Launchpad plays the grid") : qsTr("A Novation Launchpad plays the grid when it is connected"); enabled: false }
+                }
+            }
         }
         Text {
             Layout.fillWidth: true
@@ -210,6 +230,15 @@ Dialog {
                                     text: cell.info ? (cell.info.takes > 0 ? "" + (cell.info.activeTake + 1) + "/" + cell.info.takes : (cell.info.type === "session" ? "SP" : "P")) : ""
                                     color: "#101010"; font.family: Theme.fontFamily; font.pixelSize: 10
                                 }
+                                readonly property string target: "cell:" + trackRow.modelData.id + ":" + index
+                                readonly property string assigned: { root.grid; return root.assignmentOf(target) }
+                                Text {   // the note or controller that runs the cell
+                                    objectName: "cellAssignment"
+                                    anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 3
+                                    visible: cell.assigned !== "" || root.grid.learning === cell.target
+                                    text: root.grid.learning === cell.target ? "…" : "♪" + cell.assigned
+                                    color: "#101010"; font.family: Theme.fontFamily; font.pixelSize: 10
+                                }
                                 Text {
                                     anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 3
                                     visible: cell.info !== null && !cell.info.loop
@@ -225,12 +254,13 @@ Dialog {
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onPressed: (mouse) => {
                                         root.select(trackRow.modelData.id, cell.index)
-                                        if (mouse.button === Qt.LeftButton && cell.info !== null && !(mouse.modifiers & Qt.ControlModifier)) {
+                                        if (mouse.button === Qt.LeftButton && cell.info !== null && mouse.y >= 12 && !(mouse.modifiers & Qt.ControlModifier)) {   // the upper part only selects
                                             if (cell.state === "recording" || cell.state === "recordQueued") root.project.recordIntoCell(trackRow.modelData.id, cell.index)
                                             else root.project.launchCell(trackRow.modelData.id, cell.index, (mouse.modifiers & Qt.AltModifier) !== 0)
                                         }
                                     }
-                                    onReleased: (mouse) => { if (mouse.button === Qt.LeftButton && cell.info !== null) root.project.releaseCell(trackRow.modelData.id, cell.index) }
+                                    onReleased: (mouse) => { if (mouse.button === Qt.LeftButton && cell.info !== null && mouse.y >= 12) root.project.releaseCell(trackRow.modelData.id, cell.index) }
+                                    onDoubleClicked: (mouse) => { if (cell.info !== null && mouse.y < 12) root.editorOpen = true }
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton || (mouse.modifiers & Qt.ControlModifier)) cellMenu.popup()
                                         else if (cell.info === null) {
@@ -245,6 +275,8 @@ Dialog {
                                     readonly property string track: trackRow.modelData.id
                                     readonly property string kind: trackRow.modelData.kind
                                     MenuItem { text: qsTr("Queue Cell Playback"); enabled: cell.info !== null; onTriggered: root.project.launchCell(cellMenu.track, cell.index, true) }
+                                    MenuItem { text: qsTr("Open in Cell Editor"); enabled: cell.info !== null; onTriggered: { root.select(cellMenu.track, cell.index); root.editorOpen = true } }
+                                    MenuItem { text: qsTr("Learn Assignment…"); onTriggered: root.project.learnLiveAssignment(cell.target) }
                                     MenuItem { text: qsTr("Record Into Cell"); enabled: trackRow.modelData.armed; onTriggered: root.project.recordIntoCell(cellMenu.track, cell.index) }
                                     MenuSeparator { }
                                     MenuItem { text: qsTr("Add Audio File…"); enabled: cellMenu.kind === "audio"; onTriggered: { audioFile.track = cellMenu.track; audioFile.scene = cell.index; audioFile.open() } }
@@ -348,6 +380,11 @@ Dialog {
                                     label: "▶"
                                     onClicked: root.project.launchScene(scene.index, false)
                                 }
+                                Text {   // the note or controller that runs the scene
+                                    visible: text !== ""
+                                    text: root.assignmentOf("scene:" + scene.index) !== "" ? "♪" + root.assignmentOf("scene:" + scene.index) : (root.grid.learning === "scene:" + scene.index ? "…" : "")
+                                    color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: 10
+                                }
                                 TextInput {
                                     Layout.fillWidth: true
                                     text: root.grid.sceneNames[scene.index] === "" || root.grid.sceneNames[scene.index] === undefined ? qsTr("Scene %1").arg(scene.index + 1) : root.grid.sceneNames[scene.index]
@@ -364,6 +401,7 @@ Dialog {
                             Menu {
                                 id: sceneMenu
                                 MenuItem { text: qsTr("Queue Scene"); onTriggered: root.project.launchScene(scene.index, true) }
+                                MenuItem { text: qsTr("Learn Assignment…"); onTriggered: root.project.learnLiveAssignment("scene:" + scene.index) }
                                 MenuItem { text: qsTr("Copy Scene to Tracks Area"); onTriggered: root.project.copySceneToTracks(scene.index) }
                                 Menu {
                                     id: sceneQuantizeMenu
@@ -396,7 +434,10 @@ Dialog {
                 ColumnLayout {
                     spacing: 4
                     Layout.alignment: Qt.AlignTop
-                    Text { text: qsTr("Cell"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; font.weight: Font.DemiBold }
+                    RowLayout {
+                        Text { text: qsTr("Cell"); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeBodySize; font.weight: Font.DemiBold }
+                        IconButton { objectName: "cellEditorToggle"; implicitHeight: 20; label: qsTr("Editor"); active: root.editorOpen; onClicked: root.editorOpen = !root.editorOpen }
+                    }
                     RowLayout {
                         Text { text: qsTr("Name"); Layout.preferredWidth: 70; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTypeCaptionSize }
                         Rectangle {
@@ -440,6 +481,16 @@ Dialog {
                 }
             }
         }
+        CellEditor {
+            objectName: "liveCellEditor"
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? 160 : 0
+            visible: root.editorOpen && root.selected !== null && root.info.exists === true
+            project: root.project
+            trackId: root.selected !== null ? root.selected.trackId : ""
+            scene: root.selected !== null ? root.selected.scene : 0
+            info: root.info
+        }
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
@@ -459,6 +510,8 @@ Dialog {
     Shortcut { sequence: "Alt+Return"; enabled: root.visible && root.selected !== null; onActivated: root.project.launchCell(root.selected.trackId, root.selected.scene, true) }
     Shortcut { sequence: "Alt+R"; enabled: root.visible && root.selected !== null; onActivated: root.project.recordIntoCell(root.selected.trackId, root.selected.scene) }
     Shortcut { sequence: "Alt+T"; enabled: root.visible; onActivated: root.project.triggerQueued() }
+    Shortcut { sequence: "E"; enabled: root.visible && root.selected !== null && root.info.exists === true; onActivated: root.editorOpen = !root.editorOpen }
+    Shortcut { sequence: "Ctrl+L"; enabled: root.visible && root.selected !== null; onActivated: root.learnSelected() }
     Dialog {   // the name of a take
         id: renameBox
         property string track

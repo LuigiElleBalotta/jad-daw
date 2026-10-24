@@ -182,6 +182,34 @@ TestCase {
         compare(Number(d.quantizeBeats("2bar")), c.barBeats * 2)
     }
 
+    function test_the_cell_editor_moves_the_loop_markers_of_the_selected_cell() {
+        const c = createTemporaryObject(ctlC, this)
+        verify(c.newProjectInTempForTest())
+        c.addTrack("instrument")
+        tryVerify(function () { return c.tracks.rowCount() === 1 })
+        const d = createTemporaryObject(liveC, this, { project: c })
+        d.open()
+        tryCompare(d, "visible", true)
+        const track = d.grid.tracks[0].id
+        c.newPatternCell(track, 0)
+        tryVerify(function () { return d.cellAt(track, 0) !== null })
+        d.select(track, 0)
+        d.editorOpen = true
+        const editor = findChild(d.contentItem, "liveCellEditor")
+        tryCompare(editor, "visible", true)
+        tryCompare(editor.content, "exists", true)
+        verify(editor.content.notes !== undefined)
+        editor.commitMarker("start", 1)
+        tryVerify(function () { return c.liveCellInfo(track, 0).startBeats === 1 })
+        editor.commitMarker("loopStart", 1)
+        tryVerify(function () { return c.liveCellInfo(track, 0).loopStartBeats === 1 })
+        compare(c.liveCellInfo(track, 0).loopLengthBeats, c.liveCellInfo(track, 0).lengthBeats - 1)   // the end of the loop stays where it was
+        editor.commitMarker("loopEnd", 3)
+        tryVerify(function () { return c.liveCellInfo(track, 0).loopLengthBeats === 2 })
+        editor.moveLoop(1)
+        tryVerify(function () { return c.liveCellInfo(track, 0).loopStartBeats === 3 })
+    }
+
     function test_the_dolby_atmos_dialog_turns_the_mode_on_and_lists_the_tracks() {
         const c = createTemporaryObject(ctlC, this)
         verify(c.newProjectInTempForTest())

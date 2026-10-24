@@ -123,6 +123,7 @@ qt_add_qml_module(jad_ui_lib
         qml/MissingFilesDialog.qml
         qml/MovieWindow.qml
         qml/LiveLoopsWindow.qml
+        qml/CellEditor.qml
         qml/DolbyAtmosDialog.qml
         qml/FxObjectPannerView.qml
         qml/ConsolidateDialog.qml

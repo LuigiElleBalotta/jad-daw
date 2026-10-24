@@ -1916,8 +1916,16 @@ void ProjectController::setInstrumentParam(const QString& trackId, const QString
 
 namespace {
 struct EngineMidi final : lpc::IMidiSink {
-    EngineMidi(lpc::audio::AudioEngine& e, ProjectController* o, const std::atomic<int>* w) : engine(e), owner(o), watch(w) {}
+    EngineMidi(lpc::audio::AudioEngine& e, ProjectController* o, const std::atomic<int>* w, const std::atomic<bool>* f, const std::atomic<bool>* l) : engine(e), owner(o), watch(w), flags(f), learning(l) {}
     void midi(unsigned char status, unsigned char d1, unsigned char d2) noexcept override {
+        const int type = status & 0xF0;
+        if (type == 0x90 || type == 0x80 || type == 0xB0) {  // a note or a controller that runs Live Loops (or that is being learned) does not play
+            const bool learn = learning->load(std::memory_order_relaxed) && ((type == 0x90 && d2 > 0) || type == 0xB0);
+            if (learn || flags[type == 0xB0 ? 128 + (d1 & 127) : (d1 & 127)].load(std::memory_order_relaxed)) {
+                QMetaObject::invokeMethod(owner, "liveMidiMessage", Qt::QueuedConnection, Q_ARG(int, static_cast<int>(status)), Q_ARG(int, static_cast<int>(d1)), Q_ARG(int, static_cast<int>(d2)));
+                return;
+            }
+        }
         engine.pushDeviceMidi({status, d1, d2});
         const int w = watch->load(std::memory_order_relaxed);  // Automation Quick Access listens to one controller
         if (w != -1 && (status & 0xF0) == 0xB0 && (w == -2 || w == d1))
@@ -1926,6 +1934,8 @@ struct EngineMidi final : lpc::IMidiSink {
     lpc::audio::AudioEngine& engine;
     ProjectController* owner;
     const std::atomic<int>* watch;
+    const std::atomic<bool>* flags;
+    const std::atomic<bool>* learning;
 };
 }  // namespace
 
@@ -2097,11 +2107,15 @@ void ProjectController::openMidi() {
         emit midiChanged();
         return;
     }
-    midiSink_ = std::make_unique<EngineMidi>(*engine_, this, &aqaWatch_);
+    midiSink_ = std::make_unique<EngineMidi>(*engine_, this, &aqaWatch_, liveMidiFlags_, &liveLearning_);
     std::vector<std::string> names;
     for (const QString& n : std::as_const(midiChosen_)) names.push_back(n.toStdString());
     std::shared_ptr<lpc::IMidiInputs> open = lpc::openJuceMidiInputs(names, *midiSink_);
     midiInputs_ = std::static_pointer_cast<void>(open);
+    launchpadPresent_ = false;
+    for (const QString& n : midiInputNames())
+        if (n.contains(QLatin1String("launchpad"), Qt::CaseInsensitive) && (midiChosen_.isEmpty() || midiChosen_.contains(n))) launchpadPresent_ = true;
+    syncLiveMidi();
 #endif
     emit midiChanged();
 }

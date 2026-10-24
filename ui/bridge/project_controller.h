@@ -1,5 +1,6 @@
 #pragma once
 #include <QList>
+#include <QJsonObject>
 #include <QObject>
 #include <QStringList>
 #include <QHash>
@@ -628,6 +629,10 @@ public:
     Q_INVOKABLE void extractLoops(const QString& trackId, int scene);                                // Extract Loops: the loop points that suit an audio cell
     Q_INVOKABLE void importLiveLoopsGrid(const QUrl& projectFolder);                                 // File > Import > Live Loops Grid
     Q_INVOKABLE void copyToLiveLoopsScene();                                                         // Edit > Copy to Live Loops Scene
+    Q_INVOKABLE QVariantMap liveCellContent(const QString& trackId, int scene, int buckets);          // what the Cell Editor draws: the waveform of an audio cell (regionPeaksReady follows) or the notes of a MIDI cell
+    Q_INVOKABLE void learnLiveAssignment(const QString& target);                                     // Learn Assignment: the next MIDI note or controller runs cell:<track>:<scene>, scene:<n> or action:<trigger|stopAll|performance>
+    Q_INVOKABLE void clearLiveAssignment(const QString& target);
+    Q_INVOKABLE void liveMidiMessage(int status, int d1, int d2);                                    // from the MIDI thread (queued)
     Q_INVOKABLE void addLiveScene();
     Q_INVOKABLE void renameLiveScene(int scene, const QString& name);
     Q_INVOKABLE int consolidateMedia(bool audio, bool sampler);                 // how many files were copied into the project
@@ -1374,6 +1379,14 @@ private:
     int marqueeRow0_ = 0, marqueeRow1_ = 0;
     void whenRegionsExist(const QStringList& ids, std::function<void()> then, int tries = 100);
     int aqaCc_ = -1;
+    std::atomic<bool> liveMidiFlags_[256] = {};  // read by the MIDI thread: the notes (0-127) and controllers (128-255) that run Live Loops
+    std::atomic<bool> liveLearning_{false};
+    QString liveLearnTarget_;
+    bool launchpadPresent_ = false;  // a Novation Launchpad is among the open MIDI inputs: its pads are the grid
+    QJsonObject liveBindings() const;
+    QString livePadTarget(int note) const;
+    void syncLiveMidi();
+    void runLiveTarget(const QString& target, bool on);
     std::atomic<int> aqaWatch_{-1};  // read by the MIDI thread: -1 off, -2 any controller, else the one
     QTimer aqaRelease_;
     void autoselectLane(const QString& trackId, const QString& param);  // Autoselect Automation Parameter in Read Mode

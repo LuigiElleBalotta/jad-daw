@@ -304,6 +304,15 @@ Retrigger), Quantize and Q Loop Start (Off, On, On Preserve Start). Only one cel
 queued again. In the *Divider column* at the right of each row a lamp shows what plays, the pause button stops at the next quantize start and resumes from there, and the arrow is Track
 Activation: while a track plays its cells its regions are silent, and the button gives the track back to them.
 
+*Cell Editor.* Double-click the upper part of a cell, or press E, to open the Cell Editor under the inspector: an audio cell shows its waveform and the other cells their notes. On the ruler
+drag the start marker (green), the loop start and loop end, or the end of the cell; grab the loop area by its middle to move it; Control-click the ruler for *Set Start Position Here*,
+*Set Loop Start Here*, *Set Loop End Here* and *Move Loop Forward / Backward by Loop Length*. The values snap to a sixteenth note and follow the Cell inspector.
+
+*Control from a MIDI device.* Choose *Learn Assignment…* in the shortcut menu of a cell or scene (or press Control-L on the selected cell), then press the key, pad or button: from then on it
+starts the cell (a Momentary cell stops when it is let go) or the scene. The *Controller* button also learns Trigger Live Loops, Grid Stop and Performance Recording. The assignments are saved
+with the project and shown on the cells; an assigned key does not play the instrument. A connected Novation Launchpad plays the grid by itself: its eight by eight pads are the cells and the
+buttons at the right launch the scenes.
+
 *Recording.* With the track armed (R), the shortcut menu (or Alt+R) records into a cell from the next quantize start (a bar at most) for the Rec-Length: the length of the cell, or
 automatic in bars or beats (press again to end it). *Recording* is Replace, Takes (a take folder: the take that plays can be chosen, renamed, deleted, flattened, copied, moved or unpacked
 to a new scene, the next empty cell to the right, a new track or the next matching empty cell below) or Merge (instruments); *At Rec-End* plays the cell or continues recording. The
@@ -330,6 +339,6 @@ The renderer is our own, not Dolby's, and the Automatic trims are our values. No
 ## What is not there yet
 
 Some menu commands are present but say "not implemented yet" when chosen: the Mac window sets (they belong to macOS) and a few stubs without a counterpart in Logic's guide.
-The Live Loops grid has no graphical Cell Editor (the inspector sets the loop points and a cell is edited as a region in the Tracks area) and is not controlled from other devices. Match EQ's
+Live Loops cannot be controlled from Logic Remote (the iPad and iPhone app is Apple's). Match EQ's
 Learn buttons listen to what reaches the insert. The plug-in windows of the stock effects are our own drawings in Logic's style, not Apple's. The file
 [docs/roadmap-autonomous.md](roadmap-autonomous.md) keeps the full list.

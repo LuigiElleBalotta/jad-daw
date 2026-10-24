@@ -15,6 +15,14 @@ Contents: [Start](#1-start) · [The main window](#2-the-main-window) · [Tracks 
 
 ---
 
+## 0. Install and update
+
+Each release on GitHub (https://github.com/LuigiElleBalotta/jad-daw/releases) has these files:
+
+- **Windows:** `jad-daw-<version>-windows-x64-setup.exe` installs for your user (no administrator rights) in `%LOCALAPPDATA%\Programs\JAD Daw`, with a Start menu entry and an uninstaller in Settings > Apps. `jad-daw-<version>-windows-x64.zip` is the same program to unzip and run from anywhere.
+- **macOS (Apple Silicon):** open `jad-daw-<version>-macos-arm64.dmg` and drag the app onto Applications. The app is not signed yet: the first time, right-click it and choose Open. The `.zip` of the app is what the updater downloads.
+- **Updates:** `Help > Check for Updates…` asks GitHub for the newest release, shows what it brings, and **Install and Restart** downloads it (size and SHA-256 are checked), closes the program, replaces the installed copy (Windows: the setup runs silently; macOS: the app bundle is swapped) and opens it again. The program also looks once a day at start-up (it opens the dialog only when something newer is there); the dialog has switches for that and for offering pre-releases (the versions below 1.0 are all pre-releases), and **Skip This Version**. Save your project first: the program does not ask, it closes. A copy run from the zip is not the installed one: the update installs (or replaces) the installed copy and leaves the zip alone.
+
 ## 1. Start
 
 A project is a folder ending in `.lpc` (the project file, the audio it uses and some caches).

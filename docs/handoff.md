@@ -1,7 +1,7 @@
 # Handoff: where the work stands
 
 Updated at every commit so that another session (or another AI) can resume. The detailed list is `docs/roadmap-autonomous.md` (sections E and F); this file is the short version.
-Last update: 2026-10-23, after the Movie window, Live Loops and Dolby Atmos (roadmap H7-H9).
+Last update: 2026-10-24, after the installer and the in-app updater (see "Installer and updater" below).
 
 ## Rules from the owner (Luigi, Italian-speaking)
 - Use ALL the reverse-engineering knowledge (Logic Pro 11.2) and `jad-daw-private` (nested git repo, ignored): do not skip anything.
@@ -12,6 +12,12 @@ Last update: 2026-10-23, after the Movie window, Live Loops and Dolby Atmos (roa
 
 ## Done (committed)
 F0, F0b converters and icon tracer; F1 presets (324) and Match EQ curves (75); F2 pan law, Channel EQ, compressor circuits, gate/limiter, Match EQ; F3 Mastering macro and limiter fit like `AutoAdjustLimiter`; F4 Klopfgeist click; F5a-e onnxruntime, Smart Tempo and Flex Pitch networks, Neural Saturation insert; F5f models and DLLs shipped with the app (`lpc_copy_models`); E1, E2, E3, E4, E5, E6, E8, E10, E13, E14.
+
+## Installer and updater (2026-10-24)
+- Windows: `installer/windows/jad-daw.iss` (Inno Setup 6, per-user install, fixed AppId, so a new setup replaces the old copy) and `installer/windows/build.ps1 -Version x.y.z -Source <build folder> -Out <dir>` make `jad-daw-<v>-windows-x64-setup.exe` and the portable zip. It copies the build folder without the test programs and link files (so `lpc-plugin-scanner.exe`, which the old zip step forgot, is now in). The release workflow installs Inno with choco and calls it. Tried locally: install 9.9.8, then the app's own update to 9.9.9 through a local fake feed (`JAD_UPDATE_FEED`), setup ran silently, the app came back.
+- macOS: `installer/macos/build-dmg.sh <app> <version> <out>` makes the disk image (app plus a link to Applications); the release also keeps the zip of the app. Not run on a Mac: the DMG script and the bundle swap script of `Updater::startMac` are untested there (no Mac here).
+- In the app: `ui/bridge/update_logic.{h,cpp}` (versions as the tags write them, release list parsing, which asset fits the platform, SHA-256) and `ui/bridge/updater.{h,cpp}` (`Updater`, a QML type: GitHub `releases` list, download with size and digest check, then the Windows setup with `/SILENT /CLOSEAPPLICATIONS /RELAUNCH=1`, or the macOS script that waits for the process, swaps the bundle, clears quarantine and opens it). `ui/qml/UpdateDialog.qml`, action `help.checkUpdates`, start-up check once a day (5 s after start, skipped for `-dev` builds, `--screenshot` runs and `JAD_NO_UPDATE_CHECK`). Settings: `update/auto`, `update/prereleases`, `update/skipped`, `update/lastCheck`. Tests: `ui/tests/tst_updater.cpp` (a fake GitHub on a local socket).
+- Not done: signing (Windows Authenticode, macOS Developer ID and notarization: the updater needs the macOS app to be notarized to open without the right-click; `xattr -dr com.apple.quarantine` is only a help), delta updates, an Intel mac build, Linux.
 
 ## Build state (2026-10-23)
 Everything is built and tested: core (`build-core`) 471 test cases, 1 skipped; UI QML 232, bridge 179, all green. The UI now needs Qt Multimedia (`.qt` has it via aqt; the CI actions install `qtmultimedia`). Nothing pushed since 0.0.2 + CI fix: push when the owner asks. The UI had never been compiled before this day: only missing includes showed up.

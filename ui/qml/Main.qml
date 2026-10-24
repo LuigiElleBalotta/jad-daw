@@ -19,7 +19,9 @@ ApplicationWindow {
 
     property alias project: controller
     property bool editorsVisible: false
+    property alias updater: updateChecker
     ProjectController { id: controller }
+    Updater { id: updateChecker; objectName: "updater"; onUpdateFound: updateDialog.open() }
     ActionRegistry { id: actionRegistry; objectName: "registry" }
     Component.onCompleted: ActionHub.registry = actionRegistry
 
@@ -281,6 +283,7 @@ ApplicationWindow {
         root.x = x0 + r[0]; root.y = y0 + r[1]; root.width = r[2]; root.height = r[3]
     }
     AboutDialog { id: aboutDialog; objectName: "aboutDialog" }
+    UpdateDialog { id: updateDialog; objectName: "updateDialog"; updater: updateChecker }
     // the Mixer in a window of its own (View > Mixer when it is detached, Window > Open Mixer)
     Window {
         id: mixerWindow
@@ -325,6 +328,7 @@ ApplicationWindow {
     readonly property var handlers: ({
         "help.aiLiveLink": () => controller.setLiveLink(!controller.liveLinkOn),
         "help.about": () => aboutDialog.open(),
+        "help.checkUpdates": () => updateDialog.checkNow(),
         "file.new": () => root.guard(() => newDialog.open()),
         "file.open": () => root.guard(() => openDialog.open()),
         "file.save": () => controller.saveProject(),

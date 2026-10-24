@@ -80,13 +80,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $dist = "jad-daw-${{ needs.meta.outputs.version }}-${{ matrix.name }}"
-          New-Item -ItemType Directory -Path $dist | Out-Null
-          Copy-Item build/ui/Release/jad-daw.exe $dist/
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir ui/qml "$dist/jad-daw.exe"
-          Copy-Item LICENSE, THIRD_PARTY.md $dist/
-          Copy-Item assets/fonts/LICENSE.txt "$dist/Inter-LICENSE.txt"
-          Compress-Archive -Path $dist -DestinationPath "$dist.zip"
+          choco install innosetup -y --no-progress
+          # the zip (portable) and the setup (installs for the current user; the updater of the program runs it) from the deployed build folder
+          ./installer/windows/build.ps1 -Version "${{ needs.meta.outputs.version }}" -Source build/ui/Release -Out dist-win
+          Move-Item dist-win/* .
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -94,11 +91,17 @@ jobs:
           app=build/ui/jad-daw.app
           "$QT_ROOT_DIR/bin/macdeployqt" "$app" -qmldir=ui/qml
           cp LICENSE THIRD_PARTY.md "$app/Contents/Resources/"
+          # the zip is what the updater of the program downloads; the disk image is for the first install (drag the app onto Applications)
           ditto -c -k --sequesterRsrc --keepParent "$app" "jad-daw-${{ needs.meta.outputs.version }}-${{ matrix.name }}.zip"
+          ./installer/macos/build-dmg.sh "$app" "${{ needs.meta.outputs.version }}" dist-mac
+          mv dist-mac/*.dmg .
       - uses: actions/upload-artifact@v4
         with:
           name: jad-daw-${{ matrix.name }}
-          path: jad-daw-*.zip
+          path: |
+            jad-daw-*.zip
+            jad-daw-*-setup.exe
+            jad-daw-*.dmg
           if-no-files-found: error
 
   publish:
@@ -118,12 +121,13 @@ jobs:
         run: |
           flag=""
           if [ "$PRERELEASE" = "true" ]; then flag="--prerelease"; fi
-          gh release create "$VERSION" dist/*.zip $flag \
+          gh release create "$VERSION" dist/* $flag \
             --repo "$GITHUB_REPOSITORY" \
             --title "JAD Daw $VERSION ($CHANNEL)" \
             --notes "JAD Daw $VERSION, $CHANNEL build.
 
-          - Windows: unzip and run \`jad-daw.exe\`.
-          - macOS (Apple Silicon): unzip, then right-click the app and choose Open the first time (the app is not signed yet).
+          - Windows: run \`jad-daw-$VERSION-windows-x64-setup.exe\` (installs for your user, no administrator needed), or unzip \`jad-daw-$VERSION-windows-x64.zip\` and run \`jad-daw.exe\`.
+          - macOS (Apple Silicon): open \`jad-daw-$VERSION-macos-arm64.dmg\` and drag the app onto Applications, then right-click the app and choose Open the first time (the app is not signed yet).
+          - Updates: Help > Check for Updates in the program installs a newer release over the installed copy (the program also looks once a day at start-up).
           - New since 0.0.1: Channel EQ (HQ mode, Mid/Side), Noise Gate side-chain filter, Drum Kit, Match EQ analyzer, live loudness and correlation meters in Mastering, CAF export, signature and key lists in the control bar. A screen-by-screen guide with pictures is in docs/user-guide.md.
           - 48 kHz audio device. This is early software: expect rough edges."

@@ -100,6 +100,11 @@ int main(int argc, char** argv) {
         }
         if (parser.isSet(projectOption)) controller->openProject(QUrl::fromLocalFile(parser.value(projectOption)));
     }
+    // a day after the last look the program asks GitHub for a newer release (Help > Check for Updates does it on demand); pictures and tests stay offline
+    if (!parser.isSet(screenshotOption) && qEnvironmentVariableIsEmpty("JAD_NO_UPDATE_CHECK")) {
+        if (auto* updater = engine.rootObjects().first()->property("updater").value<QObject*>())
+            QTimer::singleShot(5000, updater, [updater] { QMetaObject::invokeMethod(updater, "checkOnStartup"); });
+    }
 
     if (parser.isSet(screenshotOption) && window) {
         const QString file = parser.value(screenshotOption);

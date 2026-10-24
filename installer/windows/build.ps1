@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$Source,   # folder with jad-daw.exe; the tests and the import libraries are not copied
-    [string]$Out = "dist"
+    [string]$Out = "dist",
+    [string]$Overlay = ""   # a folder whose files replace the same files of the stage (the signed jad-daw.exe and lpc-plugin-scanner.exe)
 )
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
@@ -14,6 +15,7 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 $src = Resolve-Path $Source
 # the program and what it loads: everything of the build folder except the test programs and the link files
 Get-ChildItem $src | Where-Object { $_.Name -notmatch '^jad_.*_tests\.exe$|^lpc_tests\.exe$|\.(lib|exp|pdb|ilk)$' } | Copy-Item -Destination $stage -Recurse
+if ($Overlay) { Copy-Item (Join-Path (Resolve-Path $Overlay) "*") $stage -Force }
 Copy-Item (Join-Path $root "LICENSE"), (Join-Path $root "THIRD_PARTY.md") $stage
 Copy-Item (Join-Path $root "assets\fonts\LICENSE.txt") (Join-Path $stage "Inter-LICENSE.txt")
 $iscc = @("$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1

@@ -61,6 +61,8 @@ jobs:
             configure: -DCMAKE_BUILD_TYPE=Release
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}   # empty without the secret: the signing steps are skipped
     steps:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
@@ -76,14 +78,66 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
         env:
           QT_QPA_PLATFORM: offscreen
+      # Windows code signing through SignPath (docs/signing.md). Every signing step runs only when the secret SIGNPATH_API_TOKEN exists:
+      # without it the release is built unsigned, as before.
+      - name: Collect the programs to sign (Windows)
+        if: runner.os == 'Windows' && env.SIGNPATH_API_TOKEN != ''
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path unsigned-exe | Out-Null
+          Copy-Item build/ui/Release/jad-daw.exe, build/ui/Release/lpc-plugin-scanner.exe unsigned-exe/
+      - name: Upload the programs to sign (Windows)
+        if: runner.os == 'Windows' && env.SIGNPATH_API_TOKEN != ''
+        id: upload-exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: unsigned-exe/*
+      - name: Sign the programs (SignPath)
+        if: runner.os == 'Windows' && env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: exe
+          github-artifact-id: ${{ steps.upload-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-exe
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          # the zip (portable) and the setup (installs for the current user; the updater of the program runs it) from the deployed build folder
-          ./installer/windows/build.ps1 -Version "${{ needs.meta.outputs.version }}" -Source build/ui/Release -Out dist-win
+          # the zip (portable) and the setup (installs for the current user; the updater of the program runs it) from the deployed build folder;
+          # signed-exe (when SignPath ran) replaces the two programs inside both
+          $overlay = if (Test-Path signed-exe) { @("-Overlay", "signed-exe") } else { @() }
+          ./installer/windows/build.ps1 -Version "${{ needs.meta.outputs.version }}" -Source build/ui/Release -Out dist-win @overlay
           Move-Item dist-win/* .
+      - name: Upload the setup to sign (Windows)
+        if: runner.os == 'Windows' && env.SIGNPATH_API_TOKEN != ''
+        id: upload-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup
+          path: jad-daw-*-setup.exe
+      - name: Sign the setup (SignPath)
+        if: runner.os == 'Windows' && env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.upload-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-setup
+      - name: Use the signed setup (Windows)
+        if: runner.os == 'Windows' && env.SIGNPATH_API_TOKEN != ''
+        shell: pwsh
+        run: Move-Item signed-setup/*.exe . -Force
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |

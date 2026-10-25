@@ -18,7 +18,7 @@ Get-ChildItem $src | Where-Object { $_.Name -notmatch '^jad_.*_tests\.exe$|^lpc_
 if ($Overlay) { Copy-Item (Join-Path (Resolve-Path $Overlay) "*") $stage -Force }
 Copy-Item (Join-Path $root "LICENSE"), (Join-Path $root "THIRD_PARTY.md") $stage
 Copy-Item (Join-Path $root "assets\fonts\LICENSE.txt") (Join-Path $stage "Inter-LICENSE.txt")
-$iscc = @("$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+$iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "Inno Setup 6 (ISCC.exe) not found" }
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $outAbs = Resolve-Path $Out

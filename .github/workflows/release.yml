@@ -147,7 +147,7 @@ jobs:
           cp LICENSE THIRD_PARTY.md "$app/Contents/Resources/"
           # the zip is what the updater of the program downloads; the disk image is for the first install (drag the app onto Applications)
           ditto -c -k --sequesterRsrc --keepParent "$app" "jad-daw-${{ needs.meta.outputs.version }}-${{ matrix.name }}.zip"
-          ./installer/macos/build-dmg.sh "$app" "${{ needs.meta.outputs.version }}" dist-mac
+          bash installer/macos/build-dmg.sh "$app" "${{ needs.meta.outputs.version }}" dist-mac
           mv dist-mac/*.dmg .
       - uses: actions/upload-artifact@v4
         with:
